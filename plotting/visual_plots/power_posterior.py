@@ -1,9 +1,14 @@
 import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.cm import magma
 
-sns.set_style("whitegrid", rc={'text.usetex': True, 'font.family': 'serif', 'font.serif': ['Computer Modern']})
+plt.rcParams.update({
+    'text.usetex': True, 
+    'font.family': 'serif', 
+    'font.serif': ['Compute Modern'], 
+    'axes.unicode_minus': False, 
+    'text.latex.preamble': r'\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}'  
+})
 
 z = np.linspace(-5, 5, 500)  
 
@@ -24,19 +29,20 @@ def power_posterior(z, t):
 
 t_values = np.linspace(0, 1, 4)  
 
-plt.figure(figsize=(7, 5))
+fig, axes = plt.subplots(1, len(t_values), figsize=(10, 3), sharey=True)
 colors = magma(np.linspace(0.9, 0.2, len(t_values)))  
 
-for t, color in zip(t_values, colors):
+for ax, t, color in zip(axes, t_values, colors):
     posterior = power_posterior(z, t)
-    posterior /= np.trapz(posterior, z)  
-    plt.plot(z, posterior, label=rf"$t={t:.2f}$", color=color)
+    posterior /= np.trapz(posterior, z) 
+    ax.set_xlabel(r"$\bm{\bar{z}}$", fontsize=16)
+    ax.plot(z, posterior, color=color, label=rf"$t={t:.2f}$")
+    
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper right', fontsize=14)
 
-plt.title(r"Evolution of power posterior measure on $\mathbf{\bar{z}}$ with $t$", fontsize=14)
-plt.xlabel(r"$\mathbf{\bar{z}}$", fontsize=12)
-plt.ylabel(r"$\mathcal{P}(\mathbf{\bar{z}} \mid \mathbf{x},\mathbf{f}, \mathbf{\alpha}, \mathbf{\Phi},t)$", fontsize=12)
+axes[0].set_ylabel(r"$\probP(\bm{\bar{z}} \mid \bm{x},\bm{f}, \bm{\alpha}, \bm{\Phi},t)$", fontsize=16)
 plt.ylim(0, 1)
-plt.legend(title=r"Temperature, $t$", loc='upper left', fontsize=10)
-plt.grid(True, alpha=0.3)
-# sns.despine()
+plt.subplots_adjust(hspace=0)
+plt.tight_layout()
 plt.savefig("figures/visual/power_posterior.png", dpi=300)

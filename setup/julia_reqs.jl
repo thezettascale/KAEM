@@ -1,3 +1,12 @@
 using Pkg
 
+Pkg.add("CUDA")
+Pkg.add("KernelAbstractions")
+Pkg.add("NNlib")
+Pkg.add("Tullio")
 Pkg.add("Lux")
+Pkg.add("LuxCUDA")
+Pkg.add("LinearAlgebra")
+Pkg.add("Statistics")
+Pkg.add("Random")
+Pkg.add("Test")

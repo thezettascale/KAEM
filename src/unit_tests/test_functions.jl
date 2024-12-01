@@ -2,9 +2,9 @@ using Test, Random, LinearAlgebra
 
 ENV["GPU"] = false
 
-include("../LV-KAM/univariate_functions.jl")
+include("../LV-KAM/spline_bases.jl")
 include("../utils.jl")
-using .spline_functions: extend_grid, B_spline_basis, RBF_basis, RSWAF_basis, coef2curve, curve2coef
+using .spline_functions
 using .Utils
 
 Random.seed!(42)

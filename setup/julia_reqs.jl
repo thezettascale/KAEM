@@ -1,3 +1,3 @@
 using Pkg
 
-Pkg.add("SciML")
+Pkg.add("Lux")

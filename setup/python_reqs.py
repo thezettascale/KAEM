@@ -4,7 +4,6 @@ import sys
 def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
-# List of packages to install
 packages = [
     "matplotlib",
     "numpy",

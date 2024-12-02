@@ -42,8 +42,8 @@ struct univariate_function <: Lux.AbstractLuxLayer
     ε_scale::Float32
     σ_base::AbstractArray{Float32}
     σ_spline::Float32
-    init_α::AbstractArray{Float32}
-    α_trainable::Bool
+    init_η::AbstractArray{Float32}
+    η_trainable::Bool
 end
 
 function init_function(
@@ -58,8 +58,8 @@ function init_function(
     ε_scale::Float32=1f-1,
     σ_base::AbstractArray{Float32}=[NaN32],
     σ_spline::Float32=1f0,
-    init_α::Float32=1f0,
-    α_trainable::Bool=true
+    init_η::Float32=1f0,
+    η_trainable::Bool=true
 )
 
     grid = Float32.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
@@ -69,20 +69,20 @@ function init_function(
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
     spline_function = get(SplineBasis_mapping, spline_function, B_spline_basis)
     
-    return univariate_function(in_dim, out_dim, spline_degree, base_activation, spline_function, grid, grid_size, grid_update_ratio, grid_range, ε_scale, σ_base, σ_spline, [init_α], α_trainable)
+    return univariate_function(in_dim, out_dim, spline_degree, base_activation, spline_function, grid, grid_size, grid_update_ratio, grid_range, ε_scale, σ_base, σ_spline, [init_η], η_trainable)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     ε = ((rand(rng, Float32, l.grid_size + 1, l.in_dim, l.out_dim) .- 0.5f0) .* l.ε_scale ./ l.grid_size) |> device
-    coef = curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_α))
+    coef = curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η))
     w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_spline
-    return l.α_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_α=l.init_α) : (w_base=w_base, w_sp=w_sp, coef=coef)
+    return l.η_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_η=l.init_η) : (w_base=w_base, w_sp=w_sp, coef=coef)
 end
 
 function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
     mask = ones(Float32, l.in_dim, l.out_dim)
-    return l.α_trainable ? (mask=mask) : (mask=mask, basis_α=l.init_α)
+    return l.η_trainable ? (mask=mask) : (mask=mask, basis_η=l.init_η)
 end
 
 function fwd(l::univariate_function, ps, st, x)
@@ -100,18 +100,18 @@ function fwd(l::univariate_function, ps, st, x)
     """
 
     w_base, w_sp, coef = ps.w_base, ps.w_sp, ps.coef
-    mask = l.α_trainable ? st : st.mask
-    α = l.α_trainable ? ps.basis_α : st.basis_α
+    mask = l.η_trainable ? st : st.mask
+    η = l.η_trainable ? ps.basis_η : st.basis_η
 
     base = l.base_activation(x)
-    y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=α)
+    y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=η)
 
     return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
 end
 
-function update_lyr_grid(l, ps, st, x)
+function update_lyr_grid(l::univariate_function, ps, st, x)
     """
-    Adapt the grid to the distribution of the input data
+    Adapt the function's grid to the distribution of the input data.
 
     Args:
         l: The univariate function layer.
@@ -125,10 +125,10 @@ function update_lyr_grid(l, ps, st, x)
     """
     b_size = size(x, 1)
     coef = ps.coef
-    α = l.α_trainable ? ps.basis_α : st.basis_α
+    η = l.η_trainable ? ps.basis_η : st.basis_η
     
     x_sort = sort(x, dims=1)
-    current_splines = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=α)
+    current_splines = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=η)
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(l.grid, 2) - 2*l.spline_degree - 1
@@ -148,7 +148,7 @@ function update_lyr_grid(l, ps, st, x)
     # Grid is a convex combination of the uniform and adaptive grid
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend=l.spline_degree) 
-    new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=α)
+    new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=η)
 
     return new_grid, new_coef
 end

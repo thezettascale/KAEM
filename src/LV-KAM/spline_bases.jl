@@ -2,6 +2,7 @@ module spline_functions
 
 export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis
 
+using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra
 using NNlib
 
@@ -141,7 +142,7 @@ function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
     return B
 end
 
-function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0)
+function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0, basis_function=nothing)
     """
     Compute the B-spline curves from the B-spline coefficients.
 
@@ -154,12 +155,12 @@ function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0)
     Returns:
         A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
     """
-    splines = BasisFcn(x_eval, grid; degree=k, σ=scale)
+    splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
     y_eval = @tullio out[i, j, l] := splines[i, j, p] * coef[j, l, p]
     return y_eval
 end
 
-function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0)
+function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0, basis_function=nothing)
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs.
@@ -177,7 +178,8 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0)
     in_dim = size(x_eval, 2)
     out_dim = size(y_eval, 3)
 
-    B = BasisFcn(x_eval, grid; degree=k, σ=scale)  # b_size x in_dim x n_coeff
+    # b_size x in_dim x n_coeff
+    B = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)  
 
     n_coeff = size(B, 3)
 

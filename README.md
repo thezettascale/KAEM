@@ -13,6 +13,12 @@ The shell script will install all requirements. Python dependencies will be inst
 bash setup/setup.sh
 ```
 
+[Optional;] Test all Julia scripts:
+
+```bash
+bash src/unit_tests/run_tests.sh
+```
+
 ## Sustainability statement
 
 LV-KAM neither performs optimally nor scales effectively on a GPU. Our hardware offers significantly better performance, achieving 27.6x the performance per Watt of GPUs in the [initial public revisions](https://exalaboratories.com/litepaper), with rapid ongoing private improvements. LV-KAM is especially well-suited to Exa hardware and will be scaled using such. 

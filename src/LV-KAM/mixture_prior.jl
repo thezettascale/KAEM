@@ -1,6 +1,6 @@
 module ebm_mix_prior
 
-export mix_prior, init_mix_prior, sample_prior
+export mix_prior, init_mix_prior, sample_prior, log_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Zygote, Distributions, Accessors, LuxCUDA
@@ -99,13 +99,12 @@ function sample_prior(prior::mix_prior, num_samples, ps, st; init_seed=1)
 
         # Draw candidate samples from Gaussian proposal, then filter f_{q,p}(z) + z^2/2 by chosen components
         seed = next_rng(seed) 
-        z_p = rand(Normal(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
-        fz_qp = @tullio f[b, i, o] := fwd(prior.fcn_qp, ps, st, z_p)[b, i, o] + ((z_p[b, i]^2)/2) 
+        z_p = rand(Uniform(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
+        fz_qp = fwd(prior.fcn_qp, ps, st, z_p)
         selected_components = sum(fz_qp .* chosen_components, dims=2)[:,1,:] # samples x q
 
         # Grid search for max_z[ f_{q,c}(z) + z^2/2 ]
-        f_grid = @tullio fg[b, i, o] := fwd(prior.fcn_qp, ps, st, grid)[b ,i, o] + ((grid[b, i]^2)/2)
-        f_grid = @tullio fg[b, g, o] := f_grid[g, i, o] * chosen_components[b, i, o]
+        f_grid = @tullio fg[b, g, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
         max_f_grid = maximum(f_grid; dims=2)[:,1,:] # samples x q
 
         # Accept or reject
@@ -120,6 +119,70 @@ function sample_prior(prior::mix_prior, num_samples, ps, st; init_seed=1)
     end
 
     return previous_samples, seed
+end
+
+function flip_states(prior::mix_prior, ps, st)
+    """
+    Flip the params and states of the mixture ebm-prior.
+    This is needed for the log-probability calculation, 
+    since z_q is sampled component-wise, but needs to be
+    evaluated for each component, f_{q,p}(z_q). This only works
+    given that the domain of f is fixed to [0,1], (no grid updating).
+
+    Args:
+        prior: The mixture ebm-prior.
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        prior_flipped: The ebm-prior with a flipped grid.
+        ps_flipped: The flipped parameters of the mixture ebm-prior.
+        st_flipped: The flipped states of the mixture ebm-prior.
+    """
+    ps_flipped = prior.fcn_qp.η_trainable ? (
+        coef = permutedims(ps.coef, [2, 1, 3]),
+        w_base = ps.w_base',
+        w_sp = ps.w_sp',
+        basis_η = ps.basis_η
+    ) : (
+        coef = permutedims(ps.coef, [2, 1, 3]),
+        w_base = ps.w_base',
+        w_sp = ps.w_sp'
+    )
+
+    st_flipped = prior.fcn_qp.η_trainable ? st' : (
+        mask = st.mask',
+        basis_η = st.basis_η
+    )
+
+    grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
+    @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
+    
+    return prior.fcn_qp, ps_flipped, st_flipped
+end
+
+function log_prior(prior::mix_prior, z, ps, st)
+    """
+    Compute the unnormalized log-probability of the mixture ebm-prior.
+    
+    Args:
+        prior: The mixture ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        The unnormalized log-probability of the mixture ebm-prior.
+    """
+
+    π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
+    alpha = softmax(ps.α)
+    f_qp = fwd(flip_states(prior, ps, st)..., z)
+
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
+    prior = @tullio p[b, o, i] := alpha[i] * exp(f_qp[b, o, i]) * π_0[b, o]
+    prior = sum(prior; dims=3)
+    return sum(log.(prior); dims=2)[:,1,1]
 end
 
 end

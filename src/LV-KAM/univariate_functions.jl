@@ -1,6 +1,6 @@
 module univariate_functions
 
-export univariate_function, init_function, fwd, update_lyr_grid
+export univariate_function, init_function, fwd, update_fcn_grid
 
 using CUDA, KernelAbstractions, Tullio
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
@@ -96,7 +96,7 @@ function fwd(l::univariate_function, ps, st, x)
         x_p: The input, (b, i).
 
     Returns:
-        The output, (b, i, o), containing all f_{q,p}(x_p)
+        The output, (b, i, o), containing all fcn_{q,p}(x_p)
     """
 
     w_base, w_sp, coef = ps.w_base, ps.w_sp, ps.coef
@@ -109,7 +109,7 @@ function fwd(l::univariate_function, ps, st, x)
     return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
 end
 
-function update_lyr_grid(l::univariate_function, ps, st, x)
+function update_fcn_grid(l::univariate_function, ps, st, x)
     """
     Adapt the function's grid to the distribution of the input data.
 

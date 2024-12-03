@@ -28,7 +28,7 @@ function test_grid_update()
     ps, st = ps |> device, st |> device
 
     y = fwd(f, ps, st, x)
-    grid, coef = update_lyr_grid(f, ps, st, x)
+    grid, coef = update_fcn_grid(f, ps, st, x)
     @test size(grid) == (3, 12)
 end
 

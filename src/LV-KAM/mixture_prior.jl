@@ -80,6 +80,7 @@ function sample_prior(prior::mix_prior, num_samples, ps, st; init_seed=1)
 
     Returns:
         z: The samples from the mixture ebm-prior, (num_samples, q). 
+        seed: The updated seed.
     """
 
     seed = init_seed
@@ -88,13 +89,15 @@ function sample_prior(prior::mix_prior, num_samples, ps, st; init_seed=1)
     grid = prior.fcn_qp.grid'
     alpha = cpu_device()(softmax(ps.α))
 
-    while any(sample_mask .< 1)
-        # Categorical component selection (per sample, per outer sum dimension)
-        seed = next_rng(seed)
-        rand_vals = rand(Categorical(alpha), prior.fcn_qp.out_dim, num_samples) 
-        chosen_components = permutedims(collect(Float32, onehotbatch(rand_vals, 1:prior.fcn_qp.in_dim)), [3, 1, 2]) |> device # mask of 1s/0s - only admits chosen components
+    # Categorical component selection (per sample, per outer sum dimension)
+    seed = next_rng(seed)
+    rand_vals = rand(Categorical(alpha), prior.fcn_qp.out_dim, num_samples) 
+    chosen_components = permutedims(collect(Float32, onehotbatch(rand_vals, 1:prior.fcn_qp.in_dim)), [3, 1, 2]) |> device # mask of 1s/0s - only admits chosen components
 
-        # Draw candidate samples from Gaussian proposal, filter f_{q,p}(z) + z^2/2 by chosen components
+    # Rejection sampling
+    while any(sample_mask .< 1)
+
+        # Draw candidate samples from Gaussian proposal, then filter f_{q,p}(z) + z^2/2 by chosen components
         seed = next_rng(seed) 
         z_p = rand(Normal(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
         fz_qp = @tullio f[b, i, o] := fwd(prior.fcn_qp, ps, st, z_p)[b, i, o] + ((z_p[b, i]^2)/2) 

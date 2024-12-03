@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero
+export removeNaN, device, removeZero, next_rng
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random
 using CUDA, LuxCUDA, KernelAbstractions
@@ -22,6 +22,11 @@ function removeZero(x; ε=1f-3)
     Zeros = @tullio res[i, j, k] := abs(x[i, j, k]) .< ε
     x = ifelse.(Zeros, ε, x)
     return device(x)
+end
+
+function next_rng(seed)
+    Random.seed!(seed)
+    return seed + 1
 end
 
 end

@@ -1,6 +1,7 @@
 using Pkg
 
 Pkg.add("CUDA")
+Pkg.add("cuDNN")
 Pkg.add("KernelAbstractions")
 Pkg.add("NNlib")
 Pkg.add("Tullio")
@@ -14,3 +15,4 @@ Pkg.add("ConfParser")
 Pkg.add("Zygote")
 Pkg.add("Distributions")
 Pkg.add("Flux")
+Pkg.add("Accessors")

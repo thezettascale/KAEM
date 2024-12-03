@@ -3,7 +3,7 @@ module univariate_functions
 export univariate_function, init_function, fwd, update_lyr_grid
 
 using CUDA, KernelAbstractions, Tullio
-using Lux, NNlib, LinearAlgebra, Random
+using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 include("spline_bases.jl")
 include("../utils.jl")
@@ -74,7 +74,7 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     ε = ((rand(rng, Float32, l.grid_size + 1, l.in_dim, l.out_dim) .- 0.5f0) .* l.ε_scale ./ l.grid_size) |> device
-    coef = curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η))
+    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η)))
     w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_spline
     return l.η_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_η=l.init_η) : (w_base=w_base, w_sp=w_sp, coef=coef)

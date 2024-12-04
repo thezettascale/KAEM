@@ -85,7 +85,7 @@ function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
     return l.η_trainable ? (mask=mask) : (mask=mask, basis_η=l.init_η)
 end
 
-function fwd(l::univariate_function, ps, st, x)
+function fwd(l, ps, st, x)
     """
     Forward pass for the univariate function.
 
@@ -106,10 +106,12 @@ function fwd(l::univariate_function, ps, st, x)
     base = l.base_activation(x)
     y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=η)
 
-    return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
+    y = @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
+    any(isnan.(y)) && error("NaN in univariate function")
+    return y
 end
 
-function update_fcn_grid(l::univariate_function, ps, st, x)
+function update_fcn_grid(l, ps, st, x)
     """
     Adapt the function's grid to the distribution of the input data.
 

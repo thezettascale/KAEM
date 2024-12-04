@@ -3,23 +3,20 @@ module MoE_likelihood
 export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior  
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Zygote, Distributions, Accessors, LuxCUDA, Statistics
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
 using NNlib: softmax
-using Flux: mse, logitbinarycrossentropy
+using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
+include("mixture_prior.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng
+using .ebm_mix_prior
 
 lkhood_models = Dict(
-    "l2" => mse,
-    "bernoulli" => logitbinarycrossentropy,
-)
-
-reduction_mapping = Dict(
-    "sum" => sum,
-    "mean" => mean,
+    "l2" => (x, x̂) -> sum((x .- x̂) .^ 2, dims=2)[:, 1],
+    "bernoulli" => (x, x̂) -> sum(x .* log.(x̂) .+ (1 .- x) .* log.(1 .- x̂), dims=2)[:, 1],
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -28,7 +25,6 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_ε::Float32
     σ_llhood::Float32
     log_lkhood_model::Function
-    lkhood_model_reduction::Function
 end
 
 function init_MoE_lkhood(
@@ -49,14 +45,14 @@ function init_MoE_lkhood(
     σ_spline = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_spline"))
     init_η = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "MOE_LIKELIHOOD", "η_trainable"))
+    η_trainable = spline_function == "B-spline" ? false : η_trainable
     noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_variance"))
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
-    lkhood_model_reduction = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model_reduction")
 
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))
-    .+ σ_base .* (randn(Float32, q, o) .* 2f0 .- 1f0) .* (1f0 / √(Float32(q))))
+    .+ σ_base .* (randn(Float32, q, 1) .* 2f0 .- 1f0) .* (1f0 / √(Float32(q))))
 
     func = init_function(
         q,
@@ -74,23 +70,34 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
     
-    return MoE_lkhood(func, o, noise_var, gen_var, lkhood_models[lkhood_model], reduction_mapping[lkhood_model_reduction])
+    return MoE_lkhood(func, o, noise_var, gen_var, lkhood_models[lkhood_model])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
-    ps = Lux.initialparameters(rng, lkhood.fcn_qp)
-    @reset ps[:gate_w] = glorot_normal(rng, Float32, lkhood.out_size, lkhood.fcn_qp.in_dim)
+    ps = Lux.initialparameters(rng, lkhood.fcn_q)
+    @reset ps[:gate_w] = glorot_normal(rng, Float32, lkhood.fcn_q.in_dim, lkhood.out_size)
     return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
-    st = Lux.initialstates(rng, lkhood.fcn_qp)
+    st = Lux.initialstates(rng, lkhood.fcn_q)
     return st
 end
 
 function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     Compute the log-likelihood of the data given the latent variable.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The log-likelihood per sample of data given the latent variable.
     """
     
     # Gen function, experts for all features
@@ -105,10 +112,36 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     # Generate data, and log-likelihood
     x̂ = @tullio gen[b, i, o] := Λ[b, i, 1] * γ[b, i, o]
     x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
-    log_likelihood = lkhood.log_lkhood_model(x̂, x; agg=lkhood.lkhood_model_reduction) ./ lkhood.σ_llhood
-    return log_likelihood
+    return lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
 end
 
+function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
+    """
+    Compute the expected posterior of an arbritrary function of the latent variable,
+    using importance sampling. Sampling procedure is ignored from the gradient computation.
 
+    Args:
+        prior: The prior distribution of the latent variable.
+        lkhood: The likelihood model.
+        ps: The parameters of the LV-KAM.
+        st: The states of the LV-KAM.
+        x: The data.
+        ρ_fcn: The function of the latent variable to compute the expected posterior.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The expected posterior of the function of the latent variable.  
+        The updated seed. 
+    """
+
+    prior_ps, prior_st = ps.ebm, st.ebm
+    gen_ps, gen_st = ps.gen, st.gen
+
+    z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
+    ρ_values = ρ_fcn(z, ρ_ps)
+    weights = @ignore_derivatives softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+
+    return sum(ρ_values .* weights), seed
+end
 
 end

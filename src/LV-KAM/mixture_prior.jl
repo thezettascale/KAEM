@@ -1,11 +1,12 @@
 module ebm_mix_prior
 
-export mix_prior, init_mix_prior, sample_prior, log_prior
+export mix_prior, init_mix_prior, sample_prior, log_prior, expected_prior
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Zygote, Distributions, Accessors, LuxCUDA
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA
 using NNlib: softmax
 using Flux: onehotbatch
+using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
 include("../utils.jl")
@@ -14,6 +15,7 @@ using .Utils: device, next_rng
 
 struct mix_prior <: Lux.AbstractLuxLayer
     fcn_qp::univariate_function
+    π_tol::Float32
 end
 
 function init_mix_prior(
@@ -34,6 +36,8 @@ function init_mix_prior(
     σ_spline = parse(Float32, retrieve(conf, "MIX_PRIOR", "σ_spline"))
     init_η = parse(Float32, retrieve(conf, "MIX_PRIOR", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
+    η_trainable = spline_function == "B-spline" ? false : η_trainable
+    π_tol = parse(Float32, retrieve(conf, "MIX_PRIOR", "π_tol"))
 
     prior_seed = next_rng(prior_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(p))) 
@@ -55,7 +59,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func)
+    return mix_prior(func, π_tol)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -69,7 +73,7 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
     return st
 end
 
-function sample_prior(prior::mix_prior, num_samples, ps, st; init_seed=1)
+function sample_prior(prior, num_samples, ps, st; init_seed=1)
     """
     Component-wise rejection sampling for the mixture ebm-prior.
 
@@ -176,6 +180,7 @@ function log_prior(prior::mix_prior, z, ps, st)
     """
 
     π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
+    π_0 = Float32.(π_0) .+ prior.π_tol
     alpha = softmax(ps.α)
     f_qp = fwd(flip_states(prior, ps, st)..., z)
 
@@ -183,6 +188,15 @@ function log_prior(prior::mix_prior, z, ps, st)
     prior = @tullio p[b, o, i] := alpha[i] * exp(f_qp[b, o, i]) * π_0[b, o]
     prior = sum(prior; dims=3)
     return sum(log.(prior); dims=2)[:,1,1]
+end
+
+function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
+    """
+    Compute the expected prior of an arbritrary function of the latent variable, 
+    using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
+    """
+    z, seed = @ignore_derivatives sample_prior(prior, num_samples, ps, st; init_seed=seed)
+    return mean(ρ_fcn(z, ps))
 end
 
 end

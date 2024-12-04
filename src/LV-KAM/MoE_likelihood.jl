@@ -1,6 +1,6 @@
 module MoE_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior  
+export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior, generate_from_z 
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
@@ -28,11 +28,11 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
 end
 
 function init_MoE_lkhood(
-    conf::ConfParse;
+    conf::ConfParse,
+    output_dim::Int;
     lkhood_seed::Int=1,
 )
     q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
-    o = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
     spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
     spline_function = retrieve(conf, "MOE_LIKELIHOOD", "spline_function")
@@ -70,7 +70,7 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
     
-    return MoE_lkhood(func, o, noise_var, gen_var, lkhood_models[lkhood_model])
+    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -84,9 +84,41 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
     return st
 end
 
+function generate_from_z(lkhood::MoE_lkhood, ps, st, z; seed=1)
+    """
+    Generate data from the likelihood model.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The generated data.
+        The updated seed.
+    """
+    # Gen function, experts for all features
+    Λ = fwd(lkhood.fcn_q, ps, st, z)
+    seed = next_rng(seed)
+    ε = rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device
+
+    # Gating function, feature-specific
+    wz = @tullio out[b, i, o] := z[b, i] * ps.gate_w[i, o]
+    γ = softmax(wz; dims=2)
+
+    # Generate data
+    x̂ = @tullio gen[b, i, o] := Λ[b, i, 1] * γ[b, i, o]
+    x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
+    return x̂, seed
+end
+
 function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     Compute the log-likelihood of the data given the latent variable.
+    The updated seed is not returned, since noise is ignored by derivatives anyway.
 
     Args:
         lkhood: The likelihood model.
@@ -100,18 +132,7 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
         The log-likelihood per sample of data given the latent variable.
     """
     
-    # Gen function, experts for all features
-    Λ = fwd(lkhood.fcn_q, ps, st, z)
-    seed = next_rng(seed)
-    ε = rand(Normal(0f0, lkhood.σ_ε), size(x)) |> device
-
-    # Gating function, feature-specific
-    wz = @tullio out[b, i, o] := z[b, i] * ps.gate_w[i, o]
-    γ = softmax(wz; dims=2)
-
-    # Generate data, and log-likelihood
-    x̂ = @tullio gen[b, i, o] := Λ[b, i, 1] * γ[b, i, o]
-    x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
+    x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     return lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
 end
 

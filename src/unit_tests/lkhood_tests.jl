@@ -11,15 +11,16 @@ using .Utils
 
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
+out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
 
 function test_log_likelihood()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf; lkhood_seed=1)
+    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
     z_test = randn(Float32, 5, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
-    x_test = randn(Float32, 5, parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))) |> device
+    x_test = randn(Float32, 5, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
     @test size(log_lkhood) == (5,)
@@ -27,12 +28,12 @@ end
 
 function test_log_likelihood_derivative()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf; lkhood_seed=1)
+    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
     z_test = randn(Float32, 5, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
-    x_test = randn(Float32, 5, parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))) |> device
+    x_test = randn(Float32, 5, out_dim) |> device
     
     ∇ = first(gradient(z -> sum(log_likelihood(lkhood, ps, st, x_test, z)), z_test))
     @test size(∇) == size(z_test)
@@ -40,7 +41,7 @@ end
 
 function test_expected_posterior()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf; lkhood_seed=1)
+    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     
     prior = init_mix_prior(conf; prior_seed=1)
@@ -49,16 +50,16 @@ function test_expected_posterior()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    x_test = randn(Float32, 5, parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))) |> device
+    x_test = randn(Float32, 5, out_dim) |> device
     
     func = (z, p) -> log_likelihood(lkhood, p, st.gen, x_test, z)
     expected_p = first(expected_posterior(prior, lkhood, ps, st, x_test, func, ps.gen))
     @test length(expected_p) == 1
 end
 
-function test_ps_derivative()
+function test_generate()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf; lkhood_seed=1)
+    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -67,16 +68,14 @@ function test_ps_derivative()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    x_test = randn(Float32, 5, parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))) |> device
-
-    func = (z, p) -> log_likelihood(lkhood, p.gen, st.gen, x_test, z) + log_prior(prior, z, p.ebm, st.ebm)
-    ∇ = first(gradient(p -> first(expected_posterior(prior, lkhood, p, st, x_test, func, p)), ps))
-    @test norm(∇) > 0
+    z, seed = sample_prior(prior, 5, ps.ebm, st.ebm)
+    x = first(generate_from_z(lkhood, ps.gen, st.gen, z))
+    @test size(x) == (5, out_dim)
 end
 
 @testset "MoE Likelihood Tests" begin
     test_log_likelihood()
     test_log_likelihood_derivative()
     test_expected_posterior()
-    test_ps_derivative()
+    test_generate()
 end

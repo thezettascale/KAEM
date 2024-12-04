@@ -196,7 +196,7 @@ function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
     """
     z, seed = @ignore_derivatives sample_prior(prior, num_samples, ps, st; init_seed=seed)
-    return mean(ρ_fcn(z, ps))
+    return mean(ρ_fcn(z, ps)), seed
 end
 
 end

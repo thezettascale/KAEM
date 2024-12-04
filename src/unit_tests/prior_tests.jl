@@ -49,7 +49,7 @@ function test_expected_prior()
     ps, st = ps |> device, st |> device
 
     func = (z, p) -> log_prior(prior, z, p, st)
-    expected_p = expected_prior(prior, 5, ps, st, func)
+    expected_p = first(expected_prior(prior, 5, ps, st, func))
     @test length(expected_p) == 1
 end
 
@@ -60,7 +60,7 @@ function test_ps_derivative()
     ps, st = ps |> device, st |> device
 
     func = (z, p) -> log_prior(prior, z, p, st)
-    ∇ = first(gradient(p -> expected_prior(prior, 5, p, st, func), ps))
+    ∇ = first(gradient(p -> first(expected_prior(prior, 5, p, st, func)), ps))
     @test norm(∇) > 0
 end
     

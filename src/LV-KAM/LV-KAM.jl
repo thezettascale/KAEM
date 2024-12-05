@@ -80,7 +80,7 @@ function generate_batch(model::LV_KAM, ps, st, num_samples; seed)
         The updated seed.
     """
     z, seed = sample_prior(model.prior, num_samples, ps.ebm, st.ebm; init_seed=seed)
-    x̂ = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
+    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
     
     return x̂, seed
 end

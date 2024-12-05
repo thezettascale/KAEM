@@ -3,7 +3,7 @@ module ebm_mix_prior
 export mix_prior, init_mix_prior, sample_prior, log_prior, expected_prior
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
 using NNlib: softmax
 using Flux: onehotbatch
 using ChainRules: @ignore_derivatives
@@ -165,12 +165,13 @@ function flip_states(prior::mix_prior, ps, st)
     return prior.fcn_qp, ps_flipped, st_flipped
 end
 
-function log_prior(prior::mix_prior, z, ps, st)
+function log_prior(mix::mix_prior, z, ps, st)
     """
     Compute the unnormalized log-probability of the mixture ebm-prior.
+    Log-sum-exp trick is used for numerical stability.
     
     Args:
-        prior: The mixture ebm-prior.
+        mix: The mixture ebm-prior.
         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
         ps: The parameters of the mixture ebm-prior.
         st: The states of the mixture ebm-prior.
@@ -180,20 +181,18 @@ function log_prior(prior::mix_prior, z, ps, st)
     """
 
     π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
-    π_0 = Float32.(π_0) .+ prior.π_tol
+    π_0 = Float32.(π_0) 
     alpha = softmax(ps.α)
-    f_qp = fwd(flip_states(prior, ps, st)..., z)
-
+    f_qp = fwd(flip_states(mix, ps, st)..., z)
+    
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    prior = @tullio p[b, o, i] := alpha[i] * exp(f_qp[b, o, i]) * π_0[b, o]
+    max_f = maximum(f_qp; dims=3)
+    exp_shifted = exp.(f_qp .- max_f)
+    prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] * π_0[b, o]
     prior = sum(prior; dims=3)
-    log_prior = sum(log.(prior); dims=2)[:,1,1]
-
-    any(isnan.(f_qp)) && error("NaN in f_qp")
-    any(isnan.(prior)) && error("NaN in prior")
-    any(isnan.(log_prior)) && error("NaN in log_prior")
-
-    return log_prior
+    log_prior = max_f .+ log.(prior .+ mix.π_tol)
+    
+    return sum(log_prior; dims=2)[:,1,1]
 end
 
 function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
@@ -202,12 +201,7 @@ function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
     """
     z, seed = @ignore_derivatives sample_prior(prior, num_samples, ps, st; init_seed=seed)
-    mc_estimate = mean(ρ_fcn(z, ps))
-
-    any(isnan.(mc_estimate)) && error("NaN in mc_estimate")
-    any(isnan.(z)) && error("NaN in z")
-
-    return mc_estimate, seed
+    return mean(ρ_fcn(z, ps)), seed
 end
 
 end

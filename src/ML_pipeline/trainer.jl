@@ -201,7 +201,8 @@ function train!(t::LV_KAM_trainer)
     generated_images = zeros(Float32, 0, t.img_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
-        generated_images = vcat(generated_images, cpu_device()(batch))
+        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))
+        generated_images = vcat(generated_images, batch)
         t.seed += 1
     end
     h5write(t.file_loc * "generated_images.h5", "samples", generated_images)

@@ -4,9 +4,8 @@ export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior, generate
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
-using NNlib: softmax
+using NNlib: softmax, sigmoid_fast, tanh_fast
 using ChainRules: @ignore_derivatives
-using Flux: mse, logitbinarycrossentropy
 
 include("univariate_functions.jl")
 include("mixture_prior.jl")
@@ -15,9 +14,15 @@ using .univariate_functions
 using .Utils: device, next_rng
 using .ebm_mix_prior
 
+activation_mapping = Dict(
+    "tanh" => tanh_fast,
+    "sigmoid" => sigmoid_fast,
+    "none" => x -> x 
+)
+
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> mse(x̂, x, agg=sum, dims=2)[:, 1],
-    "bernoulli" => (x, x̂) -> logitbinarycrossentropy(x̂, x, agg=sum, dims=2)[:, 1],
+    "l2" => (x, x̂) -> sum((x̂ .- x).^2, dims=2)[:, 1],  
+    "bernoulli" => (x, x̂) -> sum(x .* log.(x̂ .+ 1f-4) .+ (1 .- x) .* log.(1 .- x̂ .+ 1f-4), dims=2)[:, 1]
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -26,6 +31,7 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_ε::Float32
     σ_llhood::Float32
     log_lkhood_model::Function
+    output_activation::Function
 end
 
 function init_MoE_lkhood(
@@ -50,6 +56,7 @@ function init_MoE_lkhood(
     noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_variance"))
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
+    output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))
@@ -71,7 +78,7 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
     
-    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model])
+    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -113,7 +120,7 @@ function generate_from_z(lkhood::MoE_lkhood, ps, st, z; seed=1)
     # Generate data
     x̂ = @tullio gen[b, i, o] := Λ[b, i, 1] * γ[b, i, o]
     x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
-    return x̂, seed
+    return lkhood.output_activation(x̂), seed
 end
 
 function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
@@ -134,12 +141,7 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    llhood = lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
-
-    any(isnan.(x̂)) && error("NaN in x̂")
-    any(isnan.(llhood)) && error("NaN in llhood")
-
-    return llhood
+    return lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
 end
 
 function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
@@ -167,10 +169,6 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
     z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
     ρ_values = ρ_fcn(z, ρ_ps)
     weights = @ignore_derivatives softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
-
-    any(isnan.(ρ_values)) && error("NaN in ρ_values")
-    any(isnan.(weights)) && error("NaN in weights")
-    any(isnan.(z)) && error("NaN in z")
 
     return sum(ρ_values .* weights), seed
 end

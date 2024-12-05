@@ -10,7 +10,7 @@ using .optimization
 using .Utils: device
 
 using CUDA, KernelAbstractions, Tullio
-using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, BSON, ConfParser
+using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA
 
 dataset_mapping = Dict(
@@ -217,13 +217,7 @@ function train!(t::LV_KAM_trainer)
     end
 
     # Save params, state, model
-    combined_data = Dict(
-    :params => Dict(cpu_device()(t.ps)),
-    :state => Dict(cpu_device()(t.st)),
-    :model => t.model
-    )
-
-    BSON.bson(t.file_loc * "model.bson", combined_data)
+    @save "t_data.jld2" cpu_device()(t.ps) cpu_device()(t.st) t.model
 end
 
 end

@@ -93,20 +93,20 @@ function train!(t::LV_KAM_trainer)
     
     loss_file = t.file_loc * "loss.csv"
     open(loss_file, "w") do file
-        write(file, "Time (s),Iter,Train Loss,Test Loss,Grid Updated\n")
+        write(file, "Time (s),Epoch,Train Loss,Test Loss,Grid Updated\n")
     end
 
     function find_nan(grads)
         for k in keys(grads)
-            if any(isnan.(grads[k]))
+            if any(isnan, grads[k]) || any(isinf, grads[k])
                 for i in keys(grads[k])
-                    any(isnan.(grads[k][i])) && error("NaN in $k, $i gradients")
+                    any(isnan, grads[k][i]) || any(isinf, grads[k][i]) && error("NaN/Inf in $k, $i gradients")
                 end
             end
         end
     end
 
-    # Train step for a single batch
+    # Gradient for a single batch
     function grad_fcn(G, u, args...)
         t.ps = u
         grid_updated = 0
@@ -120,7 +120,7 @@ function train!(t::LV_KAM_trainer)
         end
 
         grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
-        any(isnan, grads) && find_nan(grads)
+        any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
         t.seed += 1
 
         copy!(G, grads)
@@ -129,21 +129,14 @@ function train!(t::LV_KAM_trainer)
 
     train_loss = 0
 
+    # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
         loss = MLE_loss(t.model, t.ps, t.st, t.x)
         train_loss += loss
-        return loss
-    end    
+        println("Iter: $(t.iter), Loss: $loss")
 
-    start_time = time()
-
-    # Callback for logging
-    function log_callback(state, args...)
-        println(state)
-        t.ps = state.u
-
-        # After one epoch only
+        # After one epoch, calculate test loss and log to CSV
         if t.iter % num_batches == 0 || t.iter == 1
             
             test_loss = 0
@@ -156,9 +149,10 @@ function train!(t::LV_KAM_trainer)
             train_loss = train_loss / num_batches
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
+            epoch = t.iter == 1 ? 0 : fld(t.iter, num_batches)
 
             open(loss_file, "a") do file
-                write(file, "$now_time,$(t.iter),$train_loss,$test_loss,$grid_updated\n")
+                write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
             end
 
             train_loss = 0
@@ -170,8 +164,10 @@ function train!(t::LV_KAM_trainer)
         x, t.train_loader_state = (t.iter % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x')
 
-        return false
-    end
+        return loss
+    end    
+
+    start_time = time()
     
     optf = Optimization.OptimizationFunction(opt_loss; grad=grad_fcn)
     optprob = Optimization.OptimizationProblem(optf, copy(t.ps))
@@ -179,7 +175,6 @@ function train!(t::LV_KAM_trainer)
     # Optimization only stops when maxiters is reached
     res = Optimization.solve(optprob, t.o.init_optimizer();
         maxiters=num_param_updates, 
-        cb=log_callback, 
         verbose=true,
         abstol=-1f0,
         reltol=-1f0,
@@ -222,9 +217,13 @@ function train!(t::LV_KAM_trainer)
     end
 
     # Save params, state, model
-    BSON.bson(t.file_loc * "params.bson", cpu_device()(t.ps))  
-    BSON.bson(t.file_loc * "state.bson", cpu_device()(t.st))  
-    BSON.bson(t.file_loc * "model.bson", t.model)  
+    combined_data = Dict(
+    :params => Dict(cpu_device()(t.ps)),
+    :state => Dict(cpu_device()(t.st)),
+    :model => t.model
+    )
+
+    BSON.bson(t.file_loc * "model.bson", combined_data)
 end
 
 end

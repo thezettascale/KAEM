@@ -8,7 +8,8 @@ packages = [
     "matplotlib",
     "numpy",
     "pandas",
-    "seaborn"
+    "seaborn",
+    "h5py"
 ]
 
 for package in packages:

@@ -38,7 +38,7 @@ function init_LV_KAM(
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     data_seed = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
-    test_loader = DataLoader(dataset[:, N_train+1:N_test], batchsize=batch_size, shuffle=false)
+    test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
     out_dim = size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)

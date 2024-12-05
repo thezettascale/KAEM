@@ -188,7 +188,7 @@ function log_prior(mix::mix_prior, z, ps, st)
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     max_f = maximum(f_qp; dims=3)
     exp_shifted = exp.(f_qp .- max_f)
-    prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] * π_0[b, o]
+    prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] # * π_0[b, o]
     prior = sum(prior; dims=3)
     log_prior = max_f .+ log.(prior .+ mix.π_tol)
     

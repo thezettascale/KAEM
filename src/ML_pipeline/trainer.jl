@@ -93,7 +93,7 @@ function train!(t::LV_KAM_trainer)
     
     loss_file = t.file_loc * "loss.csv"
     open(loss_file, "w") do file
-        write(file, "Time (s),Iter,Batch Loss,Test Loss,Grid Updated\n")
+        write(file, "Time (s),Iter,Train Loss,Test Loss,Grid Updated\n")
     end
 
     function find_nan(grads)
@@ -127,17 +127,22 @@ function train!(t::LV_KAM_trainer)
         return G
     end
 
+    train_loss = 0
+
     function opt_loss(u, args...)
         t.ps = u
-        return MLE_loss(t.model, t.ps, t.st, t.x)
+        loss = MLE_loss(t.model, t.ps, t.st, t.x)
+        train_loss += loss
+        return loss
     end    
 
     start_time = time()
 
     # Callback for logging
-    function log_callback!(state, obj)
+    function log_callback(state, args...)
+        println(state)
         t.ps = state.u
-        
+
         # After one epoch only
         if t.iter % num_batches == 0 || t.iter == 1
             
@@ -148,12 +153,15 @@ function train!(t::LV_KAM_trainer)
                 t.seed += 1
             end
             
+            train_loss = train_loss / num_batches
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
 
             open(loss_file, "a") do file
-                write(file, "$now_time,$t.iter,$obj,$test_loss,$grid_updated\n")
+                write(file, "$now_time,$(t.iter),$train_loss,$test_loss,$grid_updated\n")
             end
+
+            train_loss = 0
         end
 
         t.iter += 1
@@ -166,12 +174,12 @@ function train!(t::LV_KAM_trainer)
     end
     
     optf = Optimization.OptimizationFunction(opt_loss; grad=grad_fcn)
-    optprob = Optimization.OptimizationProblem(optf, copy(t.ps), nothing)
+    optprob = Optimization.OptimizationProblem(optf, copy(t.ps))
     
     # Optimization only stops when maxiters is reached
     res = Optimization.solve(optprob, t.o.init_optimizer();
         maxiters=num_param_updates, 
-        cb=log_callback!, 
+        cb=log_callback, 
         verbose=true,
         abstol=-1f0,
         reltol=-1f0,
@@ -205,7 +213,13 @@ function train!(t::LV_KAM_trainer)
         generated_images = vcat(generated_images, batch)
         t.seed += 1
     end
-    h5write(t.file_loc * "generated_images.h5", "samples", generated_images)
+
+    try
+        h5write(t.file_loc * "generated_images.h5", "samples", generated_images)
+    catch
+        rm(t.file_loc * "generated_images.h5")
+        h5write(t.file_loc * "generated_images.h5", "samples", generated_images)
+    end
 
     # Save params, state, model
     BSON.bson(t.file_loc * "params.bson", cpu_device()(t.ps))  

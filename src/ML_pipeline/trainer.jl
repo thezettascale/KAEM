@@ -1,15 +1,17 @@
 module trainer
 
+export LV_KAM_trainer, init_trainer, train!
+
 include("../LV-KAM/LV-KAM.jl")
 include("optimizer.jl")
 include("../utils.jl")
 using .LV_KAM_model
 using .optimization
-using .Utils
+using .Utils: device
 
 using CUDA, KernelAbstractions, Tullio
-using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, BSON
-using Zygote, Optimization, OptimizationOptimJL, LuxCUDA
+using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, BSON, ConfParser
+using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA
 
 dataset_mapping = Dict(
     "MNIST" => MLDatasets.MNIST(),
@@ -20,19 +22,19 @@ dataset_mapping = Dict(
 
 mutable struct LV_KAM_trainer
     model::LV_KAM
-    opt::Function
+    o::opt
     dataset_name::AbstractString
     img_shape::Tuple
     ps::ComponentArray
     st::NamedTuple
     N_epochs::Int
-    sample_every::Int
-    train_loader_state::Int
+    train_loader_state::Tuple{Any, Int}
     x::AbstractArray
     file_loc::AbstractString
     num_generated_samples::Int
     batch_size_for_gen::Int
     seed::Int
+    grid_update_frequency::Int
     iter::Int
     last_grid_update::Int
 end
@@ -41,11 +43,11 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     seed=1, img_resize=nothing, file_loc=nothing)
 
     # Load dataset
-    N_train = parse(Int, retrieve(conf, "DATA", "N_train"))
-    N_test = parse(Int, retrieve(conf, "DATA", "N_test"))
+    N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
+    N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     dataset = dataset_mapping[dataset_name][1:N_train+N_test].features
-    num_generated_samples = parse(Int, retrieve(conf, "DATA", "num_generated_samples"))
-    batch_size_for_gen = parse(Int, retrieve(conf, "DATA", "batch_size_for_gen"))
+    num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
+    batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
 
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
@@ -58,9 +60,9 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     params, state = Lux.setup(rng, model)
     params, state = ComponentArray(params) |> device, state |> device
     optimizer = create_opt(conf)
+    grid_update_frequency = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_frequency"))
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
-    sample_every = parse(Int, retrieve(conf, "TRAINING", "sample_every"))
     x, loader_state = iterate(model.train_loader) 
 
     file_loc = isnothing(file_loc) ? "logs/$(dataset_name)_$(seed)/" : file_loc
@@ -74,24 +76,24 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         params, 
         state, 
         N_epochs, 
-        sample_every, 
         loader_state, 
         device(x'), 
         file_loc, 
         num_generated_samples,
         batch_size_for_gen,
         seed, 
+        grid_update_frequency,
         1, 
         1)
 end
 
-function train!(trainer::LV_KAM_trainer)
-    num_batches = length(t.train_loader)
+function train!(t::LV_KAM_trainer)
+    num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
     
     loss_file = t.file_loc * "loss.csv"
-    open(t.file_name, "w") do file
+    open(loss_file, "w") do file
         write(file, "Time (s),Iter,Batch Loss,Test Loss,Grid Updated\n")
     end
 
@@ -101,9 +103,9 @@ function train!(trainer::LV_KAM_trainer)
         grid_updated = 0
 
         # Grid updating for likelihood model
-        if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.model.grid_update_frequency))
+        if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.grid_update_frequency))
             t.model, t.ps, t.seed = update_llhood_grid(t.model, t.ps, t.st; seed=t.seed)
-            t.model.grid_update_frequency = t.iter > 1 ? floor(t.model.grid_update_frequency * (2 - t.model.grid_update_decay)^t.iter) : t.model.grid_update_frequency
+            t.grid_update_frequency = t.iter > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.iter) : t.grid_update_frequency
             t.last_grid_update = t.iter
             grid_updated = 1
         end
@@ -157,7 +159,7 @@ function train!(trainer::LV_KAM_trainer)
     optprob = Optimization.OptimizationProblem(optf, t.ps)
     
     # Optimization only stops when maxiters is reached
-    res = Optimization.solve(optprob, t.opt.init_optimizer();
+    res = Optimization.solve(optprob, t.o.init_optimizer();
         maxiters=num_param_updates, 
         cb=log_callback!, 
         verbose=true,
@@ -178,7 +180,7 @@ function train!(trainer::LV_KAM_trainer)
         outer_f_reltol=-1f0, 
         outer_g_abstol=-1f0, 
         outer_g_reltol=-1f0, 
-        successive_f_tol=t.max_iters,
+        successive_f_tol=num_param_updates,
         allow_f_increases=true, 
         allow_outer_f_increases=true,
     )   

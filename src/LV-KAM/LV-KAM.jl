@@ -20,7 +20,6 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     lkhood::MoE_lkhood
     train_loader::DataLoader
     test_loader::DataLoader
-    grid_update_frequency::Int
     grid_update_decay::Float32
     grid_updates_samples::Int
 end
@@ -33,9 +32,9 @@ function init_LV_KAM(
     data_seed::Int=1,
 )
 
-    batch_size = parse(Int, retrieve(conf, "DATA", "batch_size"))
-    N_train = parse(Int, retrieve(conf, "DATA", "N_train"))
-    N_test = parse(Int, retrieve(conf, "DATA", "N_test"))
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
+    N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     data_seed = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
     test_loader = DataLoader(dataset[:, N_train+1:N_test], batchsize=batch_size, shuffle=false)
@@ -44,7 +43,6 @@ function init_LV_KAM(
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
     
-    grid_update_frequency = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_frequency"))
     grid_update_decay = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "num_grid_updating_samples"))
 
@@ -53,7 +51,6 @@ function init_LV_KAM(
         lkhood_model,
         train_loader,
         test_loader,
-        grid_update_frequency,
         grid_update_decay,
         num_grid_updating_samples,
     )

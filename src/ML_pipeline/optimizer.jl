@@ -19,8 +19,8 @@ function create_opt(conf::ConfParse)
         opt: opt object, which initializes the optimizer when called
     """
 
-    LR = parse(Float32, retrieve(conf, "OPTIMIZER", "LR"))
-    m = parse(Float32, retrieve(conf, "OPTIMIZER", "l-bfgs_memory"))
+    LR = parse(Float32, retrieve(conf, "OPTIMIZER", "learning_rate"))
+    m = parse(Int, retrieve(conf, "OPTIMIZER", "l-bfgs_memory"))
     c_1 = parse(Float32, retrieve(conf, "LINE_SEARCH", "c_1"))
     c_2 = parse(Float32, retrieve(conf, "LINE_SEARCH", "c_2"))
     ρ = parse(Float32, retrieve(conf, "LINE_SEARCH", "rho"))
@@ -38,7 +38,7 @@ function create_opt(conf::ConfParse)
 
     optimiser_map = Dict(
         "bfgs" => BFGS(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), linesearch=linesearch),
-        "l-bfgs" => LBFGS(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), m=o.m, linesearch=linesearch),
+        "l-bfgs" => LBFGS(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), m=m, linesearch=linesearch),
         "cg" => ConjugateGradient(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), linesearch=linesearch),
         "gd" => GradientDescent(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), linesearch=linesearch),
         "newton" => Newton(alphaguess=LineSearches.InitialHagerZhang{Float32}(α0=LR), linesearch=linesearch),

@@ -106,9 +106,7 @@ function fwd(l, ps, st, x)
     base = l.base_activation(x)
     y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=η)
 
-    y = @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
-    any(isnan.(y)) && error("NaN in univariate function")
-    return y
+    return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
 end
 
 function update_fcn_grid(l, ps, st, x)

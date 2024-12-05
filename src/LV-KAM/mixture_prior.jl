@@ -187,7 +187,13 @@ function log_prior(prior::mix_prior, z, ps, st)
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     prior = @tullio p[b, o, i] := alpha[i] * exp(f_qp[b, o, i]) * π_0[b, o]
     prior = sum(prior; dims=3)
-    return sum(log.(prior); dims=2)[:,1,1]
+    log_prior = sum(log.(prior); dims=2)[:,1,1]
+
+    any(isnan.(f_qp)) && error("NaN in f_qp")
+    any(isnan.(prior)) && error("NaN in prior")
+    any(isnan.(log_prior)) && error("NaN in log_prior")
+
+    return log_prior
 end
 
 function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
@@ -196,7 +202,12 @@ function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
     """
     z, seed = @ignore_derivatives sample_prior(prior, num_samples, ps, st; init_seed=seed)
-    return mean(ρ_fcn(z, ps)), seed
+    mc_estimate = mean(ρ_fcn(z, ps))
+
+    any(isnan.(mc_estimate)) && error("NaN in mc_estimate")
+    any(isnan.(z)) && error("NaN in z")
+
+    return mc_estimate, seed
 end
 
 end

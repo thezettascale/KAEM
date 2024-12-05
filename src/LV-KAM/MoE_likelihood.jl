@@ -6,6 +6,7 @@ using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
+using Flux: mse, logitbinarycrossentropy
 
 include("univariate_functions.jl")
 include("mixture_prior.jl")
@@ -15,8 +16,8 @@ using .Utils: device, next_rng
 using .ebm_mix_prior
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> sum((x .- x̂) .^ 2, dims=2)[:, 1],
-    "bernoulli" => (x, x̂) -> sum(x .* log.(x̂) .+ (1 .- x) .* log.(1 .- x̂), dims=2)[:, 1],
+    "l2" => (x, x̂) -> mse(x̂, x, agg=sum, dims=2)[:, 1],
+    "bernoulli" => (x, x̂) -> logitbinarycrossentropy(x̂, x, agg=sum, dims=2)[:, 1],
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -133,7 +134,12 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    return lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
+    llhood = lkhood.log_lkhood_model(x̂, x) ./ lkhood.σ_llhood
+
+    any(isnan.(x̂)) && error("NaN in x̂")
+    any(isnan.(llhood)) && error("NaN in llhood")
+
+    return llhood
 end
 
 function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
@@ -161,6 +167,10 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
     z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
     ρ_values = ρ_fcn(z, ρ_ps)
     weights = @ignore_derivatives softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+
+    any(isnan.(ρ_values)) && error("NaN in ρ_values")
+    any(isnan.(weights)) && error("NaN in weights")
+    any(isnan.(z)) && error("NaN in z")
 
     return sum(ρ_values .* weights), seed
 end

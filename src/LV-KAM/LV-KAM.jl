@@ -5,6 +5,7 @@ export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors
 using Flux: DataLoader
+using NNlib: sigmoid_fast
 
 include("mixture_prior.jl")
 include("MoE_likelihood.jl")
@@ -15,6 +16,11 @@ using .MoE_likelihood
 using .univariate_functions: update_fcn_grid
 using .Utils
 
+gen_acts = Dict(
+    "l2" => x -> x,
+    "bernoulli" => sigmoid_fast,
+)
+
 struct LV_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
     lkhood::MoE_lkhood
@@ -22,6 +28,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     grid_update_decay::Float32
     grid_updates_samples::Int
+    generation_act::Function
 end
 
 function init_LV_KAM(
@@ -45,6 +52,7 @@ function init_LV_KAM(
     
     grid_update_decay = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "num_grid_updating_samples"))
+    lkhood_type = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
 
     return LV_KAM(
         prior_model,
@@ -53,6 +61,7 @@ function init_LV_KAM(
         test_loader,
         grid_update_decay,
         num_grid_updating_samples,
+        gen_acts[lkhood_type],
     )
 end
 
@@ -79,7 +88,8 @@ function generate_batch(model::LV_KAM, ps, st, num_samples; seed)
         The updated seed.
     """
     z, seed = sample_prior(model.prior, num_samples, ps.ebm, st.ebm; init_seed=seed)
-    return generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
+    x̂ = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
+    return model.generation_act(x̂), seed
 end
 
 function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
@@ -121,6 +131,9 @@ function update_llhood_grid(model::LV_KAM, ps, st; seed=1)
     new_grid, new_coef = update_fcn_grid(model.lkhood.fcn_q, ps.gen, st.gen, z)
     @reset ps.gen.coef = new_coef
     @reset model.lkhood.fcn_q.grid = new_grid
+
+    any(isnan.(new_grid)) && error("NaN in grid")
+    any(isnan.(new_coef)) && error("NaN in coef")
 
     return model, ps, seed
 end

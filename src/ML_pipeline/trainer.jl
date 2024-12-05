@@ -58,7 +58,6 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Initialize model
     model = init_LV_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
-    params, state = ComponentArray(params) |> device, state |> device
     optimizer = create_opt(conf)
     grid_update_frequency = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_frequency"))
 
@@ -73,8 +72,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         optimizer, 
         dataset_name, 
         img_shape, 
-        params, 
-        state, 
+        ComponentArray(params) |> device, 
+        device(state), 
         N_epochs, 
         loader_state, 
         device(x'), 
@@ -97,8 +96,18 @@ function train!(t::LV_KAM_trainer)
         write(file, "Time (s),Iter,Batch Loss,Test Loss,Grid Updated\n")
     end
 
+    function find_nan(grads)
+        for k in keys(grads)
+            if any(isnan.(grads[k]))
+                for i in keys(grads[k])
+                    any(isnan.(grads[k][i])) && error("NaN in $k, $i gradients")
+                end
+            end
+        end
+    end
+
     # Train step for a single batch
-    function grad_fcn(G, u, p)
+    function grad_fcn(G, u, args...)
         t.ps = u
         grid_updated = 0
 
@@ -110,17 +119,18 @@ function train!(t::LV_KAM_trainer)
             grid_updated = 1
         end
 
-        grads = first(gradient(p -> MLE_loss(t.model, p, t.st, t.x; seed=t.seed), t.ps))
+        grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
+        any(isnan, grads) && find_nan(grads)
         t.seed += 1
 
         copy!(G, grads)
         return G
     end
 
-    function opt_loss(p, s)
-        t.ps = p
-        return MLE_loss(t.model, p, t.st, t.x)
-    end
+    function opt_loss(u, args...)
+        t.ps = u
+        return MLE_loss(t.model, t.ps, t.st, t.x)
+    end    
 
     start_time = time()
 
@@ -154,9 +164,9 @@ function train!(t::LV_KAM_trainer)
 
         return false
     end
-            
+    
     optf = Optimization.OptimizationFunction(opt_loss; grad=grad_fcn)
-    optprob = Optimization.OptimizationProblem(optf, t.ps)
+    optprob = Optimization.OptimizationProblem(optf, copy(t.ps), nothing)
     
     # Optimization only stops when maxiters is reached
     res = Optimization.solve(optprob, t.o.init_optimizer();

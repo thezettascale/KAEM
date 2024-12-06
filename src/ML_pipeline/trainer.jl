@@ -52,8 +52,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     img_shape = size(dataset)[1:end-1]
-    save_dataset = dataset[:, 1:num_generated_samples]
     dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> Float32
+    save_dataset = reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
     println("Resized dataset to $(img_shape)")
     
     # Initialize model

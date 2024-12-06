@@ -117,7 +117,6 @@ function train!(t::LV_KAM_trainer)
     # Gradient for a single batch
     function grad_fcn(G, u, args...)
         t.ps = u
-        grid_updated = 0
 
         # Grid updating for likelihood model
         if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.grid_update_frequency))
@@ -164,6 +163,7 @@ function train!(t::LV_KAM_trainer)
             end
 
             train_loss = 0
+            grid_updated = 0
         end
 
         t.iter += 1

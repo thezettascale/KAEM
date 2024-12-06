@@ -108,8 +108,8 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
         selected_components = sum(fz_qp .* chosen_components, dims=2)[:,1,:] # samples x q
 
         # Grid search for max_z[ f_{q,c}(z) ]
-        f_grid = @tullio fg[b, g, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
-        max_f_grid = maximum(f_grid; dims=2)[:,1,:] # samples x q
+        f_grid = @tullio fg[b, g, i, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
+        max_f_grid = maximum(sum(f_grid; dims=3); dims=2)[:,1,1,:] # samples x q
 
         # Accept or reject
         seed = next_rng(seed)
@@ -120,6 +120,7 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
         z_p = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
         previous_samples = z_p .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
         sample_mask = accept_mask .+ sample_mask
+        clamp!(sample_mask, 0, 1)
     end
 
     return previous_samples, seed
@@ -186,11 +187,15 @@ function log_prior(mix::mix_prior, z, ps, st)
     f_qp = fwd(flip_states(mix, ps, st)..., z)
     
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    max_f = maximum(f_qp; dims=3)
-    exp_shifted = exp.(f_qp .- max_f)
-    prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] * π_0[b, o]
-    prior = sum(prior; dims=3)
-    log_prior = max_f .+ log.(prior .+ mix.π_tol)
+    # max_f = maximum(f_qp; dims=3)
+    # exp_shifted = exp.(f_qp .- max_f)
+    # prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] * π_0[b, o]
+    # prior = sum(prior; dims=3)
+    # log_prior = max_f .+ log.(prior .+ mix.π_tol)
+
+    exp_f = exp.(f_qp)
+    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
+    log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
     
     return sum(log_prior; dims=2)[:,1,1]
 end

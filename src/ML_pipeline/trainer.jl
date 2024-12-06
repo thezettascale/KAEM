@@ -52,6 +52,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     img_shape = size(dataset)[1:end-1]
+    save_dataset = dataset[:, 1:num_generated_samples]
     dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> Float32
     println("Resized dataset to $(img_shape)")
     
@@ -66,6 +67,13 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
 
     file_loc = isnothing(file_loc) ? "logs/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)
+
+    try
+        h5write(file_loc * "real_images.h5", "samples", save_dataset)
+    catch
+        rm(file_loc * "real_images.h5")
+        h5write(file_loc * "real_images.h5", "samples", save_dataset)
+    end
     
     return LV_KAM_trainer(
         model, 

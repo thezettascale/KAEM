@@ -9,5 +9,5 @@ include("src/ML_pipeline/trainer.jl")
 using .trainer
 
 Random.seed!(1)
-t = init_trainer(Random.GLOBAL_RNG, conf, "MNIST")
+t = init_trainer(Random.GLOBAL_RNG, conf, retrieve(conf, "TRAINING", "dataset"))
 train!(t)

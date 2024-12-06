@@ -3,11 +3,16 @@ Official implementation of the Latent Variable Kolmogov-Arnold Model -  a novel 
 
 Go see our [litepaper!](https://exalaboratories.com/litepaper).
 
-## Setup
+## Setup:
 
-Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup).
+Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup). Choose your favourite installer and run: 
 
-The shell script will install all requirements. Python dependencies will be installed into a conda environment called "LV-KAM". Run:
+```bash
+bash <conda-installer-name>-latest-Linux-x86_64.sh
+curl -fsSL https://install.julialang.org | sh
+```
+
+The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "LV-KAM". Just need to run:
 
 ```bash
 bash setup/setup.sh
@@ -19,7 +24,21 @@ bash setup/setup.sh
 bash src/unit_tests/run_tests.sh
 ```
 
-## Sustainability statement
+## To run experiments:
+
+Edit the config file:
+
+```bash
+nano config.ini
+```
+
+Run:
+
+```bash
+julia main.jl
+```
+
+## Sustainability statement:
 
 Like all KANs, LV-KAM neither performs optimally nor scales effectively on a GPU. Our hardware offers significantly better performance, achieving 27.6x the performance per Watt of GPUs in the [initial public revisions](https://exalaboratories.com/litepaper), with rapid ongoing private improvements. LV-KAM is especially well-suited to Exa hardware and will be scaled using such. 
 

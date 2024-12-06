@@ -217,7 +217,7 @@ function train!(t::LV_KAM_trainer)
     end
 
     # Save params, state, model
-    @save "t_data.jld2" cpu_device()(t.ps) cpu_device()(t.st) t.model
+    jldsave(t.file_loc * "saved_model.jld2"; params=cpu_device()(t.ps), state=cpu_device()(t.st), model=t.model)
 end
 
 end

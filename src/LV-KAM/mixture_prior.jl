@@ -101,7 +101,7 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
     # Rejection sampling
     while any(sample_mask .< 1)
 
-        # Draw candidate samples from Gaussian proposal, then filter f_{q,p}(z) by chosen components
+        # Draw candidate samples from uniform proposal, then filter f_{q,p}(z) by chosen components
         seed = next_rng(seed) 
         z_p = rand(Uniform(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
         fz_qp = fwd(prior.fcn_qp, ps, st, z_p)

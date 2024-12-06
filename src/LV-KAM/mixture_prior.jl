@@ -101,13 +101,13 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
     # Rejection sampling
     while any(sample_mask .< 1)
 
-        # Draw candidate samples from Gaussian proposal, then filter f_{q,p}(z) + z^2/2 by chosen components
+        # Draw candidate samples from Gaussian proposal, then filter f_{q,p}(z) by chosen components
         seed = next_rng(seed) 
         z_p = rand(Uniform(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
         fz_qp = fwd(prior.fcn_qp, ps, st, z_p)
         selected_components = sum(fz_qp .* chosen_components, dims=2)[:,1,:] # samples x q
 
-        # Grid search for max_z[ f_{q,c}(z) + z^2/2 ]
+        # Grid search for max_z[ f_{q,c}(z) ]
         f_grid = @tullio fg[b, g, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
         max_f_grid = maximum(f_grid; dims=2)[:,1,:] # samples x q
 

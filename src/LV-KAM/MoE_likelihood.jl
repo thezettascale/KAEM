@@ -168,7 +168,7 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
 
     z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
     ρ_values = ρ_fcn(z, ρ_ps)
-    weights = @ignore_derivatives softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+    weights = softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
 
     return sum(ρ_values .* weights), seed
 end

@@ -101,17 +101,19 @@ function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
         The updated seed.
     """
 
-    # Prior learning grad
+    # Prior normalizer
     logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm)
-    en_prior, seed = expected_prior(model.prior, size(x, 1), ps.ebm, st.ebm, logprior; seed=seed)
-    en_posterior, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logprior, ps.ebm; seed=seed)
-    loss_prior = en_posterior - en_prior
+    logZ, seed = expected_prior(model.prior, size(x, 1), ps.ebm, st.ebm, logprior; seed=seed)
+
+    # Prior learning gradient
+    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm) .- logZ
+    loss_prior, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logprior, ps.ebm; seed=seed)
 
     # Likelihood learning grad
     logllhood = (z, p) -> log_likelihood(model.lkhood, p, st.gen, x, z; seed=seed)
     loss_llhood, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logllhood, ps.gen; seed=seed)
     
-    return loss_prior + loss_llhood
+    return -(loss_prior + loss_llhood)
 end
 
 function update_llhood_grid(model::LV_KAM, ps, st; seed=1)

@@ -21,7 +21,7 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> sum((x̂ .- x).^2, dims=2)[:, 1],  
+    "l2" => (x, x̂) -> -sum((x̂ .- x).^2, dims=2)[:, 1],  
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer

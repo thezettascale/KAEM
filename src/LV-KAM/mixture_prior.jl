@@ -3,7 +3,7 @@ module ebm_mix_prior
 export mix_prior, init_mix_prior, sample_prior, log_prior, expected_prior
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra
 using NNlib: softmax
 using Flux: onehotbatch
 using ChainRules: @ignore_derivatives
@@ -169,7 +169,8 @@ end
 function log_prior(mix::mix_prior, z, ps, st)
     """
     Compute the unnormalized log-probability of the mixture ebm-prior.
-    Log-sum-exp trick is used for numerical stability.
+    The likelihood of each sample, z_q, is evaluated for each component of the
+    mixture model
     
     Args:
         mix: The mixture ebm-prior.
@@ -185,20 +186,56 @@ function log_prior(mix::mix_prior, z, ps, st)
     π_0 = Float32.(π_0) 
     alpha = softmax(ps.α)
     f_qp = fwd(flip_states(mix, ps, st)..., z)
-    
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    # max_f = maximum(f_qp; dims=3)
-    # exp_shifted = exp.(f_qp .- max_f)
-    # prior = @tullio p[b, o, i] := alpha[i] * exp_shifted[b, o, i] * π_0[b, o]
-    # prior = sum(prior; dims=3)
-    # log_prior = max_f .+ log.(prior .+ mix.π_tol)
 
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     exp_f = exp.(f_qp)
     prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
     log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
-    
     return sum(log_prior; dims=2)[:,1,1]
 end
+
+# function log_prior(mix::mix_prior, z, ps, st)
+#     """
+#     Compute the unnormalized log-probability of the mixture ebm-prior.
+#     The likelihood of each sample, z_q, is evaluated for each component of the
+#     mixture model
+    
+#     Args:
+#         mix: The mixture ebm-prior.
+#         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+#         ps: The parameters of the mixture ebm-prior.
+#         st: The states of the mixture ebm-prior.
+
+#     Returns:
+#         The unnormalized log-probability of the mixture ebm-prior.
+#     """
+
+#     b, q, p = size(z)..., mix.fcn_qp.in_dim
+
+#     # Prior
+#     π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
+
+#     # Prepare for broadcasting, (Tullio not working for some reason)
+#     alpha = repeat(reshape(softmax(ps.α), 1, 1, p), b, q, 1)
+#     π_0 = repeat(reshape(Float32.(π_0), b, q, 1), 1, 1, p)
+
+#     # Repeat samples for each mixture component
+#     z = repeat(reshape(z, :, 1), 1, p) 
+#     f_qqp = fwd(mix.fcn_qp, ps, st, z)
+#     f_qqp = reshape(f_qqp, b, q, q, p)
+
+#     # Extract diagonals, (mapreduce is non-differentiable - I tried)
+#     f = zeros(Float32, b, 0, p) |> device
+#     for i in 1:q
+#         f = hcat(f, f_qqp[:, i:i, i, :])
+#     end
+
+#     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
+#     exp_f = exp.(f)
+#     prior = alpha .* exp_f .* π_0
+#     log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
+#     return sum(log_prior; dims=2)[:,1,1]
+# end
 
 function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     """

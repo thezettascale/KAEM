@@ -65,7 +65,10 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     x, loader_state = iterate(model.train_loader) 
 
-    file_loc = isnothing(file_loc) ? "logs/$(dataset_name)_$(seed)/" : file_loc
+    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
+    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla"
+
+    file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)
 
     try

@@ -216,15 +216,17 @@ function log_prior(mix::mix_prior, z, ps, st)
     π_0 = 0 .<= z .<= 1  # π_0(z) = U(z;0,1)
     alpha = softmax(ps.α)
 
-    # Repeat samples for each mixture component
-    z = @views repeat(reshape(z, :, 1), 1, p) 
-    f_qp = fwd(mix.fcn_qp, ps, st, z)
-    f_qp = @views reshape(f_qp, b_size, q, q, p)
-    f_qp = mapreduce(i -> view(f_qp, :, i:i, i, :), hcat, 1:q) # Extract diagonals
+    # Find likelihood for each sample under its corresponding component
+    z = repeat(reshape(z, b_size, q, 1), 1, 1, p) 
+    f_qp = map(
+        i -> view(fwd(mix.fcn_qp, ps, st, view(z, :, i, :)), :, :, i:i), # f_{q,p}(z_q)
+        1:q  # Loop over components to prevent GPU allocation overflow
+        ) 
+    f_qp = cat(f_qp..., dims=3) # (b, q, p)
  
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     exp_f = exp.(f_qp)
-    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
+    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, i, o] * π_0[b, o]
     log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
     return sum(log_prior; dims=2)[:,1,1]
 end

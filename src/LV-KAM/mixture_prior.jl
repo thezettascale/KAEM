@@ -126,73 +126,45 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
     return previous_samples, seed
 end
 
-function flip_states(prior::mix_prior, ps, st)
-    """
-    Flip the params and states of the mixture ebm-prior.
-    This is needed for the log-probability calculation, 
-    since z_q is sampled component-wise, but needs to be
-    evaluated for each component, f_{q,p}(z_q). This only works
-    given that the domain of f is fixed to [0,1], (no grid updating).
+# function flip_states(prior::mix_prior, ps, st)
+#     """
+#     Flip the params and states of the mixture ebm-prior.
+#     This is needed for the log-probability calculation, 
+#     since z_q is sampled component-wise, but needs to be
+#     evaluated for each component, f_{q,p}(z_q). This only works
+#     given that the domain of f is fixed to [0,1], (no grid updating).
 
-    Args:
-        prior: The mixture ebm-prior.
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
+#     Args:
+#         prior: The mixture ebm-prior.
+#         ps: The parameters of the mixture ebm-prior.
+#         st: The states of the mixture ebm-prior.
 
-    Returns:
-        prior_flipped: The ebm-prior with a flipped grid.
-        ps_flipped: The flipped parameters of the mixture ebm-prior.
-        st_flipped: The flipped states of the mixture ebm-prior.
-    """
-    ps_flipped = prior.fcn_qp.η_trainable ? (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp',
-        basis_η = ps.basis_η
-    ) : (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp'
-    )
+#     Returns:
+#         prior_flipped: The ebm-prior with a flipped grid.
+#         ps_flipped: The flipped parameters of the mixture ebm-prior.
+#         st_flipped: The flipped states of the mixture ebm-prior.
+#     """
+#     ps_flipped = prior.fcn_qp.η_trainable ? (
+#         coef = permutedims(ps.coef, [2, 1, 3]),
+#         w_base = ps.w_base',
+#         w_sp = ps.w_sp',
+#         basis_η = ps.basis_η
+#     ) : (
+#         coef = permutedims(ps.coef, [2, 1, 3]),
+#         w_base = ps.w_base',
+#         w_sp = ps.w_sp'
+#     )
 
-    st_flipped = prior.fcn_qp.η_trainable ? st' : (
-        mask = st.mask',
-        basis_η = st.basis_η
-    )
+#     st_flipped = prior.fcn_qp.η_trainable ? st' : (
+#         mask = st.mask',
+#         basis_η = st.basis_η
+#     )
 
-    grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
-    @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
+#     grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
+#     @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
     
-    return prior.fcn_qp, ps_flipped, st_flipped
-end
-
-function log_prior(mix::mix_prior, z, ps, st)
-    """
-    Compute the unnormalized log-probability of the mixture ebm-prior.
-    The likelihood of each sample, z_q, is evaluated for each component of the
-    mixture model
-    
-    Args:
-        mix: The mixture ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-
-    Returns:
-        The unnormalized log-probability of the mixture ebm-prior.
-    """
-
-    π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
-    π_0 = Float32.(π_0) 
-    alpha = softmax(ps.α)
-    f_qp = fwd(flip_states(mix, ps, st)..., z)
-
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    exp_f = exp.(f_qp)
-    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
-    log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
-    return sum(log_prior; dims=2)[:,1,1]
-end
+#     return prior.fcn_qp, ps_flipped, st_flipped
+# end
 
 # function log_prior(mix::mix_prior, z, ps, st)
 #     """
@@ -210,32 +182,52 @@ end
 #         The unnormalized log-probability of the mixture ebm-prior.
 #     """
 
-#     b, q, p = size(z)..., mix.fcn_qp.in_dim
-
-#     # Prior
-#     π_0 = 0 .<= z .<= 1 # π_0(z) = U(z;0,1)
-
-#     # Prepare for broadcasting, (Tullio not working for some reason)
-#     alpha = repeat(reshape(softmax(ps.α), 1, 1, p), b, q, 1)
-#     π_0 = repeat(reshape(Float32.(π_0), b, q, 1), 1, 1, p)
-
-#     # Repeat samples for each mixture component
-#     z = repeat(reshape(z, :, 1), 1, p) 
-#     f_qqp = fwd(mix.fcn_qp, ps, st, z)
-#     f_qqp = reshape(f_qqp, b, q, q, p)
-
-#     # Extract diagonals, (mapreduce is non-differentiable - I tried)
-#     f = zeros(Float32, b, 0, p) |> device
-#     for i in 1:q
-#         f = hcat(f, f_qqp[:, i:i, i, :])
-#     end
+#     π_0 = 0 .<= z .<= 1  # π_0(z) = U(z;0,1)
+#     π_0 = Float32.(π_0) 
+#     alpha = softmax(ps.α)
+#     f_qp = fwd(flip_states(mix, ps, st)..., z)
 
 #     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-#     exp_f = exp.(f)
-#     prior = alpha .* exp_f .* π_0
+#     exp_f = exp.(f_qp)
+#     prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
 #     log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
 #     return sum(log_prior; dims=2)[:,1,1]
 # end
+
+function log_prior(mix::mix_prior, z, ps, st)
+    """
+    Compute the unnormalized log-probability of the mixture ebm-prior.
+    The likelihood of each sample, z_q, is evaluated for each component of the
+    mixture model
+    
+    Args:
+        mix: The mixture ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        The unnormalized log-probability of the mixture ebm-prior.
+    """
+
+    b_size, q, p = size(z)..., mix.fcn_qp.in_dim
+
+    # Prior
+    π_0 = 0 .<= z .<= 1  # π_0(z) = U(z;0,1)
+    alpha = softmax(ps.α)
+
+    # Repeat samples for each mixture component
+    z = @views repeat(reshape(z, :, 1), 1, p) 
+    f_qp = fwd(mix.fcn_qp, ps, st, z)
+    f_qp = @views reshape(f_qp, b_size, q, q, p)
+    f_qp = mapreduce(i -> view(f_qp, :, i:i, i, :), hcat, 1:q) # Extract diagonals
+ 
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
+    exp_f = exp.(f_qp)
+    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
+    log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
+    return sum(log_prior; dims=2)[:,1,1]
+end
 
 function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     """

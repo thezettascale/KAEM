@@ -133,10 +133,7 @@ function update_fcn_grid(l, ps, st, x)
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(l.grid, 2) - 2*l.spline_degree - 1
     ids = [div(b_size * i, num_interval) + 1 for i in 0:num_interval-1]
-    grid_adaptive = zeros(Float32, 0, size(x, 2)) |> device
-    for idx in ids
-        grid_adaptive = vcat(grid_adaptive, x_sort[idx:idx, :])
-    end
+    grid_adaptive = mapreduce(i -> view(x_sort, i:i, :), vcat, ids)
     grid_adaptive = vcat(grid_adaptive, x_sort[end:end, :])
     grid_adaptive = grid_adaptive |> permutedims 
 

@@ -220,7 +220,7 @@ function log_prior(mix::mix_prior, z, ps, st)
     z = repeat(reshape(z, b_size, q, 1), 1, 1, p) 
     f_qp = map(
         i -> view(fwd(mix.fcn_qp, ps, st, view(z, :, i, :)), :, :, i:i), # f_{q,p}(z_q)
-        1:q  # Loop over components to prevent GPU allocation overflow
+        1:q  # Loop over components to prevent GPU allocation
         ) 
     f_qp = cat(f_qp..., dims=3) # (b, q, p)
  

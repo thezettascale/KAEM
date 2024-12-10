@@ -116,27 +116,26 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
     # Rejection sampling
     while any(sample_mask .< 1)
 
-        # Draw candidate samples from uniform proposal, then filter f_{q,p}(z) by chosen components
+        # Draw candidate samples from proposal, i.e. prior
         seed = next_rng(seed) 
         z_p = rand(prior.π_0, num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
         fz_qp = fwd(prior.fcn_qp, ps, st, z_p)
-        selected_components = sum(fz_qp .* chosen_components, dims=2)[:,1,:] # samples x q
-
-        # Grid search for max_z[ f_{q,c}(z) ]
+        
+        # Filter chosen components of mixture model, (samples x q)
+        z_selected = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
+        f_selected = sum(fz_qp .* chosen_components, dims=2)[:,1,:] 
+        
+        # Grid search for max_z[ f_{q,c}(z) ] for chosen components
         f_grid = @tullio fg[b, g, i, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
-        sum_f = sum(f_grid; dims=3)[:,:,1,:] # Filter input dim by chosen components
-        max_f_grid = maximum(sum_f; dims=2)[:,1,:] # Max f_qp
-        grid_selected = @tullio chosen[b, g, o] := grid[g, i] * chosen_components[b, i, o] 
-        max_z_grid = grid_selected[argmax(sum_f; dims=2)[:,1,:]] # Argmax f_qp
+        max_f_grid = maximum(sum(f_grid; dims=3); dims=2)[:,1,1,:] # Filtered max f_qp, (samples x q)
         
         # Accept or reject
         seed = next_rng(seed)
         u_threshold = rand(Uniform(0,1), num_samples, prior.fcn_qp.out_dim) |> device # u ~ U(0,1)
-        z_p = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
-        accept_mask = u_threshold .< exp.(selected_components .- max_f_grid) .* (pdf(prior.π_0, z_p) ./ pdf(prior.π_0, max_z_grid))
+        accept_mask = u_threshold .< exp.(f_selected .- max_f_grid)
 
         # Update samples
-        previous_samples = z_p .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
+        previous_samples = z_selected .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
         sample_mask = accept_mask .+ sample_mask
         clamp!(sample_mask, 0, 1)
     end

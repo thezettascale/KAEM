@@ -21,7 +21,7 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> sum((x̂ .- x).^2, dims=2)[:, 1],  
+    "l2" => (x, x̂) -> - sum((x̂ .- x).^2, dims=2)[:, 1],  
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -143,7 +143,7 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     return lkhood.log_lkhood_model(x̂, x) ./ (2*lkhood.σ_llhood^2)
 end
 
-function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
+function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1)
     """
     Compute the expected posterior of an arbritrary function of the latent variable,
     using importance sampling. Sampling procedure is ignored from the gradient computation.
@@ -167,7 +167,7 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1)
 
     z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
     ρ_values = ρ_fcn(z, ρ_ps)
-    weights = @ignore_derivatives softmax(log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+    weights = @ignore_derivatives softmax(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
 
     return sum(ρ_values .* weights), seed
 end

@@ -238,7 +238,7 @@ function log_prior(mix::mix_prior, z, ps, st)
         i -> view(fwd(mix.fcn_qp, ps, st, view(z, :, i, :)), :, :, i:i), # f_{q,p}(z_q)
         1:q  # Loop over components to prevent GPU allocation
         ) 
-    f_qp = cat(f_qp..., dims=3) # (b, q, p)
+    f_qp = cat(f_qp..., dims=3) # (b, p, q)
  
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     exp_f = exp.(f_qp)

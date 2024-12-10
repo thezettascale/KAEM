@@ -13,8 +13,22 @@ include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng
 
+prior_distributions = Dict(
+    "uniform" => Uniform(0f0,1f0),
+    "normal" => Normal(0f0,1f0),
+    "bernoulli" => Bernoulli(5f-1)
+)
+
+prior_pdf = Dict(
+    "uniform" => z -> 0 .<= z .<= 1,
+    "normal" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
+    "bernoulli" => z -> 1 ./ 2
+)
+
 struct mix_prior <: Lux.AbstractLuxLayer
     fcn_qp::univariate_function
+    π_0::Union{Uniform, Normal, Bernoulli}
+    π_pdf::Function
     π_tol::Float32
 end
 
@@ -37,6 +51,7 @@ function init_mix_prior(
     init_η = parse(Float32, retrieve(conf, "MIX_PRIOR", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
+    prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     π_tol = parse(Float32, retrieve(conf, "MIX_PRIOR", "π_tol"))
 
     prior_seed = next_rng(prior_seed)
@@ -59,7 +74,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func, π_tol)
+    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], π_tol)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -103,21 +118,24 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
 
         # Draw candidate samples from uniform proposal, then filter f_{q,p}(z) by chosen components
         seed = next_rng(seed) 
-        z_p = rand(Uniform(0,1), num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
+        z_p = rand(prior.π_0, num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
         fz_qp = fwd(prior.fcn_qp, ps, st, z_p)
         selected_components = sum(fz_qp .* chosen_components, dims=2)[:,1,:] # samples x q
 
         # Grid search for max_z[ f_{q,c}(z) ]
         f_grid = @tullio fg[b, g, i, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
-        max_f_grid = maximum(sum(f_grid; dims=3); dims=2)[:,1,1,:] # samples x q
-
+        sum_f = sum(f_grid; dims=3)[:,:,1,:] # Filter input dim by chosen components
+        max_f_grid = maximum(sum_f; dims=2)[:,1,:] # Max f_qp
+        grid_selected = @tullio chosen[b, g, o] := grid[g, i] * chosen_components[b, i, o] 
+        max_z_grid = grid_selected[argmax(sum_f; dims=2)[:,1,:]] # Argmax f_qp
+        
         # Accept or reject
         seed = next_rng(seed)
         u_threshold = rand(Uniform(0,1), num_samples, prior.fcn_qp.out_dim) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(selected_components .- max_f_grid) 
+        z_p = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
+        accept_mask = u_threshold .< exp.(selected_components .- max_f_grid) .* (pdf(prior.π_0, z_p) ./ pdf(prior.π_0, max_z_grid))
 
         # Update samples
-        z_p = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
         previous_samples = z_p .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
         sample_mask = accept_mask .+ sample_mask
         clamp!(sample_mask, 0, 1)
@@ -182,8 +200,7 @@ end
 #         The unnormalized log-probability of the mixture ebm-prior.
 #     """
 
-#     π_0 = 0 .<= z .<= 1  # π_0(z) = U(z;0,1)
-#     π_0 = Float32.(π_0) 
+#     π_0 = mix.π_pdf(z)
 #     alpha = softmax(ps.α)
 #     f_qp = fwd(flip_states(mix, ps, st)..., z)
 
@@ -213,7 +230,7 @@ function log_prior(mix::mix_prior, z, ps, st)
     b_size, q, p = size(z)..., mix.fcn_qp.in_dim
 
     # Prior
-    π_0 = 0 .<= z .<= 1  # π_0(z) = U(z;0,1)
+    π_0 = mix.π_pdf(z)
     alpha = softmax(ps.α)
 
     # Find likelihood for each sample under its corresponding component

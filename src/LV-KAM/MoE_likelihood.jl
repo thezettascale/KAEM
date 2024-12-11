@@ -171,7 +171,7 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
     
     z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st, seed)
     weights = lkhood.weight_fcn(t' .* log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
-    ρ = reshape(ρ_fcn(z, ρ_ps), size(weights), 1)
+    ρ = reshape(ρ_fcn(z, ρ_ps), size(x,1), 1)
     
     return sum(ρ .* weights; dims=1), seed
 end

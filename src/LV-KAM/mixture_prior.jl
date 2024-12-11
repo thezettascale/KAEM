@@ -59,7 +59,7 @@ function init_mix_prior(
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
 
-    need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_t")) > 1
+    need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
     τ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "gumbel_temperature"))
     ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
 

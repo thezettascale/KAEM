@@ -147,7 +147,7 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     return lkhood.log_lkhood_model(x̂, x) ./ (2*lkhood.σ_llhood^2)
 end
 
-function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1)
+function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=[1])
     """
     Compute the expected posterior of an arbritrary function of the latent variable,
     using importance sampling. Sampling procedure is ignored from the gradient computation.
@@ -170,9 +170,10 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1
     gen_ps, gen_st = ps.gen, st.gen
     
     z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st, seed)
-    weights = lkhood.weight_fcn(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
-
-    return sum(ρ_fcn(z, ρ_ps) .* weights), seed
+    weights = lkhood.weight_fcn(t' .* log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+    ρ = reshape(ρ_fcn(z, ρ_ps), size(weights), 1)
+    
+    return sum(ρ .* weights; dims=1), seed
 end
 
 end

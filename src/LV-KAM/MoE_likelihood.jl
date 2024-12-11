@@ -168,8 +168,8 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1
 
     prior_ps, prior_st = ps.ebm, st.ebm
     gen_ps, gen_st = ps.gen, st.gen
-    z, seed = sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
-
+    
+    z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
     weights = lkhood.weight_fcn(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
 
     return sum(ρ_fcn(z, ρ_ps) .* weights), seed

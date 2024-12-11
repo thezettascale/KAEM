@@ -4,8 +4,7 @@ export mix_prior, init_mix_prior, sample_prior, log_prior, expected_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra
-using NNlib: softmax, logsoftmax, sigmoid_fast
-using Flux: onehotbatch
+using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
 
 include("prior_sampling.jl")

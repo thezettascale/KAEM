@@ -3,8 +3,10 @@ module prior_sampler
 export select_category, select_category_differentiable, sample_prior
 
 using CUDA, KernelAbstractions, Tullio
-using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
+using Lux, LinearAlgebra, Random, LuxCUDA
 using Distributions: Categorical, Uniform
+using Flux: onehotbatch
+using NNlib: softmax, logsoftmax, sigmoid_fast
 
 include("univariate_functions.jl")
 include("../utils.jl")

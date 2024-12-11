@@ -31,6 +31,7 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
     τ::Float32
+    num_latent_samples::Int
     sample_z::Function
     categorical_mask::Function
     max_fcn::Function
@@ -42,6 +43,7 @@ function init_mix_prior(
     prior_seed::Int=1,
 )
     p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
+    latent_samples = parse(Int, retrieve(conf, "MIX_PRIOR", "num_latent_samples"))
     q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
@@ -97,7 +99,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
+    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, latent_samples, sample_function, choose_category, max_fcn, acceptance_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -215,14 +217,15 @@ end
 #     return sum(prior; dims=2)[:,1,1]
 # end
 
-function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
+function expected_prior(prior::mix_prior, batch_size, ps, st, ρ_fcn; seed=1)
     """
     Compute the expected prior of an arbritrary function of the latent variable, 
-    using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
+    using a Monte Carlo estimator with num_latent_samples samples.
     """
 
-    z, seed = prior.sample_z(prior, num_samples, ps, st, seed)
-    return mean(ρ_fcn(z, ps)), seed
+    z, seed = prior.sample_z(prior, batch_size*prior.num_latent_samples, ps, st, seed)
+    ρ = reshape(ρ_fcn(z, ps), batch_size, prior.num_latent_samples)
+    return mean(ρ_fcn(z, ps); dims=2), seed
 end
 
 end

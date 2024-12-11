@@ -3,7 +3,7 @@ module MoE_likelihood
 export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior, generate_from_z 
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra
 using NNlib: softmax, sigmoid_fast, tanh_fast
 using ChainRules: @ignore_derivatives
 
@@ -21,7 +21,7 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> - sum((x̂ .- x).^2, dims=2)[:, 1],  
+    "l2" => (x, x̂) -> -sum((x̂ .- x).^2, dims=2),
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -59,7 +59,7 @@ function init_MoE_lkhood(
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
     need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
-    weight_fcn = need_derivative ? softmax :  x -> @ignore_derivatives softmax(x)
+    weight_fcn = need_derivative ? x -> softmax(x; dims=3) :  x -> @ignore_derivatives softmax(x; dims=3)
 
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))
@@ -144,6 +144,8 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
+    x̂ = reshape(x̂, size(x)..., :) # batch_size x out_dim x num_samples
+    x = reshape(x, size(x)..., 1) # batch_size x out_dim x 1
     return lkhood.log_lkhood_model(x̂, x) ./ (2*lkhood.σ_llhood^2)
 end
 
@@ -162,18 +164,18 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
         seed: The seed for the random number generator.
 
     Returns:
-        The expected posterior of the function of the latent variable.  
+        The expected posterior of the function of the latent variable, (w.r.t samples from the latent space, NOT BATCH).
         The updated seed. 
     """
 
     prior_ps, prior_st = ps.ebm, st.ebm
     gen_ps, gen_st = ps.gen, st.gen
     
-    z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st, seed)
-    weights = lkhood.weight_fcn(t' .* log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
-    ρ = reshape(ρ_fcn(z, ρ_ps), size(x,1), 1)
+    z, seed = prior.sample_z(prior, size(x,1)*prior.num_latent_samples, prior_ps, prior_st, seed)
+    ρ = reshape(ρ_fcn(z, ρ_ps), size(x, 1), 1, prior.num_latent_samples)
+    weights = lkhood.weight_fcn(view(t, 1, length(t), 1) .* log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
     
-    return sum(ρ .* weights; dims=1), seed
+    return sum(ρ .* weights; dims=3), seed
 end
 
 end

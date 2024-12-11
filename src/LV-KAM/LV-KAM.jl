@@ -117,7 +117,7 @@ function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
         seed: The seed for the random number generator.
 
     Returns:
-        The negative marginal likelihood.
+        The negative marginal likelihood, averaged over the batch.
         The updated seed.
     """
 
@@ -126,14 +126,14 @@ function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
     logZ, seed = expected_prior(model.prior, size(x, 1), ps.ebm, st.ebm, logprior; seed=seed)
 
     # Prior learning gradient
-    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm) #.- logZ
+    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm) .- logZ
     loss_prior, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logprior, ps.ebm; seed=seed)
 
     # Likelihood learning grad
     logllhood = (z, p) -> log_likelihood(model.lkhood, p, st.gen, x, z; seed=seed)
     loss_llhood, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logllhood, ps.gen; seed=seed)
     
-    return - sum(loss_prior + loss_llhood)
+    return - mean(loss_prior + loss_llhood)
 end
 
 function update_llhood_grid(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st; seed=1)

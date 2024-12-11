@@ -166,20 +166,15 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
         The updated seed. 
     """
 
-    prior_ps, prior_st = ps.ebm, st.ebm
-    gen_ps, gen_st = ps.gen, st.gen
-
     # MC estimator is mapped over batch dim for memory efficiency
     function MC_estimate(x_i)
-        x_i = view(x_i, 1, :)
-        z, seed = prior.sample_z(prior, prior.num_latent_samples, prior_ps, prior_st, seed)
-        ρ = ρ_fcn(z, x_i, ρ_ps)
-        weights = lkhood.weight_fcn(view(t, 1, length(t)) .* log_likelihood(lkhood, gen_ps, gen_st, x_i, z; seed=seed))
-        return sum(ρ .* weights; dims=1)
+        z, seed = prior.sample_z(prior, prior.num_latent_samples, ps.ebm, st.ebm, seed)
+        weights = lkhood.weight_fcn(view(t, 1, length(t)) .* log_likelihood(lkhood, ps.gen, st.gen, x_i, z; seed=seed))
+        return sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=1)
     end
     
-    ρ = mapreduce(x_i -> MC_estimate(x_i), vcat, eachrow(x))
-    return ρ, seed
+    ρ = map(i -> MC_estimate(view(x, i:i, :)), 1:size(x, 1))
+    return vcat(ρ...), seed
 end
 
 end

@@ -31,6 +31,7 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::Float32
     log_lkhood_model::Function
     output_activation::Function
+    weight_fcn::Function
 end
 
 function init_MoE_lkhood(
@@ -57,6 +58,9 @@ function init_MoE_lkhood(
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
+    need_derivative = parse(Bool, retrieve(conf, "TRAINING", "learn_through_sampling")) 
+    weight_fcn = need_derivative ? softmax : @ignore_derivatives softmax
+
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))
     .+ σ_base .* (randn(Float32, q, 1) .* 2f0 .- 1f0) .* (1f0 / √(Float32(q))))
@@ -77,7 +81,7 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
     
-    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act])
+    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -164,12 +168,11 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1
 
     prior_ps, prior_st = ps.ebm, st.ebm
     gen_ps, gen_st = ps.gen, st.gen
+    z, seed = sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
 
-    z, seed = @ignore_derivatives sample_prior(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
-    ρ_values = ρ_fcn(z, ρ_ps)
-    weights = @ignore_derivatives softmax(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
+    weights = lkhood.weight_fcn(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
 
-    return sum(ρ_values .* weights), seed
+    return sum(ρ_fcn(z, ρ_ps) .* weights), seed
 end
 
 end

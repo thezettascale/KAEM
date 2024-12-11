@@ -11,7 +11,7 @@ using .Utils: device
 
 using CUDA, KernelAbstractions, Tullio
 using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
-using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA
+using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra
 
 dataset_mapping = Dict(
     "MNIST" => MLDatasets.MNIST(),
@@ -132,6 +132,8 @@ function train!(t::LV_KAM_trainer)
         grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
         any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
         t.seed += 1
+
+        println("Iter: $(t.iter), Grad norm: $(norm(grads))")
 
         copy!(G, grads)
         return G

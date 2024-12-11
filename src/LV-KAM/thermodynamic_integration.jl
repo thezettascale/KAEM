@@ -29,4 +29,6 @@ function Lux.initialstates(rng::AbstractRNG, model::Thermodynamic_LV_KAM)
     return (ebm = Lux.initialstates(rng, model.prior), gen = Lux.initialstates(rng, model.lkhood))
 end
 
+
+
 end

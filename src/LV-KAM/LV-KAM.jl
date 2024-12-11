@@ -126,7 +126,7 @@ function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
     logZ, seed = expected_prior(model.prior, size(x, 1), ps.ebm, st.ebm, logprior; seed=seed)
 
     # Prior learning gradient
-    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm) .- logZ
+    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm) #.- logZ
     loss_prior, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logprior, ps.ebm; seed=seed)
 
     # Likelihood learning grad

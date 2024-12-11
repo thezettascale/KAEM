@@ -4,12 +4,14 @@ export mix_prior, init_mix_prior, sample_prior, log_prior, expected_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra
-using NNlib: softmax
+using NNlib: softmax, logsoftmax, sigmoid_fast
 using Flux: onehotbatch
 using ChainRules: @ignore_derivatives
 
+include("prior_sampling.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
+using .prior_sampler
 using .univariate_functions
 using .Utils: device, next_rng
 
@@ -29,7 +31,11 @@ struct mix_prior <: Lux.AbstractLuxLayer
     fcn_qp::univariate_function
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
-    π_tol::Float32
+    τ::Float32
+    sample_z::Function
+    categorical_mask::Function
+    max_fcn::Function
+    acceptance_fcn::Function
 end
 
 function init_mix_prior(
@@ -52,7 +58,18 @@ function init_mix_prior(
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
-    π_tol = parse(Float32, retrieve(conf, "MIX_PRIOR", "π_tol"))
+
+    need_derivative = parse(Bool, retrieve(conf, "TRAINING", "learn_through_sampling")) 
+    τ = parse(Float32, retrieve(conf, "TRAINING", "gumbel_temperature"))
+    ζ = parse(Float32, retrieve(conf, "MIX_PRIOR", "rejection_smoothening"))
+
+    sample_function = need_derivative ? sample_prior : @ignore_derivatives sample_prior
+    choose_category = need_derivative ? select_category_differentiable : select_category
+    max_fcn = need_derivative ? logsumexp : maximum
+    acceptance_fcn = (need_derivative ?
+        (u_th, fz, f_grid) -> sigmoid_fast((u_th .- exp.(fz .- f_grid)) .* ζ) : 
+        (u_th, fz, f_grid) -> u_th .< exp.(fz .- f_grid)
+        )
 
     prior_seed = next_rng(prior_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(p))) 
@@ -74,7 +91,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], π_tol)
+    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -88,9 +105,13 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
     return st
 end
 
-function sample_prior(prior, num_samples, ps, st; init_seed=1)
+function flip_states(prior::mix_prior, ps, st)
     """
-    Component-wise rejection sampling for the mixture ebm-prior.
+    Flip the params and states of the mixture ebm-prior.
+    This is needed for the log-probability calculation, 
+    since z_q is sampled component-wise, but needs to be
+    evaluated for each component, f_{q,p}(z_q). This only works
+    given that the domain of f is fixed to [0,1], (no grid updating).
 
     Args:
         prior: The mixture ebm-prior.
@@ -98,117 +119,31 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
         st: The states of the mixture ebm-prior.
 
     Returns:
-        z: The samples from the mixture ebm-prior, (num_samples, q). 
-        seed: The updated seed.
+        prior_flipped: The ebm-prior with a flipped grid.
+        ps_flipped: The flipped parameters of the mixture ebm-prior.
+        st_flipped: The flipped states of the mixture ebm-prior.
     """
+    ps_flipped = prior.fcn_qp.η_trainable ? (
+        coef = permutedims(ps.coef, [2, 1, 3]),
+        w_base = ps.w_base',
+        w_sp = ps.w_sp',
+        basis_η = ps.basis_η
+    ) : (
+        coef = permutedims(ps.coef, [2, 1, 3]),
+        w_base = ps.w_base',
+        w_sp = ps.w_sp'
+    )
 
-    seed = init_seed
-    previous_samples = zeros(Float32, num_samples) |> device
-    sample_mask = zeros(Float32, num_samples) |> device
-    grid = prior.fcn_qp.grid'
-    alpha = cpu_device()(softmax(ps.α))
+    st_flipped = prior.fcn_qp.η_trainable ? st' : (
+        mask = st.mask',
+        basis_η = st.basis_η
+    )
 
-    # Categorical component selection (per sample, per outer sum dimension)
-    seed = next_rng(seed)
-    rand_vals = rand(Categorical(alpha), prior.fcn_qp.out_dim, num_samples) 
-    chosen_components = permutedims(collect(Float32, onehotbatch(rand_vals, 1:prior.fcn_qp.in_dim)), [3, 1, 2]) |> device # mask of 1s/0s - only admits chosen components
-
-    # Rejection sampling
-    while any(sample_mask .< 1)
-
-        # Draw candidate samples from proposal, i.e. prior
-        seed = next_rng(seed) 
-        z_p = rand(prior.π_0, num_samples, prior.fcn_qp.in_dim) |> device # z ~ Q(z)
-        fz_qp = fwd(prior.fcn_qp, ps, st, z_p)
-        
-        # Filter chosen components of mixture model, (samples x q)
-        z_selected = @tullio chosen[b, o] := z_p[b, i] * chosen_components[b, i, o]
-        f_selected = sum(fz_qp .* chosen_components, dims=2)[:,1,:] 
-        
-        # Grid search for max_z[ f_{q,c}(z) ] for chosen components
-        f_grid = @tullio fg[b, g, i, o] := fwd(prior.fcn_qp, ps, st, grid)[g ,i, o]  * chosen_components[b, i, o]
-        max_f_grid = maximum(sum(f_grid; dims=3); dims=2)[:,1,1,:] # Filtered max f_qp, (samples x q)
-        
-        # Accept or reject
-        seed = next_rng(seed)
-        u_threshold = rand(Uniform(0,1), num_samples, prior.fcn_qp.out_dim) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(f_selected .- max_f_grid)
-
-        # Update samples
-        previous_samples = z_selected .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
-        sample_mask = accept_mask .+ sample_mask
-        clamp!(sample_mask, 0, 1)
-    end
-
-    return previous_samples, seed
+    grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
+    @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
+    
+    return prior.fcn_qp, ps_flipped, st_flipped
 end
-
-# function flip_states(prior::mix_prior, ps, st)
-#     """
-#     Flip the params and states of the mixture ebm-prior.
-#     This is needed for the log-probability calculation, 
-#     since z_q is sampled component-wise, but needs to be
-#     evaluated for each component, f_{q,p}(z_q). This only works
-#     given that the domain of f is fixed to [0,1], (no grid updating).
-
-#     Args:
-#         prior: The mixture ebm-prior.
-#         ps: The parameters of the mixture ebm-prior.
-#         st: The states of the mixture ebm-prior.
-
-#     Returns:
-#         prior_flipped: The ebm-prior with a flipped grid.
-#         ps_flipped: The flipped parameters of the mixture ebm-prior.
-#         st_flipped: The flipped states of the mixture ebm-prior.
-#     """
-#     ps_flipped = prior.fcn_qp.η_trainable ? (
-#         coef = permutedims(ps.coef, [2, 1, 3]),
-#         w_base = ps.w_base',
-#         w_sp = ps.w_sp',
-#         basis_η = ps.basis_η
-#     ) : (
-#         coef = permutedims(ps.coef, [2, 1, 3]),
-#         w_base = ps.w_base',
-#         w_sp = ps.w_sp'
-#     )
-
-#     st_flipped = prior.fcn_qp.η_trainable ? st' : (
-#         mask = st.mask',
-#         basis_η = st.basis_η
-#     )
-
-#     grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
-#     @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
-    
-#     return prior.fcn_qp, ps_flipped, st_flipped
-# end
-
-# function log_prior(mix::mix_prior, z, ps, st)
-#     """
-#     Compute the unnormalized log-probability of the mixture ebm-prior.
-#     The likelihood of each sample, z_q, is evaluated for each component of the
-#     mixture model
-    
-#     Args:
-#         mix: The mixture ebm-prior.
-#         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-#         ps: The parameters of the mixture ebm-prior.
-#         st: The states of the mixture ebm-prior.
-
-#     Returns:
-#         The unnormalized log-probability of the mixture ebm-prior.
-#     """
-
-#     π_0 = mix.π_pdf(z)
-#     alpha = softmax(ps.α)
-#     f_qp = fwd(flip_states(mix, ps, st)..., z)
-
-#     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-#     exp_f = exp.(f_qp)
-#     prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, o, i] * π_0[b, o]
-#     log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
-#     return sum(log_prior; dims=2)[:,1,1]
-# end
 
 function log_prior(mix::mix_prior, z, ps, st)
     """
@@ -226,33 +161,61 @@ function log_prior(mix::mix_prior, z, ps, st)
         The unnormalized log-probability of the mixture ebm-prior.
     """
 
-    b_size, q, p = size(z)..., mix.fcn_qp.in_dim
-
-    # Prior
     π_0 = mix.π_pdf(z)
     alpha = softmax(ps.α)
+    f_qp = fwd(flip_states(mix, ps, st)..., z)
 
-    # Find likelihood for each sample under its corresponding component
-    z = repeat(reshape(z, b_size, q, 1), 1, 1, p) 
-    f_qp = map(
-        i -> view(fwd(mix.fcn_qp, ps, st, view(z, :, i, :)), :, :, i:i), # f_{q,p}(z_q)
-        1:q  # Loop over components to prevent GPU allocation
-        ) 
-    f_qp = cat(f_qp..., dims=3) # (b, p, q)
- 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    exp_f = exp.(f_qp)
-    prior = @tullio p[b, o, i] := alpha[i] * exp_f[b, i, o] * π_0[b, o]
-    log_prior = log.(sum(prior; dims=3) .+ mix.π_tol)
-    return sum(log_prior; dims=2)[:,1,1]
+    f_qp = exp.(f_qp)
+    prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
+    prior = log.(sum(prior; dims=3) .+ eps(Float32))
+    return sum(prior; dims=2)[:,1,1]
 end
+
+# function log_prior(mix::mix_prior, z, ps, st)
+#     """
+#     Compute the unnormalized log-probability of the mixture ebm-prior.
+#     The likelihood of each sample, z_q, is evaluated for each component of the
+#     mixture model
+    
+#     Args:
+#         mix: The mixture ebm-prior.
+#         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+#         ps: The parameters of the mixture ebm-prior.
+#         st: The states of the mixture ebm-prior.
+
+#     Returns:
+#         The unnormalized log-probability of the mixture ebm-prior.
+#     """
+
+#     b_size, q, p = size(z)..., mix.fcn_qp.in_dim
+
+#     # Prior
+#     π_0 = mix.π_pdf(z)
+#     alpha = softmax(ps.α)
+
+#     # Find likelihood for each sample under its corresponding component
+#     z = repeat(reshape(z, b_size, q, 1), 1, 1, p) 
+#     f_qp = map(
+#         i -> view(fwd(mix.fcn_qp, ps, st, view(z, :, i, :)), :, :, i:i), # f_{q,p}(z_q)
+#         1:q  # Loop over components to prevent GPU allocation
+#         ) 
+#     f_qp = cat(f_qp..., dims=3) # (b, p, q)
+ 
+#     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
+#     f_qp = exp.(f_qp)
+#     prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, i, o] * π_0[b, o]
+#     prior = log.(sum(prior; dims=3) .+ eps(Float32))
+#     return sum(prior; dims=2)[:,1,1]
+# end
 
 function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     """
     Compute the expected prior of an arbritrary function of the latent variable, 
     using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
     """
-    z, seed = @ignore_derivatives sample_prior(prior, num_samples, ps, st; init_seed=seed)
+
+    z, seed = prior.sample_z(prior, num_samples, ps, st; init_seed=seed)
     return mean(ρ_fcn(z, ps)), seed
 end
 

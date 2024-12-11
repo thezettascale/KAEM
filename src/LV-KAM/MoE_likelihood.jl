@@ -135,8 +135,8 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
         lkhood: The likelihood model.
         ps: The parameters of the likelihood model.
         st: The states of the likelihood model.
-        x: The data.
-        z: The latent variable.
+        x: The data, (batch_size, out_dim).
+        z: The latent variable, (batch_size*num_latent_samples, q).
         seed: The seed for the random number generator.
 
     Returns:
@@ -144,7 +144,8 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    return lkhood.log_lkhood_model(x̂, x) ./ (2*lkhood.σ_llhood^2)
+    x̂ = reshape(x̂, size(x)..., fld(size(x̂, 1), size(x, 1))) # (batch_size, out_dim, num_latent_samples)    
+    return lkhood.log_lkhood_model((x, size(x)..., 1), x̂) ./ (2*lkhood.σ_llhood^2)
 end
 
 function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=device([1f0]))
@@ -167,13 +168,14 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
     """
 
     # MC estimator is mapped over batch dim for memory efficiency
+    num_iters = fld(size(x, 1), prior.MC_batch_size)
     function MC_estimate(x_i)
-        z, seed = prior.sample_z(prior, prior.num_latent_samples, ps.ebm, st.ebm, seed)
-        weights = lkhood.weight_fcn(view(t, 1, length(t)) .* log_likelihood(lkhood, ps.gen, st.gen, x_i, z; seed=seed))
-        return sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=1)
+        z, seed = prior.sample_z(prior, prior.num_latent_samples*prior.MC_batch_size, ps.ebm, st.ebm, seed)
+        weights = lkhood.weight_fcn(view(t, 1, length(t), 1) .* log_likelihood(lkhood, ps.gen, st.gen, x_i, z; seed=seed))
+        return sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=3)
     end
     
-    ρ = map(i -> MC_estimate(view(x, i:i, :)), 1:size(x, 1))
+    ρ = map(i -> MC_estimate(view(x, i:i+prior.MC_batch_size-1, :)), 1:num_iters)
     return vcat(ρ...), seed
 end
 

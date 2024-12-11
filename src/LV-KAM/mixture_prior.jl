@@ -36,6 +36,7 @@ struct mix_prior <: Lux.AbstractLuxLayer
     categorical_mask::Function
     max_fcn::Function
     acceptance_fcn::Function
+    MC_batch_size::Int
 end
 
 function init_mix_prior(
@@ -44,6 +45,7 @@ function init_mix_prior(
 )
     p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
     latent_samples = parse(Int, retrieve(conf, "MIX_PRIOR", "num_latent_samples"))
+    MC_batch_size = parse(Int, retrieve(conf, "TRAINING", "MC_estimate_subbatch_size"))
     q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
@@ -59,7 +61,7 @@ function init_mix_prior(
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
-
+    
     need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
     τ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "gumbel_temperature"))
     ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
@@ -99,7 +101,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, latent_samples, sample_function, choose_category, max_fcn, acceptance_fcn)
+    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, latent_samples, sample_function, choose_category, max_fcn, acceptance_fcn, MC_batch_size)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -116,6 +118,7 @@ end
 function flip_states(prior::mix_prior, ps, st)
     """
     Flip the params and states of the mixture ebm-prior.
+    
     This is needed for the log-probability calculation, 
     since z_q is sampled component-wise, but needs to be
     evaluated for each component, f_{q,p}(z_q). This only works
@@ -236,13 +239,15 @@ function expected_prior(prior::mix_prior, data_batch_size, ps, st, ρ_fcn; seed=
     """
 
     # MC estimator is mapped over batch dim for memory efficiency
+    num_iters = fld(data_batch_size, prior.MC_batch_size)
     function MC_estimate()
-        z, seed = prior.sample_z(prior, prior.num_latent_samples, ps, st, seed)
-        return ρ_fcn(z, ps)
+        z, seed = prior.sample_z(prior, prior.num_latent_samples*prior.MC_batch_size, ps, st, seed)
+        return reshape(ρ_fcn(z, ps), prior.num_latent_samples, prior.MC_batch_size)
     end
 
-    ρ = mapreduce(i -> MC_estimate(), hcat, 1:data_batch_size)
-    return mean(ρ; dims=1)[1, :], seed + data_batch_size
+    ρ = mapreduce(i -> MC_estimate(), hcat, 1:num_iters)
+    println(size(ρ))
+    return mean(ρ; dims=1)[1, :], seed
 end
 
 end

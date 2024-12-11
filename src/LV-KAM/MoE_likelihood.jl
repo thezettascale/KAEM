@@ -58,7 +58,7 @@ function init_MoE_lkhood(
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
-    need_derivative = parse(Bool, retrieve(conf, "TRAINING", "learn_through_sampling")) 
+    need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_t")) > 1
     weight_fcn = need_derivative ? softmax : @ignore_derivatives softmax
 
     lkhood_seed = next_rng(lkhood_seed)

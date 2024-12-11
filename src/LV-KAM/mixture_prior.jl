@@ -62,9 +62,16 @@ function init_mix_prior(
     τ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "gumbel_temperature"))
     ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
 
-    sample_function = need_derivative ? sample_prior : @ignore_derivatives sample_prior
-    choose_category = need_derivative ? select_category_differentiable : select_category
-    max_fcn = need_derivative ? logsumexp : maximum
+    if need_derivative
+        sample_function = sample_prior
+        choose_category = select_category_differentiable
+        max_fcn = logsumexp
+    else
+        sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; init_seed=seed)
+        choose_category = select_category
+        max_fcn = maximum
+    end
+    
     acceptance_fcn = (need_derivative ?
         (u_th, fz, f_grid) -> sigmoid_fast((u_th .- exp.(fz .- f_grid)) .* ζ) : 
         (u_th, fz, f_grid) -> u_th .< exp.(fz .- f_grid)
@@ -214,7 +221,7 @@ function expected_prior(prior::mix_prior, num_samples, ps, st, ρ_fcn; seed=1)
     using a Monte Carlo estimator. Sampling procedure is ignored from the gradient computation.
     """
 
-    z, seed = prior.sample_z(prior, num_samples, ps, st; init_seed=seed)
+    z, seed = prior.sample_z(prior, num_samples, ps, st, seed)
     return mean(ρ_fcn(z, ps)), seed
 end
 

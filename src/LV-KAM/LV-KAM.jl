@@ -99,7 +99,7 @@ function generate_batch(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st, num_
         The generated data.
         The updated seed.
     """
-    z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm; init_seed=seed)
+    z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
     x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
     
     return x̂, seed
@@ -150,7 +150,7 @@ function update_llhood_grid(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st; 
         The updated params.
         The updated seed.
     """
-    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm; init_seed=seed)
+    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
     new_grid, new_coef = update_fcn_grid(model.lkhood.fcn_q, ps.gen, st.gen, z)
     @reset ps.gen.coef = new_coef
     @reset model.lkhood.fcn_q.grid = new_grid

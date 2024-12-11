@@ -16,7 +16,7 @@ using .Utils: device, next_rng
 function select_category(α, τ, in_dim, out_dim, num_samples)
     α = cpu_device()(softmax(α))
     rand_vals = rand(Categorical(α), out_dim, num_samples) 
-    return permutedims(collect(Float32, onehotbatch(rand_vals, in_dim)), [3, 1, 2]) |> device 
+    return permutedims(collect(Float32, onehotbatch(rand_vals, 1:in_dim)), [3, 1, 2]) |> device 
 end
 
 function select_category_differentiable(α, τ, in_dim, out_dim, num_samples)
@@ -48,7 +48,7 @@ function sample_prior(prior, num_samples, ps, st; init_seed=1)
     chosen_components = prior.categorical_mask(ps.α, prior.τ, prior.fcn_qp.in_dim, prior.fcn_qp.out_dim, num_samples)
 
     # Rejection sampling
-    while any(sample_mask .< 1)
+    while any(sample_mask .< 5f-1)
 
         # Draw candidate samples from proposal, i.e. prior
         seed = next_rng(seed) 

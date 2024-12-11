@@ -59,7 +59,7 @@ function init_MoE_lkhood(
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
     need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
-    weight_fcn = need_derivative ? softmax : @ignore_derivatives softmax
+    weight_fcn = need_derivative ? softmax :  x -> @ignore_derivatives softmax(x)
 
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))
@@ -169,7 +169,7 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=1
     prior_ps, prior_st = ps.ebm, st.ebm
     gen_ps, gen_st = ps.gen, st.gen
     
-    z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st; init_seed=seed)
+    z, seed = prior.sample_z(prior, size(x,1), prior_ps, prior_st, seed)
     weights = lkhood.weight_fcn(t * log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
 
     return sum(ρ_fcn(z, ρ_ps) .* weights), seed

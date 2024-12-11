@@ -144,8 +144,6 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    x̂ = reshape(x̂, size(x)..., :) # batch_size x out_dim x num_samples
-    x = reshape(x, size(x)..., 1) # batch_size x out_dim x 1
     return lkhood.log_lkhood_model(x̂, x) ./ (2*lkhood.σ_llhood^2)
 end
 
@@ -160,7 +158,7 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
         ps: The parameters of the LV-KAM.
         st: The states of the LV-KAM.
         x: The data.
-        ρ_fcn: The function of the latent variable to compute the expected posterior.
+        ρ_fcn: The function of the latent variable to compute the expected posterior. Should return a sample_size x 1 array.
         seed: The seed for the random number generator.
 
     Returns:
@@ -170,12 +168,18 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
 
     prior_ps, prior_st = ps.ebm, st.ebm
     gen_ps, gen_st = ps.gen, st.gen
+
+    # MC estimator is mapped over batch dim for memory efficiency
+    function MC_estimate(x_i)
+        x_i = view(x_i, 1, :)
+        z, seed = prior.sample_z(prior, prior.num_latent_samples, prior_ps, prior_st, seed)
+        ρ = ρ_fcn(z, x_i, ρ_ps)
+        weights = lkhood.weight_fcn(view(t, 1, length(t)) .* log_likelihood(lkhood, gen_ps, gen_st, x_i, z; seed=seed))
+        return sum(ρ .* weights; dims=1)
+    end
     
-    z, seed = prior.sample_z(prior, size(x,1)*prior.num_latent_samples, prior_ps, prior_st, seed)
-    ρ = reshape(ρ_fcn(z, ρ_ps), size(x, 1), 1, prior.num_latent_samples)
-    weights = lkhood.weight_fcn(view(t, 1, length(t), 1) .* log_likelihood(lkhood, gen_ps, gen_st, x, z; seed=seed))
-    
-    return sum(ρ .* weights; dims=3), seed
+    ρ = mapreduce(x_i -> MC_estimate(x_i), vcat, eachrow(x))
+    return ρ, seed
 end
 
 end

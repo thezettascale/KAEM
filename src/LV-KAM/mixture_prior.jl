@@ -177,7 +177,7 @@ function log_prior(mix::mix_prior, z, ps, st)
     f_qp = exp.(f_qp)
     prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
     prior = log.(sum(prior; dims=3) .+ eps(Float32))
-    return sum(prior; dims=2)[:,1,1]
+    return sum(prior; dims=2)[:,:,1]
 end
 
 # function log_prior(mix::mix_prior, z, ps, st)
@@ -217,15 +217,32 @@ end
 #     return sum(prior; dims=2)[:,1,1]
 # end
 
-function expected_prior(prior::mix_prior, batch_size, ps, st, ρ_fcn; seed=1)
+function expected_prior(prior::mix_prior, data_batch_size, ps, st, ρ_fcn; seed=1)
     """
     Compute the expected prior of an arbritrary function of the latent variable, 
-    using a Monte Carlo estimator with num_latent_samples samples.
+    using a Monte Carlo estimator with 'num_latent_samples' samples.
+
+    Args:
+        prior: The prior distribution of the latent variable.
+        data_batch_size: The batch size of the data.
+        ps: The parameters of the LV-KAM.
+        st: The states of the LV-KAM.
+        ρ_fcn: The function of the latent variable to compute the expected prior, should return a sample_size x 1 array.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The expected prior of the function of the latent variable, (w.r.t samples from the latent space, NOT BATCH).
+        The updated seed.
     """
 
-    z, seed = prior.sample_z(prior, batch_size*prior.num_latent_samples, ps, st, seed)
-    ρ = reshape(ρ_fcn(z, ps), batch_size, prior.num_latent_samples)
-    return mean(ρ_fcn(z, ps); dims=2), seed
+    # MC estimator is mapped over batch dim for memory efficiency
+    function MC_estimate()
+        z, seed = prior.sample_z(prior, prior.num_latent_samples, ps, st, seed)
+        return ρ_fcn(z, ps)
+    end
+
+    ρ = mapreduce(i -> MC_estimate(), hcat, 1:data_batch_size)
+    return mean(ρ; dims=1)[1, :], seed + data_batch_size
 end
 
 end

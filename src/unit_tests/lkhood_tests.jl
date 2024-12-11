@@ -23,7 +23,7 @@ function test_log_likelihood()
     x_test = randn(Float32, 5, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (5,)
+    @test size(log_lkhood) == (5, 1)
 end
 
 function test_log_likelihood_derivative()
@@ -52,9 +52,9 @@ function test_expected_posterior()
 
     x_test = randn(Float32, 5, out_dim) |> device
     
-    func = (z, p) -> log_likelihood(lkhood, p, st.gen, x_test, z)
+    func = (z, x_i, p) -> log_likelihood(lkhood, p, st.gen, x_i, z)
     expected_p = first(expected_posterior(prior, lkhood, ps, st, x_test, func, ps.gen))
-    @test length(expected_p) == 1
+    @test length(expected_p) == 5
 end
 
 function test_generate()

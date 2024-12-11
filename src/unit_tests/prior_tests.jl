@@ -28,7 +28,7 @@ function test_log_prior()
 
     z_test = first(sample_prior(prior, 5, ps, st))
     log_p = log_prior(prior, z_test, ps, st)
-    @test size(log_p) == (5,)
+    @test size(log_p) == (5, 1)
 end
 
 function test_log_prior_derivative()
@@ -50,7 +50,7 @@ function test_expected_prior()
 
     func = (z, p) -> log_prior(prior, z, p, st)
     expected_p = first(expected_prior(prior, 5, ps, st, func))
-    @test length(expected_p) == 1
+    @test length(expected_p) == 5
 end
 
 function test_ps_derivative()
@@ -60,7 +60,7 @@ function test_ps_derivative()
     ps, st = ps |> device, st |> device
 
     func = (z, p) -> log_prior(prior, z, p, st)
-    ∇ = first(gradient(p -> first(expected_prior(prior, 5, p, st, func)), ps))
+    ∇ = first(gradient(p -> sum(first(expected_prior(prior, 5, p, st, func))), ps))
     @test norm(∇) > 0
 end
     

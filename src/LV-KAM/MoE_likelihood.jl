@@ -3,7 +3,7 @@ module MoE_likelihood
 export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z 
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
+using ConfParser, Random, Lux, Distributions, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: softmax, sigmoid_fast, tanh_fast
 using ChainRules: @ignore_derivatives
 
@@ -25,7 +25,8 @@ lkhood_models = Dict(
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
-    fcn_q::univariate_function
+    Λ_fcns::NamedTuple
+    depth::Int
     out_size::Int
     σ_ε::Float32
     σ_llhood::Float32
@@ -41,7 +42,12 @@ function init_MoE_lkhood(
     weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=3) 
     )
 
-    q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
+    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "hidden_widths"))
+    widths = (widths..., 1)
+    first(widths) !== parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim")) && (
+        error("First width must be equal to the hidden dimension of the prior.")
+    )
+
     spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
     spline_function = retrieve(conf, "MOE_LIKELIHOOD", "spline_function")
@@ -60,13 +66,15 @@ function init_MoE_lkhood(
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
 
-    lkhood_seed = next_rng(lkhood_seed)
-    base_scale = (μ_scale * (1f0 / √(Float32(q)))
-    .+ σ_base .* (randn(Float32, q, 1) .* 2f0 .- 1f0) .* (1f0 / √(Float32(q))))
+    functions = NamedTuple()
+    for i in eachindex(widths[1:end-1])
+        lkhood_seed = next_rng(lkhood_seed)
+        base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
+        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
 
-    func = init_function(
-        q,
-        1;
+        func = init_function(
+        widths[i],
+        widths[i+1];
         spline_degree=spline_degree,
         base_activation=base_activation,
         spline_function=spline_function,
@@ -78,19 +86,22 @@ function init_MoE_lkhood(
         σ_spline=σ_spline,
         init_η=init_η,
         η_trainable=η_trainable,
-    )
-    
-    return MoE_lkhood(func, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn)
+        )
+
+        @reset functions[Symbol("$i")] = func
+    end
+        
+    return MoE_lkhood(functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
-    ps = Lux.initialparameters(rng, lkhood.fcn_q)
-    @reset ps[:gate_w] = glorot_normal(rng, Float32, lkhood.fcn_q.in_dim, lkhood.out_size)
+    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    @reset ps[Symbol("w")] = glorot_normal(rng, Float32, lkhood.Λ_fcns[Symbol("1")].in_dim, lkhood.out_size)
     return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
-    st = Lux.initialstates(rng, lkhood.fcn_q)
+    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
     return st
 end
 
@@ -116,17 +127,23 @@ function generate_from_z(
         The generated data.
         The updated seed.
     """
+    # Gating function, feature-specific
+    gate_w = ps[Symbol("w")]
+    wz = @tullio out[b, i, o] := z[b, i] * gate_w[i, o]
+    γ = softmax(wz; dims=2)
+
     # Gen function, experts for all features
-    Λ = fwd(lkhood.fcn_q, ps, st, z)
+    for i in 1:lkhood.depth
+        z = fwd(lkhood.Λ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+        z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :] 
+    end
+    z = reshape(z, size(out)[1:2]..., 1)
+
     seed = next_rng(seed)
     ε = rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device
 
-    # Gating function, feature-specific
-    wz = @tullio out[b, i, o] := z[b, i] * ps.gate_w[i, o]
-    γ = softmax(wz; dims=2)
-
     # Generate data
-    x̂ = @tullio gen[b, i, o] := Λ[b, i, 1] * γ[b, i, o]
+    x̂ = @tullio gen[b, i, o] := z[b, i, 1] * γ[b, i, o]
     x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
     return lkhood.output_activation(x̂), seed
 end

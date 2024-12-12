@@ -169,14 +169,14 @@ function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=d
 
     # MC estimator is divided over batch dim for memory efficiency
     num_iters = fld(size(x, 1), prior.MC_batch_size)
-    ρ = Vector{eltype(x)}(undef, 0) |> device
-    for i in 1:num_iters
-        x_i = view(x, i:i+prior.MC_batch_size-1, :)
+    function MC_estimate(x_i)
         z, seed = prior.sample_z(prior, prior.num_latent_samples*prior.MC_batch_size, ps.ebm, st.ebm, seed)
         weights = lkhood.weight_fcn(view(t, 1, length(t), 1) .* log_likelihood(lkhood, ps.gen, st.gen, x_i, z; seed=seed))
-        ρ = vcat(ρ, sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=3)[:, 1, 1])
+        return sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=3)
     end
-    return ρ, seed
+    
+    ρ = map(i -> MC_estimate(view(x, i:i+prior.MC_batch_size-1, :)), 1:num_iters)
+    return reduce(vcat, ρ), seed
 end
 
 end

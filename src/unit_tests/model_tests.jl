@@ -31,9 +31,9 @@ function test_grid_update()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    size_grid = size(model.lkhood.fcn_q.grid)
+    size_grid = size(model.lkhood.Λ_fcns[Symbol("1")].grid)
     model, ps, seed = update_llhood_grid(model, ps, st)
-    @test all(size(model.lkhood.fcn_q.grid) .== size_grid)
+    @test all(size(model.lkhood.Λ_fcns[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
 
 end

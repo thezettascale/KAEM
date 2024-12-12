@@ -15,7 +15,7 @@ include("../utils.jl")
 using .ebm_mix_prior
 using .MoE_likelihood
 using .ThermodynamicIntegration
-using .univariate_functions: update_fcn_grid
+using .univariate_functions: update_fcn_grid, fwd
 using .Utils
 
 struct LV_KAM <: Lux.AbstractLuxLayer
@@ -183,9 +183,15 @@ function update_llhood_grid(
         The updated seed.
     """
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-    new_grid, new_coef = update_fcn_grid(model.lkhood.fcn_q, ps.gen, st.gen, z)
-    @reset ps.gen.coef = new_coef
-    @reset model.lkhood.fcn_q.grid = new_grid
+
+    for i in 1:model.lkhood.depth
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
+        @reset ps.gen[Symbol("$i")].coef = new_coef
+        @reset model.lkhood.Λ_fcns[Symbol("$i")].grid = new_grid
+
+        z = fwd(model.lkhood.Λ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
+        z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :] 
+    end 
 
     return model, ps, seed
 end

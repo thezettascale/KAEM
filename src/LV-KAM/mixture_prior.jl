@@ -184,7 +184,7 @@ function log_prior(
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     f_qp = exp.(f_qp)
     prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
-    prior = log.(sum(prior; dims=3) .+ eps(Float32))
+    prior = log.(sum(prior; dims=3) .+ eps(Float32))[:,:,1]
     return sum(prior; dims=2)
 end
 

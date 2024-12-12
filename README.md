@@ -1,11 +1,11 @@
 # LV-KAM
-Official implementation of the Latent Variable Kolmogov-Arnold Model -  a novel generative model defined entirely by finite representations of continous functions.
+Official implementation of the Latent Variable Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
 
 Go see our [litepaper!](https://exalaboratories.com/litepaper).
 
 ## What is LV-KAM.
 
-LV-KAM is a a generative model that has been **entirely derived.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
+LV-KAM is a a generative model that has been **entirely represented in maths and stats.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
 
 It uses:
 

@@ -204,14 +204,15 @@ function log_prior(mix::mix_prior, z, ps, st)
     # Prior
     π_0 = mix.π_pdf(z)
     alpha = softmax(ps.α)
-    z = repeat(z, 1, 1, p)
 
     # Find likelihood for each sample under its corresponding component, 
     prior_llhood = zeros(eltype(z), sample_size) |> device
+    one_vec = ones(Float32, p) |> device
     for o in 1:q
-        exp_f = exp.(fwd(mix.fcn_qp, ps, st, view(z, :, o, :))[:, :, o]) 
+        z_q = one_vec' .* view(z, :, o) # Stabler than repeat
+        z_q = exp.(fwd(mix.fcn_qp, ps, st, z_q)[:, :, o]) 
         π_q = view(π_0, :, o)
-        prior = @tullio p[b, i] := alpha[i] * exp_f[b, i] * π_q[b]
+        prior = @tullio p[b, i] := alpha[i] * z_q[b, i] * π_q[b]
         prior = log.(sum(prior; dims=2) .+ eps(Float32))
         prior_llhood = prior_llhood .+ prior
     end

@@ -38,7 +38,9 @@ function init_MoE_lkhood(
     conf::ConfParse,
     output_dim::Int;
     lkhood_seed::Int=1,
-)
+    weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=3) 
+    )
+
     q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
     spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
@@ -57,9 +59,6 @@ function init_MoE_lkhood(
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
-
-    need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
-    weight_fcn = need_derivative ? x -> softmax(x; dims=3) :  x -> @ignore_derivatives softmax(x; dims=3)
 
     lkhood_seed = next_rng(lkhood_seed)
     base_scale = (μ_scale * (1f0 / √(Float32(q)))

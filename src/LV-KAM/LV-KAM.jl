@@ -44,7 +44,6 @@ function init_LV_KAM(
     out_dim = size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
-    lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
     
     grid_update_decay = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "num_grid_updating_samples"))
@@ -53,7 +52,9 @@ function init_LV_KAM(
 
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 
+        temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
+        weight_fcn = x -> softmax(view(temperatures, 1, :, 1) .* x; dims=3)
+        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
         
         return Thermodynamic_LV_KAM(
             prior_model,
@@ -65,6 +66,8 @@ function init_LV_KAM(
             temperatures,
         )
     else
+        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
+
         return LV_KAM(
             prior_model,
             lkhood_model,

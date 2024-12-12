@@ -149,7 +149,7 @@ function log_likelihood(
         ps: The parameters of the likelihood model.
         st: The states of the likelihood model.
         x: The data, (batch_size, out_dim).
-        z: The latent variable, (batch_size*num_latent_samples, q).
+        z: The latent variable, (batch_size, q).
         seed: The seed for the random number generator.
 
     Returns:

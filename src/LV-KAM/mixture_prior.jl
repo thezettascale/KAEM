@@ -31,7 +31,6 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
     τ::Float32
-    num_latent_samples::Int
     sample_z::Function
     categorical_mask::Function
     max_fcn::Function
@@ -43,7 +42,6 @@ function init_mix_prior(
     prior_seed::Int=1,
 )
     p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
-    latent_samples = parse(Int, retrieve(conf, "MIX_PRIOR", "num_latent_samples"))
     q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
@@ -99,7 +97,7 @@ function init_mix_prior(
         η_trainable=η_trainable,
     )
 
-    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, latent_samples, sample_function, choose_category, max_fcn, acceptance_fcn)
+    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -228,7 +226,7 @@ end
 #         prior_llhood = prior_llhood .+ prior
 #     end
 
-#     return reshape(prior_llhood, :, 1, mix.num_latent_samples)
+#     return prior_llhood[:,:]
 # end
 
 end

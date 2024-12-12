@@ -25,7 +25,6 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     grid_update_decay::Float32
     grid_updates_samples::Int
-    MC_batch_size::Int
 end
 
 function init_LV_KAM(
@@ -37,7 +36,6 @@ function init_LV_KAM(
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-    MC_batch_size = parse(Int, retrieve(conf, "TRAINING", "MC_estimate_subbatch_size"))
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     data_seed = next_rng(data_seed)
@@ -74,7 +72,6 @@ function init_LV_KAM(
             test_loader,
             grid_update_decay,
             num_grid_updating_samples,
-            MC_batch_size,
         )
     end
 end

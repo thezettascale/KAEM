@@ -5,7 +5,7 @@ Go see our [litepaper!](https://exalaboratories.com/litepaper).
 
 ## What is LV-KAM.
 
-LV-KAM is a a generative model that has been **entirely represented in maths and stats.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
+LV-KAM is a generative model that has been **entirely represented in maths and stats.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
 
 It uses:
 
@@ -13,6 +13,8 @@ It uses:
 - **Empirical Bayes** - the prior is updated using observations from the data.
 - **Rejection/importance sampling** - Markov Chain Monte Carlo is avoided for speed.
 - **Thermodynamic Integration** - the practicality of the theorem is improved using another means of marginal likelihood estimation.
+
+Watch [the video](https://www.youtube.com/watch?v=dQw4w9WgXcQ) to understand my motivations in more depth!
 
 ## Setup:
 

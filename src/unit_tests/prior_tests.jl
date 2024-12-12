@@ -43,34 +43,10 @@ function test_log_prior_derivative()
     ∇ = first(gradient(x -> sum(log_prior(prior, x, ps, st)), z_test))
     @test size(∇) == size(z_test)
 end
-
-function test_expected_prior()
-    Random.seed!(42)
-    prior = init_mix_prior(conf; prior_seed=1)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
-    ps, st = ps |> device, st |> device
-
-    func = (z, p) -> log_prior(prior, z, p, st)
-    expected_p = first(expected_prior(prior, b_size, ps, st, func))
-    @test length(expected_p) == b_size
-end
-
-function test_ps_derivative()
-    Random.seed!(42)
-    prior = init_mix_prior(conf; prior_seed=1)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
-    ps, st = ps |> device, st |> device
-
-    func = (z, p) -> log_prior(prior, z, p, st)
-    ∇ = first(gradient(p -> sum(first(expected_prior(prior, b_size, p, st, func))), ps))
-    @test norm(∇) > 0
-end
     
 
 @testset "Mixture Prior Tests" begin
     test_sampling()
     test_log_prior()
     test_log_prior_derivative()
-    test_expected_prior()
-    test_ps_derivative()
 end

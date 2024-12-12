@@ -3,7 +3,7 @@ module prior_sampler
 export select_category, select_category_differentiable, sample_prior
 
 using CUDA, KernelAbstractions, Tullio
-using Lux, LinearAlgebra, Random, LuxCUDA
+using Lux, LinearAlgebra, Random, LuxCUDA, ComponentArrays
 using Distributions: Categorical, Uniform
 using Flux: onehotbatch
 using NNlib: softmax, logsoftmax, sigmoid_fast
@@ -13,20 +13,40 @@ include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng
 
-function select_category(α, τ, in_dim, out_dim, num_samples)
+function select_category(
+    α::AbstractArray, 
+    τ::Float32, 
+    in_dim::Int, 
+    out_dim::Int, 
+    num_samples::Int
+    )
+    
     α = cpu_device()(softmax(α))
     rand_vals = rand(Categorical(α), out_dim, num_samples) 
     return permutedims(collect(Float32, onehotbatch(rand_vals, 1:in_dim)), [3, 1, 2]) |> device 
 end
 
-function select_category_differentiable(α, τ, in_dim, out_dim, num_samples)
+function select_category_differentiable(
+    α::AbstractArray, 
+    τ::Float32, 
+    in_dim::Int, 
+    out_dim::Int, 
+    num_samples::Int
+    )
+
     α = logsoftmax(α)
     gumbel = -log.(-log.(rand(Uniform(0,1), num_samples, length(α), out_dim) .+ eps(Float32))) |> device
     logits = @tullio gumbel_logits[b, i, o] := α[i] + gumbel[b, i, o]
     return softmax(logits ./ τ, dims=2)
 end
 
-function sample_prior(prior, num_samples, ps, st; init_seed=1)
+function sample_prior(
+    prior, 
+    num_samples::Int, 
+    ps::Union{ComponentArray, NamedTuple},
+    st::Union{ComponentArray, NamedTuple};
+    init_seed::Int=1
+    )
     """
     Component-wise rejection sampling for the mixture ebm-prior.
 

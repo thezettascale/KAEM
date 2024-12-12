@@ -1,9 +1,9 @@
 module MoE_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, expected_posterior, generate_from_z 
+export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z 
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra
+using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
 using NNlib: softmax, sigmoid_fast, tanh_fast
 using ChainRules: @ignore_derivatives
 
@@ -95,7 +95,13 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
     return st
 end
 
-function generate_from_z(lkhood::MoE_lkhood, ps, st, z; seed=1)
+function generate_from_z(
+    lkhood::MoE_lkhood, 
+    ps::Union{ComponentArray, NamedTuple}, 
+    st::Union{ComponentArray, NamedTuple}, 
+    z::AbstractArray; 
+    seed::Int=1
+    )
     """
     Generate data from the likelihood model.
 
@@ -126,7 +132,14 @@ function generate_from_z(lkhood::MoE_lkhood, ps, st, z; seed=1)
     return lkhood.output_activation(x̂), seed
 end
 
-function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
+function log_likelihood(
+    lkhood::MoE_lkhood, 
+    ps::Union{ComponentArray, NamedTuple}, 
+    st::Union{ComponentArray, NamedTuple}, 
+    x::AbstractArray, 
+    z::AbstractArray;
+    seed::Int=1
+    )
     """
     Compute the log-likelihood of the data given the latent variable.
     The updated seed is not returned, since noise is ignored by derivatives anyway.
@@ -140,43 +153,12 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
         seed: The seed for the random number generator.
 
     Returns:
-        The log-likelihood per sample of data given the latent variable.
+        The log-likelihood of the batch given the latent samples.
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     x̂ = reshape(x̂, size(x)..., fld(size(x̂, 1), size(x, 1))) # (batch_size, out_dim, num_latent_samples)    
     return lkhood.log_lkhood_model(view(x, size(x)..., 1), x̂) ./ (2*lkhood.σ_llhood^2)
-end
-
-function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=device([1f0]))
-    """
-    Compute the expected posterior of an arbritrary function of the latent variable,
-    using importance sampling. Sampling procedure is ignored from the gradient computation.
-
-    Args:
-        prior: The prior distribution of the latent variable.
-        lkhood: The likelihood model.
-        ps: The parameters of the LV-KAM.
-        st: The states of the LV-KAM.
-        x: The data.
-        ρ_fcn: The function of the latent variable to compute the expected posterior. Should return a sample_size x 1 array.
-        seed: The seed for the random number generator.
-
-    Returns:
-        The expected posterior of the function of the latent variable, (w.r.t samples from the latent space, NOT BATCH).
-        The updated seed. 
-    """
-
-    # MC estimator is divided over batch dim for memory efficiency
-    num_iters = fld(size(x, 1), prior.MC_batch_size)
-    function MC_estimate(x_i)
-        z, seed = prior.sample_z(prior, prior.num_latent_samples*prior.MC_batch_size, ps.ebm, st.ebm, seed)
-        weights = lkhood.weight_fcn(view(t, 1, length(t), 1) .* log_likelihood(lkhood, ps.gen, st.gen, x_i, z; seed=seed))
-        return sum(ρ_fcn(z, x_i, ρ_ps) .* weights; dims=3)
-    end
-    
-    ρ = map(i -> MC_estimate(view(x, i:i+prior.MC_batch_size-1, :)), 1:num_iters)
-    return reduce(vcat, ρ), seed
 end
 
 end

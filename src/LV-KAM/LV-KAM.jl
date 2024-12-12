@@ -3,7 +3,7 @@ module LV_KAM_model
 export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Accessors
+using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics
 using Flux: DataLoader
 using NNlib: sigmoid_fast
 
@@ -25,6 +25,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     grid_update_decay::Float32
     grid_updates_samples::Int
+    MC_batch_size::Int
 end
 
 function init_LV_KAM(
@@ -36,6 +37,7 @@ function init_LV_KAM(
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    MC_batch_size = parse(Int, retrieve(conf, "TRAINING", "MC_estimate_subbatch_size"))
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     data_seed = next_rng(data_seed)
@@ -72,19 +74,32 @@ function init_LV_KAM(
             test_loader,
             grid_update_decay,
             num_grid_updating_samples,
+            MC_batch_size,
         )
     end
 end
 
 function Lux.initialparameters(rng::AbstractRNG, model::LV_KAM)
-    return (ebm = Lux.initialparameters(rng, model.prior), gen = Lux.initialparameters(rng, model.lkhood))
+    return (
+        ebm = Lux.initialparameters(rng, model.prior), 
+        gen = Lux.initialparameters(rng, model.lkhood)
+        )
 end
 
 function Lux.initialstates(rng::AbstractRNG, model::LV_KAM)
-    return (ebm = Lux.initialstates(rng, model.prior), gen = Lux.initialstates(rng, model.lkhood))
+    return (
+        ebm = Lux.initialstates(rng, model.prior), 
+        gen = Lux.initialstates(rng, model.lkhood)
+        )
 end
 
-function generate_batch(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st, num_samples; seed)
+function generate_batch(
+    model::Union{LV_KAM, Thermodynamic_LV_KAM}, 
+    ps::Union{ComponentArray, NamedTuple}, 
+    st::Union{ComponentArray, NamedTuple},
+    num_samples::Int; 
+    seed::Int=1
+    )
     """
     Inference pass to generate a batch of data from the model.
     This is the same for both the standard and thermodynamic models.
@@ -101,16 +116,21 @@ function generate_batch(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st, num_
     """
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
     x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
-    
     return x̂, seed
 end
 
-function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
+function MLE_loss(
+    m::LV_KAM, 
+    ps::Union{ComponentArray, NamedTuple}, 
+    st::Union{ComponentArray, NamedTuple}, 
+    x::AbstractArray;
+    seed::Int=1
+    )
     """
     Maximum likelihood estimation loss.
 
     Args:
-        model: The model.
+        m: The model.
         ps: The parameters of the model.
         st: The states of the model.
         x: The batch of data.
@@ -118,27 +138,47 @@ function MLE_loss(model::LV_KAM, ps, st, x; seed=1)
 
     Returns:
         The negative marginal likelihood, averaged over the batch.
-        The updated seed.
     """
 
-    # Prior normalizer
-    logprior = (z, p) -> log_prior(model.prior, z, p, st.ebm)
-    en_prior, seed = expected_prior(model.prior, size(x, 1), ps.ebm, st.ebm, logprior; seed=seed)
+    # Due to memory constraints, the MC expectations are divided into sub-batches
+    num_iters = fld(size(x, 1), m.MC_batch_size)
+    loss = 0f0
 
-    # Prior learning gradient
-    logprior = (z, x, p) -> log_prior(model.prior, z, p, st.ebm) 
-    en_post, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logprior, ps.ebm; seed=seed)
+    for i in 1:num_iters
+        x_i = view(x, i:i+m.MC_batch_size-1, :)
+        z, seed = m.prior.sample_z(
+            m.prior, 
+            m.prior.num_latent_samples * m.MC_batch_size, 
+            ps.ebm, 
+            st.ebm, 
+            seed
+            )
 
-    loss_prior = en_post .- en_prior
+        # Compute the log-distributions for these samples, (batch_size x 1 x num_latent_samples)
+        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z; seed=seed)
+        posterior_weights = m.lkhood.weight_fcn(logllhood)
 
-    # Likelihood learning grad
-    logllhood = (z, x_i, p) -> log_likelihood(model.lkhood, p, st.gen, x_i, z; seed=seed)
-    loss_llhood, seed = expected_posterior(model.prior, model.lkhood, ps, st, x, logllhood, ps.gen; seed=seed)
-    
-    return -sum(loss_prior .+ loss_llhood)
+        # Expectation of the logprior with respect to the posterior and prior
+        ex_prior = mean(logprior; dims=3)
+        ex_post = mean(logprior .* posterior_weights; dims=3)
+        loss_prior = ex_post .- ex_prior
+
+        # Expectation of the loglikelihood with respect to the posterior
+        loss_llhood = mean(logllhood .* posterior_weights; dims=3)
+
+        loss -= sum(loss_prior .+ loss_llhood) # Sum over batches, dims=1
+    end
+
+    return loss / size(x, 1)
 end
 
-function update_llhood_grid(model::Union{LV_KAM, Thermodynamic_LV_KAM}, ps, st; seed=1)
+function update_llhood_grid(
+    model::Union{LV_KAM, Thermodynamic_LV_KAM},
+    ps::Union{ComponentArray, NamedTuple}, 
+    st::Union{ComponentArray, NamedTuple}; 
+    seed::Int=1
+    )
     """
     Update the grid of the likelihood model using samples from the prior.
 

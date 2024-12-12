@@ -115,8 +115,8 @@ end
 
 function flip_states(
     prior::mix_prior, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}
+    ps, 
+    st
     )
     """
     Flip the params and states of the mixture ebm-prior.
@@ -161,8 +161,8 @@ end
 function log_prior(
     mix::mix_prior, 
     z::AbstractArray, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}
+    ps, 
+    st
     )
     """
     Compute the unnormalized log-probability of the mixture ebm-prior.
@@ -187,13 +187,13 @@ function log_prior(
     f_qp = exp.(f_qp)
     prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
     prior = log.(sum(prior; dims=3) .+ eps(Float32))
-    return reshape(sum(prior; dims=2), :, 1, mix.num_latent_samples)
+    return sum(prior; dims=2)
 end
 
 # function log_prior(mix::mix_prior, 
 #     z::AbstractArray, 
-#     ps::Union{ComponentArray, NamedTuple}, 
-#     st::Union{ComponentArray, NamedTuple}, 
+#     ps, 
+#     st, 
 #     )
 #     """
 #     Compute the unnormalized log-probability of the mixture ebm-prior.

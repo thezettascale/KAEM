@@ -20,7 +20,7 @@ function select_category(
     out_dim::Int, 
     num_samples::Int
     )
-    
+
     α = cpu_device()(softmax(α))
     rand_vals = rand(Categorical(α), out_dim, num_samples) 
     return permutedims(collect(Float32, onehotbatch(rand_vals, 1:in_dim)), [3, 1, 2]) |> device 
@@ -43,8 +43,8 @@ end
 function sample_prior(
     prior, 
     num_samples::Int, 
-    ps::Union{ComponentArray, NamedTuple},
-    st::Union{ComponentArray, NamedTuple};
+    ps,
+    st;
     init_seed::Int=1
     )
     """

@@ -95,8 +95,8 @@ end
 
 function generate_batch(
     model::Union{LV_KAM, Thermodynamic_LV_KAM}, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple},
+    ps, 
+    st,
     num_samples::Int; 
     seed::Int=1
     )
@@ -121,8 +121,8 @@ end
 
 function MLE_loss(
     m::LV_KAM, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}, 
+    ps, 
+    st, 
     x::AbstractArray;
     seed::Int=1
     )
@@ -139,44 +139,34 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
+    z, seed = m.prior.sample_z(
+        m.prior, 
+        size(x, 1),
+        ps.ebm,
+        st.ebm,
+        seed
+        )
 
-    # Due to memory constraints, the MC expectations are divided into sub-batches
-    num_iters = fld(size(x, 1), m.MC_batch_size)
-    loss = 0f0
+    # Compute the log-distributions for these samples, (batch_size x 1)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    posterior_weights = m.lkhood.weight_fcn(logllhood)
 
-    for i in 1:num_iters
-        x_i = view(x, i:i+m.MC_batch_size-1, :)
-        z, seed = m.prior.sample_z(
-            m.prior, 
-            m.prior.num_latent_samples * m.MC_batch_size, 
-            ps.ebm, 
-            st.ebm, 
-            seed
-            )
+    # Expectation of the logprior with respect to the posterior and prior
+    ex_prior = mean(logprior)
+    ex_post = mean(logprior .* posterior_weights)
+    loss_prior = ex_post - ex_prior
 
-        # Compute the log-distributions for these samples, (batch_size x 1 x num_latent_samples)
-        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z; seed=seed)
-        posterior_weights = m.lkhood.weight_fcn(logllhood)
+    # Expectation of the loglikelihood with respect to the posterior
+    loss_llhood = mean(logllhood .* posterior_weights)
 
-        # Expectation of the logprior with respect to the posterior and prior
-        ex_prior = mean(logprior; dims=3)
-        ex_post = mean(logprior .* posterior_weights; dims=3)
-        loss_prior = ex_post .- ex_prior
-
-        # Expectation of the loglikelihood with respect to the posterior
-        loss_llhood = mean(logllhood .* posterior_weights; dims=3)
-
-        loss -= sum(loss_prior .+ loss_llhood) # Sum over batches, dims=1
-    end
-
-    return loss / size(x, 1)
+    return -(loss_prior + loss_llhood)
 end
 
 function update_llhood_grid(
     model::Union{LV_KAM, Thermodynamic_LV_KAM},
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}; 
+    ps, 
+    st; 
     seed::Int=1
     )
     """

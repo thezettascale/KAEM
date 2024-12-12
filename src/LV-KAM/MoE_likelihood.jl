@@ -97,8 +97,8 @@ end
 
 function generate_from_z(
     lkhood::MoE_lkhood, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}, 
+    ps, 
+    st, 
     z::AbstractArray; 
     seed::Int=1
     )
@@ -134,8 +134,8 @@ end
 
 function log_likelihood(
     lkhood::MoE_lkhood, 
-    ps::Union{ComponentArray, NamedTuple}, 
-    st::Union{ComponentArray, NamedTuple}, 
+    ps, 
+    st, 
     x::AbstractArray, 
     z::AbstractArray;
     seed::Int=1
@@ -157,8 +157,7 @@ function log_likelihood(
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    x̂ = reshape(x̂, size(x)..., fld(size(x̂, 1), size(x, 1))) # (batch_size, out_dim, num_latent_samples)    
-    return lkhood.log_lkhood_model(view(x, size(x)..., 1), x̂) ./ (2*lkhood.σ_llhood^2)
+    return lkhood.log_lkhood_model(x, x̂) ./ (2*lkhood.σ_llhood^2)
 end
 
 end

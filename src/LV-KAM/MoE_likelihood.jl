@@ -145,7 +145,7 @@ function log_likelihood(lkhood::MoE_lkhood, ps, st, x, z; seed=1)
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     x̂ = reshape(x̂, size(x)..., fld(size(x̂, 1), size(x, 1))) # (batch_size, out_dim, num_latent_samples)    
-    return lkhood.log_lkhood_model((x, size(x)..., 1), x̂) ./ (2*lkhood.σ_llhood^2)
+    return lkhood.log_lkhood_model(view(x, size(x)..., 1), x̂) ./ (2*lkhood.σ_llhood^2)
 end
 
 function expected_posterior(prior, lkhood, ps, st, x, ρ_fcn, ρ_ps; seed=1, t=device([1f0]))

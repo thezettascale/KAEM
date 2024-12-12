@@ -180,7 +180,7 @@ function log_prior(mix::mix_prior, z, ps, st)
     f_qp = exp.(f_qp)
     prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
     prior = log.(sum(prior; dims=3) .+ eps(Float32))
-    return sum(prior; dims=2)[:,:,1]
+    return reshape(sum(prior; dims=2), :, 1, mix.num_latent_samples)
 end
 
 # function log_prior(mix::mix_prior, z, ps, st)
@@ -242,12 +242,11 @@ function expected_prior(prior::mix_prior, data_batch_size, ps, st, ρ_fcn; seed=
     num_iters = fld(data_batch_size, prior.MC_batch_size)
     function MC_estimate()
         z, seed = prior.sample_z(prior, prior.num_latent_samples*prior.MC_batch_size, ps, st, seed)
-        return reshape(ρ_fcn(z, ps), prior.num_latent_samples, prior.MC_batch_size)
+        return ρ_fcn(z, ps)
     end
 
-    ρ = mapreduce(i -> MC_estimate(), hcat, 1:num_iters)
-    println(size(ρ))
-    return mean(ρ; dims=1)[1, :], seed
+    ρ = mapreduce(i -> MC_estimate(), vcat, 1:num_iters)
+    return mean(ρ; dims=3)[:, 1, 1], seed
 end
 
 end

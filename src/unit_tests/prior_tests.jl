@@ -9,6 +9,8 @@ using .Utils
 
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
+b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+MC_batch_size = parse(Int, retrieve(conf, "TRAINING", "MC_estimate_subbatch_size"))
 
 function test_sampling()
     Random.seed!(42)
@@ -16,8 +18,8 @@ function test_sampling()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, 6, ps, st))
-    @test all(size(z_test) .== (6, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))))
+    z_test = first(sample_prior(prior, b_size, ps, st))
+    @test all(size(z_test) .== (b_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))))
 end
 
 function test_log_prior()
@@ -26,9 +28,9 @@ function test_log_prior()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, 6, ps, st))
+    z_test = first(sample_prior(prior, b_size*prior.num_latent_samples, ps, st))
     log_p = log_prior(prior, z_test, ps, st)
-    @test size(log_p) == (6, 1)
+    @test size(log_p) == (b_size, 1, prior.num_latent_samples)
 end
 
 function test_log_prior_derivative()
@@ -37,7 +39,7 @@ function test_log_prior_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, 6, ps, st))
+    z_test = first(sample_prior(prior, b_size*prior.num_latent_samples, ps, st))
     ∇ = first(gradient(x -> sum(log_prior(prior, x, ps, st)), z_test))
     @test size(∇) == size(z_test)
 end
@@ -49,8 +51,8 @@ function test_expected_prior()
     ps, st = ps |> device, st |> device
 
     func = (z, p) -> log_prior(prior, z, p, st)
-    expected_p = first(expected_prior(prior, 6, ps, st, func))
-    @test length(expected_p) == 6
+    expected_p = first(expected_prior(prior, b_size, ps, st, func))
+    @test length(expected_p) == b_size
 end
 
 function test_ps_derivative()
@@ -60,7 +62,7 @@ function test_ps_derivative()
     ps, st = ps |> device, st |> device
 
     func = (z, p) -> log_prior(prior, z, p, st)
-    ∇ = first(gradient(p -> sum(first(expected_prior(prior, 6, p, st, func))), ps))
+    ∇ = first(gradient(p -> sum(first(expected_prior(prior, b_size, p, st, func))), ps))
     @test norm(∇) > 0
 end
     

@@ -12,6 +12,9 @@ using .Utils
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
+b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+MC_batch_size = parse(Int, retrieve(conf, "TRAINING", "MC_estimate_subbatch_size"))
+num_latent_samples = parse(Int, retrieve(conf, "MIX_PRIOR", "num_latent_samples"))
 
 function test_log_likelihood()
     Random.seed!(42)
@@ -19,11 +22,11 @@ function test_log_likelihood()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, 6, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
-    x_test = randn(Float32, 6, out_dim) |> device
+    z_test = randn(Float32, b_size*num_latent_samples, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
+    x_test = randn(Float32, b_size, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (6, 1)
+    @test size(log_lkhood) == (b_size, 1, num_latent_samples)
 end
 
 function test_log_likelihood_derivative()
@@ -32,8 +35,8 @@ function test_log_likelihood_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, 6, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
-    x_test = randn(Float32, 6, out_dim) |> device
+    z_test = randn(Float32, b_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
+    x_test = randn(Float32, b_size, out_dim) |> device
     
     ∇ = first(gradient(z -> sum(log_likelihood(lkhood, ps, st, x_test, z)), z_test))
     @test size(∇) == size(z_test)
@@ -50,11 +53,11 @@ function test_expected_posterior()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    x_test = randn(Float32, 6, out_dim) |> device
+    x_test = randn(Float32, b_size, out_dim) |> device
     
     func = (z, x_i, p) -> log_likelihood(lkhood, p, st.gen, x_i, z)
     expected_p = first(expected_posterior(prior, lkhood, ps, st, x_test, func, ps.gen))
-    @test length(expected_p) == 6
+    @test length(expected_p) == b_size
 end
 
 function test_generate()
@@ -68,9 +71,9 @@ function test_generate()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    z, seed = sample_prior(prior, 6, ps.ebm, st.ebm)
+    z, seed = sample_prior(prior, b_size, ps.ebm, st.ebm)
     x = first(generate_from_z(lkhood, ps.gen, st.gen, z))
-    @test size(x) == (6, out_dim)
+    @test size(x) == (b_size, out_dim)
 end
 
 @testset "MoE Likelihood Tests" begin

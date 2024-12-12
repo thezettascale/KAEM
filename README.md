@@ -3,19 +3,9 @@ Official implementation of the Latent Variable Kolmogov-Arnold Model -  a novel 
 
 Go see our [litepaper!](https://exalaboratories.com/litepaper).
 
-## Motivation
+## What is LV-KAM.
 
-**AI is blind without guidance** when faced with the poor-quality and scarce datasets of the physical world, and the need for general applicability beyond domains/lab setups.
-
-This is true for all fields beyond generating sentences and images - where our biggest problems lie. Hence why [SciML](https://sites.brown.edu/bergen-lab/research/what-is-sciml/) is emerging, and why [AlphaFold](https://www.nature.com/articles/s41586-021-03819-2) is not just a standard, very-large Transformer. 
-
-AI is not a magic wand. Other sucessful statistical models in science and engineering are **derived, then applied** and extended when assumptions break down. AI is backwards in this regard. 
-
-Interpretability allows us to guide models with priors and inductive biases, enabling efficient training and generalization beyond lab setups/domains. Moreover, it helps us uncover new insights from the data, and embed transferable knowledge into future models. 
-
-The point of statistical modeling and data-driven experimentation is not to model the outputs of a lab setup or simply make a decision. We want to learn something new that can be applied to solve a problem. 
-
-**LV-KAM is entirely derived.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
+LV-KAM is a a generative model that has been **entirely derived.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
 
 It uses:
 

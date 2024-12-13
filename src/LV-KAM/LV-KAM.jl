@@ -25,6 +25,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     grid_update_decay::Float32
     grid_updates_samples::Int
+    MC_samples::Int
 end
 
 function init_LV_KAM(
@@ -36,6 +37,7 @@ function init_LV_KAM(
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    MC_samples = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     data_seed = next_rng(data_seed)
@@ -53,7 +55,7 @@ function init_LV_KAM(
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
-        weight_fcn = x -> softmax(view(temperatures, 1, :, 1) .* x; dims=3)
+        weight_fcn = x -> softmax(view(temperatures, 1, :, 1) .* x; dims=2)
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
         
         return Thermodynamic_LV_KAM(
@@ -75,6 +77,7 @@ function init_LV_KAM(
             test_loader,
             grid_update_decay,
             num_grid_updating_samples,
+            MC_samples
         )
     end
 end
@@ -141,7 +144,7 @@ function MLE_loss(
     """
     z, seed = m.prior.sample_z(
         m.prior, 
-        size(x, 1),
+        m.MC_samples,
         ps.ebm,
         st.ebm,
         seed
@@ -154,13 +157,13 @@ function MLE_loss(
 
     # Expectation of the logprior with respect to the posterior and prior
     ex_prior = mean(logprior)
-    ex_post = mean(logprior .* posterior_weights)
-    loss_prior = ex_post - ex_prior
+    ex_post = mean(logprior[:,:]' .* posterior_weights; dims=2)
+    loss_prior = ex_post .- ex_prior
 
     # Expectation of the loglikelihood with respect to the posterior
-    loss_llhood = mean(logllhood .* posterior_weights)
+    loss_llhood = mean(logllhood .* posterior_weights; dims=2)
 
-    return -(loss_prior + loss_llhood)
+    return -sum(loss_prior + loss_llhood)
 end
 
 function update_llhood_grid(

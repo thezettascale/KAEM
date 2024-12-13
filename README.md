@@ -14,8 +14,6 @@ It uses:
 - **Rejection/importance sampling** - Markov Chain Monte Carlo is avoided for speed.
 - **Thermodynamic Integration** - the practicality of the theorem is improved using another means of marginal likelihood estimation.
 
-Watch [the video](https://www.youtube.com/watch?v=dQw4w9WgXcQ) to understand my motivations in more depth!
-
 ## Setup:
 
 Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup). Choose your favourite installer and run: 

@@ -13,6 +13,7 @@ conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
 
 function test_log_likelihood()
     Random.seed!(42)
@@ -20,11 +21,11 @@ function test_log_likelihood()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, b_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
+    z_test = randn(Float32, MC_sample_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
     x_test = randn(Float32, b_size, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (b_size, 1)
+    @test size(log_lkhood) == (b_size, MC_sample_size)
 end
 
 function test_log_likelihood_derivative()

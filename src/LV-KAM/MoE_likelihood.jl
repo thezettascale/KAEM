@@ -21,7 +21,7 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> -sum((x̂ .- x).^2, dims=2),
+    "l2" => (x, x̂) -> - sqrt.(@tullio l2[b, s] := (x[b, i] - x̂[s, i])^2),
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -39,7 +39,7 @@ function init_MoE_lkhood(
     conf::ConfParse,
     output_dim::Int;
     lkhood_seed::Int=1,
-    weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=3) 
+    weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=2) 
     )
 
     widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "hidden_widths"))
@@ -173,7 +173,7 @@ function log_likelihood(
     """
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
-    return lkhood.log_lkhood_model(x, x̂) ./ (2*lkhood.σ_llhood^2)
+    return lkhood.log_lkhood_model(x, x̂) ./ (2f0*lkhood.σ_llhood^2)
 end
 
 end

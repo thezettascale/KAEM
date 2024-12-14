@@ -127,13 +127,15 @@ function train!(t::LV_KAM_trainer)
             t.grid_update_frequency = t.iter > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.iter) : t.grid_update_frequency
             t.last_grid_update = t.iter
             grid_updated = 1
+
+            t.model.verbose && println("Iter: $(t.iter), Grid updated")
         end
 
         grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
         any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
         t.seed += 1
 
-        println("Iter: $(t.iter), Grad norm: $(norm(grads))")
+        t.model.verbose && println("Iter: $(t.iter), Grad norm: $(norm(grads))")
 
         copy!(G, grads)
         return G
@@ -146,7 +148,7 @@ function train!(t::LV_KAM_trainer)
         t.ps = u
         loss = MLE_loss(t.model, t.ps, t.st, t.x)
         train_loss += loss
-        println("Iter: $(t.iter), Loss: $loss")
+        t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
 
         # After one epoch, calculate test loss and log to CSV
         if t.iter % num_batches == 0 || t.iter == 1

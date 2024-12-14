@@ -26,6 +26,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     grid_update_decay::Float32
     grid_updates_samples::Int
     MC_samples::Int
+    verbose::Bool
 end
 
 function init_LV_KAM(
@@ -40,6 +41,7 @@ function init_LV_KAM(
     MC_samples = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
+    verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     data_seed = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
@@ -77,7 +79,8 @@ function init_LV_KAM(
             test_loader,
             grid_update_decay,
             num_grid_updating_samples,
-            MC_samples
+            MC_samples,
+            verbose,
         )
     end
 end
@@ -162,6 +165,8 @@ function MLE_loss(
 
     # Expectation of the loglikelihood with respect to the posterior
     loss_llhood = sum(logllhood .* posterior_weights; dims=2)
+
+    verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
 
     return -mean(loss_prior + loss_llhood)
 end

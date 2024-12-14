@@ -157,13 +157,13 @@ function MLE_loss(
 
     # Expectation of the logprior with respect to the posterior and prior
     ex_prior = mean(logprior)
-    ex_post = mean(logprior[:,:]' .* posterior_weights; dims=2)
+    ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
     loss_prior = ex_post .- ex_prior
 
     # Expectation of the loglikelihood with respect to the posterior
-    loss_llhood = mean(logllhood .* posterior_weights; dims=2)
+    loss_llhood = sum(logllhood .* posterior_weights; dims=2)
 
-    return -sum(loss_prior + loss_llhood)
+    return -mean(loss_prior + loss_llhood)
 end
 
 function update_llhood_grid(

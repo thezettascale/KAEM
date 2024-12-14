@@ -14,6 +14,7 @@ parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
+z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
 function test_log_likelihood()
     Random.seed!(42)
@@ -21,7 +22,7 @@ function test_log_likelihood()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, MC_sample_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
+    z_test = randn(Float32, MC_sample_size, z_dim) |> device
     x_test = randn(Float32, b_size, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
@@ -34,7 +35,7 @@ function test_log_likelihood_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, b_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))) |> device
+    z_test = randn(Float32, b_size, z_dim) |> device
     x_test = randn(Float32, b_size, out_dim) |> device
     
     ∇ = first(gradient(z -> sum(log_likelihood(lkhood, ps, st, x_test, z)), z_test))

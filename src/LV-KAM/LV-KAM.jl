@@ -166,7 +166,7 @@ function MLE_loss(
     # Expectation of the loglikelihood with respect to the posterior
     loss_llhood = sum(logllhood .* posterior_weights; dims=2)
 
-    verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
+    m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
 
     return -mean(loss_prior + loss_llhood)
 end

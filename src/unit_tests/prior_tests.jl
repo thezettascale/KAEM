@@ -10,6 +10,7 @@ using .Utils
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
 function test_sampling()
     Random.seed!(42)
@@ -18,7 +19,7 @@ function test_sampling()
     ps, st = ps |> device, st |> device
 
     z_test = first(sample_prior(prior, b_size, ps, st))
-    @test all(size(z_test) .== (b_size, parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))))
+    @test all(size(z_test) .== (b_size, z_dim))
 end
 
 function test_log_prior()

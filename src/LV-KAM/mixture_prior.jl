@@ -27,7 +27,8 @@ prior_pdf = Dict(
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
-    fcn_qp::univariate_function
+    fcns_qp::NamedTuple
+    depth::Int
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
     τ::Float32
@@ -41,8 +42,10 @@ function init_mix_prior(
     conf::ConfParse;
     prior_seed::Int=1,
 )
-    p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
-    q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
+    # p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
+    # q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
+
+    widths = parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
@@ -77,13 +80,15 @@ function init_mix_prior(
         (u_th, fz, f_grid) -> u_th .< exp.(fz .- f_grid)
         )
 
-    prior_seed = next_rng(prior_seed)
-    base_scale = (μ_scale * (1f0 / √(Float32(p))) 
-    .+ σ_base .* (randn(Float32, p, q) .* 2f0 .- 1f0) .* (1f0 / √(Float32(p))))
+    functions = NamedTuple()
+    for i in eachindex(widths[1:end-1])
+        prior_seed = next_rng(prior_seed)
+        base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
+        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
 
-    func = init_function(
-        p,
-        q;
+        func = init_function(
+        widths[i],
+        widths[i+1];
         spline_degree=spline_degree,
         base_activation=base_activation,
         spline_function=spline_function,
@@ -95,24 +100,27 @@ function init_mix_prior(
         σ_spline=σ_spline,
         init_η=init_η,
         η_trainable=η_trainable,
-    )
+        )
 
-    return mix_prior(func, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
+        @reset functions[Symbol("$i")] = func
+    end
+
+    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
-    ps =  Lux.initialparameters(rng, prior.fcn_qp)
-    @reset ps[:α] = glorot_normal(rng, Float32, prior.fcn_qp.in_dim)
+    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
+    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("1")].in_dim)
     return ps
 end
  
 function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
-    st = Lux.initialstates(rng, prior.fcn_qp)
+    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
     return st
 end
 
 function flip_states(
-    prior::mix_prior, 
+    fcn::univariate_function, 
     ps, 
     st
     )
@@ -134,7 +142,7 @@ function flip_states(
         ps_flipped: The flipped parameters of the mixture ebm-prior.
         st_flipped: The flipped states of the mixture ebm-prior.
     """
-    ps_flipped = prior.fcn_qp.η_trainable ? (
+    ps_flipped = fcn.η_trainable ? (
         coef = permutedims(ps.coef, [2, 1, 3]),
         w_base = ps.w_base',
         w_sp = ps.w_sp',
@@ -145,15 +153,15 @@ function flip_states(
         w_sp = ps.w_sp'
     )
 
-    st_flipped = prior.fcn_qp.η_trainable ? st' : (
+    st_flipped = fcn.η_trainable ? st' : (
         mask = st.mask',
         basis_η = st.basis_η
     )
 
-    grid = prior.fcn_qp.grid[1:1, :] # Grid is repeated along first dim for each in_dim
-    @reset prior.fcn_qp.grid = repeat(grid, prior.fcn_qp.out_dim, 1)
+    grid = fcn.grid[1:1, :] # Grid is repeated along first dim for each in_dim
+    @reset fcn.grid = repeat(grid, fcn.out_dim, 1)
     
-    return prior.fcn_qp, ps_flipped, st_flipped
+    return fcn, ps_flipped, st_flipped
 end
 
 function log_prior(
@@ -178,55 +186,19 @@ function log_prior(
     """
 
     π_0 = mix.π_pdf(z)
-    alpha = softmax(ps.α)
-    f_qp = fwd(flip_states(mix, ps, st)..., z)
+    alpha = softmax(ps[Symbol("α")])
+
+    for i in reverse(1:mix.depth)
+        z = fwd(flip_states(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")])..., z)
+        z = i == mix.depth ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :]
+    end
+    z = reshape(z, size(π_0)[1:2]..., :)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    f_qp = exp.(f_qp)
-    prior = @tullio p[b, o, i] := alpha[i] * f_qp[b, o, i] * π_0[b, o]
+    z = exp.(z)
+    prior = @tullio p[b, o, i] := alpha[i] * z[b, o, i] * π_0[b, o]
     prior = log.(sum(prior; dims=3) .+ eps(Float32))[:,:,1]
     return sum(prior; dims=2)
 end
-
-# function log_prior(mix::mix_prior, 
-#     z::AbstractArray, 
-#     ps, 
-#     st, 
-#     )
-#     """
-#     Compute the unnormalized log-probability of the mixture ebm-prior.
-#     The likelihood of each sample, z_q, is evaluated for each component of the
-#     mixture model: ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    
-#     Args:
-#         mix: The mixture ebm-prior.
-#         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-#         ps: The parameters of the mixture ebm-prior.
-#         st: The states of the mixture ebm-prior.
-
-#     Returns:
-#         The unnormalized log-probability of the mixture ebm-prior.
-#     """
-
-#     sample_size, q, p = size(z)..., mix.fcn_qp.in_dim
-
-#     # Prior
-#     π_0 = mix.π_pdf(z)
-#     alpha = softmax(ps.α)
-
-#     # Find likelihood for each sample under its corresponding component, 
-#     prior_llhood = zeros(eltype(z), sample_size) |> device
-#     one_vec = ones(Float32, p) |> device
-#     for o in 1:q
-#         z_q = one_vec' .* view(z, :, o) # Stabler than repeat
-#         z_q = exp.(fwd(mix.fcn_qp, ps, st, z_q)[:, :, o]) 
-#         π_q = view(π_0, :, o)
-#         prior = @tullio p[b, i] := alpha[i] * z_q[b, i] * π_q[b]
-#         prior = log.(sum(prior; dims=2) .+ eps(Float32))
-#         prior_llhood = prior_llhood .+ prior
-#     end
-
-#     return prior_llhood[:,:]
-# end
 
 end

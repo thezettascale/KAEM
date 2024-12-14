@@ -42,9 +42,9 @@ function init_MoE_lkhood(
     weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=2) 
     )
 
-    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "hidden_widths"))
+    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
     widths = (widths..., 1)
-    first(widths) !== parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim")) && (
+    first(widths) !== last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))) && (
         error("First width must be equal to the hidden dimension of the prior.")
     )
 

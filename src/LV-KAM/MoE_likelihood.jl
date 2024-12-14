@@ -39,7 +39,7 @@ function init_MoE_lkhood(
     conf::ConfParse,
     output_dim::Int;
     lkhood_seed::Int=1,
-    weight_fcn::Function= x -> @ignore_derivatives softmax(x; dims=2) 
+    weight_fcn::Function= x -> softmax(x; dims=2) 
     )
 
     widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))

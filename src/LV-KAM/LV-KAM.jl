@@ -57,7 +57,7 @@ function init_LV_KAM(
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
-        weight_fcn = x -> softmax(view(temperatures, 1, :, 1) .* x; dims=2)
+        weight_fcn = x -> softmax(reshape(temperatures, 1, :, 1) .* x; dims=2)
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
         
         return Thermodynamic_LV_KAM(

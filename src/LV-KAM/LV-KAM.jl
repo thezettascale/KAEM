@@ -23,6 +23,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     lkhood::MoE_lkhood
     train_loader::DataLoader
     test_loader::DataLoader
+    update_grid::Bool
     grid_update_decay::Float32
     grid_updates_samples::Int
     MC_samples::Int
@@ -42,6 +43,7 @@ function init_LV_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
+    update_grid = parse(Bool, retrieve(conf, "TRAINING", "update_grid"))
     data_seed = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
@@ -77,6 +79,7 @@ function init_LV_KAM(
             lkhood_model,
             train_loader,
             test_loader,
+            update_grid,
             grid_update_decay,
             num_grid_updating_samples,
             MC_samples,

@@ -66,7 +66,8 @@ function kl_div_2D(u_k::AbstractArray, Σ_k::AbstractArray, u_k1::AbstractArray,
     """
     Compute the KL divergence between two 2D Gaussian distributions.
     """
-    logdet_term = logdet(Σ_k1) - logdet(Σ_k)
+    # logdet_term = logdet(Σ_k1) - logdet(Σ_k)
+    logdet_term = log(det(Σ_k1) / det(Σ_k) + eps(Float32))
     trace_term = tr(Σ_k1 \ Σ_k)
     diff = u_k1 .- u_k
     quad_term = diff' * (Σ_k1 \ diff)
@@ -87,10 +88,10 @@ function compute_kl_divergence(μ::AbstractArray, Σ::AbstractArray)
         KL_b = zeros(Float32, 0) |> device
         for t in 1:T
             KL_b = vcat(KL_b, kl_div_2D(
-                u_k[b, t, :],
-                Σ_k[b, t, :, :],
-                u_k1[b, t, :],
-                Σ_k1[b, t, :, :],
+                view(u_k, b, t, :),
+                view(Σ_k, b, t, :, :),
+                view(u_k1, b, t, :),
+                view(Σ_k1, b, t, :, :),
                 Q
                 ))
         end

@@ -62,7 +62,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     model = init_LV_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     optimizer = create_opt(conf)
-    grid_update_frequency = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_frequency"))
+    grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     x, loader_state = iterate(model.train_loader) 
@@ -124,7 +124,7 @@ function train!(t::LV_KAM_trainer)
         t.ps = u
 
         # Grid updating for likelihood model
-        if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.grid_update_frequency)) && t.model.update_grid
+        if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
             t.model, t.ps, t.seed = update_llhood_grid(t.model, t.ps, t.st; seed=t.seed)
             t.grid_update_frequency = t.iter > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.iter) : t.grid_update_frequency
             t.last_grid_update = t.iter

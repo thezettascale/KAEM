@@ -16,14 +16,15 @@ using .ebm_mix_prior
 using .MoE_likelihood
 using .ThermodynamicIntegration
 using .univariate_functions: update_fcn_grid, fwd
-using .Utils
+using .Utils: device, next_rng
 
 struct LV_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
     lkhood::MoE_lkhood
     train_loader::DataLoader
     test_loader::DataLoader
-    update_grid::Bool
+    update_prior_grid::Bool
+    update_llhood_grid::Bool
     grid_update_decay::Float32
     grid_updates_samples::Int
     MC_samples::Int
@@ -43,7 +44,8 @@ function init_LV_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    update_grid = parse(Bool, retrieve(conf, "TRAINING", "update_grid"))
+    update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
+    update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     data_seed = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
@@ -51,8 +53,8 @@ function init_LV_KAM(
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     
-    grid_update_decay = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_decay"))
-    num_grid_updating_samples = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "num_grid_updating_samples"))
+    grid_update_decay = parse(Float32, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
+    num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
 
@@ -67,7 +69,8 @@ function init_LV_KAM(
             lkhood_model,
             train_loader,
             test_loader,
-            update_grid,
+            update_prior_grid,
+            update_llhood_grid,
             grid_update_decay,
             num_grid_updating_samples,
             MC_samples,
@@ -82,7 +85,8 @@ function init_LV_KAM(
             lkhood_model,
             train_loader,
             test_loader,
-            update_grid,
+            update_prior_grid,
+            update_llhood_grid,
             grid_update_decay,
             num_grid_updating_samples,
             MC_samples,
@@ -196,8 +200,24 @@ function update_llhood_grid(
         The updated params.
         The updated seed.
     """
-    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    
+    if model.update_prior_grid
+        p_size = model.prior.fcns_qp[Symbol("1")].in_dim
+        z_p = rand(model.prior.π_0, model.grid_updates_samples, p_size) |> device
 
+        for i in 1:model.prior.depth
+            new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z_p)
+            @reset ps.ebm[Symbol("$i")].coef = new_coef
+            @reset model.prior.fcns_qp[Symbol("$i")].grid = new_grid
+
+            z_p = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z_p)
+            z_p = i == 1 ? reshape(z_p, :, size(z_p, 3)) : sum(z_p, dims=2)[:, 1, :] 
+        end
+    end
+         
+    !model.update_llhood_grid && return model, ps, seed
+
+    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
         @reset ps.gen[Symbol("$i")].coef = new_coef

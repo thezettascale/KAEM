@@ -16,7 +16,8 @@ struct Thermodynamic_LV_KAM <: Lux.AbstractLuxLayer
     lkhood::MoE_lkhood
     train_loader::DataLoader
     test_loader::DataLoader
-    update_grid::Bool
+    update_prior_grid::Bool
+    update_llhood_grid::Bool
     grid_update_decay::Float32
     grid_updates_samples::Int
     MC_samples::Int

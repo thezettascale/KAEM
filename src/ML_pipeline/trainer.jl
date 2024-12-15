@@ -3,9 +3,11 @@ module trainer
 export LV_KAM_trainer, init_trainer, train!
 
 include("../LV-KAM/LV-KAM.jl")
+include("../LV-KAM/thermodynamic_integration.jl")
 include("optimizer.jl")
 include("../utils.jl")
 using .LV_KAM_model
+using .ThermodynamicIntegration
 using .optimization
 using .Utils: device
 
@@ -21,7 +23,7 @@ dataset_mapping = Dict(
 )
 
 mutable struct LV_KAM_trainer
-    model::LV_KAM
+    model::Union{LV_KAM, Thermodynamic_LV_KAM}
     o::opt
     dataset_name::AbstractString
     img_shape::Tuple

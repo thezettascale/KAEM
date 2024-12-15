@@ -1,7 +1,7 @@
 # LV-KAM
 Official implementation of the Latent Variable Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
 
-Go see our [litepaper!](https://exalaboratories.com/litepaper).
+Go see our [litepaper!](https://exalaboratories.com/litepaper). We are able to train both MLPs and KANs more efficiently than a GPU, and we can certainly make KANs better than anything else out there.
 
 ## What is LV-KAM.
 

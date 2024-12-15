@@ -21,7 +21,8 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> - sqrt.(@tullio l2[b, s] := (x[b, i] - x̂[s, i])^2),
+    "l2" => (x, x̂) -> @tullio(l2[b, s] := -sqrt((x[b, i] - x̂[s, i])^2)),
+    "bernoulli" => (x, x̂) -> @tullio(bern[b, s] := x[b, i] * log(x̂[s, i] + 1f-4) + (1 - x[b, i]) * log(1 - x̂[s, i] + 1f-4)),
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer

@@ -29,6 +29,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     grid_updates_samples::Int
     MC_samples::Int
     verbose::Bool
+    loss_fcn::Function
 end
 
 function init_LV_KAM(
@@ -76,6 +77,7 @@ function init_LV_KAM(
             MC_samples,
             verbose,
             temperatures,
+            TI_loss
         )
     else
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
@@ -91,6 +93,7 @@ function init_LV_KAM(
             num_grid_updating_samples,
             MC_samples,
             verbose,
+            MLE_loss
         )
     end
 end
@@ -163,10 +166,10 @@ function MLE_loss(
         seed
         )
 
-    # Compute the log-distributions for these samples, (batch_size x 1)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    posterior_weights = m.lkhood.weight_fcn(logllhood)
+    # Compute the log-distributions for these samples
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm) # (sample_size x 1)
+    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed) # (batch_size x sample_size)
+    posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size)
 
     # Expectation of the logprior with respect to the posterior and prior
     ex_prior = mean(logprior)

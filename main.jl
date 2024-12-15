@@ -8,6 +8,18 @@ ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 include("src/ML_pipeline/trainer.jl")
 using .trainer
 
-Random.seed!(1)
-t = init_trainer(Random.GLOBAL_RNG, conf, retrieve(conf, "TRAINING", "dataset"), img_resize=(14,14))
-train!(t)
+datasets = ["MNIST", "FMNIST"]
+
+for dataset in datasets
+    Random.seed!(1)
+    t = init_trainer(Random.GLOBAL_RNG, conf, dataset, img_resize=(14,14))
+    train!(t)
+
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", 30)
+
+    Random.seed!(1)
+    t = init_trainer(Random.GLOBAL_RNG, conf, dataset, img_resize=(14,14))
+    train!(t)
+
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", -1)
+end

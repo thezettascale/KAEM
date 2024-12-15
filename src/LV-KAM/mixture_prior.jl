@@ -42,9 +42,6 @@ function init_mix_prior(
     conf::ConfParse;
     prior_seed::Int=1,
 )
-    # p = parse(Int, retrieve(conf, "MIX_PRIOR", "latent_dim"))
-    # q = parse(Int, retrieve(conf, "MIX_PRIOR", "hidden_dim"))
-
     widths = parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
@@ -66,7 +63,7 @@ function init_mix_prior(
     ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
 
     if need_derivative
-        sample_function = sample_prior
+        sample_function = (m, n, p, s, seed) -> sample_prior(m, n, p, s; init_seed=seed)
         choose_category = select_category_differentiable
         max_fcn = logsumexp
     else
@@ -197,7 +194,7 @@ function log_prior(
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     z = exp.(z)
     prior = @tullio p[b, o, i] := alpha[i] * z[b, o, i] * π_0[b, o]
-    prior = log.(sum(prior; dims=3) .+ eps(Float32))[:,:,1]
+    prior = log.(sum(prior; dims=3) .+ eps(eltype(prior)))[:,:,1]
     return sum(prior; dims=2)
 end
 

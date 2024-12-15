@@ -133,7 +133,7 @@ function train!(t::LV_KAM_trainer)
             t.model.verbose && println("Iter: $(t.iter), Grid updated")
         end
 
-        grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
+        grads = first(gradient(pars -> t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
         any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
         t.seed += 1
 
@@ -148,7 +148,7 @@ function train!(t::LV_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        loss = MLE_loss(t.model, t.ps, t.st, t.x)
+        loss = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
         train_loss += loss
         t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
 
@@ -158,7 +158,7 @@ function train!(t::LV_KAM_trainer)
             test_loss = 0
             for x in t.model.test_loader
                 x = device(x')
-                test_loss += MLE_loss(t.model, t.ps, t.st, x; seed=t.seed)
+                test_loss += t.model.loss_fcn(t.model, t.ps, t.st, x; seed=t.seed)
                 t.seed += 1
             end
             

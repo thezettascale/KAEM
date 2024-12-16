@@ -19,8 +19,8 @@ using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng
 
 struct LV_KAM <: Lux.AbstractLuxLayer
-    prior::mix_prior
-    lkhood::MoE_lkhood
+    prior::mix_prior # The mixture ebm-prior; q -> p
+    lkhood::MoE_lkhood # The mixture of experts likelihood model; q -> out
     train_loader::DataLoader
     test_loader::DataLoader
     update_prior_grid::Bool
@@ -64,7 +64,8 @@ function init_LV_KAM(
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
         weight_fcn = x -> softmax(reshape(temperatures, 1, 1, :) .* x[:, :, :]; dims=2)
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
-        
+        γ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "prior_regularization_weight"))
+
         return Thermodynamic_LV_KAM(
             prior_model,
             lkhood_model,
@@ -77,7 +78,8 @@ function init_LV_KAM(
             MC_samples,
             verbose,
             temperatures,
-            TI_loss
+            TI_loss,
+            γ
         )
     else
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
@@ -205,16 +207,16 @@ function update_llhood_grid(
     """
     
     if model.update_prior_grid
-        p_size = model.prior.fcns_qp[Symbol("1")].in_dim
-        z_p = rand(model.prior.π_0, model.grid_updates_samples, p_size) |> device
+        q_size = model.prior.fcns_qp[Symbol("1")].in_dim
+        z = rand(model.prior.π_0, model.grid_updates_samples, q_size) |> device
 
         for i in 1:model.prior.depth
-            new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z_p)
+            new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             @reset ps.ebm[Symbol("$i")].coef = new_coef
             @reset model.prior.fcns_qp[Symbol("$i")].grid = new_grid
 
-            z_p = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z_p)
-            z_p = i == 1 ? reshape(z_p, :, size(z_p, 3)) : sum(z_p, dims=2)[:, 1, :] 
+            z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
+            z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :] 
         end
     end
          

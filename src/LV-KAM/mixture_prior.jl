@@ -31,11 +31,7 @@ struct mix_prior <: Lux.AbstractLuxLayer
     depth::Int
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
-    τ::Float32
     sample_z::Function
-    categorical_mask::Function
-    max_fcn::Function
-    acceptance_fcn::Function
 end
 
 function init_mix_prior(
@@ -43,6 +39,7 @@ function init_mix_prior(
     prior_seed::Int=1,
 )
     widths = parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
+    widths = reverse(widths) # Reverse widths because we are going from q -> p in the prior
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
@@ -62,21 +59,8 @@ function init_mix_prior(
     τ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "gumbel_temperature"))
     ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
 
-    if need_derivative
-        sample_function = (m, n, p, s, seed) -> sample_prior(m, n, p, s; init_seed=seed)
-        choose_category = select_category_differentiable
-        max_fcn = logsumexp
-    else
-        sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; init_seed=seed)
-        choose_category = select_category
-        max_fcn = maximum
-    end
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; init_seed=seed)
     
-    acceptance_fcn = (need_derivative ?
-        (u_th, fz, f_grid, π_eval) -> sigmoid_fast((u_th .- (exp.(fz .- f_grid) ./ π_eval)) .* ζ) : 
-        (u_th, fz, f_grid, π_eval) -> u_th .< exp.(fz .- f_grid) ./ π_eval
-        )
-
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed = next_rng(prior_seed)
@@ -102,63 +86,18 @@ function init_mix_prior(
         @reset functions[Symbol("$i")] = func
     end
 
-    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], τ, sample_function, choose_category, max_fcn, acceptance_fcn)
+    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("1")].in_dim)
+    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("$(prior.depth)")].out_dim)
     return ps
 end
  
 function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
     st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
     return st
-end
-
-function flip_states(
-    fcn::univariate_function, 
-    ps, 
-    st
-    )
-    """
-    Flip the params and states of the mixture ebm-prior.
-    
-    This is needed for the log-probability calculation, 
-    since z_q is sampled component-wise, but needs to be
-    evaluated for each component, f_{q,p}(z_q). This only works
-    given that the domain of f is fixed to [0,1], (no grid updating).
-
-    Args:
-        prior: The mixture ebm-prior.
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-
-    Returns:
-        prior_flipped: The ebm-prior with a flipped grid.
-        ps_flipped: The flipped parameters of the mixture ebm-prior.
-        st_flipped: The flipped states of the mixture ebm-prior.
-    """
-    ps_flipped = fcn.η_trainable ? (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp',
-        basis_η = ps.basis_η
-    ) : (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp'
-    )
-
-    st_flipped = fcn.η_trainable ? st' : (
-        mask = st.mask',
-        basis_η = st.basis_η
-    )
-
-    grid = fcn.grid[1:1, :] # Grid is repeated along first dim for each in_dim
-    @reset fcn.grid = repeat(grid, fcn.out_dim, 1)
-    
-    return fcn, ps_flipped, st_flipped
 end
 
 function log_prior(
@@ -169,8 +108,8 @@ function log_prior(
     )
     """
     Compute the unnormalized log-probability of the mixture ebm-prior.
-    The likelihood of each sample, z_q, is evaluated for each component of the
-    mixture model
+    The likelihood of samples from each mixture model, z_q, is evaluated 
+    for all components of the mixture model it has been sampled from , M_q.
     
     Args:
         mix: The mixture ebm-prior.
@@ -182,21 +121,19 @@ function log_prior(
         The unnormalized log-probability of the mixture ebm-prior.
     """
     b_size, q_size = size(z)[1:2]
+    alpha = permutedims(softmax(ps[Symbol("α")])[:,:,:], [3, 2, 1])
 
-    π_0 = mix.π_pdf(z)
-    alpha = softmax(ps[Symbol("α")])
-
-    for i in reverse(1:mix.depth)
-        z = fwd(flip_states(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")])..., z)
-        z = i == mix.depth ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :]
+    # Energy functions of each component, q -> p
+    for i in 1:mix.depth
+        z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+        z = i == 1 ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
     end
-    z = reshape(z, b_size, q_size, :)
+    z = @views(reshape(z, b_size, q_size, :))
 
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
-    z = exp.(z)
-    prior = @tullio p[b, o, i] := alpha[i] * z[b, o, i] 
-    prior = log.(sum(prior; dims=3) .+ eps(eltype(prior)))[:,:,1]
-    return sum(prior; dims=2)
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) ) ] ; likelihood of samples under each component
+    z = sum(alpha .* exp.(z); dims=3)[:,:,1]
+    z = log.(z .+ eps(eltype(z)))
+    return sum(z; dims=2)
 end
 
 end

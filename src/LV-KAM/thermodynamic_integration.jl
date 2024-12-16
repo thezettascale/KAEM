@@ -5,19 +5,17 @@ export Thermodynamic_LV_KAM, TI_loss
 using CUDA, KernelAbstractions, Tullio
 using Random, Lux, Statistics, LinearAlgebra
 using Flux: DataLoader
-using ChainRules: @ignore_derivatives
 
 # Inherit from parent module
 if isdefined(Main, :LV_KAM_model)
-    using Main.LV_KAM_model.ebm_mix_prior: mix_prior
+    using Main.LV_KAM_model.ebm_mix_prior: mix_prior, log_prior
     using Main.LV_KAM_model.MoE_likelihood: MoE_lkhood, log_likelihood 
 elseif isdefined(Main, :trainer) && isdefined(Main.trainer, :LV_KAM_model)
-    using Main.trainer.LV_KAM_model.ebm_mix_prior: mix_prior
+    using Main.trainer.LV_KAM_model.ebm_mix_prior: mix_prior, log_prior
     using Main.trainer.LV_KAM_model.MoE_likelihood: MoE_lkhood, log_likelihood
 else
     error("Neither Main.LV_KAM_model nor Main.trainer.LV_KAM_model is defined")
 end
-
 
 include("../utils.jl")
 using .Utils: device
@@ -35,6 +33,7 @@ struct Thermodynamic_LV_KAM <: Lux.AbstractLuxLayer
     verbose::Bool
     temperatures::AbstractArray{Float32}
     loss_fcn::Function
+    γ::Float32
 end
 
 function Lux.initialparameters(rng::AbstractRNG, model::Thermodynamic_LV_KAM)
@@ -83,14 +82,31 @@ function compute_mean_variance(z::AbstractArray, posterior_weights::AbstractArra
     return μ[:,:,:,1], Σ[:,:,:,:,1]
 end
 
-function kl_div_2D(u_k::AbstractVector, Σ_k::AbstractMatrix, u_k1::AbstractVector, Σ_k1::AbstractMatrix, Q::Int)
+function kl_div_2D(
+    u_k::AbstractVector, 
+    Σ_k::AbstractMatrix, 
+    u_k1::AbstractVector, 
+    Σ_k1::AbstractMatrix, 
+    Q::Int; 
+    ε=1f-4
+    )
     """
     Compute the KL divergence between two 2D Gaussian distributions.
+    LinearAlgebra is not behaving for CuArrays, so this must be done on the CPU.
     """
-    logdet_term = log(det(Σ_k1) / det(Σ_k) + eps(Float32))
-    trace_term = tr(Σ_k1 \ Σ_k)
-    diff = u_k1 .- u_k
+    eye = Matrix{Float32}(I, Q, Q) .* ε
+    Σ_k1 += eye
+    Σ_k += eye
+
+    logdet_term = logdet(Σ_k1) - logdet(Σ_k)
+    trace_term = tr(Σ_k1 \ Σ_k1)
+    diff = u_k1 - u_k
     quad_term = diff' * (Σ_k1 \ diff)
+
+    isnan(logdet_term) && error("logdet_term is NaN")
+    isnan(trace_term) && error("trace_term is NaN")
+    isnan(quad_term) && error("quad_term is NaN")
+
     return 5f-1 * (logdet_term + trace_term + quad_term - Q)
 end
 
@@ -163,14 +179,23 @@ function TI_loss(
         seed
         )
         
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm) # (sample_size x 1)
     logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed) # (batch_size x sample_size)
     posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size x num_temps)
 
     # Thermodynamic Integration
     trap_approx = trapz(logllhood, posterior_weights) 
     μ, Σ = compute_mean_variance(z, posterior_weights)
-    KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ)) 
-    return -(mean(trap_approx) + mean(KL_divz))
+    KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ))
+
+    # Prior regularization
+    ex_prior = mean(logprior)
+    ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
+    loss_prior = ex_post .- ex_prior
+
+    m.verbose && println("Prior loss: ", -mean(loss_prior), ", TI loss: ", -mean(trap_approx), ", KL loss: ", -mean(KL_divz))
+
+    return -(mean(trap_approx + KL_divz) + m.γ * mean(loss_prior))
 end
 
 end

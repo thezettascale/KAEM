@@ -23,7 +23,7 @@ dataset_mapping = Dict(
 )
 
 mutable struct LV_KAM_trainer
-    model::Union{LV_KAM, Thermodynamic_LV_KAM}
+    model
     o::opt
     dataset_name::AbstractString
     img_shape::Tuple

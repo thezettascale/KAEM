@@ -21,7 +21,7 @@ prior_distributions = Dict(
 )
 
 prior_pdf = Dict(
-    "uniform" => z -> 0 .<= z .<= 1,
+    "uniform" => z -> 0 .<= z .<= 1 .|> Float32,
     "normal" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
     "bernoulli" => z -> 1 ./ 2
 )
@@ -55,10 +55,6 @@ function init_mix_prior(
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     
-    need_derivative = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1
-    τ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "gumbel_temperature"))
-    ζ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "rejection_smoothening"))
-
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; init_seed=seed)
     
     functions = NamedTuple()

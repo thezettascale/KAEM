@@ -82,6 +82,9 @@ function compute_mean_variance(z::AbstractArray, posterior_weights::AbstractArra
     return μ[:,:,:,1], Σ[:,:,:,:,1]
 end
 
+# Will need this: prod(diag(CUSOLVER.getrf!(Mgpu)[1]))
+# Or maybe cholesky!(Σ_k1)
+
 function kl_div_2D(
     u_k::AbstractVector, 
     Σ_k::AbstractMatrix, 
@@ -99,6 +102,7 @@ function kl_div_2D(
     Σ_k += eye
 
     logdet_term = logdet(Σ_k1) - logdet(Σ_k)
+    Σ_k1 = cholesky!(Σ_k1)
     trace_term = tr(Σ_k1 \ Σ_k1)
     diff = u_k1 - u_k
     quad_term = diff' * (Σ_k1 \ diff)

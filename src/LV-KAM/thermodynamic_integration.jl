@@ -169,9 +169,7 @@ function TI_loss(
     # Thermodynamic Integration
     trap_approx = trapz(logllhood, posterior_weights) 
     μ, Σ = compute_mean_variance(z, posterior_weights)
-    μ, Σ = cpu_device()(μ), cpu_device()(Σ)
-    KL_divz = kl_trapz(μ, Σ) 
-    
+    KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ)) 
     return -(mean(trap_approx) + mean(KL_divz))
 end
 

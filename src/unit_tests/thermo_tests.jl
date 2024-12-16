@@ -20,12 +20,12 @@ function test_sample_prior()
     ps, st = Lux.setup(Random.GLOBAL_RNG, m)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    z, seed = z, seed = m.prior.sample_z(
+    z, seed = m.prior.sample_z(
         m.prior, 
         m.MC_samples,
         ps.ebm,
         st.ebm,
-        seed
+        1
         )
 
     @test all(size(z) .== (m.MC_samples, m.lkhood.Λ_fcns[Symbol("1")].in_dim))
@@ -43,7 +43,7 @@ function test_sample_prior_derivative()
         m.MC_samples,
         p.ebm,
         st.ebm,
-        seed
+        1
         )))
 
     ∇ = first(gradient(p -> fcn(p), ps))

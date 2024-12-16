@@ -37,7 +37,7 @@ function select_category_differentiable(
     α = logsoftmax(α)
     gumbel = -log.(-log.(rand(Uniform(0,1), num_samples, length(α), out_dim) .+ eps(Float32))) |> device
     logits = @tullio gumbel_logits[b, i, o] := α[i] + gumbel[b, i, o]
-    return softmax(logits ./ τ, dims=2)
+    return softmax(logits ./ τ, dims=3)
 end
 
 function sample_prior(
@@ -103,13 +103,14 @@ function sample_prior(
         fz_qp = sum(fz_qp .* chosen_components, dims=2)[:,1,:] 
 
         # Grid search for max_z[ f_{q,c}(z) ] for chosen components
-        f_grid = @tullio fg[b, g, i, o] := f_grid[g ,i, o]  * chosen_components[b, i, o]
+        f_grid = @tullio fg[b, g, i, o] := f_grid[g, i, o]  * chosen_components[b, i, o]
         f_grid = prior.max_fcn(sum(f_grid; dims=3); dims=2)[:,1,1,:] # Filtered max f_qp, (samples x q)
 
         # Accept or reject
         seed = next_rng(seed)
+        candidate_measure = prior.π_pdf(z_p)
         u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
-        accept_mask = prior.acceptance_fcn(u_threshold, fz_qp, f_grid) # Acceptance mask
+        accept_mask = prior.acceptance_fcn(u_threshold, fz_qp, f_grid, candidate_measure) # Acceptance mask
 
         # Update samples
         previous_samples = z_p .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask

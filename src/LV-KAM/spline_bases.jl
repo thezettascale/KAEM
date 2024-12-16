@@ -130,7 +130,7 @@ function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
 
     diff = @tullio res[d, n, m] := x[d, n, 1] - grid[1, n, m]
     
-    # Fast tanh may cause stability problems, but I was more interested in speed. If problematic, use base tanh instead. 
+    # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
     tan_diff = NNlib.tanh_fast(diff ./ σ) 
     # tan_diff = tanh.(diff ./ σ)
     

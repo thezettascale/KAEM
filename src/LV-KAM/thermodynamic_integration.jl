@@ -2,13 +2,22 @@ module ThermodynamicIntegration
 
 export Thermodynamic_LV_KAM, TI_loss
 
-using CUDA, KernelAbstractions, Tullio, ChainRulesCore
+using CUDA, KernelAbstractions, Tullio
 using Random, Lux, Statistics, LinearAlgebra
 using Flux: DataLoader
+using ChainRules: @ignore_derivatives
 
-# Inherit from LV_KAM_model
-using Main.LV_KAM_model.ebm_mix_prior: mix_prior
-using Main.LV_KAM_model.MoE_likelihood: MoE_lkhood, log_likelihood
+# Inherit from parent module
+if isdefined(Main, :LV_KAM_model)
+    using Main.LV_KAM_model.ebm_mix_prior: mix_prior
+    using Main.LV_KAM_model.MoE_likelihood: MoE_lkhood, log_likelihood 
+elseif isdefined(Main, :trainer) && isdefined(Main.trainer, :LV_KAM_model)
+    using Main.trainer.LV_KAM_model.ebm_mix_prior: mix_prior
+    using Main.trainer.LV_KAM_model.MoE_likelihood: MoE_lkhood, log_likelihood
+else
+    error("Neither Main.LV_KAM_model nor Main.trainer.LV_KAM_model is defined")
+end
+
 
 include("../utils.jl")
 using .Utils: device
@@ -49,29 +58,40 @@ end
 function compute_mean_variance(z::AbstractArray, posterior_weights::AbstractArray)
     """
     Importance sampling estimators for mean and variance of the 
-    power posterior samples at each temp.
+    power posterior samples at each temp. Latent dim (Q) must be on
+    first dimension to make the resulting arrays contiguous. 
     """
-    μ = sum(
-        @tullio(z_t[b, s, t, q] := z[s, q] * posterior_weights[b, s, t]);
-        dims=2
-    )[:, 1, :, :]
-    Σ = sum(
-        @tullio(z_t[b, s, t, q, q] := (z[s, q] - μ[b, t, q])' * (z[s, q] - μ[b, t, q]) * posterior_weights[b, s, t]);
-        dims=2
-    )[:, 1, :, :, :]
-    return μ, Σ
+    S, Q = size(z)
+    B, _, T = size(posterior_weights)
+
+    # Reshape for broadcasting, Q x B x T x S
+    z = reshape(z, Q, 1, 1, S)
+    posterior_weights = reshape(posterior_weights, 1, 1, B, T, S)
+
+    # Importance sampling estimators for mean
+    μ = sum(z .* posterior_weights[1, :, :, :, :]; dims=4)
+    
+    # Importance sampling estimators for variance
+    diff = reshape(z .- μ, Q, B*T*S)
+    vars = map(
+        i -> view(diff, :, i) * view(diff, :, i)',
+        1:B*T*S
+    )
+    Σ = reshape(reduce((x, y) -> cat(x, y; dims=3), vars), Q, Q, B, T, S)
+    Σ = sum(Σ .* posterior_weights; dims=5)
+
+    return μ[:,:,:,1], Σ[:,:,:,:,1]
 end
 
-function kl_div_2D(u_k::AbstractArray, Σ_k::AbstractArray, u_k1::AbstractArray, Σ_k1::AbstractArray, Q::Int)
+function kl_div_2D(u_k::AbstractVector, Σ_k::AbstractMatrix, u_k1::AbstractVector, Σ_k1::AbstractMatrix, Q::Int)
     """
     Compute the KL divergence between two 2D Gaussian distributions.
     """
-    # logdet_term = logdet(Σ_k1) - logdet(Σ_k)
     logdet_term = log(det(Σ_k1) / det(Σ_k) + eps(Float32))
     trace_term = tr(Σ_k1 \ Σ_k)
     diff = u_k1 .- u_k
     quad_term = diff' * (Σ_k1 \ diff)
-    return logdet_term + trace_term + quad_term - Q
+    return 5f-1 * (logdet_term + trace_term + quad_term - Q)
 end
 
 function compute_kl_divergence(μ::AbstractArray, Σ::AbstractArray)
@@ -79,26 +99,28 @@ function compute_kl_divergence(μ::AbstractArray, Σ::AbstractArray)
     Compute the KL divergences between each adjacent pair of 
     power posteriors in ascending order, assuming Gaussian.
     """
-    u_k, Σ_k = μ[:, 1:end-1, :], Σ[:, 1:end-1, :, :]
-    u_k1, Σ_k1 = μ[:, 2:end, :], Σ[:, 2:end, :, :]
-    B, T, Q = size(u_k)
-    
+    # Adjacent pairs of power posteriors
+    u_k, Σ_k = μ[:, :, 1:end-1], Σ[:, :, :, 1:end-1]
+    u_k1, Σ_k1 = μ[:, :, 2:end], Σ[:, :, :, 2:end]
+
+    Q, B, T = size(u_k)
+
     KL_divz = zeros(Float32, 0, T) |> device
     for b in 1:B
         KL_b = zeros(Float32, 0) |> device
         for t in 1:T
             KL_b = vcat(KL_b, kl_div_2D(
-                view(u_k, b, t, :),
-                view(Σ_k, b, t, :, :),
-                view(u_k1, b, t, :),
-                view(Σ_k1, b, t, :, :),
+                view(u_k, :, b, t),
+                view(Σ_k, :, :, b, t),
+                view(u_k1, :, b, t),
+                view(Σ_k1, :, :, b, t),
                 Q
                 ))
         end
-        KL_divz = vcat(KL_divz, KL_b[:,:]' |> device)
+        KL_divz = vcat(KL_divz, KL_b[:,:]')
     end
  
-    return 5f-1 .* KL_divz
+    return KL_divz
 end
 
 function kl_trapz(μ::AbstractArray, Σ::AbstractArray)
@@ -108,8 +130,8 @@ function kl_trapz(μ::AbstractArray, Σ::AbstractArray)
 
     # Ascending and descending order
     KL_divz = compute_kl_divergence(μ, Σ)
-    KL_divs_reverse = compute_kl_divergence(reverse(μ, dims=2), reverse(Σ, dims=2))
-    return 5f-1 .* sum(KL_divz .+ KL_divs_reverse; dims=2)
+    KL_divs_reverse = compute_kl_divergence(reverse(μ, dims=3), reverse(Σ, dims=4))
+    return 5f-1 .* sum(KL_divz + KL_divs_reverse; dims=2)
 end
 
 function TI_loss(
@@ -145,11 +167,12 @@ function TI_loss(
     posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size x num_temps)
 
     # Thermodynamic Integration
-    trap_approx = trapz(logllhood, posterior_weights)
+    trap_approx = trapz(logllhood, posterior_weights) 
     μ, Σ = compute_mean_variance(z, posterior_weights)
-    KL_divz = kl_trapz(μ, Σ)
+    μ, Σ = cpu_device()(μ), cpu_device()(Σ)
+    KL_divz = kl_trapz(μ, Σ) 
     
-    return -mean(trap_approx + KL_divz)
+    return -(mean(trap_approx) + mean(KL_divz))
 end
 
 end

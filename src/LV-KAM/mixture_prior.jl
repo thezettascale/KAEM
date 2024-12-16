@@ -73,8 +73,8 @@ function init_mix_prior(
     end
     
     acceptance_fcn = (need_derivative ?
-        (u_th, fz, f_grid) -> sigmoid_fast((u_th .- exp.(fz .- f_grid)) .* ζ) : 
-        (u_th, fz, f_grid) -> u_th .< exp.(fz .- f_grid)
+        (u_th, fz, f_grid, π_eval) -> sigmoid_fast((u_th .- (exp.(fz .- f_grid) ./ π_eval)) .* ζ) : 
+        (u_th, fz, f_grid, π_eval) -> u_th .< exp.(fz .- f_grid) ./ π_eval
         )
 
     functions = NamedTuple()
@@ -181,6 +181,7 @@ function log_prior(
     Returns:
         The unnormalized log-probability of the mixture ebm-prior.
     """
+    b_size, q_size = size(z)[1:2]
 
     π_0 = mix.π_pdf(z)
     alpha = softmax(ps[Symbol("α")])
@@ -189,11 +190,11 @@ function log_prior(
         z = fwd(flip_states(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")])..., z)
         z = i == mix.depth ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :]
     end
-    z = reshape(z, size(π_0)[1:2]..., :)
+    z = reshape(z, b_size, q_size, :)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) π_0(z) ) ]
     z = exp.(z)
-    prior = @tullio p[b, o, i] := alpha[i] * z[b, o, i] * π_0[b, o]
+    prior = @tullio p[b, o, i] := alpha[i] * z[b, o, i] 
     prior = log.(sum(prior; dims=3) .+ eps(eltype(prior)))[:,:,1]
     return sum(prior; dims=2)
 end

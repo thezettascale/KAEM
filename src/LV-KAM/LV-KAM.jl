@@ -3,7 +3,7 @@ module LV_KAM_model
 export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics
+using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 using NNlib: sigmoid_fast
 

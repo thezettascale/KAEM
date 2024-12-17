@@ -53,7 +53,7 @@ function trapz(logllhood::AbstractArray, posterior_weights::AbstractArray, Δt::
     """
 
     E_k = sum(logllhood .* posterior_weights; dims=2) # (batch_size x 1 x num_temps)
-    trapz = Δt .* (E_k[:, 1, 1:end-1] + E_k[:, 1, 2:end]) # (batch_size x num_temps - 1)
+    trapz = Δt[:,:]' .* (E_k[:, 1, 1:end-1] + E_k[:, 1, 2:end]) # (batch_size x num_temps - 1)
     return 5f-1 .* sum(trapz; dims=2) 
 end
 

@@ -64,6 +64,7 @@ function init_LV_KAM(
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
         weight_fcn = x -> softmax(reshape(temperatures, 1, 1, :) .* x[:, :, :]; dims=2)
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
+        output_kl = parse(Bool, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "verbose_kl_divergence"))
         γ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "prior_regularization_weight"))
 
         return Thermodynamic_LV_KAM(
@@ -79,6 +80,7 @@ function init_LV_KAM(
             verbose,
             temperatures,
             TI_loss,
+            output_kl,
             γ
         )
     else

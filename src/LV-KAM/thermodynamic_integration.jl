@@ -5,6 +5,7 @@ export Thermodynamic_LV_KAM, TI_loss
 using CUDA, KernelAbstractions, Tullio
 using Random, Lux, Statistics, LinearAlgebra
 using Flux: DataLoader
+using ChainRules: @ignore_derivatives
 
 # Inherit from parent module
 if isdefined(Main, :LV_KAM_model)
@@ -33,6 +34,7 @@ struct Thermodynamic_LV_KAM <: Lux.AbstractLuxLayer
     verbose::Bool
     temperatures::AbstractArray{Float32}
     loss_fcn::Function
+    kl_div_verbose::Bool
     γ::Float32
 end
 
@@ -44,13 +46,14 @@ function Lux.initialstates(rng::AbstractRNG, model::Thermodynamic_LV_KAM)
     return (ebm = Lux.initialstates(rng, model.prior), gen = Lux.initialstates(rng, model.lkhood))
 end
 
-function trapz(logllhood::AbstractArray, posterior_weights::AbstractArray)
+function trapz(logllhood::AbstractArray, posterior_weights::AbstractArray, Δt::AbstractArray)
     """
     Importance sampling estimators for the expected log-likelihoods,
     w.r.t the poswer posteriors at each temperature.
     """
+
     E_k = sum(logllhood .* posterior_weights; dims=2) # (batch_size x 1 x num_temps)
-    trapz = (E_k[:, 1, 1:end-1] + E_k[:, 1, 2:end]) # (batch_size x num_temps - 1)
+    trapz = Δt .* (E_k[:, 1, 1:end-1] + E_k[:, 1, 2:end]) # (batch_size x num_temps - 1)
     return 5f-1 .* sum(trapz; dims=2) 
 end
 
@@ -82,9 +85,6 @@ function compute_mean_variance(z::AbstractArray, posterior_weights::AbstractArra
     return μ[:,:,:,1], Σ[:,:,:,:,1]
 end
 
-# Will need this: prod(diag(CUSOLVER.getrf!(Mgpu)[1]))
-# Or maybe cholesky!(Σ_k1)
-
 function kl_div_2D(
     u_k::AbstractVector, 
     Σ_k::AbstractMatrix, 
@@ -95,21 +95,16 @@ function kl_div_2D(
     )
     """
     Compute the KL divergence between two 2D Gaussian distributions.
-    LinearAlgebra is not behaving for CuArrays, so this must be done on the CPU.
+    LinearAlgebra is not behaving on GPU, so we need to use CPU.
     """
-    eye = Matrix{Float32}(I, Q, Q) .* ε
+    eye = Matrix{Float32}(I, Q, Q) .* ε 
     Σ_k1 += eye
     Σ_k += eye
 
     logdet_term = logdet(Σ_k1) - logdet(Σ_k)
-    Σ_k1 = cholesky!(Σ_k1)
     trace_term = tr(Σ_k1 \ Σ_k1)
     diff = u_k1 - u_k
     quad_term = diff' * (Σ_k1 \ diff)
-
-    isnan(logdet_term) && error("logdet_term is NaN")
-    isnan(trace_term) && error("trace_term is NaN")
-    isnan(quad_term) && error("quad_term is NaN")
 
     return 5f-1 * (logdet_term + trace_term + quad_term - Q)
 end
@@ -151,7 +146,7 @@ function kl_trapz(μ::AbstractArray, Σ::AbstractArray)
     # Ascending and descending order
     KL_divz = compute_kl_divergence(μ, Σ)
     KL_divs_reverse = compute_kl_divergence(reverse(μ, dims=3), reverse(Σ, dims=4))
-    return 5f-1 .* sum(KL_divz + KL_divs_reverse; dims=2)
+    return 5f-1 .* sum(KL_divz - KL_divs_reverse; dims=2)
 end
 
 function TI_loss(
@@ -188,18 +183,27 @@ function TI_loss(
     posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size x num_temps)
 
     # Thermodynamic Integration
-    trap_approx = trapz(logllhood, posterior_weights) 
-    μ, Σ = compute_mean_variance(z, posterior_weights)
-    KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ))
+    Δt = m.temperatures[2:end] - m.temperatures[1:end-1]
+    trap_approx = trapz(logllhood, posterior_weights, Δt)
+
+    # KL divergence term
+    if m.kl_div_verbose
+        @ignore_derivatives begin
+            μ, Σ = compute_mean_variance(z, posterior_weights)
+            KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ))
+            println("KL divergence: ", KL_divz)
+        end
+    end
+
 
     # Prior regularization
     ex_prior = mean(logprior)
     ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
     loss_prior = ex_post .- ex_prior
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), ", TI loss: ", -mean(trap_approx), ", KL loss: ", -mean(KL_divz))
+    m.verbose && println("Prior loss: ", -mean(loss_prior), ", TI loss: ", -mean(trap_approx))
 
-    return -(mean(trap_approx + KL_divz) + m.γ * mean(loss_prior))
+    return -mean(trap_approx) - m.γ * mean(loss_prior)
 end
 
 end

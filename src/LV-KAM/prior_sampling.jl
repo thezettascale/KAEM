@@ -49,11 +49,11 @@ function sample_prior(
 
     previous_samples = zeros(Float32, num_samples) |> device
     sample_mask = zeros(Float32, num_samples) |> device
-    seed = next_rng(init_seed)
     p_size = prior.fcns_qp[Symbol("1")].in_dim
     q_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
 
     # Categorical component selection (per sample, per outer sum dimension)
+    seed = next_rng(init_seed)
     chosen_components = categorical_mask(
         ps.α, 
         p_size, 

@@ -19,8 +19,8 @@ using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng
 
 struct LV_KAM <: Lux.AbstractLuxLayer
-    prior::mix_prior # The mixture ebm-prior; q -> p
-    lkhood::MoE_lkhood # The mixture of experts likelihood model; q -> out
+    prior::mix_prior
+    lkhood::MoE_lkhood 
     train_loader::DataLoader
     test_loader::DataLoader
     update_prior_grid::Bool
@@ -64,8 +64,7 @@ function init_LV_KAM(
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
         weight_fcn = x -> softmax(reshape(temperatures, 1, 1, :) .* x[:, :, :]; dims=2)
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
-        output_kl = parse(Bool, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "verbose_kl_divergence"))
-        γ = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "prior_regularization_weight"))
+        diagnostics_bool = parse(Bool, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "verbose_diagnostics"))
 
         return Thermodynamic_LV_KAM(
             prior_model,
@@ -80,8 +79,7 @@ function init_LV_KAM(
             verbose,
             temperatures,
             TI_loss,
-            output_kl,
-            γ
+            diagnostics_bool
         )
     else
         lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
@@ -185,6 +183,7 @@ function MLE_loss(
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
 
+    # Return the negative marginal likelihood, averaged over the batch
     return -mean(loss_prior + loss_llhood)
 end
 

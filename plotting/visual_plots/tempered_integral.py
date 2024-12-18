@@ -16,19 +16,6 @@ temp_cmap = plt.get_cmap('coolwarm')
 temp_colors = [temp_cmap(i) for i in np.linspace(0, 1, len(p_list))]
 num_temps = 100
 
-# plt.figure(figsize=(12, 9)) 
-# for p in p_list:
-#     temp = np.linspace(0, 1, num_temps) ** p
-#     label = "p = {}".format(p)
-#     plt.plot(temp, label=label, color=temp_colors[p_list.index(p)])
-# plt.xlabel(r"Schedule/Summation Index, $k$")
-# plt.ylabel(r"Temperature, $t^{(k)}$")
-# plt.title("Temperature Schedule", pad=70)
-# plt.legend(loc="upper center", bbox_to_anchor=(0.5, 1.16), ncol=4, columnspacing=1.5)
-# plt.tight_layout()
-# plt.savefig("results/temperature_schedule.png")
-
-
 reduced_p = [0.35, 1, 4]
 reduced_temps = [temp_colors[p_list.index(p)] for p in reduced_p]
 num_temps = 30

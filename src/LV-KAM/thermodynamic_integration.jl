@@ -2,10 +2,11 @@ module ThermodynamicIntegration
 
 export Thermodynamic_LV_KAM, TI_loss
 
-using CUDA, KernelAbstractions, Tullio
-using Random, Lux, Statistics, LinearAlgebra
-using Flux: DataLoader
+using CUDA, KernelAbstractions, Tullio, LuxCUDA
+using Random, Lux, Statistics, LinearAlgebra, Distributions
+using Flux: DataLoader, onehotbatch
 using ChainRules: @ignore_derivatives
+using NNlib: softmax
 
 # Inherit from parent module
 if isdefined(Main, :LV_KAM_model)
@@ -19,7 +20,7 @@ else
 end
 
 include("../utils.jl")
-using .Utils: device
+using .Utils: device, next_rng
 
 struct Thermodynamic_LV_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
@@ -34,8 +35,7 @@ struct Thermodynamic_LV_KAM <: Lux.AbstractLuxLayer
     verbose::Bool
     temperatures::AbstractArray{Float32}
     loss_fcn::Function
-    kl_div_verbose::Bool
-    γ::Float32
+    diagnostics::Bool
 end
 
 function Lux.initialparameters(rng::AbstractRNG, model::Thermodynamic_LV_KAM)
@@ -182,28 +182,57 @@ function TI_loss(
     logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed) # (batch_size x sample_size)
     posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size x num_temps)
 
-    # Thermodynamic Integration
-    Δt = m.temperatures[2:end] - m.temperatures[1:end-1]
-    trap_approx = trapz(logllhood, posterior_weights, Δt)
-
-    # KL divergence term
-    if m.kl_div_verbose
+    # Diagnostics - Thermodynamic Integration without derivatives or masking
+    if m.diagnostics
         @ignore_derivatives begin
+
+            # Trapezoidal approximation
+            Δt = m.temperatures[2:end] - m.temperatures[1:end-1]
+            trap_approx = trapz(logllhood, posterior_weights, Δt)
+
+            # KL divergence term
             μ, Σ = compute_mean_variance(z, posterior_weights)
             KL_divz = kl_trapz(cpu_device()(μ), cpu_device()(Σ))
-            println("KL divergence: ", KL_divz)
+            
+            println("Trapezoidal approximation: ", trap_approx)
+            println("KL divergence term: ", KL_divz)
         end
     end
 
-
-    # Prior regularization
+    # Expected power posteriors at each temperature
+    loss_llhood = sum(logllhood .* posterior_weights; dims=2) 
     ex_prior = mean(logprior)
-    ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
+    ex_post = sum(permutedims(logprior[:,:,:], [2,1,3]) .* posterior_weights; dims=2)
+
+    # Mask out a random temperature index for each batch, based on the variance across batch
+    mask = ones(Float32, size(loss_llhood)...) |> device
+    @ignore_derivatives begin
+        
+        # Categorically choose high variance temperature
+        ranked_vars = softmax(var(loss_llhood, dims=1)[1,1,:]) |> cpu_device()
+        seed = next_rng(seed)
+        rand_indexes = rand(Categorical(ranked_vars), size(x, 1)) 
+        
+        # Mask for removal
+        mask = 1 .- onehotbatch(rand_indexes, 1:length(m.temperatures)) |> device
+        mask = permutedims(mask[:, :, :], [2, 3, 1])
+    end
+
+    # Tempered sum of the expected log-likelihoods 
+    loss_llhood .*= mask
+    loss_llhood = loss_llhood[:, 1, 2:end] - loss_llhood[:, 1, 1:end-1]
+    loss_llhood = sum(loss_llhood; dims=2)
+
+    # Tempered sum of the expected log-priors    
+    ex_post .*= mask
     loss_prior = ex_post .- ex_prior
+    loss_prior = loss_prior[:, 1, 2:end] - loss_prior[:, 1, 1:end-1]
+    loss_prior = sum(loss_prior; dims=2)
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), ", TI loss: ", -mean(trap_approx))
+    m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
 
-    return -mean(trap_approx) - m.γ * mean(loss_prior)
+    # Return the negative marginal likelihood averaged over the batch
+    return -mean(loss_prior + loss_llhood)
 end
 
 end

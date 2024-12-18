@@ -200,9 +200,9 @@ function TI_loss(
     end
 
     # Expected power posteriors at each temperature
-    loss_llhood = sum(logllhood .* posterior_weights; dims=2) 
+    loss_llhood = sum(logllhood .* posterior_weights; dims=2)[:,1,:]
     ex_prior = mean(logprior)
-    ex_post = sum(permutedims(logprior[:,:,:], [2,1,3]) .* posterior_weights; dims=2)
+    ex_post = sum(permutedims(logprior[:,:,:], [2,1,3]) .* posterior_weights; dims=2)[:,1,:]
 
     # Mask out a random temperature index for each batch, based on the variance across batch
     mask = ones(Float32, size(loss_llhood)...) |> device
@@ -219,14 +219,15 @@ function TI_loss(
     end
 
     # Tempered sum of the expected log-likelihoods 
+    println(size(loss_llhood), size(mask))
     loss_llhood = loss_llhood .* mask
-    loss_llhood = loss_llhood[:, 1, 2:end] - loss_llhood[:, 1, 1:end-1]
+    loss_llhood = loss_llhood[:, 2:end] - loss_llhood[:, 1:end-1]
     loss_llhood = sum(loss_llhood; dims=2)
 
     # Tempered sum of the expected log-priors    
     ex_post = ex_post .* mask
     loss_prior = ex_post .- ex_prior
-    loss_prior = loss_prior[:, 1, 2:end] - loss_prior[:, 1, 1:end-1]
+    loss_prior = loss_prior[:, 2:end] - loss_prior[:, 1:end-1]
     loss_prior = sum(loss_prior; dims=2)
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))

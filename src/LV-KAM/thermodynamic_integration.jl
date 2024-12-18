@@ -219,7 +219,6 @@ function TI_loss(
     end
 
     # Tempered sum of the expected log-likelihoods 
-    println(size(loss_llhood), size(mask))
     loss_llhood = loss_llhood .* mask
     loss_llhood = loss_llhood[:, 2:end] - loss_llhood[:, 1:end-1]
     loss_llhood = sum(loss_llhood; dims=2)

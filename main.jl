@@ -8,10 +8,13 @@ ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 include("src/ML_pipeline/trainer.jl")
 using .trainer
 
-datasets = ["MNIST", "FMNIST"]
+datasets = [
+    "MNIST", 
+    # "FMNIST"
+    ]
 
 for dataset in datasets
-    
+
     ## Vanilla training
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 

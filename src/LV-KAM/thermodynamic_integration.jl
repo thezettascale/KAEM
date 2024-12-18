@@ -215,16 +215,16 @@ function TI_loss(
         
         # Mask for removal
         mask = 1 .- onehotbatch(rand_indexes, 1:length(m.temperatures)) |> device
-        mask = permutedims(mask[:, :, :], [2, 3, 1])
+        mask = mask'
     end
 
     # Tempered sum of the expected log-likelihoods 
-    loss_llhood .*= mask
+    loss_llhood = loss_llhood .* mask
     loss_llhood = loss_llhood[:, 1, 2:end] - loss_llhood[:, 1, 1:end-1]
     loss_llhood = sum(loss_llhood; dims=2)
 
     # Tempered sum of the expected log-priors    
-    ex_post .*= mask
+    ex_post = ex_post .* mask
     loss_prior = ex_post .- ex_prior
     loss_prior = loss_prior[:, 1, 2:end] - loss_prior[:, 1, 1:end-1]
     loss_prior = sum(loss_prior; dims=2)

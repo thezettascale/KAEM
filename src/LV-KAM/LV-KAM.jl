@@ -209,8 +209,8 @@ function update_llhood_grid(
     """
     
     if model.update_prior_grid
-        q_size = model.prior.fcns_qp[Symbol("1")].in_dim
-        z = rand(model.prior.π_0, model.grid_updates_samples, q_size) |> device
+        p_size = model.prior.fcns_qp[Symbol("1")].in_dim
+        z = rand(model.prior.π_0, model.grid_updates_samples, p_size) |> device
 
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)

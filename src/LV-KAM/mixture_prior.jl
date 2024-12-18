@@ -39,7 +39,6 @@ function init_mix_prior(
     prior_seed::Int=1,
 )
     widths = parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
-    widths = reverse(widths) # Reverse widths because we are going from q -> p in the prior
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
@@ -87,7 +86,7 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("$(prior.depth)")].out_dim)
+    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("1")].in_dim)
     return ps
 end
  
@@ -116,18 +115,19 @@ function log_prior(
     Returns:
         The unnormalized log-probability of the mixture ebm-prior.
     """
-    b_size, q_size = size(z)[1:2]
+    b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("1")].in_dim
     alpha = permutedims(softmax(ps[Symbol("α")])[:,:,:], [3, 2, 1])
+    π_0 = mix.π_pdf(z)
 
     # Energy functions of each component, q -> p
-    for i in 1:mix.depth
-        z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
+    for i in reverse(1:mix.depth)
+        z = fwd(flip_states(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")])..., z)
+        z = i == mix.depth ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
     end
-    z = @views(reshape(z, b_size, q_size, :))
+    z = @views(reshape(z, b_size, q_size, p_size))
 
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z) ) ) ] ; likelihood of samples under each component
-    z = sum(alpha .* exp.(z); dims=3)[:,:,1]
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
+    z = sum(alpha .* exp.(z); dims=3)[:,:,1] .* π_0
     z = log.(z .+ eps(eltype(z)))
     return sum(z; dims=2)
 end

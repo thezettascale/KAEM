@@ -166,20 +166,22 @@ function MLE_loss(
         ps.ebm,
         st.ebm,
         seed
-        )
+        ) # (sample_size x q)
 
-    # Compute the log-distributions for these samples
+    # Prior expectation is unaltered by the data
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm) # (sample_size x 1)
-    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed) # (batch_size x sample_size)
-    posterior_weights = m.lkhood.weight_fcn(logllhood) # (batch_size x sample_size)
-
-    # Expectation of the logprior with respect to the posterior and prior
     ex_prior = mean(logprior)
+
+    # Generate importance sample weights, (procedure includes resampling)
+    z, logllhood, posterior_weights = importance_sampler(m.lkhood, ps.gen, st.gen, x, z)
+    
+    # Learning gradient for the prior serves to align the prior with the posterior
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm) 
     ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
     loss_prior = ex_post .- ex_prior
 
-    # Expectation of the loglikelihood with respect to the posterior
-    loss_llhood = sum(logllhood .* posterior_weights; dims=2)
+    # Learning gradient for the likelihood is just the posterior-expected log-likelihood
+    loss_llhood = sum(logllhood .* posterior_weights; dims=2) 
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
 

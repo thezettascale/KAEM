@@ -7,7 +7,7 @@ using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, Li
 using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
 
-include("prior_sampling.jl")
+include("rejection_sampling.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .prior_sampler
@@ -128,7 +128,7 @@ function log_prior(
     z = @views(reshape(z, b_size, q_size, p_size))
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    z = sum(alpha .* exp.(z); dims=3).* π_0[:,:,:]
+    z = sum(alpha .* exp.(z); dims=3) .* π_0[:,:,:]
     z = log.(z .+ eps(eltype(z)))
     return sum(z; dims=2)
 end

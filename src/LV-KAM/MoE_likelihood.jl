@@ -1,6 +1,6 @@
 module MoE_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z 
+export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z, importance_sampler
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -34,6 +34,8 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     log_lkhood_model::Function
     output_activation::Function
     weight_fcn::Function
+    resamples::Int
+    ess_thresh::Float32
 end
 
 function init_MoE_lkhood(
@@ -66,6 +68,8 @@ function init_MoE_lkhood(
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
+    resample_size = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "importance_resample_size"))
+    resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
@@ -92,7 +96,7 @@ function init_MoE_lkhood(
         @reset functions[Symbol("$i")] = func
     end
         
-    return MoE_lkhood(functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn)
+    return MoE_lkhood(functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn, resample_size, resampling_ess_threshold)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -175,6 +179,58 @@ function log_likelihood(
     
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     return lkhood.log_lkhood_model(x, x̂) ./ (2f0*lkhood.σ_llhood^2)
+end
+
+function importance_sampler(
+    lkhood::MoE_lkhood, 
+    ps, 
+    st, 
+    x::AbstractArray, 
+    z::AbstractArray;
+    seed::Int=1
+    )
+    """
+    Resample the latent variable using importance sampling weights.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data, (batch_size, out_dim).
+        z: The latent variable, (batch_size, q).
+
+    Returns:
+        The resampled latent variable.
+        The new log-likelihood.
+        The importance sampling weights.
+    """
+    # Initial importance sampling weights
+    logllhood = log_likelihood(lkhood, ps, st, x, z)
+    init_weights = cpu_device()(softmax(sum(logllhood, dims=1)[1, :]))
+    
+    # Systematic resampling 
+    ESS = 1 / sum(init_weights.^2)
+    N = size(z, 1)
+    if ESS < lkhood.ess_thresh*N
+        
+        cdf = cumsum(init_weights)
+        
+        seed = next_rng(seed)
+        u0 = rand() / N
+        u = u0 .+ (0:N-1) ./ N
+        indices = zeros(Int, 0) |> device
+
+        for i in 1:N
+            indices = vcat(indices, findfirst(cdf .>= u[i]))
+        end
+
+        z = z[indices, :]
+    end
+
+    logllhood = log_likelihood(lkhood, ps, st, x, z)
+    weights = softmax(logllhood; dims=2)
+
+    return z, logllhood, weights
 end
 
 end

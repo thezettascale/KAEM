@@ -15,14 +15,14 @@ using .Utils: device, next_rng
 
 function categorical_mask(
     α::AbstractArray, 
-    in_dim::Int, 
-    out_dim::Int, 
+    latent_dim::Int, 
+    q_dim::Int, 
     num_samples::Int
     )
 
     α = cpu_device()(softmax(α))
-    rand_vals = rand(Categorical(α), out_dim, num_samples) 
-    return permutedims(collect(Float32, onehotbatch(rand_vals, 1:in_dim)), [3, 2, 1]) |> device 
+    rand_vals = rand(Categorical(α), q_dim, num_samples) 
+    return permutedims(collect(Float32, onehotbatch(rand_vals, 1:latent_dim)), [3, 2, 1]) |> device 
 end
 
 function sample_prior(

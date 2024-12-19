@@ -33,81 +33,7 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::Float32
     log_lkhood_model::Function
     output_activation::Function
-    weight_fcn::Function
-    resamples::Int
-    ess_thresh::Float32
-end
-
-function init_MoE_lkhood(
-    conf::ConfParse,
-    output_dim::Int;
-    lkhood_seed::Int=1,
-    weight_fcn::Function= x -> softmax(x; dims=2) 
-    )
-
-    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
-    widths = (widths..., 1)
-    first(widths) !== last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))) && (
-        error("First width must be equal to the hidden dimension of the prior.")
-    )
-
-    spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
-    base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
-    spline_function = retrieve(conf, "MOE_LIKELIHOOD", "spline_function")
-    grid_size = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_size"))
-    grid_update_ratio = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_ratio"))
-    grid_range = parse.(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_range"))
-    ε_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "ε_scale"))
-    μ_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "μ_scale"))
-    σ_base = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_base"))
-    σ_spline = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_spline"))
-    init_η = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "init_η"))
-    η_trainable = parse(Bool, retrieve(conf, "MOE_LIKELIHOOD", "η_trainable"))
-    η_trainable = spline_function == "B-spline" ? false : η_trainable
-    noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_variance"))
-    gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
-    lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
-    output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
-    resample_size = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "importance_resample_size"))
-    resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
-
-    functions = NamedTuple()
-    for i in eachindex(widths[1:end-1])
-        lkhood_seed = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
-        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
-
-        func = init_function(
-        widths[i],
-        widths[i+1];
-        spline_degree=spline_degree,
-        base_activation=base_activation,
-        spline_function=spline_function,
-        grid_size=grid_size,
-        grid_update_ratio=grid_update_ratio,
-        grid_range=Tuple(grid_range),
-        ε_scale=ε_scale,
-        σ_base=base_scale,
-        σ_spline=σ_spline,
-        init_η=init_η,
-        η_trainable=η_trainable,
-        )
-
-        @reset functions[Symbol("$i")] = func
-    end
-        
-    return MoE_lkhood(functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], weight_fcn, resample_size, resampling_ess_threshold)
-end
-
-function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
-    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    @reset ps[Symbol("w")] = glorot_normal(rng, Float32, lkhood.Λ_fcns[Symbol("1")].in_dim, lkhood.out_size)
-    return ps
-end
-
-function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
-    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    return st
+    resample_z::Function
 end
 
 function generate_from_z(
@@ -182,12 +108,13 @@ function log_likelihood(
 end
 
 function importance_sampler(
-    lkhood::MoE_lkhood, 
+    lkhood::MoE_lkhood,
     ps, 
     st, 
     x::AbstractArray, 
     z::AbstractArray;
-    seed::Int=1
+    seed::Int=1,
+    ess_thresh::Float32=5f-1
     )
     """
     Resample the latent variable using importance sampling weights.
@@ -211,7 +138,7 @@ function importance_sampler(
     # Systematic resampling 
     ESS = 1 / sum(init_weights.^2)
     N = size(z, 1)
-    if ESS < lkhood.ess_thresh*N
+    if ESS < ess_thresh*N
         
         cdf = cumsum(init_weights)
         
@@ -231,6 +158,78 @@ function importance_sampler(
     weights = softmax(logllhood; dims=2)
 
     return z, logllhood, weights
+end
+
+function init_MoE_lkhood(
+    conf::ConfParse,
+    output_dim::Int;
+    lkhood_seed::Int=1,
+    )
+
+    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
+    widths = (widths..., 1)
+    first(widths) !== last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))) && (
+        error("First width must be equal to the hidden dimension of the prior.")
+    )
+
+    spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
+    base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
+    spline_function = retrieve(conf, "MOE_LIKELIHOOD", "spline_function")
+    grid_size = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_size"))
+    grid_update_ratio = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_ratio"))
+    grid_range = parse.(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_range"))
+    ε_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "ε_scale"))
+    μ_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "μ_scale"))
+    σ_base = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_base"))
+    σ_spline = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_spline"))
+    init_η = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "init_η"))
+    η_trainable = parse(Bool, retrieve(conf, "MOE_LIKELIHOOD", "η_trainable"))
+    η_trainable = spline_function == "B-spline" ? false : η_trainable
+    noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_variance"))
+    gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
+    lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
+    output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
+    resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
+
+    resample_function = (lkhood, ps, st, x, z, seed) -> @ignore_derivatives importance_sampler(lkhood, ps, st, x, z; seed=seed, ess_thresh=resampling_ess_threshold)
+
+    functions = NamedTuple()
+    for i in eachindex(widths[1:end-1])
+        lkhood_seed = next_rng(lkhood_seed)
+        base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
+        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
+
+        func = init_function(
+        widths[i],
+        widths[i+1];
+        spline_degree=spline_degree,
+        base_activation=base_activation,
+        spline_function=spline_function,
+        grid_size=grid_size,
+        grid_update_ratio=grid_update_ratio,
+        grid_range=Tuple(grid_range),
+        ε_scale=ε_scale,
+        σ_base=base_scale,
+        σ_spline=σ_spline,
+        init_η=init_η,
+        η_trainable=η_trainable,
+        )
+
+        @reset functions[Symbol("$i")] = func
+    end
+        
+    return MoE_lkhood(functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+end
+
+function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
+    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    @reset ps[Symbol("w")] = glorot_normal(rng, Float32, lkhood.Λ_fcns[Symbol("1")].in_dim, lkhood.out_size)
+    return ps
+end
+
+function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
+    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    return st
 end
 
 end

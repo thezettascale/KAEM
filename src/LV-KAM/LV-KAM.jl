@@ -62,8 +62,7 @@ function init_LV_KAM(
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
-        weight_fcn = x -> softmax(reshape(temperatures, 1, 1, :) .* x[:, :, :]; dims=2)
-        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed, weight_fcn=weight_fcn)
+        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
         diagnostics_bool = parse(Bool, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "verbose_diagnostics"))
 
         return Thermodynamic_LV_KAM(
@@ -173,7 +172,7 @@ function MLE_loss(
     ex_prior = mean(logprior)
 
     # Generate importance sample weights, (procedure includes resampling)
-    z, logllhood, posterior_weights = importance_sampler(m.lkhood, ps.gen, st.gen, x, z)
+    z, logllhood, posterior_weights = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z)
     
     # Learning gradient for the prior serves to align the prior with the posterior
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm) 

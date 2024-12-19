@@ -7,10 +7,8 @@ using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, Li
 using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
 
-include("rejection_sampling.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
-using .prior_sampler
 using .univariate_functions
 using .Utils: device, next_rng
 
@@ -32,6 +30,136 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
     sample_z::Function
+end
+
+function categorical_mask(
+    α::AbstractArray, 
+    latent_dim::Int, 
+    q_dim::Int, 
+    num_samples::Int
+    )
+
+    α = cpu_device()(softmax(α))
+    rand_vals = rand(Categorical(α), q_dim, num_samples) 
+    return permutedims(collect(Float32, onehotbatch(rand_vals, 1:latent_dim)), [3, 2, 1]) |> device 
+end
+
+function sample_prior(
+    prior,
+    num_samples::Int, 
+    ps,
+    st;
+    init_seed::Int=1
+    )
+    """
+    Component-wise rejection sampling for the mixture ebm-prior.
+    p = components of mixture model
+    q = number of mixture models
+
+    Args:
+        prior: The mixture ebm-prior.
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        z: The samples from the mixture ebm-prior, (num_samples, q). 
+        seed: The updated seed.
+    """
+
+    previous_samples = zeros(Float32, num_samples) |> device
+    sample_mask = zeros(Float32, num_samples) |> device
+    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
+    q_size = prior.fcns_qp[Symbol("1")].in_dim
+
+    # Categorical component selection (per sample, per outer sum dimension)
+    seed = next_rng(init_seed)
+    chosen_components = categorical_mask(
+        ps.α, 
+        p_size, 
+        q_size, 
+        num_samples
+        )
+
+    # Rejection sampling
+    while any(sample_mask .< 5f-1)
+
+        # Draw candidate samples from proposal, i.e. prior
+        seed = next_rng(seed) 
+        z = rand(prior.π_0, num_samples, q_size) |> device # z ~ Q(z)
+
+        # Forward pass of proposal samples through mixture model; p -> q
+        fz_qp = z
+        for i in 1:prior.depth
+            fz_qp = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], fz_qp)
+            fz_qp = i == 1 ? @views(reshape(fz_qp, num_samples*q_size, size(fz_qp, 3))) : sum(fz_qp, dims=2)[:, 1, :]
+        end
+        fz_qp = @views(reshape(fz_qp, num_samples, q_size, p_size))
+
+        # Forward pass of grid [0,1] through model
+        f_grid = prior.fcns_qp[Symbol("1")].grid'
+        grid_size = size(f_grid, 1)
+        for i in 1:prior.depth
+            f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
+            f_grid = i == 1 ? @views(reshape(f_grid, grid_size*q_size, size(f_grid, 3))) : sum(f_grid, dims=2)[:, 1, :] 
+        end
+        f_grid = @views(reshape(f_grid, grid_size, q_size, p_size))
+
+        # Filter chosen components of mixture model, (samples x q)
+        z = sum(z[:,:,:] .* chosen_components, dims=3)[:,:,1]
+        fz_qp = sum(fz_qp .* chosen_components, dims=3)[:,:,1]
+
+        # Grid search for max_z[ f_{q,c}(z) ] for chosen components
+        f_grid = @tullio fg[b, g, q, p] := f_grid[g, q, p]  * chosen_components[b, q, p]
+        f_grid = maximum(sum(f_grid; dims=4); dims=2)[:,1,:,1] # Filtered max f_qp, (samples x q)
+
+        # Accept or reject
+        seed = next_rng(seed)
+        u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
+        accept_mask = u_threshold .< exp.(fz_qp .- f_grid)
+
+        # Update samples
+        previous_samples = z .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
+        sample_mask = accept_mask .* (1 .- sample_mask) .+ sample_mask
+    end
+
+    return previous_samples, seed
+end
+
+function log_prior(
+    mix::mix_prior, 
+    z::AbstractArray, 
+    ps, 
+    st
+    )
+    """
+    Compute the unnormalized log-probability of the mixture ebm-prior.
+    The likelihood of samples from each mixture model, z_q, is evaluated 
+    for all components of the mixture model it has been sampled from , M_q.
+    
+    Args:
+        mix: The mixture ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        The unnormalized log-probability of the mixture ebm-prior.
+    """
+    b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
+    alpha = permutedims(softmax(ps[Symbol("α")])[:,:,:], [3, 2, 1])
+    π_0 = mix.π_pdf(z)
+
+    # Energy functions of each component, q -> p
+    for i in 1:mix.depth
+        z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+        z = i == 1 ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
+    end
+    z = @views(reshape(z, b_size, q_size, p_size))
+
+    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
+    z = sum(alpha .* exp.(z); dims=3) .* π_0[:,:,:]
+    z = log.(z .+ eps(eltype(z)))
+    return sum(z; dims=2)
 end
 
 function init_mix_prior(
@@ -94,43 +222,6 @@ end
 function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
     st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
     return st
-end
-
-function log_prior(
-    mix::mix_prior, 
-    z::AbstractArray, 
-    ps, 
-    st
-    )
-    """
-    Compute the unnormalized log-probability of the mixture ebm-prior.
-    The likelihood of samples from each mixture model, z_q, is evaluated 
-    for all components of the mixture model it has been sampled from , M_q.
-    
-    Args:
-        mix: The mixture ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-
-    Returns:
-        The unnormalized log-probability of the mixture ebm-prior.
-    """
-    b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
-    alpha = permutedims(softmax(ps[Symbol("α")])[:,:,:], [3, 2, 1])
-    π_0 = mix.π_pdf(z)
-
-    # Energy functions of each component, q -> p
-    for i in 1:mix.depth
-        z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
-    end
-    z = @views(reshape(z, b_size, q_size, p_size))
-
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    z = sum(alpha .* exp.(z); dims=3) .* π_0[:,:,:]
-    z = log.(z .+ eps(eltype(z)))
-    return sum(z; dims=2)
 end
 
 end

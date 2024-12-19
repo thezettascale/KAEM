@@ -172,7 +172,7 @@ function MLE_loss(
     ex_prior = mean(logprior)
 
     # Generate importance sample weights, (procedure includes resampling)
-    z, logllhood, posterior_weights = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z)
+    z, logllhood, posterior_weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z, seed)
     
     # Learning gradient for the prior serves to align the prior with the posterior
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm) 

@@ -1,6 +1,6 @@
 module univariate_functions
 
-export univariate_function, init_function, fwd, update_fcn_grid, flip_states
+export univariate_function, init_function, fwd, update_fcn_grid
 
 using CUDA, KernelAbstractions, Tullio, Accessors
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
@@ -148,42 +148,6 @@ function update_fcn_grid(l, ps, st, x)
     new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=η)
 
     return new_grid, new_coef
-end
-
-function flip_states(fcn::univariate_function, ps, st)
-    """
-    Flip the params and states of the mixture ebm-prior.
-    This is needed for the log-probability calculation, 
-    since z_q is sampled component-wise, but needs to be
-    evaluated for each component, f_{q,p}(z_q). This only works
-    given that the domain of f is fixed to [0,1], (no grid updating).
-    Args:
-        prior: The mixture ebm-prior.
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-    Returns:
-        prior_flipped: The ebm-prior with a flipped grid.
-        ps_flipped: The flipped parameters of the mixture ebm-prior.
-        st_flipped: The flipped states of the mixture ebm-prior.
-    """
-    ps_flipped = fcn.η_trainable ? (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp',
-        basis_η = ps.basis_η
-    ) : (
-        coef = permutedims(ps.coef, [2, 1, 3]),
-        w_base = ps.w_base',
-        w_sp = ps.w_sp'
-    )
-    st_flipped = fcn.η_trainable ? st' : (
-        mask = st.mask',
-        basis_η = st.basis_η
-    )
-    grid = fcn.grid[1:1, :] # Grid is repeated along first dim for each in_dim
-    @reset fcn.grid = repeat(grid, fcn.out_dim, 1)
-    
-    return fcn, ps_flipped, st_flipped
 end
 
 end

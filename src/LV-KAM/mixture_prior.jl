@@ -5,6 +5,7 @@ export mix_prior, init_mix_prior, sample_prior, log_prior
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
 using NNlib: softmax, sigmoid_fast
+using Flux: onehotbatch
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -45,7 +46,7 @@ function categorical_mask(
 end
 
 function sample_prior(
-    prior,
+    prior::mix_prior,
     num_samples::Int, 
     ps,
     st;

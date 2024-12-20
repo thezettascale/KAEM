@@ -113,8 +113,9 @@ function importance_sampler(
     st, 
     x::AbstractArray, 
     z::AbstractArray;
+    t::Float32=1f0,
+    ess_thresh::Float32=5f-1,
     seed::Int=1,
-    ess_thresh::Float32=5f-1
     )
     """
     Resample the latent variable using importance sampling weights.
@@ -133,7 +134,7 @@ function importance_sampler(
     """
     # Initial importance sampling weights
     logllhood = log_likelihood(lkhood, ps, st, x, z)
-    init_weights = softmax(logllhood)
+    init_weights = softmax(t .* logllhood)
     
     # Systematic resampling 
     ESS = 1 / sum(init_weights.^2)
@@ -153,7 +154,7 @@ function importance_sampler(
         logllhood = logllhood[indices]
     end
 
-    weights = softmax(logllhood)
+    weights = softmax(t .* logllhood)
 
     return z, weights, seed
 end
@@ -189,7 +190,7 @@ function init_MoE_lkhood(
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
     resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
 
-    resample_function = (lkhood, ps, st, x, z, seed) -> @ignore_derivatives importance_sampler(lkhood, ps, st, x, z; seed=seed, ess_thresh=resampling_ess_threshold)
+    resample_function = (lkhood, ps, st, x, z, t, seed) -> @ignore_derivatives importance_sampler(lkhood, ps, st, x, z; t=t, ess_thresh=resampling_ess_threshold, seed=seed)
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

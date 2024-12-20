@@ -22,10 +22,10 @@ for dataset in datasets
     t = init_trainer(Random.GLOBAL_RNG, conf, dataset, img_resize=(14,14))
     train!(t)    
 
-    # ## Thermodynamic Integration
-    # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "30")
+    ## Thermodynamic Integration
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "30")
 
-    # Random.seed!(1)
-    # t = init_trainer(Random.GLOBAL_RNG, conf, dataset, img_resize=(14,14))
-    # train!(t)
+    Random.seed!(1)
+    t = init_trainer(Random.GLOBAL_RNG, conf, dataset, img_resize=(14,14))
+    train!(t)
 end

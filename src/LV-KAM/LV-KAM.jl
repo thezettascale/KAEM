@@ -2,19 +2,17 @@ module LV_KAM_model
 
 export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
 
-using CUDA, KernelAbstractions, Tullio, Folds
+using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 using NNlib: sigmoid_fast
 
 include("mixture_prior.jl")
 include("MoE_likelihood.jl")
-include("thermodynamic_integration.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_mix_prior
 using .MoE_likelihood
-using .ThermodynamicIntegration
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng
 
@@ -29,7 +27,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     grid_updates_samples::Int
     MC_samples::Int
     verbose::Bool
-    loss_fcn::Function
+    temperatures::AbstractArray{Float32}
 end
 
 function init_LV_KAM(
@@ -53,19 +51,20 @@ function init_LV_KAM(
     out_dim = size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
-    
+    lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
+
     grid_update_decay = parse(Float32, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
+    # MLE or Thermodynamic Integration
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-
+    temperatures = [1f0]
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 |> device
-        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
-        diagnostics_bool = parse(Bool, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "verbose_diagnostics"))
+        temperatures = [(k / N_t)^p for k in 1:N_t] .|> Float32 
+    end
 
-        return Thermodynamic_LV_KAM(
+    return LV_KAM(
             prior_model,
             lkhood_model,
             train_loader,
@@ -77,26 +76,7 @@ function init_LV_KAM(
             MC_samples,
             verbose,
             temperatures,
-            TI_loss,
-            diagnostics_bool
         )
-    else
-        lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
-
-        return LV_KAM(
-            prior_model,
-            lkhood_model,
-            train_loader,
-            test_loader,
-            update_prior_grid,
-            update_llhood_grid,
-            grid_update_decay,
-            num_grid_updating_samples,
-            MC_samples,
-            verbose,
-            MLE_loss
-        )
-    end
 end
 
 function Lux.initialparameters(rng::AbstractRNG, model::LV_KAM)
@@ -114,7 +94,7 @@ function Lux.initialstates(rng::AbstractRNG, model::LV_KAM)
 end
 
 function generate_batch(
-    model::Union{LV_KAM, Thermodynamic_LV_KAM}, 
+    model::LV_KAM, 
     ps, 
     st,
     num_samples::Int; 
@@ -161,40 +141,66 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
+    b_size = size(x, 2)
+
     z, seed = m.prior.sample_z(
         m.prior, 
         m.MC_samples,
         ps.ebm,
         st.ebm,
         seed
-        ) # (sample_size x q)
-
+        )
+        
     # Prior expectation is unaltered by the data
-    ex_prior = mean(log_prior(m.prior, z, ps.ebm, st.ebm)) 
+    ex_prior = mean(log_prior(m.prior, z, ps.ebm, st.ebm))
+    z_t = similar(z)
+    weights = similar(z, size(z, 1))
 
-    function single_loss(x_i)
+    function single_loss(x_i, t)
+        """Loss for a single data sample and temperature."""
 
-        # Generate importance sample weights, and resampled z for each data point
-        z_i, weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x_i, z, seed)
+        # Generate steppingstone weights, and resample z for each temperature
+        z_t, weights, seed = m.lkhood.resample_z(
+            m.lkhood, 
+            ps.gen, 
+            st.gen, 
+            x_i, 
+            z, 
+            t, 
+            seed
+            )
 
         # Learning gradient for the prior serves to align the prior with the posterior
-        logprior = log_prior(m.prior, z_i, ps.ebm, st.ebm)
-        loss_prior = sum(logprior .* weights) - ex_prior
+        logprior = log_prior(m.prior, z_t, ps.ebm, st.ebm)
+        loss_prior = (logprior' * weights) - ex_prior
 
         # Learning gradient for the likelihood is just the posterior-expected log-likelihood
-        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_i; seed=seed)
-        loss_llhood = sum(logllhood .* weights)
+        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_t; seed=seed)
+        loss_llhood = (logllhood' * weights)
 
         return loss_llhood + loss_prior
     end
 
-    # Negative marginal likelihood, averaged over the batch
-    loss = map(single_loss, eachcol(x)) 
-    return -mean(loss)
+    function TI_loss(x_i)
+        """Thermodynamic Integration."""
+        prev_loss = single_loss(x_i, m.temperatures[1])
+        total_loss = 0f0
+        for t in m.temperatures[2:end]
+            loss = single_loss(x_i, t)
+            total_loss += loss - prev_loss
+            prev_loss = loss
+        end
+        return total_loss
+    end
+
+    # Couldn't vectorize due to GPU constraints unfortunately
+    batch_loss_fcn = length(m.temperatures) > 1 ? TI_loss : x_i -> single_loss(x_i, m.temperatures[1])
+    losses = batch_loss_fcn.(eachcol(x))
+    return -mean(losses)
 end
 
 function update_llhood_grid(
-    model::Union{LV_KAM, Thermodynamic_LV_KAM},
+    model::LV_KAM,
     ps, 
     st; 
     seed::Int=1

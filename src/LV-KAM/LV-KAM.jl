@@ -185,14 +185,12 @@ function MLE_loss(
         logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_i; seed=seed)
         loss_llhood = sum(logllhood .* weights)
 
-        println("Loss prior: $loss_prior, Loss llhood: $loss_llhood")
-
         return loss_llhood + loss_prior
     end
 
     # Negative marginal likelihood, averaged over the batch
     loss = map(single_loss, eachcol(x)) 
-    return -sum(loss) / size(x, 2)
+    return -mean(loss)
 end
 
 function update_llhood_grid(

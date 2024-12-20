@@ -160,7 +160,7 @@ function log_prior(
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
     z = sum(alpha .* exp.(z); dims=3) .* π_0[:,:,:]
     z = log.(z .+ eps(eltype(z)))
-    return sum(z; dims=2)
+    return sum(z; dims=2)[:,1,1]
 end
 
 function init_mix_prior(

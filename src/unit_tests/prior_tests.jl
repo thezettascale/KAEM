@@ -30,7 +30,7 @@ function test_log_prior()
 
     z_test = first(sample_prior(prior, b_size, ps, st))
     log_p = log_prior(prior, z_test, ps, st)
-    @test size(log_p) == (b_size, 1, 1)
+    @test size(log_p) == (b_size,)
 end
 
 function test_log_prior_derivative()

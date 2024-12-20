@@ -89,7 +89,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         device(state), 
         N_epochs, 
         loader_state, 
-        device(x'), 
+        device(x), 
         file_loc, 
         num_generated_samples,
         batch_size_for_gen,
@@ -157,8 +157,7 @@ function train!(t::LV_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                x = device(x')
-                test_loss += t.model.loss_fcn(t.model, t.ps, t.st, x; seed=t.seed)
+                test_loss += t.model.loss_fcn(t.model, t.ps, t.st, device(x); seed=t.seed)
                 t.seed += 1
             end
             
@@ -179,7 +178,7 @@ function train!(t::LV_KAM_trainer)
 
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state = (t.iter % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
-        t.x = device(x')
+        t.x = device(x)
 
         return loss
     end    

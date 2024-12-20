@@ -2,7 +2,7 @@ module LV_KAM_model
 
 export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions, Tullio, Folds
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 using NNlib: sigmoid_fast
@@ -147,7 +147,9 @@ function MLE_loss(
     seed::Int=1
     )
     """
-    Maximum likelihood estimation loss.
+    Maximum likelihood estimation loss. Map and broadcasting is used to
+    conduct importance sampling per data point in the batch, (could not vectorize
+    due to GPU memory constraints).
 
     Args:
         m: The model.
@@ -168,25 +170,29 @@ function MLE_loss(
         ) # (sample_size x q)
 
     # Prior expectation is unaltered by the data
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm) # (sample_size x 1)
-    ex_prior = mean(logprior)
+    ex_prior = mean(log_prior(m.prior, z, ps.ebm, st.ebm)) 
 
-    # Generate importance sample weights, (procedure includes resampling)
-    z, posterior_weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z, seed)
+    function single_loss(x_i)
 
-    # Learning gradient for the prior serves to align the prior with the posterior
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm) 
-    ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
-    loss_prior = ex_post .- ex_prior
+        # Generate importance sample weights, and resampled z for each data point
+        z_i, weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x_i, z, seed)
 
-    # Learning gradient for the likelihood is just the posterior-expected log-likelihood
-    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z)
-    loss_llhood = sum(logllhood .* posterior_weights; dims=2) 
+        # Learning gradient for the prior serves to align the prior with the posterior
+        logprior = log_prior(m.prior, z_i, ps.ebm, st.ebm)
+        loss_prior = sum(logprior .* weights) - ex_prior
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))
+        # Learning gradient for the likelihood is just the posterior-expected log-likelihood
+        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_i; seed=seed)
+        loss_llhood = sum(logllhood .* weights)
 
-    # Return the negative marginal likelihood, averaged over the batch
-    return -mean(loss_prior + loss_llhood)
+        println("Loss prior: $loss_prior, Loss llhood: $loss_llhood")
+
+        return loss_llhood + loss_prior
+    end
+
+    # Negative marginal likelihood, averaged over the batch
+    loss = map(single_loss, eachcol(x)) 
+    return -sum(loss) / size(x, 2)
 end
 
 function update_llhood_grid(

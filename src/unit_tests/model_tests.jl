@@ -15,7 +15,7 @@ function test_ps_derivative()
     Random.seed!(42)
     dataset = randn(Float32, 3, 50) 
     model = init_LV_KAM(dataset, conf)
-    x_test = first(model.train_loader)' |> device
+    x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 

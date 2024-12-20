@@ -21,8 +21,8 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> - @tullio(l2[b, s] := -(x[b, i] - x̂[s, i])^2),
-    "bernoulli" => (x, x̂) -> @tullio(bern[b, s] := x[b, i] * log(x̂[s, i] + 1f-4) + (1 - x[b, i]) * log(1 - x̂[s, i] + 1f-4)),
+    "l2" => (x, x̂) -> - @tullio(l2[s] := -(x[i] - x̂[s, i])^2),
+    "bernoulli" => (x, x̂) -> @tullio(bern[s] := x[i] * log(x̂[s, i] + 1f-4) + (1 - x[i]) * log(1 - x̂[s, i] + 1f-4)),
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -123,7 +123,7 @@ function importance_sampler(
         lkhood: The likelihood model.
         ps: The parameters of the likelihood model.
         st: The states of the likelihood model.
-        x: The data, (batch_size, out_dim).
+        x_i: A single data sample in the batch.
         z: The latent variable, (batch_size, q).
 
     Returns:
@@ -133,7 +133,7 @@ function importance_sampler(
     """
     # Initial importance sampling weights
     logllhood = log_likelihood(lkhood, ps, st, x, z)
-    init_weights = cpu_device()(softmax(sum(logllhood, dims=1)[1, :]))
+    init_weights = softmax(logllhood)
     
     # Systematic resampling 
     ESS = 1 / sum(init_weights.^2)
@@ -145,17 +145,15 @@ function importance_sampler(
         seed = next_rng(seed)
         u0 = rand() / N
         u = u0 .+ (0:N-1) ./ N
-        indices = zeros(Int, 0) |> device
-
-        for i in 1:N
-            indices = vcat(indices, findfirst(cdf .>= u[i]))
-        end
+        
+        indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
+        indices = reduce(vcat, indices)
 
         z = z[indices, :]
-        logllhood = logllhood[:, indices]
+        logllhood = logllhood[indices]
     end
 
-    weights = softmax(logllhood; dims=2)
+    weights = softmax(logllhood)
 
     return z, weights, seed
 end

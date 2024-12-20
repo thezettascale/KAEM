@@ -152,12 +152,12 @@ function importance_sampler(
         end
 
         z = z[indices, :]
+        logllhood = logllhood[:, indices]
     end
 
-    logllhood = log_likelihood(lkhood, ps, st, x, z)
     weights = softmax(logllhood; dims=2)
 
-    return z, logllhood, weights, seed
+    return z, weights, seed
 end
 
 function init_MoE_lkhood(

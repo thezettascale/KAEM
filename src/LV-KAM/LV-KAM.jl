@@ -172,14 +172,15 @@ function MLE_loss(
     ex_prior = mean(logprior)
 
     # Generate importance sample weights, (procedure includes resampling)
-    z, logllhood, posterior_weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z, seed)
-    
+    z, posterior_weights, seed = m.lkhood.resample_z(m.lkhood, ps.gen, st.gen, x, z, seed)
+
     # Learning gradient for the prior serves to align the prior with the posterior
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm) 
     ex_post = sum(logprior[:,:]' .* posterior_weights; dims=2)
     loss_prior = ex_post .- ex_prior
 
     # Learning gradient for the likelihood is just the posterior-expected log-likelihood
+    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z)
     loss_llhood = sum(logllhood .* posterior_weights; dims=2) 
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), ", LLhood loss: ", -mean(loss_llhood))

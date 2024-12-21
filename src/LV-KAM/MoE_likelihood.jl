@@ -17,11 +17,11 @@ using .ebm_mix_prior
 activation_mapping = Dict(
     "tanh" => tanh_fast,
     "sigmoid" => sigmoid_fast,
-    "none" => x -> x 
+    "none" => identity
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> - @tullio(l2[b, s] := -(x[i, b] - x̂[s, i])^2),
+    "l2" => (x, x̂) -> @tullio(l2[b, s] := -(x[i, b] - x̂[s, i])^2),
     "bernoulli" => (x, x̂) -> @tullio(bern[b, s] := x[i, b] * log(x̂[s, i] + 1f-4) + (1 - x[i, b]) * log(1 - x̂[s, i] + 1f-4)),
 )
 
@@ -41,7 +41,8 @@ function generate_from_z(
     ps, 
     st, 
     z::AbstractArray; 
-    seed::Int=1
+    seed::Int=1,
+    noise=true
     )
     """
     Generate data from the likelihood model.
@@ -71,7 +72,7 @@ function generate_from_z(
     z = @views(reshape(z, size(wz)[1:2]..., 1))
 
     seed = next_rng(seed)
-    ε = rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device
+    ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0
 
     # Generate data
     x̂ = @tullio gen[b, q, o] := z[b, q, 1] * γ[b, q, o]

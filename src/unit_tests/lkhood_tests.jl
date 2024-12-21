@@ -26,7 +26,7 @@ function test_log_likelihood()
     x_test = randn(Float32, b_size, out_dim) |> device
 
     log_lkhood = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (MC_sample_size, b_size)
+    @test size(log_lkhood) == (b_size, MC_sample_size)
 end
 
 function test_log_likelihood_derivative()

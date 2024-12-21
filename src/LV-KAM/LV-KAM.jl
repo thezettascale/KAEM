@@ -179,7 +179,7 @@ function MLE_loss(
     end
 
     # MLE loss is default
-    length(m.temperatures) <= 1 && return -mean(tempered_loss(1))
+    length(m.temperatures) <= 1 && return -mean(tempered_loss(1f0))
 
     # Thermodynamic Integration
     losses = reduce(hcat, map(tempered_loss, m.temperatures))

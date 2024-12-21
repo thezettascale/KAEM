@@ -129,7 +129,7 @@ function importance_sampler(
     N = size(weights, 2)
 
     function resample(w)
-        ESS = 1 / sum(w.^2)
+        ESS = sum(w)^2 / sum(w.^2)
         indices = collect(1:N) 
         if ESS < ess_thresh*N
             cdf = cumsum(w)

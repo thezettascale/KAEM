@@ -62,7 +62,7 @@ function init_LV_KAM(
     temperatures = [1f0]
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = [(k / N_t)^p for k in 1:N_t] .|> Float32 
+        temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 
     end
 
     return LV_KAM(

@@ -21,8 +21,8 @@ activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x, x̂) -> - @tullio(l2[s] := -(x[i] - x̂[s, i])^2),
-    "bernoulli" => (x, x̂) -> @tullio(bern[s] := x[i] * log(x̂[s, i] + 1f-4) + (1 - x[i]) * log(1 - x̂[s, i] + 1f-4)),
+    "l2" => (x, x̂) -> - @tullio(l2[b, s] := -(x[i, b] - x̂[s, i])^2),
+    "bernoulli" => (x, x̂) -> @tullio(bern[b, s] := x[i, b] * log(x̂[s, i] + 1f-4) + (1 - x[i, b]) * log(1 - x̂[s, i] + 1f-4)),
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -108,55 +108,42 @@ function log_likelihood(
 end
 
 function importance_sampler(
-    lkhood::MoE_lkhood,
-    ps, 
-    st, 
-    x::AbstractArray, 
-    z::AbstractArray;
-    t::Float32=1f0,
+    weights::AbstractArray;
     ess_thresh::Float32=5f-1,
     seed::Int=1,
     )
     """
-    Resample the latent variable using importance sampling weights.
+    Resample the latent variable using systematic sampling.
 
     Args:
         lkhood: The likelihood model.
         ps: The parameters of the likelihood model.
         st: The states of the likelihood model.
-        x_i: A single data sample in the batch.
-        z: The latent variable, (batch_size, q).
 
     Returns:
-        The resampled latent variable.
-        The new log-likelihood.
-        The importance sampling weights.
+        The resampled indices.
+        The updated seed.
     """
-    # Initial importance sampling weights
-    logllhood = log_likelihood(lkhood, ps, st, x, z)
-    init_weights = softmax(t .* logllhood)
     
     # Systematic resampling 
-    ESS = 1 / sum(init_weights.^2)
-    N = size(z, 1)
-    if ESS < ess_thresh*N
-        
-        cdf = cumsum(init_weights)
-        
-        seed = next_rng(seed)
-        u0 = rand() / N
-        u = u0 .+ (0:N-1) ./ N
-        
-        indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
-        indices = reduce(vcat, indices)
+    N = size(weights, 2)
 
-        z = z[indices, :]
-        logllhood = logllhood[indices]
+    function resample(w)
+        ESS = 1 / sum(w.^2)
+        indices = collect(1:N) 
+        if ESS < ess_thresh*N
+            cdf = cumsum(w)
+            seed = next_rng(seed)
+            u0 = rand() / N
+            u = u0 .+ (0:N-1) ./ N
+            indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
+            indices = reduce(vcat, indices) 
+        end
+        return indices
     end
 
-    weights = softmax(t .* logllhood)
-
-    return z, weights, seed
+    indices = map(resample, eachrow(weights))
+    return indices, seed
 end
 
 function init_MoE_lkhood(
@@ -190,7 +177,7 @@ function init_MoE_lkhood(
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
     resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
 
-    resample_function = (lkhood, ps, st, x, z, t, seed) -> @ignore_derivatives importance_sampler(lkhood, ps, st, x, z; t=t, ess_thresh=resampling_ess_threshold, seed=seed)
+    resample_function = (weights, seed) -> @ignore_derivatives importance_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

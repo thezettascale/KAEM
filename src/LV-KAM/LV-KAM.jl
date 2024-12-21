@@ -6,6 +6,7 @@ using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 using NNlib: sigmoid_fast
+using ChainRules: @ignore_derivatives
 
 include("mixture_prior.jl")
 include("MoE_likelihood.jl")
@@ -128,8 +129,7 @@ function MLE_loss(
     )
     """
     Maximum likelihood estimation loss. Map and broadcasting is used to
-    conduct importance sampling per data point in the batch, (could not vectorize
-    due to GPU memory constraints).
+    conduct importance sampling per data point in the batch.
 
     Args:
         m: The model.
@@ -151,52 +151,39 @@ function MLE_loss(
         seed
         )
         
-    # Prior expectation is unaltered by the data
-    ex_prior = mean(log_prior(m.prior, z, ps.ebm, st.ebm))
-    z_t = similar(z)
-    weights = similar(z, size(z, 1))
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = mean(logprior) # Prior expectation is unaltered by the data
 
-    function single_loss(x_i, t)
-        """Loss for a single data sample and temperature."""
+    function tempered_loss(t::Float32)
+        """Returns the batched loss for a given temperature."""
+        # Resample z for each sample in batch
+        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+        resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)
 
-        # Generate steppingstone weights, and resample z for each temperature
-        z_t, weights, seed = m.lkhood.resample_z(
-            m.lkhood, 
-            ps.gen, 
-            st.gen, 
-            x_i, 
-            z, 
-            t, 
-            seed
-            )
-
-        # Learning gradient for the prior serves to align the prior with the posterior
-        logprior = log_prior(m.prior, z_t, ps.ebm, st.ebm)
-        loss_prior = (logprior' * weights) - ex_prior
-
-        # Learning gradient for the likelihood is just the posterior-expected log-likelihood
-        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_t; seed=seed)
-        loss_llhood = (logllhood' * weights)
-
-        return loss_llhood + loss_prior
-    end
-
-    function TI_loss(x_i)
-        """Thermodynamic Integration."""
-        prev_loss = single_loss(x_i, m.temperatures[1])
-        total_loss = 0f0
-        for t in m.temperatures[2:end]
-            loss = single_loss(x_i, t)
-            total_loss += loss - prev_loss
-            prev_loss = loss
+        batch_idx = 1
+        function posterior_expectation(indices)
+            """Returns the marginal likelihood for a single sample in the batch."""
+            logprior_t = view(logprior, indices)
+            logllhood_t = view(logllhood, batch_idx, indices)
+            weights_t = @ignore_derivatives softmax(t .* logllhood_t)'          
+            
+            loss_prior = (weights_t * logprior_t) - ex_prior
+            loss_llhood = weights_t * logllhood_t
+            batch_idx += 1
+            return loss_llhood + loss_prior 
         end
-        return total_loss
+
+        loss = reduce(vcat, map(posterior_expectation, resampled_idxs))
+        return loss[:,:] # Singleton dimension for fast reduction across temperatures
     end
 
-    # Couldn't vectorize due to GPU constraints unfortunately
-    batch_loss_fcn = length(m.temperatures) > 1 ? TI_loss : x_i -> single_loss(x_i, m.temperatures[1])
-    losses = batch_loss_fcn.(eachcol(x))
-    return -mean(losses)
+    # MLE loss is default
+    length(m.temperatures) > 1 && return -mean(tempered_loss(1))
+
+    # Thermodynamic Integration
+    losses = reduce(hcat, map(tempered_loss, m.temperatures))
+    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2))
 end
 
 function update_llhood_grid(

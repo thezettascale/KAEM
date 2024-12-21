@@ -165,8 +165,8 @@ function MLE_loss(
         function posterior_expectation(indices)
             """Returns the marginal likelihood for a single sample in the batch."""
             logprior_t = view(logprior, indices)
-            logllhood_t = view(logllhood, batch_idx, indices)
-            weights_t = @ignore_derivatives softmax(t .* logllhood_t)'          
+            logllhood_t = t .* view(logllhood, batch_idx, indices)
+            weights_t = @ignore_derivatives softmax(logllhood_t)'          
             
             loss_prior = (weights_t * logprior_t) - ex_prior
             loss_llhood = weights_t * logllhood_t

@@ -66,9 +66,9 @@ function generate_from_z(
     Ω = z
     for i in 1:lkhood.depth
         Ω = fwd(lkhood.Ω_fcns[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? @views(reshape(Ω, num_samples*q_size, size(Ω, 3))) : sum(Ω, dims=2)[:, 1, :] 
+        Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :] 
     end
-    Ω = @views(reshape(Ω, num_samples, q_size))
+    Ω = reshape(Ω[:,1], num_samples, q_size)
     gate_w = ps[Symbol("w")] 
     γ = softmax(@tullio(γ[b,q,o] := Ω[b,q] * gate_w[q,o]); dims=2)
 
@@ -76,9 +76,9 @@ function generate_from_z(
     Λ = z
     for i in 1:lkhood.depth
         Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
-        Λ = i == 1 ? @views(reshape(Λ, num_samples*q_size, size(Λ, 3))) : sum(Λ, dims=2)[:, 1, :] 
+        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :] 
     end
-    Λ = @views(reshape(Λ, num_samples, q_size))
+    Λ = reshape(Λ[:,1], num_samples, q_size)
 
     seed = next_rng(seed)
     ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0

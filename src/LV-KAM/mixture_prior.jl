@@ -88,18 +88,18 @@ function sample_prior(
         fz_qp = z
         for i in 1:prior.depth
             fz_qp = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], fz_qp)
-            fz_qp = i == 1 ? @views(reshape(fz_qp, num_samples*q_size, size(fz_qp, 3))) : sum(fz_qp, dims=2)[:, 1, :]
+            fz_qp = i == 1 ? reshape(fz_qp, num_samples*q_size, size(fz_qp, 3)) : sum(fz_qp, dims=2)[:, 1, :]
         end
-        fz_qp = @views(reshape(fz_qp, num_samples, q_size, p_size))
+        fz_qp = reshape(fz_qp, num_samples, q_size, p_size)
 
         # Forward pass of grid [0,1] through model
         f_grid = prior.fcns_qp[Symbol("1")].grid'
         grid_size = size(f_grid, 1)
         for i in 1:prior.depth
             f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-            f_grid = i == 1 ? @views(reshape(f_grid, grid_size*q_size, size(f_grid, 3))) : sum(f_grid, dims=2)[:, 1, :] 
+            f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : sum(f_grid, dims=2)[:, 1, :] 
         end
-        f_grid = @views(reshape(f_grid, grid_size, q_size, p_size))
+        f_grid = reshape(f_grid, grid_size, q_size, p_size)
 
         # Filter chosen components of mixture model, (samples x q)
         fz_qp = sum(fz_qp .* chosen_components, dims=3)[:,:,1]
@@ -152,9 +152,9 @@ function log_prior(
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? @views(reshape(z, b_size*q_size, size(z, 3))) : sum(z, dims=2)[:, 1, :]
+        z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : sum(z, dims=2)[:, 1, :]
     end
-    z = @views(reshape(z, b_size, q_size, p_size))
+    z = reshape(z, b_size, q_size, p_size)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
     z = sum(alpha .* exp.(z) .* π_0, dims=3) # Sum over components

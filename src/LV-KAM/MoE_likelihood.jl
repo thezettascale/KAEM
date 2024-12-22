@@ -61,7 +61,7 @@ function generate_from_z(
     """
     # Gating function, feature-specific
     gate_w = ps[Symbol("w")]
-    wz = @tullio out[b, q, o] := z[b, q] * gate_w[q, o]
+    @tullio wz[b, q, o] := z[b, q] * gate_w[q, o]
     γ = softmax(wz; dims=2)
 
     # Gen function, experts for all features
@@ -75,7 +75,7 @@ function generate_from_z(
     ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0
 
     # Generate data
-    x̂ = @tullio gen[b, q, o] := z[b, q, 1] * γ[b, q, o]
+    @tullio x̂[b, q, o] := z[b, q, 1] * γ[b, q, o]
     x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
     return lkhood.output_activation(x̂), seed
 end

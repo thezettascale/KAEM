@@ -13,15 +13,15 @@ function device(x)
 end
 
 function removeNaN(x)
-    # NaNs = @tullio res[i, j, k] := isnan(x[i, j, k])
+    # @tullio NaNs[i, j, k] := isnan(x[i, j, k])
     # x = ifelse.(NaNs, 0f0, x)
     # return device(x)
     return CUDA.@allowscalar replace(x, NaN => 0f0)
 end
 
 function removeZero(x; ε=1f-3)
-    Zeros = @tullio res[i, j, k] := abs(x[i, j, k]) .< ε
-    x = ifelse.(Zeros, ε, x)
+    @tullio zeros[i, j, k] := abs(x[i, j, k]) .< ε
+    x = ifelse.(zeros, ε, x)
     return device(x)
 end
 

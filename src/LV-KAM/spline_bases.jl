@@ -53,12 +53,12 @@ function B_spline_basis(x, grid; degree::Int64, σ=nothing)
         grid_2 = grid[:, :, 2:end] 
     
         # B0 is piecewise constant
-        term1 = @tullio res[i, j, l] := x[i, j, k] >= grid_1[p, j, l]
-        term2 = @tullio res[i, j, l] := x[i, j, k] < grid_2[p, j, l]
+        @tullio term1[i, j, l] := x[i, j, k] >= grid_1[p, j, l]
+        @tullio term2[i, j, l] := x[i, j, k] < grid_2[p, j, l]
         term1 = Float32.(term1)
         term2 = Float32.(term2)
 
-        B = @tullio res[d, p, n] := term1[d, p, n] * term2[d, p, n]
+        @tullio B[d, p, n] := term1[d, p, n] * term2[d, p, n]
 
     else
         # k-th degree
@@ -73,7 +73,7 @@ function B_spline_basis(x, grid; degree::Int64, σ=nothing)
         B_i1 = B[:, :, 1:end - 1]
         B_i2 = B[:, :, 2:end]
 
-        B = @tullio out[d, n, m] := (numer1[d, n, m] / denom1[1, n, m]) * B_i1[d, n, m] + (numer2[d, n, m] / denom2[1, n, m]) * B_i2[d, n, m]
+        @tullio B[d, n, m] := (numer1[d, n, m] / denom1[1, n, m]) * B_i1[d, n, m] + (numer2[d, n, m] / denom2[1, n, m]) * B_i2[d, n, m]
     end
     
     # B = removeNaN(B)
@@ -99,11 +99,10 @@ function RBF_basis(x, grid; degree=nothing, σ=1f0)
     grid = reshape(grid, 1, size(grid)...)
 
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 3) - 1)) * σ
-    norm = Float32.(1 ./ 2π) ./ σ
-    diff = @tullio res[d, n, m] := x[d, n, 1] - grid[1, n, m] 
-    diff = diff ./ σ
+    @tullio B[d, n, m] := x[d, n, 1] - grid[1, n, m] 
+    B = B ./ σ
 
-    B = @tullio res[d, n, m] := exp(-5f-1 * (diff[d, n, m])^2)
+    @tullio B[d, n, m] = exp(-5f-1 * (B[d, n, m])^2)
 
     # any(isnan.(B)) && error("NaN in B")
     any(isnan.(B)) && println("NaN in RBF basis")
@@ -128,13 +127,13 @@ function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
     x = reshape(x, size(x)..., 1)
     grid = reshape(grid, 1, size(grid)...)
 
-    diff = @tullio res[d, n, m] := x[d, n, 1] - grid[1, n, m]
+    @tullio B[d, n, m] := x[d, n, 1] - grid[1, n, m]
     
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    tan_diff = NNlib.tanh_fast(diff ./ σ) 
-    # tan_diff = tanh.(diff ./ σ)
+    B = NNlib.tanh_fast(B ./ σ) 
+    # B = tanh.(B ./ σ)
     
-    B = @tullio res[d, n, m] := 1 - tan_diff[d, n, m]^2
+    @tullio B[d, n, m] = 1 - B[d, n, m]^2
 
     # any(isnan.(B)) && error("NaN in B")
     any(isnan.(B)) && println("NaN in RSWAF basis")
@@ -156,8 +155,7 @@ function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0, basis_function=noth
         A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
     """
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    y_eval = @tullio out[i, j, l] := splines[i, j, p] * coef[j, l, p]
-    return y_eval
+    return @tullio y_eval[i, j, l] := splines[i, j, p] * coef[j, l, p]
 end
 
 function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0, basis_function=nothing)
@@ -193,14 +191,14 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0, basis_fun
     # Get BtB and Bty
     Bt = permutedims(B, [1, 2, 4, 3])
     
-    BtB = @tullio out[i, j, m, p] := Bt[i, j, m, n] * B[i, j, n, p] # in_dim x out_dim x n_coeffs x n_coeffs
+    @tullio BtB[i, j, m, p] := Bt[i, j, m, n] * B[i, j, n, p] # in_dim x out_dim x n_coeffs x n_coeffs
     n1, n2, n, _ = size(BtB)
     eye = Matrix{Float32}(I, n, n) .* ε |> device
     eye = reshape(eye, 1, 1, n, n)
     eye = repeat(eye, n1, n2, 1, 1)
     BtB = BtB + eye 
     
-    Bty = @tullio out[i, j, m, p] := Bt[i, j, m, n] * y_eval[i, j, n, p]
+    @tullio Bty[i, j, m, p] := Bt[i, j, m, n] * y_eval[i, j, n, p]
     
     # x = (BtB)^-1 * Bty
     coef = zeros(Float32, 0, out_dim, n_coeff) |> device

@@ -33,24 +33,12 @@ struct mix_prior <: Lux.AbstractLuxLayer
     sample_z::Function
 end
 
-function categorical_mask(
-    α::AbstractArray, 
-    latent_dim::Int, 
-    q_dim::Int, 
-    num_samples::Int
-    )
-
-    α = cpu_device()(softmax(α))
-    rand_vals = rand(Categorical(α), q_dim, num_samples) 
-    return permutedims(collect(Float32, onehotbatch(rand_vals, 1:latent_dim)), [3, 2, 1]) |> device 
-end
-
 function sample_prior(
     prior::mix_prior,
     num_samples::Int, 
     ps,
     st;
-    init_seed::Int=1
+    seed::Int=1
     )
     """
     Component-wise rejection sampling for the mixture ebm-prior.
@@ -71,15 +59,23 @@ function sample_prior(
     sample_mask = zeros(Float32, num_samples) |> device
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     q_size = prior.fcns_qp[Symbol("1")].in_dim
-
+    
     # Categorical component selection (per sample, per outer sum dimension)
-    seed = next_rng(init_seed)
-    chosen_components = categorical_mask(
-        ps.α, 
-        p_size, 
-        q_size, 
-        num_samples
-        )
+    alpha = cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2))
+    seed = next_rng(seed)
+    rand_vals = rand(Uniform(0,1), q_size, num_samples) 
+    
+    function categorical_mask(α, rv)
+        """Creates a one-hot mask for each mixture model, q, to select one component, p."""
+        idxs = map(u -> findfirst(x -> x >= u, α), rv)
+        idxs = reduce(vcat, idxs)
+        idxs = ifelse.(isnothing.(idxs), p_size, idxs)
+        idxs = collect(Float32, onehotbatch(idxs, 1:p_size))   
+        return permutedims(idxs[:,:,:], [2, 3, 1])
+    end
+    
+    chosen_components = map(i -> categorical_mask(view(alpha, i, :), view(rand_vals, i, :)), 1:q_size)
+    chosen_components = reduce(hcat, chosen_components) |> device
 
     # Rejection sampling
     while any(sample_mask .< 5f-1)
@@ -110,13 +106,13 @@ function sample_prior(
         fz_qp = sum(fz_qp .* chosen_components, dims=3)[:,:,1]
 
         # Grid search for max_z[ f_{q,c}(z) ] for chosen components
-        f_grid = @tullio fg[b, g, q, p] := f_grid[g, q, p]  * chosen_components[b, q, p]
-        f_grid = maximum(sum(f_grid; dims=4); dims=2)[:,1,:,1] # Filtered max f_qp, (samples x q)
+        @tullio f_g[b, g, q] := f_grid[g, q, p]  * chosen_components[b, q, p]
+        f_g = maximum(f_g; dims=2)[:,1,:] # Filtered max f_qp, (samples x q)
 
         # Accept or reject
         seed = next_rng(seed)
         u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(fz_qp .- f_grid)
+        accept_mask = u_threshold .< exp.(fz_qp .- f_g)
 
         # Update samples
         previous_samples = z .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
@@ -147,7 +143,7 @@ function log_prior(
         The unnormalized log-probability of the mixture ebm-prior.
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
-    alpha = permutedims(softmax(ps[Symbol("α")])[:,:,:], [3, 2, 1])
+    alpha = softmax(ps[Symbol("α")]; dims=2)
     π_0 = mix.π_pdf(z)
 
     # Energy functions of each component, q -> p
@@ -158,9 +154,10 @@ function log_prior(
     z = @views(reshape(z, b_size, q_size, p_size))
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    z = sum(alpha .* exp.(z); dims=3)[:,:,1] .* π_0
-    z = log.(z .+ eps(eltype(z)))
-    return sum(z; dims=2)[:,1]
+    z = exp.(z)
+    @tullio exp_f[b, q] := alpha[q, p] * z[b, q, p] * π_0[b, q]
+    exp_f = log.(exp_f .+ eps(eltype(exp_f)))
+    return sum(exp_f; dims=2)[:,1]
 end
 
 function init_mix_prior(
@@ -184,7 +181,7 @@ function init_mix_prior(
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; init_seed=seed)
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed)
     
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
@@ -215,8 +212,10 @@ function init_mix_prior(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
+    q_size = prior.fcns_qp[Symbol("1")].in_dim
+    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, prior.fcns_qp[Symbol("$(prior.depth)")].out_dim)
+    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, q_size, p_size)
     return ps
 end
  

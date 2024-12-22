@@ -158,7 +158,7 @@ function MLE_loss(
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
         # Resample z for each sample in batch
-        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+        posterior_weights = softmax(t .* logllhood, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)
 
         batch_idx = 1
@@ -166,7 +166,7 @@ function MLE_loss(
             """Returns the marginal likelihood for a single sample in the batch."""
             logprior_t = view(logprior, indices)
             logllhood_t = t .* view(logllhood, batch_idx, indices)
-            weights_t = @ignore_derivatives softmax(logllhood_t)'          
+            weights_t = softmax(logllhood_t)'          
             
             loss_prior = (weights_t * logprior_t) - ex_prior
             loss_llhood = weights_t * logllhood_t

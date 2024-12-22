@@ -59,24 +59,22 @@ function generate_from_z(
         The generated data.
         The updated seed.
     """
-    # Gating function, feature-specific
-    gate_w = ps[Symbol("w")]
-    @tullio wz[b, q, o] := z[b, q] * gate_w[q, o]
-    γ = softmax(wz; dims=2)
+    # Gating function, feature-specific, samples x q x o
+    gate_w = permutedims(ps[Symbol("w")][:,:,:], [3, 1, 2])
+    γ = softmax(z[:,:,:] .* gate_w; dims=2)
 
     # Gen function, experts for all features
     for i in 1:lkhood.depth
         z = fwd(lkhood.Λ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? @views(reshape(z, prod(size(wz)[1:2]), size(z, 3))) : sum(z, dims=2)[:, 1, :] 
+        z = i == 1 ? @views(reshape(z, prod(size(γ)[1:2]), size(z, 3))) : sum(z, dims=2)[:, 1, :] 
     end
-    z = @views(reshape(z, size(wz)[1:2]..., 1))
+    z = @views(reshape(z, size(γ)[1:2]..., 1))
 
     seed = next_rng(seed)
     ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0
 
     # Generate data
-    @tullio x̂[b, q, o] := z[b, q, 1] * γ[b, q, o]
-    x̂ = sum(x̂, dims=2)[:, 1, :] .+ ε
+    x̂ = sum(z .* γ, dims=2)[:, 1, :] .+ ε
     return lkhood.output_activation(x̂), seed
 end
 

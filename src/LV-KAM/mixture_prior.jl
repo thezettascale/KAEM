@@ -143,8 +143,11 @@ function log_prior(
         The unnormalized log-probability of the mixture ebm-prior.
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
+    
+    # Mixture proportions and prior, prepared for broadcasting
     alpha = softmax(ps[Symbol("α")]; dims=2)
-    π_0 = mix.π_pdf(z)
+    alpha = permutedims(alpha[:,:,:], [3, 1, 2])
+    π_0 = mix.π_pdf(z)[:,:,:]
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -154,10 +157,8 @@ function log_prior(
     z = @views(reshape(z, b_size, q_size, p_size))
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    z = exp.(z)
-    @tullio exp_f[b, q] := alpha[q, p] * z[b, q, p] * π_0[b, q]
-    exp_f = log.(exp_f .+ eps(eltype(exp_f)))
-    return sum(exp_f; dims=2)[:,1]
+    z = sum(alpha .* exp.(z) .* π_0, dims=3) # Sum over components
+    return sum(log.(z .+ eps(eltype(z))); dims=2)[:,1,1] # Sum over independent log-mixture models
 end
 
 function init_mix_prior(

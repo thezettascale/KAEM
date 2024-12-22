@@ -102,7 +102,6 @@ function sample_prior(
         f_grid = @views(reshape(f_grid, grid_size, q_size, p_size))
 
         # Filter chosen components of mixture model, (samples x q)
-        z = sum(z[:,:,:] .* chosen_components, dims=3)[:,:,1]
         fz_qp = sum(fz_qp .* chosen_components, dims=3)[:,:,1]
 
         # Grid search for max_z[ f_{q,c}(z) ] for chosen components
@@ -112,11 +111,12 @@ function sample_prior(
         # Accept or reject
         seed = next_rng(seed)
         u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(fz_qp .- f_g)
+        accept_mask = u_threshold .< exp.(fz_qp - f_g)
 
         # Update samples
         previous_samples = z .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
         sample_mask = accept_mask .* (1 .- sample_mask) .+ sample_mask
+        clamp.(sample_mask, 0f0, 1f0)
     end
 
     return previous_samples, seed

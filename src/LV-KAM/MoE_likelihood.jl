@@ -63,6 +63,7 @@ function generate_from_z(
     """
     num_samples, q_size = size(z)
 
+    # γ function; samples x q x o
     γ = fwd(lkhood.γ_fcn, ps[Symbol("γ")], st[Symbol("γ")], reshape(z, num_samples*q_size, 1))
     γ = reshape(γ, num_samples, q_size, lkhood.out_size)
 
@@ -85,8 +86,8 @@ function generate_from_z(
     ε = ε |> device
 
     # Generate data
-    @tullio x̂[b,o] := Λ[b,q,1] * γ[b,q,o] + ε[b,o]
-    return lkhood.output_activation(x̂), seed
+    @tullio x̂[b,o] := (Λ[b,q,1] * γ[b,q,o]) 
+    return lkhood.output_activation(x̂ + ε), seed
 end
 
 function log_likelihood(

@@ -141,15 +141,17 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = mean(logprior)
 
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
+
+        z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
+        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        ex_prior = mean(logprior)
         
         # Posterior samples, resamples are drawn per batch
+        z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
         posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)
 

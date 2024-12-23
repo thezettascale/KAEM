@@ -215,6 +215,11 @@ function update_llhood_grid(
     !model.update_llhood_grid && return model, ps, seed
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    
+    new_grid, new_coef = update_fcn_grid(model.lkhood.γ_fcn, ps.gen[Symbol("γ")], st.gen[Symbol("γ")], reshape(z, prod(size(z)), 1))
+    @reset ps.gen[Symbol("γ")].coef = new_coef
+    @reset model.lkhood.γ_fcn.grid = new_grid
+    
     Ω, Λ = z, z
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)

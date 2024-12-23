@@ -233,8 +233,8 @@ function update_llhood_grid(
         Ω = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
         Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
 
-        Ω = i == 1 ? reshape(Ω, prod(size(Ω)), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
-        Λ = i == 1 ? reshape(Λ, prod(size(Λ)), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
+        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
+        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
     end 
 
     return model, ps, seed

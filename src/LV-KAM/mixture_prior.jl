@@ -62,8 +62,8 @@ function sample_prior(
     
     # Categorical component selection (per sample, per outer sum dimension)
     alpha = cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2))
-    seed = next_rng(seed)
-    rand_vals = rand(Uniform(0,1), q_size, num_samples) 
+    seed, rng = next_rng(seed)
+    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
     
     function categorical_mask(α, rv)
         """Creates a one-hot mask for each mixture model, q, to select one component, p."""
@@ -81,8 +81,8 @@ function sample_prior(
     while any(sample_mask .< 5f-1)
 
         # Draw candidate samples from proposal, i.e. prior
-        seed = next_rng(seed) 
-        z = rand(prior.π_0, num_samples, q_size) |> device # z ~ Q(z)
+        seed, rng = next_rng(seed) 
+        z = rand(rng, prior.π_0, num_samples, q_size) |> device # z ~ Q(z)
 
         # Forward pass of proposal samples through mixture model; p -> q
         fz_qp = z
@@ -109,8 +109,8 @@ function sample_prior(
         f_g = maximum(f_g; dims=2)[:,1,:] 
 
         # Accept or reject
-        seed = next_rng(seed)
-        u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
+        seed, rng = next_rng(seed)
+        u_threshold = rand(rng, Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
         accept_mask = u_threshold .< exp.(fz - f_g)
 
         # Update samples
@@ -185,9 +185,9 @@ function init_mix_prior(
     
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
-        prior_seed = next_rng(prior_seed)
+        prior_seed, rng = next_rng(prior_seed)
         base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
-        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
+        .+ σ_base .* (randn(rng, Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
 
         func = init_function(
         widths[i],

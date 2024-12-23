@@ -46,8 +46,8 @@ function init_LV_KAM(
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
-    data_seed = next_rng(data_seed)
-    train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true)
+    data_seed, rng = next_rng(data_seed)
+    train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
     out_dim = size(dataset, 1)
     

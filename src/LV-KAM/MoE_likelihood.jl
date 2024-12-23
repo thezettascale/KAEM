@@ -81,8 +81,8 @@ function generate_from_z(
     # Attention-like gating
     γ = softmax(γ .* Ω ./ Float32(sqrt(q_size)); dims=2)
     
-    seed = next_rng(seed)
-    ε = noise ? randn(Float32, num_samples, lkhood.out_size) : zeros(Float32, num_samples, lkhood.out_size)
+    seed, rng = next_rng(seed)
+    ε = noise ? randn(rng, Float32, num_samples, lkhood.out_size) : zeros(Float32, num_samples, lkhood.out_size)
     ε = ε |> device
 
     # Generate data
@@ -147,8 +147,8 @@ function importance_sampler(
         indices = collect(1:N) 
         if ESS < ess_thresh*N
             cdf = cumsum(w)
-            seed = next_rng(seed)
-            u0 = rand() / N
+            seed, rng = next_rng(seed)
+            u0 = rand(rng) / N
             u = u0 .+ (0:N-1) ./ N
             indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
             indices = reduce(vcat, indices) 
@@ -211,18 +211,19 @@ function init_MoE_lkhood(
     Ω_functions = NamedTuple()
     Λ_functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
-        lkhood_seed = next_rng(lkhood_seed)
+        lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
-        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
+        .+ σ_base .* (randn(rng, Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
         @reset Ω_functions[Symbol("Ω_$i")] = initialize_function(widths[i], widths[i+1], base_scale)
 
-        lkhood_seed = next_rng(lkhood_seed)
+        lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
-        .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
+        .+ σ_base .* (randn(rng, Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(widths[i], widths[i+1], base_scale)
     end
     
-    base_scale = μ_scale .+ σ_base .* (randn(Float32, 1, output_dim) .* 2f0 .- 1f0) 
+    lkhood_seed, rng = next_rng(lkhood_seed)
+    base_scale = μ_scale .+ σ_base .* (randn(rng, Float32, 1, output_dim) .* 2f0 .- 1f0) 
     γ_function = initialize_function(1, output_dim, base_scale)
 
     return MoE_lkhood(Ω_functions, Λ_functions, γ_function, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)

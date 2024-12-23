@@ -4,7 +4,7 @@ export removeNaN, device, removeZero, next_rng
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random
 using CUDA, LuxCUDA, KernelAbstractions
-using Zygote: @ignore
+using ChainRules: @ignore_derivatives
 
 const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
@@ -26,8 +26,8 @@ function removeZero(x; ε=1f-3)
 end
 
 function next_rng(seed)
-    @ignore Random.seed!(seed)
-    return seed + 1
+    rng = @ignore_derivatives Random.seed!(seed)
+    return seed + 1, rng
 end
 
 end

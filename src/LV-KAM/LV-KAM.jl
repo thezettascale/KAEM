@@ -229,10 +229,6 @@ function update_llhood_grid(
         Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
     end 
 
-    new_grid, new_coef = update_fcn_grid(model.lkhood.γ_fcn, ps.gen[Symbol("γ")], st.gen[Symbol("γ")], z)
-    @reset ps.gen[Symbol("γ")].coef = new_coef
-    @reset model.lkhood.γ_fcn.grid = new_grid
-
     return model, ps, seed
 end
 

@@ -28,6 +28,7 @@ lkhood_models = Dict(
 struct MoE_lkhood <: Lux.AbstractLuxLayer
     Ω_fcns::NamedTuple
     Λ_fcns::NamedTuple
+    γ_fcn::univariate_function
     depth::Int
     out_size::Int
     σ_ε::Float32
@@ -63,8 +64,7 @@ function generate_from_z(
     num_samples, q_size = size(z)
 
     # Ω gating function, and Λ function; feature-specific; samples x q x o
-    Ω = z
-    Λ = z
+    Ω, Λ, γ = z, z, z
     for i in 1:lkhood.depth
         Ω = fwd(lkhood.Ω_fcns[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
         Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :] 
@@ -72,12 +72,12 @@ function generate_from_z(
         Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
         Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :] 
     end
-    Ω = reshape(Ω[:,1], num_samples, q_size)
-    Λ = reshape(Λ[:,1], num_samples, q_size)
-
-    # Gating resembles attention
-    gate_w = ps[Symbol("w")] 
-    γ = softmax(@tullio(γ[b,q,o] := Ω[b,q] * gate_w[q,o]); dims=2)
+    Ω, Λ = reshape(Ω[:,1], num_samples, q_size), reshape(Λ[:,1], num_samples, q_size)
+    
+    # Attention-like gating
+    γ = reduce(hcat, map(x -> fwd(lkhood.γ_fcn, ps[Symbol("γ")], st[Symbol("γ")], x[:,:]), eachcol(z)))
+    @tullio γ[b,q,o] = Ω[b,q] * γ[b,q,o]
+    γ = softmax(γ ./ sqrt(q_size); dims=2)
     
     seed = next_rng(seed)
     ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0
@@ -163,11 +163,10 @@ function init_MoE_lkhood(
     lkhood_seed::Int=1,
     )
 
+    q_size = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
     widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
     widths = (widths..., 1)
-    first(widths) !== last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))) && (
-        error("First width must be equal to the hidden dimension of the prior.")
-    )
+    first(widths) !== q_size && (error("First ΩΛ_hidden_widths must be equal to the hidden dimension of the prior."))
 
     spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
@@ -219,8 +218,11 @@ function init_MoE_lkhood(
         .+ σ_base .* (randn(Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(widths[i], widths[i+1], base_scale)
     end
-        
-    return MoE_lkhood(Ω_functions, Λ_functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+    
+    base_scale = μ_scale .+ σ_base .* (randn(Float32, 1, output_dim) .* 2f0 .- 1f0) 
+    γ_function = initialize_function(1, output_dim, base_scale)
+
+    return MoE_lkhood(Ω_functions, Λ_functions, γ_function, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -228,7 +230,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
     for i in 1:lkhood.depth
         @reset ps[Symbol("Λ_$i")] = Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
     end
-    @reset ps[Symbol("w")] = glorot_normal(rng, Float32, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim, lkhood.out_size)
+    @reset ps[Symbol("γ")] = Lux.initialparameters(rng, lkhood.γ_fcn)
     return ps
 end
 
@@ -237,6 +239,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
     for i in 1:lkhood.depth
         @reset st[Symbol("Λ_$i")] = Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
     end
+    @reset st[Symbol("γ")] = Lux.initialstates(rng, lkhood.γ_fcn)
     return st
 end
 

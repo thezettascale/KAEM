@@ -141,19 +141,15 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-    b_size = size(x, 2)
+    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = mean(logprior)
 
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
         
-        # Prior expectation is unaltered by the data
-        z, seed = m.prior.sample_z(m.prior, b_size, ps.ebm, st.ebm, seed)
-        ex_prior = mean(log_prior(m.prior, z, ps.ebm, st.ebm))
-
         # Posterior samples, resamples are drawn per batch
-        z, seed = m.prior.sample_z(m.prior, b_size, ps.ebm, st.ebm, seed)
-        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
         posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)
 
@@ -219,24 +215,23 @@ function update_llhood_grid(
     !model.update_llhood_grid && return model, ps, seed
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    Ω, Λ = z, z
     for i in 1:model.lkhood.depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], z)
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
         @reset ps.gen[Symbol("Ω_$i")].coef = new_coef
         @reset model.lkhood.Ω_fcns[Symbol("Ω_$i")].grid = new_grid
 
-        z = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], z)
-        z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :]
-    end
-
-    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-    for i in 1:model.lkhood.depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
         @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
 
-        z = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
-        z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :] 
+        Ω = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
+        Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
     end 
+
+    new_grid, new_coef = update_fcn_grid(model.lkhood.γ_fcn, ps.gen[Symbol("γ")], st.gen[Symbol("γ")], z)
+    @reset ps.gen[Symbol("γ")].coef = new_coef
+    @reset model.lkhood.γ_fcn.grid = new_grid
 
     return model, ps, seed
 end

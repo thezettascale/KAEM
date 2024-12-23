@@ -62,30 +62,29 @@ function generate_from_z(
     """
     num_samples, q_size = size(z)
 
-    # Gating function, feature-specific, samples x q x o
+    # Ω gating function, and Λ function; feature-specific; samples x q x o
     Ω = z
+    Λ = z
     for i in 1:lkhood.depth
         Ω = fwd(lkhood.Ω_fcns[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
         Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :] 
-    end
-    Ω = reshape(Ω[:,1], num_samples, q_size)
-    gate_w = ps[Symbol("w")] 
-    γ = softmax(@tullio(γ[b,q,o] := Ω[b,q] * gate_w[q,o]); dims=2)
 
-    # Λ function, experts for all features
-    Λ = z
-    for i in 1:lkhood.depth
         Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
         Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :] 
     end
+    Ω = reshape(Ω[:,1], num_samples, q_size)
     Λ = reshape(Λ[:,1], num_samples, q_size)
 
+    # Gating resembles attention
+    gate_w = ps[Symbol("w")] 
+    γ = softmax(@tullio(γ[b,q,o] := Ω[b,q] * gate_w[q,o]); dims=2)
+    
     seed = next_rng(seed)
     ε = noise ? rand(Normal(0f0, lkhood.σ_ε), size(lkhood.out_size)) |> device : 0f0
 
     # Generate data
-    x̂ = sum(@tullio(γ[b,q,o] = Λ[b,q] * γ[b,q,o]), dims=2)[:, 1, :] .+ ε
-    return lkhood.output_activation(x̂), seed
+    @tullio x̂[b,o] := Λ[b,q] * γ[b,q,o] 
+    return lkhood.output_activation(x̂ .+ ε), seed
 end
 
 function log_likelihood(

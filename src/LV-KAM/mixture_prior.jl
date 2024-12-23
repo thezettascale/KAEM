@@ -102,16 +102,16 @@ function sample_prior(
         f_grid = reshape(f_grid, grid_size, q_size, p_size)
 
         # Filter chosen components of mixture model, (samples x q)
-        fz_qp = sum(fz_qp .* chosen_components, dims=3)[:,:,1]
+        @tullio fz[b, q] := fz_qp[b, q, p] * chosen_components[b, q, p]
 
         # Grid search for max_z[ f_{q,c}(z) ] for chosen components
         @tullio f_g[b, g, q] := f_grid[g, q, p]  * chosen_components[b, q, p]
-        f_g = maximum(f_g; dims=2)[:,1,:] # Filtered max f_qp, (samples x q)
+        f_g = maximum(f_g; dims=2)[:,1,:] 
 
         # Accept or reject
         seed = next_rng(seed)
         u_threshold = rand(Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(fz_qp - f_g)
+        accept_mask = u_threshold .< exp.(fz - f_g)
 
         # Update samples
         previous_samples = z .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
@@ -144,10 +144,9 @@ function log_prior(
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     
-    # Mixture proportions and prior, prepared for broadcasting
+    # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2)
-    alpha = permutedims(alpha[:,:,:], [3, 1, 2])
-    π_0 = mix.π_pdf(z)[:,:,:]
+    π_0 = mix.π_pdf(z)
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -157,8 +156,8 @@ function log_prior(
     z = reshape(z, b_size, q_size, p_size)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    z = sum(alpha .* exp.(z) .* π_0, dims=3) # Sum over components
-    return sum(log.(z .+ eps(eltype(z))); dims=2)[:,1,1] # Sum over independent log-mixture models
+    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) * π_0[b, q] 
+    return sum(log.(prob .+ eps(eltype(prob))); dims=2)[:,1] # Sum over independent log-mixture models
 end
 
 function init_mix_prior(

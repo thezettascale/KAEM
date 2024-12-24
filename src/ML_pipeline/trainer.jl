@@ -131,9 +131,8 @@ function train!(t::LV_KAM_trainer)
             t.model.verbose && println("Iter: $(t.iter), Grid updated")
         end
 
-        grads = first(gradient(pars -> MLE_loss(t.model, pars, t.st, t.x; seed=t.seed), t.ps))
+        grads = first(gradient(pars -> first(MLE_loss(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
         any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
-        t.seed += 1
 
         t.model.verbose && println("Iter: $(t.iter), Grad norm: $(norm(grads))")
 
@@ -146,7 +145,7 @@ function train!(t::LV_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        loss = MLE_loss(t.model, t.ps, t.st, t.x)
+        loss, t.seed = MLE_loss(t.model, t.ps, t.st, t.x)
         train_loss += loss
         t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
 
@@ -155,8 +154,8 @@ function train!(t::LV_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                test_loss += MLE_loss(t.model, t.ps, t.st, device(x); seed=t.seed)
-                t.seed += 1
+                loss, t.seed = MLE_loss(t.model, t.ps, t.st, device(x); seed=t.seed)
+                test_loss += loss
             end
             
             train_loss = train_loss / num_batches
@@ -220,7 +219,6 @@ function train!(t::LV_KAM_trainer)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
         batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))
         generated_images = vcat(generated_images, batch)
-        t.seed += 1
     end
 
     try

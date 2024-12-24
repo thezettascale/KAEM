@@ -94,6 +94,7 @@ function sample_prior(
 
         # Forward pass of grid [0,1] through model
         f_grid = prior.fcns_qp[Symbol("1")].grid'
+        π_grid = prior.π_pdf(f_grid)
         grid_size = size(f_grid, 1)
         for i in 1:prior.depth
             f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
@@ -102,16 +103,16 @@ function sample_prior(
         f_grid = reshape(f_grid, grid_size, q_size, p_size)
 
         # Filter chosen components of mixture model, (samples x q)
-        @tullio fz[b, q] := fz_qp[b, q, p] * chosen_components[b, q, p]
+        @tullio exp_fz[b, q] := exp(fz_qp[b, q, p]) * chosen_components[b, q, p]
 
         # Grid search for max_z[ f_{q,c}(z) ] for chosen components
-        @tullio f_g[b, g, q] := f_grid[g, q, p]  * chosen_components[b, q, p]
-        f_g = maximum(f_g; dims=2)[:,1,:] 
+        @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * chosen_components[b, q, p]
+        exp_fg = maximum(exp_fg; dims=2)[:,1,:] 
 
         # Accept or reject
         seed, rng = next_rng(seed)
         u_threshold = rand(rng, Uniform(0,1), num_samples, q_size) |> device # u ~ U(0,1)
-        accept_mask = u_threshold .< exp.(fz - f_g)
+        accept_mask = u_threshold .< exp_fz ./ exp_fg
 
         # Update samples
         previous_samples = z .* accept_mask .* (1 .- sample_mask) .+ previous_samples .* sample_mask
@@ -143,10 +144,7 @@ function log_prior(
         The unnormalized log-probability of the mixture ebm-prior.
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
-    
-    # Mixture proportions and prior
-    alpha = softmax(ps[Symbol("α")]; dims=2)
-    π_0 = mix.π_pdf(z)
+    alpha = softmax(ps[Symbol("α")]; dims=2) # Mixture proportions and prior
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -156,7 +154,7 @@ function log_prior(
     z = reshape(z, b_size, q_size, p_size)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) * π_0[b, q] 
+    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) 
     return sum(log.(prob .+ eps(eltype(prob))); dims=2)[:,1] # Sum over independent log-mixture models
 end
 

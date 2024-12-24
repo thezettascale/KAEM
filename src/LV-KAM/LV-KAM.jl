@@ -147,7 +147,7 @@ function MLE_loss(
 
         z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
         logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
         ex_prior = mean(logprior)
         
         # Posterior samples, resamples are drawn per batch
@@ -155,29 +155,27 @@ function MLE_loss(
         posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)
 
-        batch_idx = 1
-        function posterior_expectation(indices)
+        function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""
-            logprior_t = view(logprior, indices)
-            logllhood_t = t .* view(logllhood, batch_idx, indices)
+            logprior_t = view(logprior, resampled_idxs[batch_idx])
+            logllhood_t = t .* view(logllhood, batch_idx, resampled_idxs[batch_idx])
             weights_t = @ignore_derivatives softmax(logllhood_t)'          
             
             loss_prior = (weights_t * logprior_t) - ex_prior
             loss_llhood = weights_t * logllhood_t
-            batch_idx += 1
             return loss_llhood + loss_prior 
         end
 
-        loss = reduce(vcat, map(posterior_expectation, resampled_idxs))
+        loss = reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
         return loss[:,:] # Singleton dimension for fast reduction across temperatures
     end
 
     # MLE loss is default
-    length(m.temperatures) <= 1 && return -mean(tempered_loss(1f0))
+    length(m.temperatures) <= 1 && return -mean(tempered_loss(1f0)), seed
 
     # Thermodynamic Integration
     losses = reduce(hcat, map(tempered_loss, m.temperatures))
-    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2))
+    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2)), seed
 end
 
 function update_llhood_grid(

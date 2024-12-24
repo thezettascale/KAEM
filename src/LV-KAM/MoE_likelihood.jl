@@ -118,7 +118,7 @@ function log_likelihood(
         permutedims(x[:,:,:], [2,3,1]),
         permutedims(x̂[:,:,:], [3,1,2])
     )
-    return logllhood ./ (2f0*lkhood.σ_llhood^2)
+    return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
 
 function importance_sampler(
@@ -142,7 +142,7 @@ function importance_sampler(
     # Systematic resampling 
     N = size(weights, 2)
 
-    function resample(w)
+    function resample(w::AbstractArray)
         ESS = 1 / sum(w.^2)
         indices = collect(1:N) 
         if ESS < ess_thresh*N

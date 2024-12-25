@@ -145,6 +145,7 @@ function log_prior(
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     alpha = softmax(ps[Symbol("α")]; dims=2) # Mixture proportions and prior
+    π_0 = mix.π_pdf(z) 
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -154,7 +155,7 @@ function log_prior(
     z = reshape(z, b_size, q_size, p_size)
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) 
+    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]
     return sum(log.(prob .+ eps(eltype(prob))); dims=2)[:,1] # Sum over independent log-mixture models
 end
 

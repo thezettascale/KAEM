@@ -117,37 +117,59 @@ function sample_prior(
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
     @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
+    Δg = Δg |> cpu_device()
 
-    function grid_index(q)
-        """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
+    function get_noise(ub::Float32)
+        """Returns random noise in the interval [0, ub]. """
+        seed, rng = next_rng(seed)
+        return rand(rng, Uniform(0, ub))
+    end
+
+    function sample_z(q)
+        """Returns samples from a given mixture model, q."""
+        # Index of trapz where CDF >= rand_val
         idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
         idxs = reduce(vcat, idxs)
         idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-        return idxs
+
+        # Additng noise [0,ub], places grid point inside the trapezium's interval interval
+        noise = get_noise.(Δg[idxs, q:q]) |> device
+        return grid[idxs, q:q] .+ noise
     end
 
-    function cdf_masks(idxs)
-        """Returns masks for the CDF values to get both bounds of each trapezium."""
-        mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1))' |> device
-        mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size))' |> device
-        return mask1[:,:,:], mask2[:,:,:]
-    end
-
-    # Get indices of trapeziums, and their corresponding cdfs
-    indices = map(grid_index, 1:q_size)
-    masks = map(cdf_masks, indices)
-    mask1 = reduce((x,y) -> cat(x,y; dims=3), first.(masks))
-    mask2 = reduce((x,y) -> cat(x,y; dims=3), last.(masks))
-    @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
-    @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
-
-    # Get trapezium bounds
-    z1 = reduce(hcat, [grid[indices[i], i:i] for i in 1:q_size])
-    z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in 1:q_size])
-
-    # Linear interpolation
-    return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed
+    return reduce(hcat, map(q -> sample_z(q), 1:q_size)), seed
 end
+
+function grid_index(q)
+    """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
+    idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
+    idxs = reduce(vcat, idxs)
+    idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
+    return idxs
+end
+
+# function cdf_masks(idxs)
+#     """Returns masks for the CDF values to get both bounds of each trapezium."""
+#     mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1))' |> device
+#     mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size))' |> device
+#     return mask1[:,:,:], mask2[:,:,:]
+# end
+
+# # Get indices of trapeziums, and their corresponding cdfs
+# indices = map(grid_index, 1:q_size)
+# masks = map(cdf_masks, indices)
+# mask1 = reduce((x,y) -> cat(x,y; dims=3), first.(masks))
+# mask2 = reduce((x,y) -> cat(x,y; dims=3), last.(masks))
+# @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
+# @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
+
+# # Get trapezium bounds
+# z1 = reduce(hcat, [grid[indices[i], i:i] for i in 1:q_size])
+# z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in 1:q_size])
+
+# # Linear interpolation
+# return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed
+# end
 
 function log_prior(
     mix::mix_prior, 

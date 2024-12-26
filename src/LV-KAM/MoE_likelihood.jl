@@ -41,7 +41,8 @@ function generate_from_z(
     lkhood::MoE_lkhood, 
     ps, 
     st, 
-    z::AbstractArray
+    z::AbstractArray;
+    seed::Int=1
     )
     """
     Generate data from the likelihood model.
@@ -79,7 +80,11 @@ function generate_from_z(
 
     # Generate data
     @tullio x̂[b,o] := (Λ[b,q,1] * γ[b,q,o]) 
-    return lkhood.output_activation(x̂)
+
+    seed, rng = next_rng(seed)
+    ε = lkhood.σ_ε * randn(rng, Float32, size(x̂)) |> device
+
+    return lkhood.output_activation(x̂ + ε), seed
 end
 
 function log_likelihood(
@@ -105,16 +110,12 @@ function log_likelihood(
     Returns:
         The log-likelihood of the batch given the latent samples.
     """
-    x̂ = generate_from_z(lkhood, ps, st, z)
+    x̂, seed = generate_from_z(lkhood, ps, st, z)
     logllhood = lkhood.log_lkhood_model(
         permutedims(x[:,:,:], [2,3,1]),
         permutedims(x̂[:,:,:], [3,1,2])
     )
-
-    seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, Float32, size(logllhood)) |> device
-
-    return (logllhood ./ (2f0*lkhood.σ_llhood^2)) .+ ε, seed
+    return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
 
 function importance_sampler(
@@ -180,7 +181,7 @@ function init_MoE_lkhood(
     init_η = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "MOE_LIKELIHOOD", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
-    noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "llhood_noise_var"))
+    noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_var"))
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")

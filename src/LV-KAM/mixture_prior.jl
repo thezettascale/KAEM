@@ -109,10 +109,9 @@ function sample_prior(
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
     @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
 
-    # Normalizing constant and CDF evaluated by trapezium rule for integration
+    # CDF evaluated by trapezium rule for integration
     trapz = permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] .+ exp_fg[:, 1:end-1, :]) 
-    norm = 5f-1 .* sum(trapz, dims=2)
-    cdf = cumsum(trapz, dims=2) ./ norm 
+    cdf = cumsum(trapz, dims=2) ./ (5f-1 .* sum(trapz, dims=2))
 
     # Inverse transform sampling
     seed, rng = next_rng(seed)

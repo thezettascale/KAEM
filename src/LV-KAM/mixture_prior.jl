@@ -135,16 +135,15 @@ function sample_prior(
 
     # Get indices of trapeziums, and their corresponding cdfs
     indices = map(grid_index, 1:q_size)
-    masks = cdf_masks.(indices)
-    mask1, mask2 = cat(first.(masks)..., dims=3), cat(last.(masks)..., dims=3)
+    masks = map(cdf_masks, indices)
+    mask1 = reduce((x,y) -> cat(x,y; dims=3), first.(masks))
+    mask2 = reduce((x,y) -> cat(x,y; dims=3), last.(masks))
     @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
     @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
 
     # Get trapezium bounds
-    z1, z2 = zeros(Float32, num_samples, 0) |> device, zeros(Float32, num_samples, 0) |> device
-    for (i, idxs) in enumerate(indices)
-        z1, z2 = hcat(z1, grid[idxs, i:i]), hcat(z2, grid[idxs .+ 1, i:i])
-    end
+    z1 = reduce(hcat, [grid[indices[i], i:i] for i in 1:q_size])
+    z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in 1:q_size])
 
     # Linear interpolation
     return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed

@@ -128,7 +128,7 @@ function sample_prior(
         # Interpolate between given trapezium
         cdf_q, u_q = view(cdf, :, :, q), view(rand_vals, :, q)
         mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1)) |> device
-        mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size)) |> device
+        mask2 = collect(Float32, onehotbatch(idxs.+1, 1:grid_size-1)) |> device
         @tullio cd1[b] := cdf_q[b,g] * mask1[g,b]
         @tullio cd2[b] := cdf_q[b,g] * mask2[g,b]
 

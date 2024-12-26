@@ -140,13 +140,13 @@ function sample_prior(
     return reduce(hcat, map(q -> sample_z(q), 1:q_size)), seed
 end
 
-function grid_index(q)
-    """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
-    idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
-    idxs = reduce(vcat, idxs)
-    idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-    return idxs
-end
+# function grid_index(q)
+#     """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
+#     idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
+#     idxs = reduce(vcat, idxs)
+#     idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
+#     return idxs
+# end
 
 # function cdf_masks(idxs)
 #     """Returns masks for the CDF values to get both bounds of each trapezium."""

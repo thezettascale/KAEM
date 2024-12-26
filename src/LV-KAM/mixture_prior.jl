@@ -33,7 +33,37 @@ struct mix_prior <: Lux.AbstractLuxLayer
     sample_z::Function
 end
 
-function sample_prior(
+function choose_component(alpha, num_samples, q_size, p_size; seed=1)
+    """
+    Creates a one-hot mask for each mixture model, q, to select one component, p.
+    
+    Args:
+        alpha: The mixture proportions, (q, p).
+        num_samples: The number of samples to generate.
+        q_size: The number of mixture models.
+        seed: The seed for the random number generator.
+
+    Returns:
+        chosen_components: The one-hot mask for each mixture model, (num_samples, q, p).
+        seed: The updated seed.
+    """
+    seed, rng = next_rng(seed)
+    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
+    
+    function categorical_mask(α, rv)
+        
+        idxs = map(u -> findfirst(x -> x >= u, α), rv)
+        idxs = reduce(vcat, idxs)
+        idxs = ifelse.(isnothing.(idxs), p_size, idxs)
+        idxs = collect(Float32, onehotbatch(idxs, 1:p_size))   
+        return permutedims(idxs[:,:,:], [2, 3, 1])
+    end
+    
+    chosen_components = map(i -> categorical_mask(view(alpha, i, :), view(rand_vals, i, :)), 1:q_size)
+    return reduce(hcat, chosen_components) |> device, seed
+end
+
+function rejection_sampler(
     prior::mix_prior,
     num_samples::Int, 
     ps,
@@ -62,20 +92,7 @@ function sample_prior(
     
     # Categorical component selection (per sample, per outer sum dimension)
     alpha = cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2))
-    seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
-    
-    function categorical_mask(α, rv)
-        """Creates a one-hot mask for each mixture model, q, to select one component, p."""
-        idxs = map(u -> findfirst(x -> x >= u, α), rv)
-        idxs = reduce(vcat, idxs)
-        idxs = ifelse.(isnothing.(idxs), p_size, idxs)
-        idxs = collect(Float32, onehotbatch(idxs, 1:p_size))   
-        return permutedims(idxs[:,:,:], [2, 3, 1])
-    end
-    
-    chosen_components = map(i -> categorical_mask(view(alpha, i, :), view(rand_vals, i, :)), 1:q_size)
-    chosen_components = reduce(hcat, chosen_components) |> device
+    chosen_components, seed = choose_component(alpha, num_samples, q_size, p_size; seed=seed)
 
     # Rejection sampling
     while any(sample_mask .< 5f-1)
@@ -121,6 +138,84 @@ function sample_prior(
     end
 
     return previous_samples, seed
+end
+
+function sample_prior(
+    prior::mix_prior,
+    num_samples::Int, 
+    ps,
+    st;
+    seed::Int=1
+    )
+    """
+    Component-wise inverse transform sampling for the mixture ebm-prior.
+    p = components of mixture model
+    q = number of mixture models
+
+    Args:
+        prior: The mixture ebm-prior.
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        z: The samples from the mixture ebm-prior, (num_samples, q). 
+        seed: The updated seed.
+    """
+    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
+    q_size = prior.fcns_qp[Symbol("1")].in_dim
+    
+    # Categorical component selection (per sample, per outer sum dimension)
+    component_mask, seed = choose_component(
+        cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2)),
+        num_samples,
+        q_size,
+        p_size;
+        seed=seed
+    )
+
+    # Evaluate prior on grid [0,1]
+    grid = prior.fcns_qp[Symbol("1")].grid'
+    f_grid = grid
+    Δg = f_grid[2:end, :] .- f_grid[1:end-1, :] 
+    π_grid = prior.π_pdf(f_grid)
+    grid_size = size(f_grid, 1)
+    for i in 1:prior.depth
+        f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
+        f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : sum(f_grid, dims=2)[:, 1, :] 
+    end
+    f_grid = reshape(f_grid, grid_size, q_size, p_size)
+    @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
+
+    # Normalizing constant and CDF evaluated by trapezium rule for integration
+    trapz = permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] .+ exp_fg[:, 1:end-1, :]) 
+    norm = 5f-1 .* sum(trapz, dims=2)
+    cdf = cumsum(trapz, dims=2) ./ norm 
+
+    # Inverse transform sampling
+    seed, rng = next_rng(seed)
+    rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
+    @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
+    Δg = Δg |> cpu_device()
+
+    function get_noise(ub::Float32)
+        """ Returns random noise in the interval [0, ub]. """
+        seed, rng = next_rng(seed)
+        return rand(rng, Uniform(0, ub))
+    end
+
+    function sample_z(q)
+        """Returns samples from a given mixture model, q."""
+        # Index of trapz where CDF >= rand_val
+        idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
+        idxs = reduce(vcat, idxs)
+        idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
+
+        # Additng noise [0,ub], places grid point inside the trapezium's interval interval
+        noise = get_noise.(Δg[idxs, q:q]) |> device
+        return grid[idxs, q:q] .+ noise
+    end
+
+    return reduce(hcat, map(q -> sample_z(q), 1:q_size)), seed
 end
 
 function log_prior(

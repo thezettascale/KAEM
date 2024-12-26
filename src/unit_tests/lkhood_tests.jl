@@ -54,7 +54,7 @@ function test_generate()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     z, seed = sample_prior(prior, b_size, ps.ebm, st.ebm)
-    x = first(generate_from_z(lkhood, ps.gen, st.gen, z))
+    x = generate_from_z(lkhood, ps.gen, st.gen, z)
     @test size(x) == (b_size, out_dim)
 end
 

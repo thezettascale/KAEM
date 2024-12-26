@@ -117,11 +117,12 @@ function sample_prior(
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
     @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
+    Δg = Δg |> cpu_device()
 
-    function trap_step(b, idx, q)
-        """Returns the magnitude to step into the trapezium for interpolation."""
-        cdf1, cdf2, rv = view(cdf, b, idx, q), view(cdf, b, idx+1, q), view(rand_vals, b, q)
-        return (rv .- cdf1) ./ (cdf2 .- cdf1)
+    function get_noise(ub::Float32)
+        """Returns random noise in the interval [0, ub]. """
+        seed, rng = next_rng(seed)
+        return rand(rng, Uniform(0, ub))
     end
 
     function sample_z(q)
@@ -131,11 +132,9 @@ function sample_prior(
         idxs = reduce(vcat, idxs)
         idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
 
-        # Interpolate to find z
-        z1, z2 = grid[idxs, q], grid[idxs.+1, q]
-        step = reduce(vcat, map(i -> trap_step(i, idxs[i], q), 1:num_samples)) |> device
-        z = z1 .+ step .* (z2 .- z1)
-        return z[:,:] |> device
+        # Additng noise [0,ub], places grid point inside the trapezium's interval interval
+        noise = get_noise.(Δg[idxs, q:q]) |> device
+        return grid[idxs, q:q] .+ noise
     end
 
     return reduce(hcat, map(q -> sample_z(q), 1:q_size)), seed

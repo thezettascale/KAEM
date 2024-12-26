@@ -118,26 +118,36 @@ function sample_prior(
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
     @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
 
-    function sample_mixture(q)
-        """Returns samples from a given mixture model, q."""
-        # Index of trapz where CDF >= rand_val
+    function grid_index(q)
+        """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
         idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
         idxs = reduce(vcat, idxs)
         idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-
-        # Interpolate between given trapezium
-        cdf_q, u_q = view(cdf, :, :, q), view(rand_vals, :, q)
-        mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1)) |> device
-        mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size)) |> device
-        @tullio cd1[b] := cdf_q[b,g] * mask1[g,b]
-        @tullio cd2[b] := cdf_q[b,g] * mask2[g,b]
-
-        # Linear interpolation
-        z1, z2 = grid[idxs, q], grid[idxs .+ 1, q]
-        return (z1 .+ (z2 .- z1) .* ((u_q .- cd1) ./ (cd2 .- cd1)))
+        return idxs
     end
 
-    return reduce(hcat, map(i -> sample_mixture(i)[:,:], 1:q_size)), seed
+    function cdf_masks(idxs)
+        """Returns masks for the CDF values to get both bounds of each trapezium."""
+        mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1))' |> device
+        mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size))' |> device
+        return mask1[:,:,:], mask2[:,:,:]
+    end
+
+    # Get indices of trapeziums, and their corresponding cdfs
+    indices = map(grid_index, 1:q_size)
+    masks = cdf_masks.(indices)
+    mask1, mask2 = cat(first.(masks)..., dims=3), cat(last.(masks)..., dims=3)
+    @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
+    @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
+
+    # Get trapezium bounds
+    z1, z2 = zeros(Float32, num_samples, 0) |> device, zeros(Float32, num_samples, 0) |> device
+    for (i, idxs) in enumerate(indices)
+        z1, z2 = hcat(z1, grid[idxs, i:i]), hcat(z2, grid[idxs .+ 1, i:i])
+    end
+
+    # Linear interpolation
+    return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed
 end
 
 function log_prior(

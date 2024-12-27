@@ -90,8 +90,9 @@ function init_mix_prior(
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
+    interpolate = retrieve(conf, "MIX_PRIOR", "inversion_sampling_interpolate")
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed)
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed, interpolation=interpolate)
     
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

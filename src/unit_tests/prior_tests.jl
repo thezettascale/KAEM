@@ -18,7 +18,7 @@ function test_sampling()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, b_size, ps, st))
+    z_test = first(prior.sample_z(prior, b_size, ps, st,1))
     @test all(size(z_test) .== (b_size, z_dim))
 end
 
@@ -28,7 +28,7 @@ function test_log_prior()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, b_size, ps, st))
+    z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
     log_p = log_prior(prior, z_test, ps, st)
     @test size(log_p) == (b_size,)
 end
@@ -39,7 +39,7 @@ function test_log_prior_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(sample_prior(prior, b_size, ps, st))
+    z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
     ∇ = first(gradient(x -> sum(log_prior(prior, x, ps, st)), z_test))
     @test size(∇) == size(z_test)
 end

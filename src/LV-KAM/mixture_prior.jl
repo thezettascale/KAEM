@@ -1,17 +1,18 @@
 module ebm_mix_prior
 
-export mix_prior, init_mix_prior, sample_prior, log_prior
+export mix_prior, init_mix_prior, log_prior
 
 using CUDA, KernelAbstractions, Tullio
-using ConfParser, Random, Lux, Distributions, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
+using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
 using NNlib: softmax, sigmoid_fast
-using Flux: onehotbatch
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
+include("inversion_sampling.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng
+using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
     "uniform" => Uniform(0f0,1f0),
@@ -32,144 +33,6 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_pdf::Function
     sample_z::Function
 end
-
-function choose_component(alpha, num_samples, q_size, p_size; seed=1)
-    """
-    Creates a one-hot mask for each mixture model, q, to select one component, p.
-    
-    Args:
-        alpha: The mixture proportions, (q, p).
-        num_samples: The number of samples to generate.
-        q_size: The number of mixture models.
-        seed: The seed for the random number generator.
-
-    Returns:
-        chosen_components: The one-hot mask for each mixture model, (num_samples, q, p).
-        seed: The updated seed.
-    """
-    seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
-    
-    function categorical_mask(α, rv)
-        """Returns sampled indices from a categorical distribution on alpha."""
-        idxs = map(u -> findfirst(x -> x >= u, α), rv)
-        idxs = reduce(vcat, idxs)
-        idxs = ifelse.(isnothing.(idxs), p_size, idxs)
-        idxs = collect(Float32, onehotbatch(idxs, 1:p_size))   
-        return permutedims(idxs[:,:,:], [2, 3, 1])
-    end
-    
-    chosen_components = map(i -> categorical_mask(view(alpha, i, :), view(rand_vals, i, :)), 1:q_size)
-    return reduce(hcat, chosen_components) |> device, seed
-end
-
-function sample_prior(
-    prior::mix_prior,
-    num_samples::Int, 
-    ps,
-    st;
-    seed::Int=1
-    )
-    """
-    Component-wise inverse transform sampling for the mixture ebm-prior.
-    p = components of mixture model
-    q = number of mixture models
-
-    Args:
-        prior: The mixture ebm-prior.
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-
-    Returns:
-        z: The samples from the mixture ebm-prior, (num_samples, q). 
-        seed: The updated seed.
-    """
-    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
-    q_size = prior.fcns_qp[Symbol("1")].in_dim
-    
-    # Categorical component selection (per sample, per outer sum dimension)
-    component_mask, seed = choose_component(
-        cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2)),
-        num_samples,
-        q_size,
-        p_size;
-        seed=seed
-    )
-
-    # Evaluate prior on grid [0,1]
-    grid = prior.fcns_qp[Symbol("1")].grid'
-    f_grid = grid
-    Δg = f_grid[2:end, :] .- f_grid[1:end-1, :] 
-    π_grid = prior.π_pdf(f_grid)
-    grid_size = size(f_grid, 1)
-    for i in 1:prior.depth
-        f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-        f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : sum(f_grid, dims=2)[:, 1, :] 
-    end
-    f_grid = reshape(f_grid, grid_size, q_size, p_size)
-    @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
-
-    # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i+1}) + u(z_i)) * Δx
-    trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] .+ exp_fg[:, 1:end-1, :]) 
-    cdf = cumsum(trapz, dims=2) ./ sum(trapz, dims=2)
-
-    # Inverse transform sampling
-    seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
-    @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
-    Δg = Δg |> cpu_device()
-
-    function get_noise(ub::Float32)
-        """Returns random noise in the interval [0, ub]. """
-        seed, rng = next_rng(seed)
-        return rand(rng, Uniform(0, ub))
-    end
-
-    function sample_z(q)
-        """Returns samples from a given mixture model, q."""
-        # Index of trapz where CDF >= rand_val
-        idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
-        idxs = reduce(vcat, idxs)
-        idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-
-        # Additng noise [0,ub], places grid point inside the trapezium's interval interval
-        noise = get_noise.(Δg[idxs, q:q]) |> device
-        return grid[idxs, q:q] .+ noise
-    end
-
-    return reduce(hcat, map(q -> sample_z(q), 1:q_size)), seed
-end
-
-# function grid_index(q)
-#     """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
-#     idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
-#     idxs = reduce(vcat, idxs)
-#     idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-#     return idxs
-# end
-
-# function cdf_masks(idxs)
-#     """Returns masks for the CDF values to get both bounds of each trapezium."""
-#     mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1))' |> device
-#     mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size))' |> device
-#     return mask1[:,:,:], mask2[:,:,:]
-# end
-
-# # Get indices of trapeziums, and their corresponding cdfs
-# indices = map(grid_index, 1:q_size)
-# masks = map(cdf_masks, indices)
-# mask1 = reduce((x,y) -> cat(x,y; dims=3), first.(masks))
-# mask2 = reduce((x,y) -> cat(x,y; dims=3), last.(masks))
-# @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
-# @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
-
-# # Get trapezium bounds
-# z1 = reduce(hcat, [grid[indices[i], i:i] for i in 1:q_size])
-# z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in 1:q_size])
-
-# # Linear interpolation
-# return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed
-# end
 
 function log_prior(
     mix::mix_prior, 

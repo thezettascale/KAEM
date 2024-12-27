@@ -87,6 +87,7 @@ end
 function get_z_with_interpolation(
     indices::AbstractArray,
     cdf::AbstractArray,
+    rv::AbstractArray,
     grid::AbstractArray;
     seed::Int=1
     )
@@ -118,7 +119,7 @@ function get_z_with_interpolation(
     z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in eachindex(indices)])
 
     # Linear interpolation
-    return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed
+    return (z1 .+ (z2 .- z1) .* ((rv .- cd1) ./ (cd2 .- cd1))), seed
 end
 
 function sample_prior(
@@ -186,7 +187,7 @@ function sample_prior(
     end
      
     indices = map(grid_index, 1:q_size)
-    interpolation && return get_z_with_interpolation(indices, cdf, grid; seed=seed)
+    interpolation && return get_z_with_interpolation(indices, cdf, rand_vals, grid; seed=seed)
     return get_z_with_noise(indices, grid, cpu_device()(Δg); seed=seed)
 end
 

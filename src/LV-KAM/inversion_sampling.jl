@@ -77,11 +77,18 @@ function get_z_with_noise(
     return z, seed 
 end
 
-function cdf_masks(idxs, grid_size)
-    """Returns masks for the CDF values to get bounds of each trapezium."""
-    mask1 = collect(Float32, onehotbatch(idxs, 1:grid_size-1))' |> device
-    mask2 = collect(Float32, onehotbatch(idxs, 2:grid_size))' |> device
-    return mask1[:,:,:], mask2[:,:,:]
+function get_trap_bounds(idxs, cdf)
+    """Returns the CDF values bounding each trapezium defined by idxs."""
+    zero_prob = zeros(Float32, size(cdf, 1), 1, size(cdf, 3)) |> device
+    cdf = hcat(zero_prob, cdf)
+
+    cd1, cd2 = zeros(Float32, size(cdf,1 ), 0) |> device, zeros(Float32, size(cdf, 1), 0) |> device
+    for (q, idx) in enumerate(idxs)
+        bound1 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx)])
+        bound2 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx .+ 1)])
+        cd1, cd2 = hcat(cd1, bound1), hcat(cd2, bound2)
+    end
+    return cd1, cd2
 end
 
 function get_z_with_interpolation(
@@ -108,11 +115,7 @@ function get_z_with_interpolation(
         seed: The updated seed.
     """
     # Get indices of trapeziums, and their corresponding cdfs
-    masks = map(idx -> cdf_masks(idx, size(grid,1)), indices)
-    mask1 = reduce((x,y) -> cat(x,y; dims=3), first.(masks))
-    mask2 = reduce((x,y) -> cat(x,y; dims=3), last.(masks))
-    @tullio cd1[b, q] := cdf[b, g, q] * mask1[b, g, q]
-    @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
+    cd1, cd2 = get_trap_bounds(indices, cdf)
 
     # Get trapezium bounds
     z1 = reduce(hcat, [grid[indices[i], i:i] for i in eachindex(indices)])

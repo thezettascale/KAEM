@@ -1,6 +1,6 @@
 using ConfParser, Random
 
-conf = ConfParse("config.ini")
+conf = ConfParse("nist_config.ini")
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
@@ -10,7 +10,7 @@ using .trainer
 
 datasets = [
     "MNIST", 
-    # "FMNIST"
+    "FMNIST"
     ]
 
 for dataset in datasets

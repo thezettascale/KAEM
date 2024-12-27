@@ -162,9 +162,22 @@ function init_MoE_lkhood(
     output_dim::Int;
     lkhood_seed::Int=1,
     )
+    q_size = (
+        try 
+            last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
+        catch
+            last(parse.(Int, split(retrieve(conf, "MIX_PRIOR", "layer_widths"), ",")))
+        end
+    )
 
-    q_size = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
-    widths = parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
+    widths = (
+        try 
+            parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"))
+        catch
+            parse.(Int, split(retrieve(conf, "MOE_LIKELIHOOD", "layer_widths"), ","))
+        end
+    )
+
     widths = (widths..., 1)
     first(widths) !== q_size && (error("First ΩΛ_hidden_widths must be equal to the hidden dimension of the prior."))
 

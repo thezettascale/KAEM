@@ -73,8 +73,15 @@ end
 function init_mix_prior(
     conf::ConfParse;
     prior_seed::Int=1,
-)
-    widths = parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
+    )
+    widths = (
+        try 
+            parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths"))
+        catch
+            parse.(Int, split(retrieve(conf, "MIX_PRIOR", "layer_widths"), ","))
+        end
+    )
+
     widths = reverse(widths)
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")

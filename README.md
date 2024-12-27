@@ -11,7 +11,7 @@ It uses:
 
 - **The Kolmogorov-Arnold theorem** - any continous function can be represented in a finite manner.
 - **Empirical Bayes** - the prior is updated using observations from the data.
-- **Rejection/importance sampling** - Markov Chain Monte Carlo is avoided for speed.
+- **Inversion/importance sampling** - Markov Chain Monte Carlo is avoided for speed.
 - **Thermodynamic Integration** - the practicality of the theorem is improved using another means of marginal likelihood estimation.
 
 ## Setup:
@@ -37,16 +37,22 @@ bash src/unit_tests/run_tests.sh
 
 ## To run experiments:
 
-Edit the config file:
+Edit the config files:
 
 ```bash
-nano config.ini
+nano nist_config.ini
 ```
 
-Run:
+For main experiments run:
 
 ```bash
-julia main.jl
+julia nist.jl
+```
+
+For benchmarking run:
+
+```bash
+bash benchmarking/run_benchmarks.sh
 ```
 
 ## Sustainability statement:

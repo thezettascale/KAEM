@@ -114,8 +114,8 @@ function get_z_with_interpolation(
     @tullio cd2[b, q] := cdf[b, g, q] * mask2[b, g, q]
 
     # Get trapezium bounds
-    z1 = reduce(hcat, [grid[indices[i], i:i] for i in 1:q_size])
-    z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in 1:q_size])
+    z1 = reduce(hcat, [grid[indices[i], i:i] for i in eachindex(indices)])
+    z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in eachindex(indices)])
 
     # Linear interpolation
     return (z1 .+ (z2 .- z1) .* ((rand_vals .- cd1) ./ (cd2 .- cd1))), seed

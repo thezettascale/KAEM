@@ -42,7 +42,8 @@ function generate_from_z(
     ps, 
     st, 
     z::AbstractArray;
-    seed::Int=1
+    seed::Int=1,
+    noise::Bool=true
     )
     """
     Generate data from the likelihood model.
@@ -83,6 +84,7 @@ function generate_from_z(
 
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, Float32, size(x̂)) |> device
+    !noise && (ε .*= 0f0)
 
     return lkhood.output_activation(x̂ + ε), seed
 end

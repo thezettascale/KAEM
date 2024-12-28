@@ -116,7 +116,7 @@ function generate_batch(
         The updated seed.
     """
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
-    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
+    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed, noise=false)
     return x̂, seed
 end
 

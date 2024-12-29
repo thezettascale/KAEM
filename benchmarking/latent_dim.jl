@@ -3,7 +3,7 @@ using BenchmarkTools, ConfParser, Lux, Zygote, Random
 include("../src/LV-KAM/LV-KAM.jl")
 using .LV_KAM_model
 
-conf = ConfParse("benchmarking/benchmark_conf.ini")
+conf = ConfParse("nist_config.ini")
 parse_conf!(conf)
 
 function benchmark_dim(n_z)

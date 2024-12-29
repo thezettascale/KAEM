@@ -142,7 +142,7 @@ function MLE_loss(
         The negative marginal likelihood, averaged over the batch.
     """
 
-    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     ex_prior = mean(logprior)

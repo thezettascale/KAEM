@@ -142,24 +142,24 @@ function MLE_loss(
         The negative marginal likelihood, averaged over the batch.
     """
 
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = mean(logprior)
-    
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
 
+        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        ex_prior = mean(logprior)
+
         # Importance weights
-        logllhood_t = t .* logllhood
-        posterior_weights = @ignore_derivatives softmax(logllhood_t, dims=2) 
+        logllhood = t .* logllhood
+        posterior_weights = @ignore_derivatives softmax(logllhood, dims=2) 
         
         # Prior loss aligns expected prior with expected posterior
         @tullio loss_prior[b] := posterior_weights[b, s] * logprior[s]
-        loss_prior .-= ex_prior
+        loss_prior = loss_prior .- ex_prior
         
         # Likelihood loss
-        @tullio loss_llhood[b] := posterior_weights[b, s] * logllhood_t[b, s]
+        @tullio loss_llhood[b] := posterior_weights[b, s] * logllhood[b, s]
         loss = loss_llhood + loss_prior
 
         # Singleton dimension for fast reduction across temperatures

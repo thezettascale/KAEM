@@ -34,7 +34,6 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::Float32
     log_lkhood_model::Function
     output_activation::Function
-    resample_z::Function
 end
 
 function generate_from_z(
@@ -161,9 +160,6 @@ function init_MoE_lkhood(
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
-    resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
-
-    resample_function = (weights, seed) -> @ignore_derivatives importance_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
@@ -195,7 +191,7 @@ function init_MoE_lkhood(
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(widths[i], widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Ω_functions, Λ_functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+    return MoE_lkhood(Ω_functions, Λ_functions, length(widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)

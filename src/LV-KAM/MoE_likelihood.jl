@@ -1,6 +1,6 @@
 module MoE_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z, importance_sampler
+export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -118,45 +118,6 @@ function log_likelihood(
         permutedims(x̂[:,:,:], [3,1,2])
     )
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
-end
-
-function importance_sampler(
-    weights::AbstractArray;
-    ess_thresh::Float32=5f-1,
-    seed::Int=1,
-    )
-    """
-    Resample the latent variable using systematic sampling.
-
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-
-    Returns:
-        The resampled indices.
-        The updated seed.
-    """
-    
-    # Systematic resampling 
-    N = size(weights, 2)
-
-    function resample(w::AbstractArray)
-        ESS = 1 / sum(w.^2)
-        indices = collect(1:N) 
-        if ESS < ess_thresh*N
-            cdf = cumsum(w)
-            seed, rng = next_rng(seed)
-            u0 = rand(rng) / N
-            u = u0 .+ (0:N-1) ./ N
-            indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
-            indices = reduce(vcat, indices) 
-        end
-        return indices
-    end
-
-    indices = map(resample, eachrow(weights))
-    return indices, seed
 end
 
 function init_MoE_lkhood(

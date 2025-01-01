@@ -13,10 +13,7 @@ function device(x)
 end
 
 function removeNaN(x)
-    # @tullio NaNs[i, j, k] := isnan(x[i, j, k])
-    # x = ifelse.(NaNs, 0f0, x)
-    # return device(x)
-    return CUDA.@allowscalar replace(x, NaN => 0f0)
+    return ifelse.(isnan.(x), 0f0, x) |> device
 end
 
 function removeZero(x; ε=1f-3)

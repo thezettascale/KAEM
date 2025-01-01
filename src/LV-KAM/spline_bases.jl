@@ -105,6 +105,7 @@ function RBF_basis(x, grid; degree=nothing, σ=1f0)
     @tullio B[d, n, m] = exp(-5f-1 * (B[d, n, m])^2)
 
     # any(isnan.(B)) && error("NaN in B")
+    # B = removeNaN(B)
     any(isnan.(B)) && println("NaN in RBF basis")
     
     return norm .* B
@@ -158,7 +159,7 @@ function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0, basis_function=noth
     return @tullio y_eval[i, j, l] := splines[i, j, p] * coef[j, l, p]
 end
 
-function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=0f0, basis_function=nothing)
+function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_function=nothing)
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs.

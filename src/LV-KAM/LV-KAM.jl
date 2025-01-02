@@ -228,10 +228,10 @@ function update_llhood_grid(
         Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
         γ = fwd(model.lkhood.γ_functions[Symbol("γ_$i")], ps.gen[Symbol("γ_$i")], st.gen[Symbol("γ_$i")], γ)
 
-        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
-        γ = i == 1 ? reshape(γ, num_samples*q_size, size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
+        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
+        γ = i == 1 ? reshape(γ, prod(size(γ)[1:2]), size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
-    Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size, 1)
+    Λ, γ = reshape(Λ, model.grid_updates_samples, q_size, 1), reshape(γ, model.grid_updates_samples, q_size, 1)
 
     w = ps[Symbol("w_gate")]
     @tullio gate[b,q,o] := γ[b,q,1] * w[o,q]

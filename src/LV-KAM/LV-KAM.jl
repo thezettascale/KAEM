@@ -215,8 +215,7 @@ function update_llhood_grid(
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
 
-    Ω = reshape(copy(z), prod(size(z)), 1)
-    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], Ω)
+    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], reshape(z, prod(size(z)), 1))
     @reset ps.gen[Symbol("Ω")].coef = new_coef
     @reset model.lkhood.Ω_fcn.grid = new_grid
 

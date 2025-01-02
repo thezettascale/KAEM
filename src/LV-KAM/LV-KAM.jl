@@ -234,7 +234,7 @@ function update_llhood_grid(
     end
     Λ, γ = reshape(Λ, model.grid_updates_samples, q_size, 1), reshape(γ, model.grid_updates_samples, q_size, 1)
 
-    w = ps[Symbol("w_gate")]
+    w = ps.gen[Symbol("w_gate")]
     @tullio gate[b,q,o] := γ[b,q,1] * w[o,q]
     z = softmax(gate, dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]

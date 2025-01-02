@@ -215,18 +215,32 @@ function update_llhood_grid(
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
 
-    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], reshape(z, prod(size(z)), 1))
-    @reset ps.gen[Symbol("Ω")].coef = new_coef
-    @reset model.lkhood.Ω_fcn.grid = new_grid
-
-    for i in 1:model.lkhood.Λ_depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
+    Λ, γ = copy(z), copy(z)
+    for i in 1:model.lkhood.depth
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
         @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
 
-        z = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
-        z = i == 1 ? reshape(z, prod(size(z)[1:2]), size(z, 3)) : sum(z, dims=2)[:, 1, :]
+        new_grid, new_coef = update_fcn_grid(model.lkhood.γ_functions[Symbol("γ_$i")], ps.gen[Symbol("γ_$i")], st.gen[Symbol("γ_$i")], γ)
+        @reset ps.gen[Symbol("γ_$i")].coef = new_coef
+        @reset model.lkhood.γ_functions[Symbol("γ_$i")].grid = new_grid
+
+        Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
+        γ = fwd(lkhood.γ_functions[Symbol("γ_$i")], ps[Symbol("γ_$i")], st[Symbol("γ_$i")], γ)
+
+        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
+        γ = i == 1 ? reshape(γ, num_samples*q_size, size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
+    Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size, 1)
+
+    w = ps[Symbol("w_gate")]
+    @tullio gate[b,q,o] := γ[b,q,1] * w[o,q]
+    z = softmax(gate, dims=2) .* Λ
+    z = sum(z, dims=2)[:, 1, :]
+
+    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], z)[:,:,1]
+    @reset ps.gen[Symbol("Ω")].coef = new_coef
+    @reset model.lkhood.Ω_fcn.grid = new_grid
 
     return model, ps, seed
 end

@@ -234,15 +234,6 @@ function update_llhood_grid(
     end
     Λ, γ = reshape(Λ, model.grid_updates_samples, q_size, 1), reshape(γ, model.grid_updates_samples, q_size, 1)
 
-    w = ps.gen[Symbol("w_gate")]
-    @tullio gate[b,q,o] := γ[b,q,1] * w[o,q]
-    z = softmax(gate, dims=2) .* Λ
-    z = sum(z, dims=2)[:, 1, :]
-
-    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], z)
-    @reset ps.gen[Symbol("Ω")].coef = new_coef
-    @reset model.lkhood.Ω_fcn.grid = new_grid
-
     return model, ps, seed
 end
 

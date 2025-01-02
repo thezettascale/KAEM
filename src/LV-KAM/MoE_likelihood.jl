@@ -26,7 +26,6 @@ lkhood_models = Dict(
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
-    Ω_fcn::univariate_function
     Λ_fcns::NamedTuple
     γ_functions::NamedTuple
     depth::Int
@@ -74,14 +73,14 @@ function generate_from_z(
     end
     Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size, 1)
 
-    # Gating mechanism - Σ_q softmax(w * γ) * Λ
-    w = ps[Symbol("w_gate")]
-    @tullio gate[b,q,o] := γ[b,q,1] * w[o,q]
+    # MoE generation - Σ_q softmax(w * γ) * Λ
+    w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
+    @tullio gate[b,q,o] := γ[b,q,1] * w_gate[o,q] + b_gate[o,q]
     z = softmax(gate, dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
     
     # Generate x
-    z = fwd(lkhood.Ω_fcn, ps[Symbol("Ω")], st[Symbol("Ω")], z)[:,:,1]
+    # z = fwd(lkhood.Ω_fcn, ps[Symbol("Ω")], st[Symbol("Ω")], z)[:,:,1]
 
     # Add noise
     seed, rng = next_rng(seed)
@@ -221,12 +220,6 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
 
-    # Output functions
-    lkhood_seed, rng = next_rng(lkhood_seed)
-    base_scale = (μ_scale * (1f0 / √(Float32(output_dim)))
-    .+ σ_base .* (randn(rng, Float32, output_dim, 1) .* 2f0 .- 1f0) .* (1f0 / √(Float32(output_dim))))
-    Ω_function = initialize_function(output_dim, 1, base_scale)
-
     # MoE functions
     Λ_functions = NamedTuple() # Expert functions
     γ_functions = NamedTuple() # Gating functions
@@ -238,7 +231,7 @@ function init_MoE_lkhood(
         @reset γ_functions[Symbol("γ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Ω_function, Λ_functions, γ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+    return MoE_lkhood(Λ_functions, γ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
@@ -247,8 +240,8 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
         @reset ps[Symbol("Λ_$i")] = Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
         @reset ps[Symbol("γ_$i")] = Lux.initialparameters(rng, lkhood.γ_functions[Symbol("γ_$i")])
     end
-    @reset ps[Symbol("Ω")] = Lux.initialparameters(rng, lkhood.Ω_fcn)
     @reset ps[Symbol("w_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
+    @reset ps[Symbol("b_gate")] = zeros(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
     return ps
 end
 
@@ -258,7 +251,6 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
         @reset st[Symbol("Λ_$i")] = Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
         @reset st[Symbol("γ_$i")] = Lux.initialstates(rng, lkhood.γ_functions[Symbol("γ_$i")])
     end
-    @reset st[Symbol("Ω")] = Lux.initialstates(rng, lkhood.Ω_fcn)
     return st
 end
 

@@ -79,9 +79,6 @@ function generate_from_z(
     z = softmax(gate, dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
     
-    # Generate x
-    # z = fwd(lkhood.Ω_fcn, ps[Symbol("Ω")], st[Symbol("Ω")], z)[:,:,1]
-
     # Add noise
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, Float32, size(z)) |> device

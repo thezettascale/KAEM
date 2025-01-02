@@ -239,7 +239,7 @@ function update_llhood_grid(
     z = softmax(gate, dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
 
-    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], z)[:,:,1]
+    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], z)
     @reset ps.gen[Symbol("Ω")].coef = new_coef
     @reset model.lkhood.Ω_fcn.grid = new_grid
 

@@ -219,7 +219,7 @@ function update_llhood_grid(
     @reset ps.gen[Symbol("Ω")].coef = new_coef
     @reset model.lkhood.Ω_fcn.grid = new_grid
 
-    for i in 1:lkhood.Λ_depth
+    for i in 1:model.lkhood.Λ_depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
         @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid

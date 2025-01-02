@@ -136,11 +136,13 @@ function importance_sampler(
         The updated seed.
     """
     
-    # Systematic resampling 
+   
     N = size(weights, 2)
     function resample(w::AbstractArray)
         ESS = 1 / sum(w.^2)
         indices = collect(1:N) 
+
+         # Systematic resampling 
         if ESS < ess_thresh*N
             cdf = cumsum(w)
             seed, rng = next_rng(seed)
@@ -149,6 +151,7 @@ function importance_sampler(
             indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
             indices = reduce(vcat, indices) 
         end
+        
         return indices
     end
     indices = map(resample, eachrow(weights))

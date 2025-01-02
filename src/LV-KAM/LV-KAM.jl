@@ -225,8 +225,8 @@ function update_llhood_grid(
         @reset ps.gen[Symbol("γ_$i")].coef = new_coef
         @reset model.lkhood.γ_functions[Symbol("γ_$i")].grid = new_grid
 
-        Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
-        γ = fwd(model.lkhood.γ_functions[Symbol("γ_$i")], ps[Symbol("γ_$i")], st[Symbol("γ_$i")], γ)
+        Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
+        γ = fwd(model.lkhood.γ_functions[Symbol("γ_$i")], ps.gen[Symbol("γ_$i")], st.gen[Symbol("γ_$i")], γ)
 
         Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
         γ = i == 1 ? reshape(γ, num_samples*q_size, size(γ, 3)) : sum(γ, dims=2)[:, 1, :]

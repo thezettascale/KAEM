@@ -142,28 +142,31 @@ function MLE_loss(
         The negative marginal likelihood, averaged over the batch.
     """
 
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = mean(logprior)
+
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
 
-        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-        ex_prior = mean(logprior)
+        # Posterior samples, resamples are drawn per batch
+        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+        resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)    
 
-        # Importance weights
-        logllhood = t .* logllhood
-        posterior_weights = @ignore_derivatives softmax(logllhood, dims=2) 
+        function posterior_expectation(batch_idx::Int)
+            """Returns the marginal likelihood for a single sample in the batch."""
+            logprior_t = view(logprior, resampled_idxs[batch_idx])
+            logllhood_t = t .* view(logllhood, batch_idx, resampled_idxs[batch_idx])
+            weights_t = @ignore_derivatives softmax(logllhood_t)'          
+            
+            loss_prior = (weights_t * logprior_t) - ex_prior
+            loss_llhood = weights_t * logllhood_t
+            return loss_llhood + loss_prior 
+        end
         
-        # Prior loss aligns expected prior with expected posterior
-        @tullio loss_prior[b] := posterior_weights[b, s] * logprior[s]
-        loss_prior = loss_prior .- ex_prior
-        
-        # Likelihood loss
-        @tullio loss_llhood[b] := posterior_weights[b, s] * logllhood[b, s]
-        loss = loss_llhood + loss_prior
-
-        # Singleton dimension for fast reduction across temperatures
-        return loss[:,:] 
+        loss = reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
+        return loss[:,:] # Singleton dimension for fast reduction across temperatures
     end
 
     # MLE loss is default

@@ -215,15 +215,10 @@ function update_llhood_grid(
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
 
-    Ω = copy(z)
-    for i in 1:model.lkhood.Ω_depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        @reset ps.gen[Symbol("Ω_$i")].coef = new_coef
-        @reset model.lkhood.Ω_fcns[Symbol("Ω_$i")].grid = new_grid
-
-        Ω = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
-    end 
+    Ω = reshape(copy(z), prod(size(z)), 1)
+    new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcn, ps.gen[Symbol("Ω")], st.gen[Symbol("Ω")], Ω)
+    @reset ps.gen[Symbol("Ω")].coef = new_coef
+    @reset model.lkhood.Ω_fcn.grid = new_grid
 
     for i in 1:lkhood.Λ_depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)

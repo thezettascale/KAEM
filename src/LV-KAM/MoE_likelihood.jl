@@ -26,9 +26,8 @@ lkhood_models = Dict(
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
-    Ω_fcns::NamedTuple
+    Ω_fcn::univariate_function
     Λ_fcns::NamedTuple
-    Ω_depth::Int
     Λ_depth::Int
     out_size::Int
     σ_ε::Float32
@@ -64,13 +63,10 @@ function generate_from_z(
     num_samples, q_size = size(z)
 
     # MoE gating function
-    Ω = copy(z)
-    for i in 1:lkhood.Ω_depth
-        Ω = fwd(lkhood.Ω_fcns[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :] 
-    end
-    Ω  = reshape(Ω, num_samples, q_size, lkhood.out_size)
-    
+    Ω = reshape(copy(z), num_samples*q_size, 1)
+    Ω = fwd(lkhood.Ω_fcn, ps[Symbol("Ω")], st[Symbol("Ω")], Ω)[:,1,:]
+    Ω = reshape(Ω, num_samples, q_size, lkhood.out_size)
+
     # MoE expert function
     for i in 1:lkhood.Λ_depth
         z = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], z)
@@ -179,18 +175,8 @@ function init_MoE_lkhood(
         end
     )
 
-    gating_widths = (
-        try 
-            parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "gating_widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "MOE_LIKELIHOOD", "gating_widths"), ","))
-        end
-    )
-
     expert_widths = (expert_widths..., 1)
-    gating_widths = (gating_widths..., output_dim)
-    first(expert_widths) !== q_size && (error("First Λ_hidden_widths must be equal to the hidden dimension of the prior."))
-    first(gating_widths) !== q_size && (error("First Ω_hidden_widths must be equal to the hidden dimension of the prior."))
+    first(expert_widths) !== q_size && (error("First expert Λ_hidden_widths must be equal to the hidden dimension of the prior."))
 
     spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
@@ -230,13 +216,9 @@ function init_MoE_lkhood(
     )
 
     # MoE gating functions
-    Ω_functions = NamedTuple()
-    for i in eachindex(gating_widths[1:end-1])
-        lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (1f0 / √(Float32(gating_widths[i])))
-        .+ σ_base .* (randn(rng, Float32, gating_widths[i], gating_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(gating_widths[i]))))
-        @reset Ω_functions[Symbol("Ω_$i")] = initialize_function(gating_widths[i], gating_widths[i+1], base_scale)
-    end
+    lkhood_seed, rng = next_rng(lkhood_seed)
+    base_scale = μ_scale .+ σ_base .* (randn(rng, Float32, 1, output_dim) .* 2f0 .- 1f0)
+    Ω_function = initialize_function(1, output_dim, base_scale)
 
     # MoE expert functions
     Λ_functions = NamedTuple()
@@ -247,22 +229,24 @@ function init_MoE_lkhood(
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Ω_functions, Λ_functions, length(gating_widths)-1, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+    return MoE_lkhood(Ω_function, Λ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
-    ps = NamedTuple(Symbol("Ω_$i") => Lux.initialparameters(rng, lkhood.Ω_fcns[Symbol("Ω_$i")]) for i in 1:lkhood.Ω_depth)
+    ps = NamedTuple()
     for i in 1:lkhood.Λ_depth
         @reset ps[Symbol("Λ_$i")] = Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
     end
+    @reset ps[Symbol("Ω")] = Lux.initialparameters(rng, lkhood.Ω_fcn)
     return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
-    st = NamedTuple(Symbol("Ω_$i") => Lux.initialstates(rng, lkhood.Ω_fcns[Symbol("Ω_$i")]) for i in 1:lkhood.Ω_depth)
+    st = NamedTuple()
     for i in 1:lkhood.Λ_depth
         @reset st[Symbol("Λ_$i")] = Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
     end
+    @reset st[Symbol("Ω")] = Lux.initialstates(rng, lkhood.Ω_fcn)
     return st
 end
 

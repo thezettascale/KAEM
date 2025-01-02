@@ -215,22 +215,24 @@ function update_llhood_grid(
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
 
-    Ω, Λ = z, z
-    for i in 1:model.lkhood.depth
+    Ω = copy(z)
+    for i in 1:model.lkhood.Ω_depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
         @reset ps.gen[Symbol("Ω_$i")].coef = new_coef
         @reset model.lkhood.Ω_fcns[Symbol("Ω_$i")].grid = new_grid
 
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
+        Ω = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
+        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
+    end 
+
+    for i in 1:lkhood.Λ_depth
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
         @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
 
-        Ω = fwd(model.lkhood.Ω_fcns[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
-
-        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
-        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
-    end 
+        z = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], z)
+        z = i == 1 ? reshape(z, prod(size(z)[1:2]), size(z, 3)) : sum(z, dims=2)[:, 1, :]
+    end
 
     return model, ps, seed
 end

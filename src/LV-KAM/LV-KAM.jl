@@ -214,6 +214,7 @@ function update_llhood_grid(
     !model.update_llhood_grid && return model, ps, seed
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    q_size = size(z, 2)
 
     Λ, γ = copy(z), copy(z)
     for i in 1:model.lkhood.depth

@@ -216,21 +216,14 @@ function update_llhood_grid(
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
     q_size = size(z, 2)
 
-    Λ, γ = copy(z), copy(z)
+    Λ = copy(z)
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
         @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
 
-        new_grid, new_coef = update_fcn_grid(model.lkhood.γ_functions[Symbol("γ_$i")], ps.gen[Symbol("γ_$i")], st.gen[Symbol("γ_$i")], γ)
-        @reset ps.gen[Symbol("γ_$i")].coef = new_coef
-        @reset model.lkhood.γ_functions[Symbol("γ_$i")].grid = new_grid
-
         Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
-        γ = fwd(model.lkhood.γ_functions[Symbol("γ_$i")], ps.gen[Symbol("γ_$i")], st.gen[Symbol("γ_$i")], γ)
-
         Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
-        γ = i == 1 ? reshape(γ, prod(size(γ)[1:2]), size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
 
     return model, ps, seed

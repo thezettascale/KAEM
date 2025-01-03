@@ -21,9 +21,9 @@ prior_distributions = Dict(
 )
 
 prior_pdf = Dict(
-    "uniform" => z -> 0 .<= z .<= 1 .|> Float32,
+    "uniform" => z -> ones(Float32, size(z)) |> device,
     "normal" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
-    "bernoulli" => z -> 1 ./ 2
+    "bernoulli" => z -> ones(Float32, size(z)) ./ 2 |> device
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer

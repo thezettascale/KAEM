@@ -76,7 +76,7 @@ function generate_from_z(
     # MoE generation - Σ_q softmax(w * γ) * Λ
     w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
     @tullio gate[b,q,o] := γ[b,q,1] * w_gate[o,q] + b_gate[o,q]
-    z = softmax(gate, dims=2) .* Λ
+    z = softmax(gate ./ Float32(sqrt(q_size)), dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
     
     # Add noise
@@ -238,7 +238,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
         @reset ps[Symbol("γ_$i")] = Lux.initialparameters(rng, lkhood.γ_functions[Symbol("γ_$i")])
     end
     @reset ps[Symbol("w_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
-    @reset ps[Symbol("b_gate")] = zeros(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
+    @reset ps[Symbol("b_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
     return ps
 end
 

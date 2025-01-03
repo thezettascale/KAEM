@@ -4,7 +4,7 @@ export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z, importance_
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib: softmax, sigmoid_fast, tanh_fast, leakyrelu
+using NNlib
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -15,8 +15,8 @@ using .Utils: device, next_rng
 using .ebm_mix_prior
 
 output_activation_mapping = Dict(
-    "tanh" => tanh_fast,
-    "sigmoid" => sigmoid_fast,
+    "tanh" => NNlib.tanh_fast,
+    "sigmoid" => NNlib.sigmoid_fast,
     "none" => identity
 )
 
@@ -40,7 +40,6 @@ lkhood_models = Dict(
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
     Λ_fcns::NamedTuple
-    γ_functions::NamedTuple
     depth::Int
     out_size::Int
     σ_ε::Float32
@@ -77,20 +76,17 @@ function generate_from_z(
     num_samples, q_size = size(z)
 
     # MoE functions
-    Λ, γ = copy(z), copy(z)
+    Λ = copy(z)
     for i in 1:lkhood.depth
         Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
         Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
-
-        γ = fwd(lkhood.γ_functions[Symbol("γ_$i")], ps[Symbol("γ_$i")], st[Symbol("γ_$i")], γ)
-        γ = i == 1 ? reshape(γ, num_samples*q_size, size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
-    Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size)
+    Λ = reshape(Λ, num_samples, q_size, 1)
 
     # MoE generation - Σ_q softmax(w * γ) * Λ
     w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
-    @tullio gate[b,q,o] := γ[b,q] * w_gate[o,q] + b_gate[o,q]
-    z = softmax(lkhood.gating_activation(gate), dims=2) .* Λ
+    @tullio gate[b,q,o] := z[b,q] * w_gate[o,q] + b_gate[o,q]
+    z = NNlib.softmax(lkhood.gating_activation(gate), dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
     
     # Add noise
@@ -234,23 +230,20 @@ function init_MoE_lkhood(
 
     # MoE functions
     Λ_functions = NamedTuple() # Expert functions
-    γ_functions = NamedTuple() # Gating functions
     for i in eachindex(expert_widths[1:end-1])
         lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (1f0 / √(Float32(expert_widths[i])))
         .+ σ_base .* (randn(rng, Float32, expert_widths[i], expert_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(expert_widths[i]))))
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
-        @reset γ_functions[Symbol("γ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Λ_functions, γ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
+    return MoE_lkhood(Λ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
     ps = NamedTuple()
     for i in 1:lkhood.depth
         @reset ps[Symbol("Λ_$i")] = Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
-        @reset ps[Symbol("γ_$i")] = Lux.initialparameters(rng, lkhood.γ_functions[Symbol("γ_$i")])
     end
     @reset ps[Symbol("w_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
     @reset ps[Symbol("b_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
@@ -261,7 +254,6 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
     st = NamedTuple()
     for i in 1:lkhood.depth
         @reset st[Symbol("Λ_$i")] = Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
-        @reset st[Symbol("γ_$i")] = Lux.initialstates(rng, lkhood.γ_functions[Symbol("γ_$i")])
     end
     return st
 end

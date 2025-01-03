@@ -232,7 +232,6 @@ function update_llhood_grid(
         Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
         γ = i == 1 ? reshape(γ, prod(size(γ)[1:2]), size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
-    Λ, γ = reshape(Λ, model.grid_updates_samples, q_size, 1), reshape(γ, model.grid_updates_samples, q_size, 1)
 
     return model, ps, seed
 end

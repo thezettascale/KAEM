@@ -4,7 +4,7 @@ export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z, importance_
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib: softmax, sigmoid_fast, tanh_fast
+using NNlib: softmax, sigmoid_fast, tanh_fast, leakyrelu
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -14,9 +14,22 @@ using .univariate_functions
 using .Utils: device, next_rng
 using .ebm_mix_prior
 
-activation_mapping = Dict(
+output_activation_mapping = Dict(
     "tanh" => tanh_fast,
     "sigmoid" => sigmoid_fast,
+    "none" => identity
+)
+
+gating_activation_mapping = Dict(
+    "relu" => NNlib.relu,
+    "leakyrelu" => NNlib.leakyrelu,
+    "tanh" => NNlib.tanh_fast,
+    "sigmoid" => NNlib.sigmoid_fast,
+    "swish" => NNlib.hardswish,
+    "gelu" => NNlib.gelu,
+    "selu" => NNlib.selu,
+    "tanh" => NNlib.tanh_fast,
+    "silu" => x -> x .* NNlib.sigmoid_fast(x),
     "none" => identity
 )
 
@@ -34,6 +47,7 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::Float32
     log_lkhood_model::Function
     output_activation::Function
+    gating_activation::Function
     resample_z::Function
 end
 
@@ -71,12 +85,12 @@ function generate_from_z(
         γ = fwd(lkhood.γ_functions[Symbol("γ_$i")], ps[Symbol("γ_$i")], st[Symbol("γ_$i")], γ)
         γ = i == 1 ? reshape(γ, num_samples*q_size, size(γ, 3)) : sum(γ, dims=2)[:, 1, :]
     end
-    Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size, 1)
+    Λ, γ = reshape(Λ, num_samples, q_size, 1), reshape(γ, num_samples, q_size)
 
     # MoE generation - Σ_q softmax(w * γ) * Λ
     w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
-    @tullio gate[b,q,o] := γ[b,q,1] * w_gate[o,q] + b_gate[o,q]
-    z = softmax(gate ./ Float32(sqrt(q_size)), dims=2) .* Λ
+    @tullio gate[b,q,o] := γ[b,q] * w_gate[o,q] + b_gate[o,q]
+    z = softmax(lkhood.gating_activation(gate), dims=2) .* Λ
     z = sum(z, dims=2)[:, 1, :]
     
     # Add noise
@@ -197,6 +211,7 @@ function init_MoE_lkhood(
     gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
+    gating_act = retrieve(conf, "MOE_LIKELIHOOD", "gating_activation")
 
     resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
     resample_function = (weights, seed) -> @ignore_derivatives importance_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
@@ -228,7 +243,7 @@ function init_MoE_lkhood(
         @reset γ_functions[Symbol("γ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Λ_functions, γ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], activation_mapping[output_act], resample_function)
+    return MoE_lkhood(Λ_functions, γ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)

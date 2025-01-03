@@ -16,13 +16,13 @@ using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
     "uniform" => Uniform(0f0,1f0),
-    "normal" => Normal(0f0,1f0),
+    "gaussian" => Normal(0f0,1f0),
     "bernoulli" => Bernoulli(5f-1)
 )
 
 prior_pdf = Dict(
     "uniform" => z -> ones(Float32, size(z)) |> device,
-    "normal" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
+    "gaussian" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
     "bernoulli" => z -> ones(Float32, size(z)) ./ 2 |> device
 )
 

@@ -159,7 +159,7 @@ function stratified_sampler(
             cdf = cumsum(w)
             seed, rng = next_rng(seed)
             u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
-            indices = map(x -> findfirst(cdf .>= x), u)
+            indices = map(x -> searchsortedfirst(cdf, x), u)
             indices = reduce(vcat, indices)
         end
         

@@ -156,11 +156,8 @@ function MLE_loss(
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""
-            logprior_t = view(logprior, resampled_idxs[batch_idx])
-            logllhood_t = t .* view(logllhood, batch_idx, resampled_idxs[batch_idx])
-            
-            loss_prior = mean(logprior_t) - ex_prior
-            loss_llhood = mean(logllhood_t)
+            loss_prior = mean(logprior[resampled_idxs[batch_idx]]) - ex_prior
+            loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx]])
             return loss_llhood + loss_prior 
         end
         

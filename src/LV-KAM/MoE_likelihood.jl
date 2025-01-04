@@ -34,8 +34,8 @@ gating_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray, x̂::AbstractArray) -> -sum((x .- x̂).^2, dims=3)[:,:,1],
-    "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3)[:,:,1],
+    "l2" => (x::AbstractArray, x̂::AbstractArray, eps::Float32) -> -sum((x .- x̂).^2, dims=3)[:,:,1],
+    "bernoulli" => (x::AbstractArray, x̂::AbstractArray, eps::Float32) -> sum(x .* log.(x̂ .+ eps) .+ (1 .- x) .* log.(1 .- x̂ .+ eps), dims=3)[:,:,1],
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -103,7 +103,8 @@ function log_likelihood(
     st, 
     x::AbstractArray, 
     z::AbstractArray;
-    seed::Int=1
+    seed::Int=1,
+    eps::Float32=1f-4
     )
     """
     Compute the log-likelihood of the data given the latent variable.
@@ -123,7 +124,8 @@ function log_likelihood(
     x̂, seed = generate_from_z(lkhood, ps, st, z)
     logllhood = lkhood.log_lkhood_model(
         permutedims(x[:,:,:], [2,3,1]),
-        permutedims(x̂[:,:,:], [3,1,2])
+        permutedims(x̂[:,:,:], [3,1,2]),
+        eps
     )
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end

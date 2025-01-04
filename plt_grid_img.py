@@ -8,7 +8,7 @@ with h5py.File(file_path, 'r') as h5_file:
     image_data = h5_file['samples'][()] 
 
 # Define grid dimensions
-grid_size = (10, 10) 
+grid_size = (20, 20) 
 fig, axes = plt.subplots(grid_size[0], grid_size[1], figsize=(8, 8))
 
 for i in range(grid_size[0] * grid_size[1]):
@@ -20,5 +20,5 @@ for i in range(grid_size[0] * grid_size[1]):
     ax.imshow(img, cmap='gray')
     ax.axis('off')  
 
-# plt.tight_layout()
+plt.subplots_adjust(wspace=0, hspace=0)
 plt.show()

@@ -29,6 +29,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     MC_samples::Int
     verbose::Bool
     temperatures::AbstractArray{Float32}
+    eps::Float32
 end
 
 function init_LV_KAM(
@@ -50,6 +51,7 @@ function init_LV_KAM(
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
     out_dim = size(dataset, 1)
+    eps = parse(Float32, retrieve(conf, "TRAINING", "eps"))
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
@@ -77,6 +79,7 @@ function init_LV_KAM(
             MC_samples,
             verbose,
             temperatures,
+            eps
         )
 end
 
@@ -143,8 +146,8 @@ function MLE_loss(
     """
 
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; eps=m.eps)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, eps=m.eps)
     ex_prior = mean(logprior)
 
     function tempered_loss(t::Float32)

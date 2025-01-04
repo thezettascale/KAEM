@@ -134,7 +134,6 @@ end
 
 function stratified_sampler(
     weights::AbstractArray;
-    ess_thresh::Float32=5f-1,
     seed::Int=1,
 )
     """
@@ -149,18 +148,11 @@ function stratified_sampler(
     
     N = size(weights, 2)  # Number of samples
     function resample(w::AbstractArray)
-        ESS = 1 / sum(w.^2)
-        indices = collect(1:N)  # Default to all indices if no resampling is needed
-
-        # Stratified resampling
-        if ESS < ess_thresh * N
-            cdf = cumsum(w)
-            seed, rng = next_rng(seed)
-            u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
-            indices = map(x -> findfirst(cdf .>= x), u)
-            indices = reduce(vcat, indices)
-        end
-        
+        cdf = cumsum(w)
+        seed, rng = next_rng(seed)
+        u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
+        indices = map(x -> findfirst(cdf .>= x), u)
+        indices = reduce(vcat, indices)
         return indices
     end
 
@@ -212,8 +204,7 @@ function init_MoE_lkhood(
     output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
     gating_act = retrieve(conf, "MOE_LIKELIHOOD", "gating_activation")
 
-    resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
-    resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
+    resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; seed=seed)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

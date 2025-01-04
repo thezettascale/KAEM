@@ -37,7 +37,6 @@ function log_prior(
     z::AbstractArray, 
     ps, 
     st;
-    eps::Float32=1f-4
     )
     """
     Compute the unnormalized log-probability of the mixture ebm-prior.
@@ -66,7 +65,7 @@ function log_prior(
 
     # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
     @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]
-    return sum(log.(prob .+ eps); dims=2)[:,1] # Sum over independent log-mixture models
+    return sum(log.(prob .+ eps(eltype(prob))); dims=2)[:,1] # Sum over independent log-mixture models
 end
 
 function init_mix_prior(

@@ -34,8 +34,8 @@ gating_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray, x̂::AbstractArray, eps::Float32) -> -sum((x .- x̂).^2, dims=3)[:,:,1],
-    "bernoulli" => (x::AbstractArray, x̂::AbstractArray, eps::Float32) -> sum(x .* log.(x̂ .+ eps) .+ (1 .- x) .* log.(1 .- x̂ .+ eps), dims=3)[:,:,1],
+    "l2" => (x::AbstractArray, x̂::AbstractArray) -> -sum((x .- x̂).^2, dims=3)[:,:,1],
+    "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3)[:,:,1],
 )
 
 struct MoE_lkhood <: Lux.AbstractLuxLayer
@@ -108,7 +108,6 @@ function log_likelihood(
     x::AbstractArray, 
     z::AbstractArray;
     seed::Int=1,
-    eps::Float32=1f-4
     )
     """
     Compute the log-likelihood of the data given the latent variable.
@@ -125,11 +124,10 @@ function log_likelihood(
     Returns:
         The log-likelihood of the batch given the latent samples.
     """
-    x̂, seed = generate_from_z(lkhood, ps, st, z)
+    x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     logllhood = lkhood.log_lkhood_model(
         permutedims(x[:,:,:], [2,3,1]),
         permutedims(x̂[:,:,:], [3,1,2]),
-        eps
     )
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
@@ -159,7 +157,7 @@ function stratified_sampler(
             cdf = cumsum(w)
             seed, rng = next_rng(seed)
             u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
-            indices = map(x -> searchsortedfirst(cdf, x), u)
+            indices = map(x -> findfirst(cdf .>= x), u)
             indices = reduce(vcat, indices)
         end
         

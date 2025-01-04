@@ -158,10 +158,9 @@ function MLE_loss(
             """Returns the marginal likelihood for a single sample in the batch."""
             logprior_t = view(logprior, resampled_idxs[batch_idx])
             logllhood_t = t .* view(logllhood, batch_idx, resampled_idxs[batch_idx])
-            weights_t = @ignore_derivatives softmax(logllhood_t)'          
             
-            loss_prior = (weights_t * logprior_t) - ex_prior
-            loss_llhood = weights_t * logllhood_t
+            loss_prior = mean(logprior_t) - ex_prior
+            loss_llhood = mean(logllhood_t)
             return loss_llhood + loss_prior 
         end
         

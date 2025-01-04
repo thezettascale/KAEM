@@ -128,44 +128,6 @@ function log_likelihood(
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
 
-function systematic_sampler(
-    weights::AbstractArray;
-    ess_thresh::Float32=5f-1,
-    seed::Int=1,
-    )
-    """
-    Resample the latent variable using systematic sampling.
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-    Returns:
-        The resampled indices.
-        The updated seed.
-    """
-    
-   
-    N = size(weights, 2)
-    function resample(w::AbstractArray)
-        ESS = 1 / sum(w.^2)
-        indices = collect(1:N) 
-
-         # Systematic resampling 
-        if ESS < ess_thresh*N
-            cdf = cumsum(w)
-            seed, rng = next_rng(seed)
-            u0 = rand(rng) / N
-            u = u0 .+ (0:N-1) ./ N
-            indices = map(i -> findfirst(cdf .>= u[i]), 1:N)
-            indices = reduce(vcat, indices) 
-        end
-        
-        return indices
-    end
-    indices = map(resample, eachrow(weights))
-    return indices, seed
-end
-
 function stratified_sampler(
     weights::AbstractArray;
     ess_thresh::Float32=5f-1,
@@ -183,7 +145,6 @@ function stratified_sampler(
     
     N = size(weights, 2)  # Number of samples
     function resample(w::AbstractArray)
-        # Calculate effective sample size (ESS)
         ESS = 1 / sum(w.^2)
         indices = collect(1:N)  # Default to all indices if no resampling is needed
 
@@ -199,7 +160,6 @@ function stratified_sampler(
         return indices
     end
 
-    # Apply resampling to each row of weights
     indices = map(resample, eachrow(weights))
     return indices, seed
 end

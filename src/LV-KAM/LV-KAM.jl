@@ -155,7 +155,7 @@ function MLE_loss(
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)    
 
         function posterior_expectation(batch_idx::Int)
-            """Returns the marginal likelihood for a single sample in the batch."""
+            """Returns the marginal likelihood for a single sample in the batch."""            
             loss_prior = mean(logprior[resampled_idxs[batch_idx]]) - ex_prior
             loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx]])
             return loss_llhood + loss_prior 

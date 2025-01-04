@@ -18,10 +18,10 @@ priors = [
     "gaussian"
 ]
 
-for dataset in datasets
-    for prior in priors
-        commit!(conf, "MIX_PRIOR", "π_0", prior)
-
+for prior in priors
+    commit!(conf, "MIX_PRIOR", "π_0", prior)
+    for dataset in datasets
+        
         ## Vanilla training
         commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 

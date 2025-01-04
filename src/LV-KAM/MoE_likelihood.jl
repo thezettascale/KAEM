@@ -1,6 +1,6 @@
 module MoE_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z, importance_sampler
+export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -128,7 +128,7 @@ function log_likelihood(
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
 
-function importance_sampler(
+function systematic_sampler(
     weights::AbstractArray;
     ess_thresh::Float32=5f-1,
     seed::Int=1,
@@ -165,6 +165,45 @@ function importance_sampler(
     indices = map(resample, eachrow(weights))
     return indices, seed
 end
+
+function stratified_sampler(
+    weights::AbstractArray;
+    ess_thresh::Float32=5f-1,
+    seed::Int=1,
+)
+    """
+    Resample the latent variable using stratified sampling.
+    Args:
+        weights: A matrix of weights where each row corresponds to a sample's weights.
+        ess_thresh: Threshold for effective sample size (ESS) as a fraction of the total sample size.
+        seed: Random seed for reproducibility.
+    Returns:
+        The resampled indices and the updated seed.
+    """
+    
+    N = size(weights, 2)  # Number of samples
+    function resample(w::AbstractArray)
+        # Calculate effective sample size (ESS)
+        ESS = 1 / sum(w.^2)
+        indices = collect(1:N)  # Default to all indices if no resampling is needed
+
+        # Stratified resampling
+        if ESS < ess_thresh * N
+            cdf = cumsum(w)
+            seed, rng = next_rng(seed)
+            u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
+            indices = map(x -> findfirst(cdf .>= x), u)
+            indices = reduce(vcat, indices)
+        end
+        
+        return indices
+    end
+
+    # Apply resampling to each row of weights
+    indices = map(resample, eachrow(weights))
+    return indices, seed
+end
+
 
 function init_MoE_lkhood(
     conf::ConfParse,
@@ -210,7 +249,7 @@ function init_MoE_lkhood(
     gating_act = retrieve(conf, "MOE_LIKELIHOOD", "gating_activation")
 
     resampling_ess_threshold = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "resampling_ess_threshold"))
-    resample_function = (weights, seed) -> @ignore_derivatives importance_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
+    resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; ess_thresh=resampling_ess_threshold, seed=seed)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

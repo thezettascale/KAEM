@@ -179,7 +179,7 @@ function sample_prior(
     # Inverse transform sampling
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
-    @tullio geq_indices[b, g, q] := cdf[b, g, q] > rand_vals[b, q]
+    @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
 
     function grid_index(q)
     """Returns index of trapz where CDF > rand_val from a given mixture model, q."""

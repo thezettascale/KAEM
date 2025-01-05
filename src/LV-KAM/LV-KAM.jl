@@ -148,12 +148,12 @@ function MLE_loss(
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
     ex_prior = mean(logprior) # Prior expectation is constant across temperatures
-    logllhood_cpu = @ignore_derivatives logllhood |> cpu_device() # For importance sampling
+    logllhood_cpu = @ignore_derivatives logllhood |> cpu_device() # For particle filter sampling
 
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
 
-        # Posterior samples, resamples are drawn per batch
+        # Posterior samples, resamples are drawn per batch using particle filter
         posterior_weights = @ignore_derivatives softmax(t .* logllhood_cpu, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)  
 
@@ -169,7 +169,14 @@ function MLE_loss(
     end
 
     # MLE loss is default
-    length(m.temperatures) <= 1 && return -mean(tempered_loss(1f0)), seed
+    if length(m.temperatures) <= 1
+        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+
+        loss_prior = (weights * logprior) .- ex_prior
+        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
+        
+        return -mean(loss_prior + loss_llhood), seed
+    end
 
     # Thermodynamic Integration
     losses = reduce(hcat, map(tempered_loss, m.temperatures))

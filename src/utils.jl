@@ -17,7 +17,7 @@ function removeNaN(x)
 end
 
 function removeZero(x; ε=1f-4)
-    return device(ifelse.(abs.(x) .< ε, ε, x))
+    return ifelse.(abs.(x) .< ε, ε, x) |> device
 end
 
 function next_rng(seed)

@@ -137,26 +137,26 @@ function stratified_sampler(
     Resample the latent variable using stratified sampling.
     Args:
         weights: A matrix of weights where each row corresponds to a sample's weights.
-        ess_thresh: Threshold for effective sample size (ESS) as a fraction of the total sample size.
         seed: Random seed for reproducibility.
     Returns:
         The resampled indices and the updated seed.
     """
     
-    N = size(weights, 2)  # Number of samples
-    function resample(w::AbstractArray)
-        cdf = cumsum(w)
-        seed, rng = next_rng(seed)
-        u = rand(rng, N) ./ N .+ (0:N-1) ./ N  # Stratified thresholds
-        indices = map(x -> findfirst(cdf .>= x), u)
-        indices = reduce(vcat, indices)
-        return indices
-    end
+    B, N = size(weights)
+    cdf = cumsum(weights, dims=2)
+    
+    # Generate stratified thresholds
+    seed, rng = next_rng(seed)
+    u = (rand(rng, B, N) .+ reshape(0:N-1, 1, N)) ./ N 
 
-    indices = map(resample, eachrow(weights))
+    # Find indices in a vectorised manner
+    indices = Array{Int}(undef, B, N)
+    @inbounds for b in 1:B
+        indices[b, :] .= searchsortedfirst.(Ref(view(cdf, b, :)), u[b, :])
+    end
+    
     return indices, seed
 end
-
 
 function init_MoE_lkhood(
     conf::ConfParse,
@@ -227,7 +227,7 @@ function init_MoE_lkhood(
         base_scale = (μ_scale * (1f0 / √(Float32(expert_widths[i])))
         .+ σ_base .* (randn(rng, Float32, expert_widths[i], expert_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(expert_widths[i]))))
         @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
-        @reset Ω_functions[Symbol("Ω_$i")] = initialize_function(expert_widths[i], 1, base_scale)
+        @reset Ω_functions[Symbol("Ω_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
     return MoE_lkhood(Λ_functions, Ω_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)

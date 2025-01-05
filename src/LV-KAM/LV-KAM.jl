@@ -142,25 +142,28 @@ function MLE_loss(
         The negative marginal likelihood, averaged over the batch.
     """
 
+    b_size = size(x, 2)
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = mean(logprior)
+    
+    ex_prior = mean(logprior) # Prior expectation is constant across temperatures
+    logllhood_cpu = @ignore_derivatives logllhood |> cpu_device() # For importance sampling
 
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch
-        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
-        resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)    
+        posterior_weights = @ignore_derivatives softmax(t .* logllhood_cpu, dims=2) 
+        resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)  
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""    
-            loss_prior = mean(logprior[resampled_idxs[batch_idx]]) - ex_prior
-            loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx]])
+            loss_prior = mean(logprior[resampled_idxs[batch_idx, :]]) - ex_prior
+            loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx, :]])
             return loss_llhood + loss_prior 
         end
-        
+
         loss = reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
         return loss[:,:] # Singleton dimension for fast reduction across temperatures
     end

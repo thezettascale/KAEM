@@ -26,6 +26,8 @@ activation_mapping = Dict(
     "selu" => NNlib.selu,
     "tanh" => NNlib.tanh_fast,
     "silu" => x -> x .* NNlib.sigmoid_fast(x),
+    "elu" => NNlib.elu,
+    "celu" => NNlib.celu,
     "none" => x -> x .* 0f0
 )
 

@@ -16,10 +16,8 @@ function removeNaN(x)
     return ifelse.(isnan.(x), 0f0, x) |> device
 end
 
-function removeZero(x; ε=1f-3)
-    @tullio zeros[i, j, k] := abs(x[i, j, k]) .< ε
-    x = ifelse.(zeros, ε, x)
-    return device(x)
+function removeZero(x; ε=1f-4)
+    return device(ifelse.(abs.(x) .< ε, ε, x))
 end
 
 function next_rng(seed)

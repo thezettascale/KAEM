@@ -8,7 +8,7 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng
+using .Utils: device, next_rng, removeZero
 using .univariate_functions: fwd
 
 function choose_component(alpha, num_samples, q_size, p_size; seed=1)
@@ -122,7 +122,7 @@ function get_z_with_interpolation(
     z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in eachindex(indices)])
 
     # Linear interpolation
-    return (z1 .+ (z2 .- z1) .* ((rv .- cd1) ./ (cd2 .- cd1))), seed
+    return (z1 + (z2 - z1) .* ((rv - cd1) ./ removeZero(cd2 - cd1; ε=eps(eltype(cd1))))), seed
 end
 
 function sample_prior(
@@ -162,7 +162,7 @@ function sample_prior(
     # Evaluate prior on grid [0,1]
     grid = prior.fcns_qp[Symbol("1")].grid'
     f_grid = grid
-    Δg = f_grid[2:end, :] .- f_grid[1:end-1, :] 
+    Δg = f_grid[2:end, :] - f_grid[1:end-1, :] 
     π_grid = prior.π_pdf(f_grid)
     grid_size = size(f_grid, 1)
     for i in 1:prior.depth
@@ -172,17 +172,17 @@ function sample_prior(
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
     @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
 
-    # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i+1}) + u(z_i)) * Δx
-    trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] .+ exp_fg[:, 1:end-1, :]) 
+    # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
+    trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
     cdf = cumsum(trapz, dims=2) ./ sum(trapz, dims=2)
 
     # Inverse transform sampling
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
-    @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
+    @tullio geq_indices[b, g, q] := cdf[b, g, q] > rand_vals[b, q]
 
     function grid_index(q)
-    """Returns index of trapz where CDF >= rand_val from a given mixture model, q."""
+    """Returns index of trapz where CDF > rand_val from a given mixture model, q."""
         idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
         idxs = reduce(vcat, idxs)
         idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)

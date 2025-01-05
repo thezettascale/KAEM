@@ -171,10 +171,8 @@ function MLE_loss(
     # MLE loss is default
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
-
         loss_prior = (weights * logprior) .- ex_prior
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
-        
         return -mean(loss_prior + loss_llhood), seed
     end
 

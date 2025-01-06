@@ -104,7 +104,7 @@ function log_prior(
     z = reshape(z, b_size, q_size, p_size)
 
     # Normalized log-probability
-    normalization = norm(mix, ps, st, alpha, size(alpha)...)
+    normalization = norm(mix, ps, st, size(alpha)...)
     @tullio prob[b, q, p] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) 
     prob = log.(sum(prob ./ normalization; dims=3) .+ eps(eltype(prob)))
     return dropdims(sum(prob, dims=2); dims=(2,3))

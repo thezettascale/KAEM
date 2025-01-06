@@ -174,7 +174,8 @@ function sample_prior(
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
-    cdf = cumsum(trapz, dims=2) ./ sum(trapz, dims=2)
+    cdf = cumsum(trapz, dims=2) 
+    cdf = cdf ./ cdf[:, end:end, :] # Normalization
 
     # Inverse transform sampling
     seed, rng = next_rng(seed)

@@ -147,7 +147,7 @@ function MLE_loss(
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
-    ex_prior = mean(logprior) # Prior expectation is constant across temperatures
+    ex_prior = mean(logprior; dims=1) # Prior expectation is constant across temperatures
     logllhood_cpu = @ignore_derivatives logllhood |> cpu_device() # For particle filter sampling
 
     function tempered_loss(t::Float32)
@@ -159,7 +159,7 @@ function MLE_loss(
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""    
-            loss_prior = mean(logprior[resampled_idxs[batch_idx, :]]) - ex_prior
+            loss_prior = mean(sum(logprior[resampled_idxs[batch_idx, :], :] .- ex_prior; dims=2))
             loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx, :]])
             return loss_llhood + loss_prior 
         end
@@ -171,7 +171,7 @@ function MLE_loss(
     # MLE loss is default
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
-        loss_prior = (weights * logprior) .- ex_prior
+        loss_prior = weights * sum(logprior .- ex_prior; dims=2)[:]
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior + loss_llhood), seed
     end

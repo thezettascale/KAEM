@@ -4,7 +4,7 @@ export mix_prior, init_mix_prior, log_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
-using NNlib: softmax, sigmoid_fast
+using NNlib: softmax, sigmoid_fast, logsumexp
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -42,6 +42,8 @@ function log_prior(
     Compute the unnormalized log-probability of the mixture ebm-prior.
     The likelihood of samples from each mixture model, z_q, is evaluated 
     for all components of the mixture model it has been sampled from , M_q.
+
+    ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ]
     
     Args:
         mix: The mixture ebm-prior.
@@ -53,8 +55,11 @@ function log_prior(
         The unnormalized log-probability of the mixture ebm-prior.
     """
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
-    alpha = softmax(ps[Symbol("α")]; dims=2) # Mixture proportions and prior
-    π_0 = mix.π_pdf(z) 
+    
+    # Mixture proportions and prior, prepared for logsumexp trick
+    alpha = softmax(ps[Symbol("α")]; dims=2) 
+    π_0 = mix.π_pdf(z)
+    log_α_prior = log.(@tullio(alphaprior[b, q, p] := alpha[q, p] * π_0[b, q]) .+ eps(eltype(z)))
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -63,9 +68,11 @@ function log_prior(
     end
     z = reshape(z, b_size, q_size, p_size)
 
-    # ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ] ; likelihood of samples under each component
-    @tullio prob[b, q] := alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]
-    return sum(log.(prob .+ eps(eltype(prob))); dims=2)[:,1] # Sum over independent log-mixture models
+    # Using logsumexp trick to avoid underflow/overflow
+    z = z + log_α_prior
+    max_z = maximum(z; dims=3)
+    z = logsumexp(z .- max_z; dims=3) .+ max_z
+    return z[:,:]
 end
 
 function init_mix_prior(

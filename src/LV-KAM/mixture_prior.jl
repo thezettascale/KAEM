@@ -64,7 +64,7 @@ function norm(
     grid = reshape(grid, grid_size, q_size, p_size)
 
     @tullio exp_fg[g, q, p] := exp(grid[g, q, p]) * π_grid[g, q]
-    trapz = 5f-1 .* Δg .* (exp_fg[2:end, :] + exp_fg[1:end-1, :])
+    trapz = 5f-1 .* Δg .* (exp_fg[2:end, :, :] + exp_fg[1:end-1, :, :])
     return sum(trapz; dims=1)
 end
 

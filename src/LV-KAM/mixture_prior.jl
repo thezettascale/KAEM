@@ -4,8 +4,9 @@ export mix_prior, init_mix_prior, log_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
-using NNlib: softmax, sigmoid_fast, logsumexp
+using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
+using LogExpFunctions: logsumexp
 
 include("univariate_functions.jl")
 include("inversion_sampling.jl")

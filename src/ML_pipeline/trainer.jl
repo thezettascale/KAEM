@@ -112,7 +112,7 @@ function train!(t::LV_KAM_trainer)
         for k in keys(grads)
             if any(isnan, grads[k]) || any(isinf, grads[k])
                 for i in keys(grads[k])
-                    any(isnan, grads[k][i]) || any(isinf, grads[k][i]) && error("NaN/Inf in $k, $i gradients")
+                    any(isnan.(grads[k][i])) || any(isinf.(grads[k][i])) && error("NaN/Inf in $k, $i gradients")
                 end
             end
         end

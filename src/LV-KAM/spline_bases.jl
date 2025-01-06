@@ -159,7 +159,7 @@ function coef2curve(x_eval, grid, coef; k::Int64, scale=1f0, basis_function=noth
     return @tullio y_eval[i, j, l] := splines[i, j, p] * coef[j, l, p]
 end
 
-function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_function=nothing)
+function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_function=B_spline_basis)
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs.
@@ -178,7 +178,7 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_fu
     out_dim = size(y_eval, 3)
 
     # b_size x in_dim x n_coeff
-    B = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)  
+    B = basis_function(x_eval, grid; degree=k, σ=scale)  
 
     n_coeff = size(B, 3)
 
@@ -214,7 +214,7 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_fu
         coef = vcat(coef, coef_)
     end
 
-    # any(isnan.(coef)) && error("NaN in coef")
+    any(isnan.(coef)) && error("NaN in coef")
     return coef
 end
 end

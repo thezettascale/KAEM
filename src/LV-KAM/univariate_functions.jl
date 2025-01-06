@@ -147,7 +147,7 @@ function update_fcn_grid(l, ps, st, x)
     # Grid is a convex combination of the uniform and adaptive grid
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend=l.spline_degree) 
-    new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=η)
+    new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=η, basis_function=l.spline_function)
 
     return new_grid, new_coef
 end

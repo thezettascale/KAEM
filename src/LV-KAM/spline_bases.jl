@@ -76,9 +76,9 @@ function B_spline_basis(x, grid; degree::Int64, σ=nothing)
         @tullio B[d, n, m] := (numer1[d, n, m] / denom1[1, n, m]) * B_i1[d, n, m] + (numer2[d, n, m] / denom2[1, n, m]) * B_i2[d, n, m]
     end
     
-    # B = removeNaN(B)
+    B = removeNaN(B)
     # any(isnan.(B)) && error("NaN in B") 
-    any(isnan.(B)) && println("NaN in B-spline basis")
+    # any(isnan.(B)) && error("NaN in B-spline basis")
     
     return B
 end
@@ -105,8 +105,8 @@ function RBF_basis(x, grid; degree=nothing, σ=1f0)
     @tullio B[d, n, m] = exp(-5f-1 * (B[d, n, m])^2)
 
     # any(isnan.(B)) && error("NaN in B")
-    # B = removeNaN(B)
-    any(isnan.(B)) && println("NaN in RBF basis")
+    B = removeNaN(B)
+    # any(isnan.(B)) && println("NaN in RBF basis")
     
     return norm .* B
 end
@@ -137,7 +137,7 @@ function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
     @tullio B[d, n, m] = 1 - B[d, n, m]^2
 
     # any(isnan.(B)) && error("NaN in B")
-    any(isnan.(B)) && println("NaN in RSWAF basis")
+    # any(isnan.(B)) && println("NaN in RSWAF basis")
 
     return B
 end

@@ -177,6 +177,9 @@ function train!(t::LV_KAM_trainer)
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state = (t.iter % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
+        
+        # Break early if NaN in loss
+        isnan(loss) && error("NaN in loss")
 
         return loss
     end    

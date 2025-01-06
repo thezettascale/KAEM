@@ -81,10 +81,10 @@ function generate_from_z(
     Λ, Ω = copy(z), copy(z)
     for i in 1:lkhood.depth
         Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
-        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
+        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : dropdims(sum(Λ, dims=2); dims=2)
 
         Ω = fwd(lkhood.Ω_functions[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
+        Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : dropdims(sum(Ω, dims=2); dims=2)
     end
     Λ, Ω = reshape(Λ, num_samples, q_size, 1), reshape(Ω, num_samples, q_size)
 
@@ -92,7 +92,7 @@ function generate_from_z(
     w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
     @tullio gate[b,q,o] := Ω[b,q] * w_gate[o,q] + b_gate[o,q]
     z = NNlib.softmax(lkhood.gating_activation(gate), dims=2) .* Λ
-    z = sum(z, dims=2)[:, 1, :]
+    z = dropdims(sum(z, dims=2); dims=2)
     
     # Add noise
     seed, rng = next_rng(seed)
@@ -133,7 +133,7 @@ end
 
 function stratified_sampler(
     weights::AbstractArray;
-    seed::Int=1,
+    seed::Int=1
 )
     """
     Resample the latent variable using stratified sampling.
@@ -143,22 +143,18 @@ function stratified_sampler(
     Returns:
         The resampled indices and the updated seed.
     """
-    
     B, N = size(weights)
-    cdf = cumsum(weights, dims=2)
-    
+    cdf = permutedims(cumsum(weights[:,:,:], dims=2), [1,3,2])
+        
     # Generate stratified thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, B, N) .+ reshape(0:N-1, 1, N)) ./ N 
-
-    # Find indices in a vectorised manner
-    indices = Array{Int}(undef, B, N)
-    @inbounds for b in 1:B
-        indices[b, :] .= searchsortedfirst.(Ref(view(cdf, b, :)), u[b, :])
-    end
+    u = (rand(B, N) .+ (0:N-1)') ./ N
     
-    return indices, seed
+    # Find indices in a vectorised manner
+    indices = sum(u[:, :, :] .> cdf, dims=3) .+ 1
+    return dropdims(indices, dims=3), seed
 end
+
 
 function init_MoE_lkhood(
     conf::ConfParse,

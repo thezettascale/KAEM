@@ -211,7 +211,7 @@ function update_llhood_grid(
             @reset model.prior.fcns_qp[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, :, size(z, 3)) : sum(z, dims=2)[:, 1, :] 
+            z = i == 1 ? reshape(z, :, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
         end
     end
          
@@ -227,14 +227,14 @@ function update_llhood_grid(
         @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
 
         Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
-        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : sum(Λ, dims=2)[:, 1, :]
+        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : dropdims(sum(Λ, dims=2); dims=2)
 
         new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_functions[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
         @reset ps.gen[Symbol("Ω_$i")].coef = new_coef
         @reset model.lkhood.Ω_functions[Symbol("Ω_$i")].grid = new_grid
 
         Ω = fwd(model.lkhood.Ω_functions[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : sum(Ω, dims=2)[:, 1, :]
+        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : dropdims(sum(Ω, dims=2); dims=2)
     end
 
     return model, ps, seed

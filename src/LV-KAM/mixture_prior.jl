@@ -64,7 +64,7 @@ function log_prior(
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : sum(z, dims=2)[:, 1, :]
+        z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
     end
     z = reshape(z, b_size, q_size, p_size)
 
@@ -72,7 +72,7 @@ function log_prior(
     z = z + log_α_prior
     max_z = maximum(z; dims=3)
     z = logsumexp(z .- max_z; dims=3) .+ max_z
-    return z[:,:]
+    return dropdims(z, dims=3)
 end
 
 function init_mix_prior(

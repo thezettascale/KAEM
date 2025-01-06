@@ -167,7 +167,7 @@ function sample_prior(
     grid_size = size(f_grid, 1)
     for i in 1:prior.depth
         f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-        f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : sum(f_grid, dims=2)[:, 1, :] 
+        f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : dropdims(sum(f_grid, dims=2); dims=2)
     end
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
     @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]

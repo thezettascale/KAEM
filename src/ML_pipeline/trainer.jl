@@ -133,7 +133,7 @@ function train!(t::LV_KAM_trainer)
         end
 
         grads = first(gradient(pars -> first(MLE_loss(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
-        any(isnan, grads) ||any(isinf, grads) && find_nan(grads)
+        isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
 
         t.model.verbose && println("Iter: $(t.iter), Grad norm: $(norm(grads))")
 
@@ -177,10 +177,6 @@ function train!(t::LV_KAM_trainer)
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state = (t.iter % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
-        
-        # Break early if NaN in loss
-        isnan(loss) && error("NaN in loss")
-
         return loss
     end    
 

@@ -150,7 +150,7 @@ function stratified_sampler(
     seed, rng = next_rng(seed)
     u = (rand(B, N) .+ (0:N-1)') ./ N
     
-    # Find indices in a vectorised manner
+    # Find resampled indices in a vectorised manner
     indices = sum(u[:, :, :] .> cdf, dims=3) .+ 1
     return dropdims(indices, dims=3), seed
 end

@@ -9,17 +9,17 @@ using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 
 include("mixture_prior.jl")
-include("MoE_likelihood.jl")
+include("KAN_likelihood.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_mix_prior
-using .MoE_likelihood
+using .KAN_likelihood
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng
 
 struct LV_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
-    lkhood::MoE_lkhood 
+    lkhood::KAN_lkhood 
     train_loader::DataLoader
     test_loader::DataLoader
     update_prior_grid::Bool
@@ -52,7 +52,7 @@ function init_LV_KAM(
     out_dim = size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
-    lkhood_model = init_MoE_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
+    lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
 
     grid_update_decay = parse(Float32, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
@@ -216,23 +216,14 @@ function update_llhood_grid(
     !model.update_llhood_grid && return model, ps, seed
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-    q_size = size(z, 2)
 
-    Λ, Ω = copy(z), copy(z)
     for i in 1:model.lkhood.depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
-        @reset ps.gen[Symbol("Λ_$i")].coef = new_coef
-        @reset model.lkhood.Λ_fcns[Symbol("Λ_$i")].grid = new_grid
+        new_grid, new_coef = update_fcn_grid(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
+        @reset ps.gen[Symbol("$i")].coef = new_coef
+        @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = new_grid
 
-        Λ = fwd(model.lkhood.Λ_fcns[Symbol("Λ_$i")], ps.gen[Symbol("Λ_$i")], st.gen[Symbol("Λ_$i")], Λ)
-        Λ = i == 1 ? reshape(Λ, prod(size(Λ)[1:2]), size(Λ, 3)) : dropdims(sum(Λ, dims=2); dims=2)
-
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Ω_functions[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        @reset ps.gen[Symbol("Ω_$i")].coef = new_coef
-        @reset model.lkhood.Ω_functions[Symbol("Ω_$i")].grid = new_grid
-
-        Ω = fwd(model.lkhood.Ω_functions[Symbol("Ω_$i")], ps.gen[Symbol("Ω_$i")], st.gen[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, prod(size(Ω)[1:2]), size(Ω, 3)) : dropdims(sum(Ω, dims=2); dims=2)
+        z = fwd(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
+        z = dropdims(sum(z, dims=2); dims=2)
     end
 
     return model, ps, seed

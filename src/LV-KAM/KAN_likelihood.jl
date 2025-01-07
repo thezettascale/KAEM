@@ -1,6 +1,6 @@
-module MoE_likelihood
+module KAN_likelihood
 
-export MoE_lkhood, init_MoE_lkhood, log_likelihood, generate_from_z
+export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -40,9 +40,8 @@ lkhood_models = Dict(
     "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3)[:,:,1],
 )
 
-struct MoE_lkhood <: Lux.AbstractLuxLayer
-    Λ_fcns::NamedTuple
-    Ω_functions::NamedTuple
+struct KAN_lkhood <: Lux.AbstractLuxLayer
+    Φ_fcns::NamedTuple
     depth::Int
     out_size::Int
     σ_ε::Float32
@@ -54,7 +53,7 @@ struct MoE_lkhood <: Lux.AbstractLuxLayer
 end
 
 function generate_from_z(
-    lkhood::MoE_lkhood, 
+    lkhood::KAN_lkhood, 
     ps, 
     st, 
     z::AbstractArray;
@@ -77,22 +76,11 @@ function generate_from_z(
     """
     num_samples, q_size = size(z)
 
-    # MoE functions
-    Λ, Ω = copy(z), copy(z)
+    # KAN functions
     for i in 1:lkhood.depth
-        Λ = fwd(lkhood.Λ_fcns[Symbol("Λ_$i")], ps[Symbol("Λ_$i")], st[Symbol("Λ_$i")], Λ)
-        Λ = i == 1 ? reshape(Λ, num_samples*q_size, size(Λ, 3)) : dropdims(sum(Λ, dims=2); dims=2)
-
-        Ω = fwd(lkhood.Ω_functions[Symbol("Ω_$i")], ps[Symbol("Ω_$i")], st[Symbol("Ω_$i")], Ω)
-        Ω = i == 1 ? reshape(Ω, num_samples*q_size, size(Ω, 3)) : dropdims(sum(Ω, dims=2); dims=2)
+        z = fwd(lkhood.Φ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+        z = dropdims(sum(z, dims=2); dims=2)
     end
-    Λ, Ω = reshape(Λ, num_samples, q_size, 1), reshape(Ω, num_samples, q_size)
-
-    # MoE generation - Σ_q softmax(w * Ω) * Λ
-    w_gate, b_gate = ps[Symbol("w_gate")], ps[Symbol("b_gate")]
-    @tullio gate[b,q,o] := Ω[b,q] * w_gate[o,q] + b_gate[o,q]
-    z = NNlib.softmax(lkhood.gating_activation(gate), dims=2) .* Λ
-    z = dropdims(sum(z, dims=2); dims=2)
     
     # Add noise
     seed, rng = next_rng(seed)
@@ -101,7 +89,7 @@ function generate_from_z(
 end
 
 function log_likelihood(
-    lkhood::MoE_lkhood, 
+    lkhood::KAN_lkhood, 
     ps, 
     st, 
     x::AbstractArray, 
@@ -156,7 +144,7 @@ function stratified_sampler(
 end
 
 
-function init_MoE_lkhood(
+function init_KAN_lkhood(
     conf::ConfParse,
     output_dim::Int;
     lkhood_seed::Int=1,
@@ -171,33 +159,33 @@ function init_MoE_lkhood(
 
     expert_widths = (
         try 
-            parse.(Int, retrieve(conf, "MOE_LIKELIHOOD", "expert_widths"))
+            parse.(Int, retrieve(conf, "KAN_LIKELIHOOD", "expert_widths"))
         catch
-            parse.(Int, split(retrieve(conf, "MOE_LIKELIHOOD", "expert_widths"), ","))
+            parse.(Int, split(retrieve(conf, "KAN_LIKELIHOOD", "expert_widths"), ","))
         end
     )
 
-    expert_widths = (expert_widths..., 1)
-    first(expert_widths) !== q_size && (error("First expert Λ_hidden_widths must be equal to the hidden dimension of the prior."))
+    expert_widths = (expert_widths..., output_dim)
+    first(expert_widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
 
-    spline_degree = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "spline_degree"))
-    base_activation = retrieve(conf, "MOE_LIKELIHOOD", "base_activation")
-    spline_function = retrieve(conf, "MOE_LIKELIHOOD", "spline_function")
-    grid_size = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "grid_size"))
-    grid_update_ratio = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_update_ratio"))
-    grid_range = parse.(Float32, retrieve(conf, "MOE_LIKELIHOOD", "grid_range"))
-    ε_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "ε_scale"))
-    μ_scale = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "μ_scale"))
-    σ_base = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_base"))
-    σ_spline = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "σ_spline"))
-    init_η = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "init_η"))
-    η_trainable = parse(Bool, retrieve(conf, "MOE_LIKELIHOOD", "η_trainable"))
+    spline_degree = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "spline_degree"))
+    base_activation = retrieve(conf, "KAN_LIKELIHOOD", "base_activation")
+    spline_function = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
+    grid_size = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "grid_size"))
+    grid_update_ratio = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "grid_update_ratio"))
+    grid_range = parse.(Float32, retrieve(conf, "KAN_LIKELIHOOD", "grid_range"))
+    ε_scale = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "ε_scale"))
+    μ_scale = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "μ_scale"))
+    σ_base = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "σ_base"))
+    σ_spline = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "σ_spline"))
+    init_η = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "init_η"))
+    η_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
-    noise_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_noise_var"))
-    gen_var = parse(Float32, retrieve(conf, "MOE_LIKELIHOOD", "generator_variance"))
-    lkhood_model = retrieve(conf, "MOE_LIKELIHOOD", "likelihood_model")
-    output_act = retrieve(conf, "MOE_LIKELIHOOD", "output_activation")
-    gating_act = retrieve(conf, "MOE_LIKELIHOOD", "gating_activation")
+    noise_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
+    gen_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
+    lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
+    output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
+    gating_act = retrieve(conf, "KAN_LIKELIHOOD", "gating_activation")
 
     resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; seed=seed)
 
@@ -217,37 +205,25 @@ function init_MoE_lkhood(
         η_trainable=η_trainable,
     )
 
-    # MoE functions
-    Λ_functions = NamedTuple() # Expert functions
-    Ω_functions = NamedTuple() # Gating functions
+    # KAN functions
+    Φ_functions = NamedTuple() # Expert functions
     for i in eachindex(expert_widths[1:end-1])
         lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (1f0 / √(Float32(expert_widths[i])))
         .+ σ_base .* (randn(rng, Float32, expert_widths[i], expert_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(expert_widths[i]))))
-        @reset Λ_functions[Symbol("Λ_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
-        @reset Ω_functions[Symbol("Ω_$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
+        @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return MoE_lkhood(Λ_functions, Ω_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
 end
 
-function Lux.initialparameters(rng::AbstractRNG, lkhood::MoE_lkhood)
-    ps = NamedTuple()
-    for i in 1:lkhood.depth
-        @reset ps[Symbol("Λ_$i")] = Lux.initialparameters(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
-        @reset ps[Symbol("Ω_$i")] = Lux.initialparameters(rng, lkhood.Ω_functions[Symbol("Ω_$i")])
-    end
-    @reset ps[Symbol("w_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
-    @reset ps[Symbol("b_gate")] = glorot_normal(Float32, lkhood.out_size, lkhood.Λ_fcns[Symbol("Λ_1")].in_dim)
+function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
+    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
     return ps
 end
 
-function Lux.initialstates(rng::AbstractRNG, lkhood::MoE_lkhood)
-    st = NamedTuple()
-    for i in 1:lkhood.depth
-        @reset st[Symbol("Λ_$i")] = Lux.initialstates(rng, lkhood.Λ_fcns[Symbol("Λ_$i")])
-        @reset st[Symbol("Ω_$i")] = Lux.initialstates(rng, lkhood.Ω_functions[Symbol("Ω_$i")])
-    end
+function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
+    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
     return st
 end
 

@@ -42,7 +42,7 @@ function norm(
     """
     Compute the normalization constant of the mixture ebm-prior using the trapezium rule.
 
-    ∫_z ∑_q ∑_p α_p exp(f_{q,p}(z)) π_0(z) dz
+    ∫_z exp(f_{q,p}(z)) π_0(z) dz
 
     Args:
         mix: The mixture ebm-prior.

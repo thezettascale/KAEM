@@ -9,7 +9,7 @@ using .Utils
 
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
-out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
+out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 
 function test_ps_derivative()
     Random.seed!(42)
@@ -31,9 +31,9 @@ function test_grid_update()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    size_grid = size(model.lkhood.Λ_fcns[Symbol("Λ_1")].grid)
+    size_grid = size(model.lkhood.Φ_fcns[Symbol("1")].grid)
     model, ps, seed = update_llhood_grid(model, ps, st)
-    @test all(size(model.lkhood.Λ_fcns[Symbol("Λ_1")].grid) .== size_grid)
+    @test all(size(model.lkhood.Φ_fcns[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
 
 end

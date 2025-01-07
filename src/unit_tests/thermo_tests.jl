@@ -10,7 +10,7 @@ using .Utils
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "30")
-out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
+out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
     
 function test_model_derivative()
     Random.seed!(42)

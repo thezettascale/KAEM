@@ -3,22 +3,22 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 ENV["GPU"] = true
 
 include("../LV-KAM/mixture_prior.jl")
-include("../LV-KAM/MoE_likelihood.jl")
+include("../LV-KAM/KAN_likelihood.jl")
 include("../utils.jl")
 using .ebm_mix_prior
-using .MoE_likelihood
+using .KAN_likelihood
 using .Utils
 
 conf = ConfParse("src/unit_tests/test_conf.ini")
 parse_conf!(conf)
-out_dim = parse(Int, retrieve(conf, "MOE_LIKELIHOOD", "output_dim"))
+out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
 z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
 function test_log_likelihood()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
@@ -31,7 +31,7 @@ end
 
 function test_log_likelihood_derivative()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
@@ -44,7 +44,7 @@ end
 
 function test_generate()
     Random.seed!(42)
-    lkhood = init_MoE_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -58,7 +58,7 @@ function test_generate()
     @test size(x) == (b_size, out_dim)
 end
 
-@testset "MoE Likelihood Tests" begin
+@testset "KAN Likelihood Tests" begin
     test_log_likelihood()
     test_log_likelihood_derivative()
     test_generate()

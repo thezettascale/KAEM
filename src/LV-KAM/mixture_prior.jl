@@ -41,6 +41,7 @@ function norm(
 )
     """
     Compute the normalization constant of the mixture ebm-prior using the trapezium rule.
+    This can be used to evaluate the learning gradient without contrastive divergence.
 
     ∫_z exp(f_{q,p}(z)) π_0(z) dz
 
@@ -105,9 +106,9 @@ function log_prior(
 
     # Normalized log-probability
     normalization = norm(mix, ps, st, size(alpha)...)
-    @tullio prob[b, q, p] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) 
-    prob = log.(sum(prob ./ normalization; dims=3) .+ eps(eltype(prob)))
-    return dropdims(sum(prob, dims=2); dims=(2,3))
+    @tullio prob[b, q] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) / normalization[1, q, p]
+    prob = log.(prob .+ eps(eltype(prob)))
+    return dropdims(sum(prob, dims=2); dims=2)
 end
 
 function init_mix_prior(

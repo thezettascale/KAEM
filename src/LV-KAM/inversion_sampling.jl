@@ -79,8 +79,8 @@ function interpolate_z(
     cd1, cd2 = get_trap_bounds(indices, cdf)
 
     # Get trapezium bounds
-    z1 = reduce(hcat, [grid[indices[i], i:i] for i in eachindex(indices)])
-    z2 = reduce(hcat, [grid[indices[i] .+ 1, i:i] for i in eachindex(indices)])
+    z1 = reduce(hcat, map(i -> grid[indices[i], i:i], eachindex(indices)))
+    z2 = reduce(hcat, map(i -> grid[indices[i] .+ 1, i:i], eachindex(indices)))
 
     # Linear interpolation
     return (z1 + (z2 - z1) .* ((rv - cd1) ./ removeZero(cd2 - cd1; ε=eps(eltype(cd1))))), seed
@@ -146,8 +146,7 @@ function sample_prior(
     """Returns index of trapz where CDF > rand_val from a given mixture model, q."""
         idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
         idxs = reduce(vcat, idxs)
-        idxs = ifelse.(isnothing.(idxs), grid_size-1, idxs)
-        return idxs
+        return ifelse.(isnothing.(idxs), grid_size-1, idxs)
     end
      
     indices = map(grid_index, 1:q_size)

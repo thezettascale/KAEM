@@ -116,7 +116,7 @@ function generate_batch(
         The updated seed.
     """
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
-    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed)
+    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed, noise=false)
     return x̂, seed
 end
 
@@ -146,6 +146,7 @@ function MLE_loss(
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = mean(logprior)
 
     function tempered_loss(t::Float32)
         """Returns the batched loss for a given temperature."""
@@ -156,7 +157,7 @@ function MLE_loss(
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""    
-            loss_prior = mean(logprior[resampled_idxs[batch_idx, :]])
+            loss_prior = mean(logprior[resampled_idxs[batch_idx, :]]) - ex_prior
             loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx, :]])
             return loss_llhood + loss_prior 
         end
@@ -168,7 +169,7 @@ function MLE_loss(
     # MLE loss is default
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
-        loss_prior = weights * logprior
+        loss_prior = (weights * logprior) .- ex_prior
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior + loss_llhood), seed
     end

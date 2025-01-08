@@ -32,43 +32,6 @@ struct mix_prior <: Lux.AbstractLuxLayer
     sample_z::Function
 end
 
-function norm(
-    mix::mix_prior, 
-    ps, 
-    st,
-    q_size::Int,
-    p_size::Int,
-)
-    """
-    Compute the normalization constant of the mixture ebm-prior using the trapezium rule.
-    This can be used to evaluate the learning gradient without contrastive divergence.
-
-    ∫_z exp(f_{q,p}(z)) π_0(z) dz
-
-    Args:
-        mix: The mixture ebm-prior.
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-        α: The mixture proportions, (q, p).
-
-    Returns:
-        The normalization constant of the mixture ebm-prior.
-    """
-    grid = mix.fcns_qp[Symbol("1")].grid'
-    Δg, π_grid = grid[2:end, :] - grid[1:end-1, :], mix.π_pdf(grid)
-    grid_size = size(grid, 1)
-
-    for i in 1:mix.depth
-        grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
-        grid = i == 1 ? reshape(grid, grid_size*q_size, size(grid, 3)) : dropdims(sum(grid, dims=2); dims=2)
-    end
-    grid = reshape(grid, grid_size, q_size, p_size)
-
-    @tullio exp_fg[g, q, p] := exp(grid[g, q, p]) * π_grid[g, q]
-    trapz = 5f-1 .* Δg .* (exp_fg[2:end, :, :] + exp_fg[1:end-1, :, :])
-    return sum(trapz; dims=1)
-end
-
 function log_prior(
     mix::mix_prior, 
     z::AbstractArray, 
@@ -104,9 +67,8 @@ function log_prior(
     end
     z = reshape(z, b_size, q_size, p_size)
 
-    # Normalized log-probability
-    normalization = norm(mix, ps, st, size(alpha)...)
-    @tullio prob[b, q] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) / normalization[1, q, p]
+    # Unnormalized log-probability
+    @tullio prob[b, q] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) 
     prob = log.(prob .+ eps(eltype(prob)))
     return dropdims(sum(prob, dims=2); dims=2)
 end
@@ -174,7 +136,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     q_size = prior.fcns_qp[Symbol("1")].in_dim
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = zeros(Float32, q_size, p_size)
+    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, q_size, p_size)
     return ps
 end
  

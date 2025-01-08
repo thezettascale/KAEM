@@ -29,6 +29,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     MC_samples::Int
     verbose::Bool
     temperatures::AbstractArray{Float32}
+    Δt::AbstractArray{Float32}
 end
 
 function init_LV_KAM(
@@ -60,9 +61,11 @@ function init_LV_KAM(
     # MLE or Thermodynamic Integration
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     temperatures = [1f0]
+    Δt = [1f0]
     if N_t > 1
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 
+        Δt = temperatures[2:end] .- temperatures[1:end-1]
     end
 
     return LV_KAM(
@@ -77,6 +80,7 @@ function init_LV_KAM(
             MC_samples,
             verbose,
             temperatures,
+            Δt
         )
 end
 
@@ -147,7 +151,7 @@ function MLE_loss(
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     ex_prior = mean(logprior)
 
-    function tempered_loss(t::Float32)
+    function tempered_loss(t::Float32, Δt::Float32)
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch using particle filter
@@ -156,8 +160,10 @@ function MLE_loss(
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""    
-            loss_prior = sum(logprior[resampled_idxs[batch_idx]] .- ex_prior) / m.MC_samples
-            loss_llhood = sum(t .* logllhood[batch_idx, resampled_idxs[batch_idx]]) / m.MC_samples
+            llhood_t = Δt .* logllhood[batch_idx, resampled_idxs[batch_idx]]
+            weights_t = @ignore_derivatives softmax(llhood_t)'
+            loss_prior = weights_t * (logprior[resampled_idxs[batch_idx]] .- ex_prior)
+            loss_llhood = weights_t * (llhood_t)
             return loss_llhood + loss_prior 
         end
 
@@ -174,7 +180,7 @@ function MLE_loss(
     end
 
     # Thermodynamic Integration
-    losses = reduce(hcat, map(tempered_loss, m.temperatures))
+    losses = reduce(hcat, map(t -> tempered_loss(m.temperatures[t], m.Δt[t]), eachindex(m.Δt)))
     return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2)), seed
 end
 

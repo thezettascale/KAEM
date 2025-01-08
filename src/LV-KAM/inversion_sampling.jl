@@ -27,54 +27,15 @@ function choose_component(alpha, num_samples, q_size, p_size; seed=1)
     """
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
-    
-    function categorical_mask(α, rv)
+    idxs = map(q -> searchsortedfirst.(Ref(alpha[q, :]), rand_vals[q, :]), 1:q_size)
+
+    function categorical_mask(i)
         """Returns sampled indices from a categorical distribution on alpha."""
-        idxs = map(u -> findfirst(x -> x >= u, α), rv)
-        idxs = reduce(vcat, idxs)
-        idxs = ifelse.(isnothing.(idxs), p_size, idxs)
-        idxs = collect(Float32, onehotbatch(idxs, 1:p_size))   
+        idxs = collect(Float32, onehotbatch(i, 1:p_size))   
         return permutedims(idxs[:,:,:], [2, 3, 1])
     end
     
-    chosen_components = map(i -> categorical_mask(view(alpha, i, :), view(rand_vals, i, :)), 1:q_size)
-    return reduce(hcat, chosen_components) |> device, seed
-end
-
-function get_z_with_noise(
-    indices::AbstractArray,
-    grid::AbstractArray,
-    Δg::AbstractArray;
-    seed::Int=1
-)
-    """
-    Returns samples of z from all mixture models, using noise 
-    to place grid point inside trapezium's interval.
-    
-    Args:
-        indices: The indices of the trapeziums, (q,).
-        grid: The grid points of the mixture ebm-prior, (grid_size, q).
-        Δg: The grid spacing of the mixture ebm-prior, (grid_size-1, q).
-        num_samples: The number of samples to generate.
-        seed: The seed for the random number generator.
-
-    Returns:
-        z: The samples from the mixture ebm-prior, (num_samples, q).
-        seed: The updated seed.
-    """
-    function get_noise(ub::Float32)
-        """Returns random noise in the interval [0, ub], to place 
-        grid point inside trapezium's interval."""
-        seed, rng = next_rng(seed)
-        return rand(rng, Uniform(0, ub))
-    end
-
-    z = zeros(Float32, length(first(indices)), 0) |> device
-    for (q, idx) in enumerate(indices)
-        noise = get_noise.(Δg[idx, q:q]) |> device
-        z = hcat(z, grid[idx, q:q] .+ noise)
-    end
-    return z, seed 
+    return reduce(hcat, categorical_mask.(idxs)) |> device, seed
 end
 
 function get_trap_bounds(idxs, cdf)
@@ -91,7 +52,7 @@ function get_trap_bounds(idxs, cdf)
     return cd1, cd2
 end
 
-function get_z_with_interpolation(
+function interpolate_z(
     indices::AbstractArray,
     cdf::AbstractArray,
     rv::AbstractArray,
@@ -131,7 +92,6 @@ function sample_prior(
     ps,
     st;
     seed::Int=1,
-    interpolation::Bool=false
     )
     """
     Component-wise inverse transform sampling for the mixture ebm-prior.
@@ -191,8 +151,7 @@ function sample_prior(
     end
      
     indices = map(grid_index, 1:q_size)
-    interpolation && return get_z_with_interpolation(indices, cdf, rand_vals, grid; seed=seed)
-    return get_z_with_noise(indices, grid, cpu_device()(Δg); seed=seed)
+    return interpolate_z(indices, cdf, rand_vals, grid; seed=seed)
 end
 
 end

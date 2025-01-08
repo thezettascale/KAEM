@@ -134,17 +134,16 @@ function stratified_sampler(
         The resampled indices and the updated seed.
     """
     B, N = size(weights)
-    cdf = permutedims(cumsum(weights[:,:,:], dims=2), [1,3,2])
+    cdf = cumsum(weights, dims=2) |> cpu_device()
         
     # Generate stratified thresholds
     seed, rng = next_rng(seed)
     u = (rand(B, N) .+ (0:N-1)') ./ N
-    
-    # Find resampled indices in a vectorised manner
-    indices = sum(u[:, :, :] .> cdf, dims=3) .+ 1
-    return dropdims(indices, dims=3), seed
-end
 
+    # Find resampled indices in a vectorised manner
+    resampled_indices = map(b -> searchsortedfirst.(Ref(cdf[b, :]), u[b, :]), 1:B)
+    return resampled_indices, seed
+end
 
 function init_KAN_lkhood(
     conf::ConfParse,

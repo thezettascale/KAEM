@@ -152,13 +152,13 @@ function MLE_loss(
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch using particle filter
-        posterior_weights = @ignore_derivatives softmax(t .* logllhood |> cpu_device(), dims=2) 
+        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)  
 
         function posterior_expectation(batch_idx::Int)
             """Returns the marginal likelihood for a single sample in the batch."""    
-            loss_prior = mean(logprior[resampled_idxs[batch_idx, :]]) - ex_prior
-            loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx, :]])
+            loss_prior = mean(logprior[resampled_idxs[batch_idx]]) - ex_prior
+            loss_llhood = mean(t .* logllhood[batch_idx, resampled_idxs[batch_idx]])
             return loss_llhood + loss_prior 
         end
 

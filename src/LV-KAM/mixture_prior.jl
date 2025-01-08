@@ -6,6 +6,7 @@ using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
 using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
+using LogExpFunctions: logsumexp
 
 include("univariate_functions.jl")
 include("inversion_sampling.jl")
@@ -59,6 +60,8 @@ function log_prior(
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
     π_0 = mix.π_pdf(z)
+    @tullio log_απ[b,q,p] := alpha[q,p] * π_0[b,q]
+    log_απ = log.(log_απ .+ eps(eltype(log_απ)))
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -67,10 +70,11 @@ function log_prior(
     end
     z = reshape(z, b_size, q_size, p_size)
 
-    # Unnormalized log-probability
-    @tullio prob[b, q] := (alpha[q, p] * exp(z[b, q, p]) * π_0[b, q]) 
-    prob = log.(prob .+ eps(eltype(prob)))
-    return dropdims(sum(prob, dims=2); dims=2)
+    # Unnormalized log-probability with logsumexp trick
+    z = log_απ .+ z
+    M = maximum(z, dims=3)
+    z = sum(M .+ logsumexp(z .- M, dims=3); dims=2)
+    return dropdims(z; dims=(2,3))
 end
 
 function init_mix_prior(

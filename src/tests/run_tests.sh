@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TEST_DIR="src/unit_tests"
+TEST_DIR="src/tests"
 test_files=$(ls "$TEST_DIR"/*.jl)
 
 for test_file in $test_files; 

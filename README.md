@@ -32,7 +32,7 @@ bash setup/setup.sh
 [Optional;] Test all Julia scripts:
 
 ```bash
-bash src/unit_tests/run_tests.sh
+bash src/tests/run_tests.sh
 ```
 
 ## To run experiments:

@@ -7,7 +7,7 @@ include("../utils.jl")
 using .ebm_mix_prior
 using .Utils
 
-conf = ConfParse("src/unit_tests/test_conf.ini")
+conf = ConfParse("src/tests/test_conf.ini")
 parse_conf!(conf)
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))

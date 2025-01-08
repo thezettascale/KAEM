@@ -9,7 +9,7 @@ using .ebm_mix_prior
 using .KAN_likelihood
 using .Utils
 
-conf = ConfParse("src/unit_tests/test_conf.ini")
+conf = ConfParse("src/tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))

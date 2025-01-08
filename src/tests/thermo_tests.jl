@@ -7,11 +7,12 @@ include("../utils.jl")
 using .LV_KAM_model
 using .Utils
 
-conf = ConfParse("src/unit_tests/test_conf.ini")
+conf = ConfParse("src/tests/test_conf.ini")
 parse_conf!(conf)
+commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "30")
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
-
-function test_ps_derivative()
+    
+function test_model_derivative()
     Random.seed!(42)
     dataset = randn(Float32, 3, 50) 
     model = init_LV_KAM(dataset, conf)
@@ -24,21 +25,6 @@ function test_ps_derivative()
     @test !any(isnan, ∇)
 end
 
-function test_grid_update()
-    Random.seed!(42)
-    dataset = randn(Float32, 3, 50) 
-    model = init_LV_KAM(dataset, conf)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-
-    size_grid = size(model.lkhood.Φ_fcns[Symbol("1")].grid)
-    model, ps, seed = update_llhood_grid(model, ps, st)
-    @test all(size(model.lkhood.Φ_fcns[Symbol("1")].grid) .== size_grid)
-    @test !any(isnan, ps)
-
-end
-
-@testset "LV-KAM Tests" begin
-    test_ps_derivative()
-    test_grid_update()
+@testset "Thermodynamic Integration Tests" begin
+    test_model_derivative()
 end

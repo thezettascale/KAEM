@@ -116,7 +116,7 @@ function systematic_sampler(
         The resampled indices and the updated seed.
     """
     B, N = size(weights)
-    cdf = cumsum(weights, dims=2) |> cpu_device()
+    cdf = cumsum(weights, dims=2) 
         
     # Generate thresholds
     seed, rng = next_rng(seed)

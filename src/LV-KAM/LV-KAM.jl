@@ -149,13 +149,14 @@ function MLE_loss(
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    llhood_cpu = logllhood |> cpu_device() # For particle filter
     ex_prior = mean(logprior)
 
     function tempered_loss(t::Float32, Δt::Float32)
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch using particle filter
-        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+        posterior_weights = @ignore_derivatives softmax(t .* llhood_cpu, dims=2) 
         resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)  
 
         function posterior_expectation(batch_idx::Int)

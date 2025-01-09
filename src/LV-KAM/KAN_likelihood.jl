@@ -103,12 +103,12 @@ function log_likelihood(
     return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
 end
 
-function stratified_sampler(
+function systematic_sampler(
     weights::AbstractArray;
     seed::Int=1
 )
     """
-    Resample the latent variable using stratified sampling.
+    Resample the latent variable using systematic sampling.
     Args:
         weights: A matrix of weights where each row corresponds to a sample's weights.
         seed: Random seed for reproducibility.
@@ -118,7 +118,7 @@ function stratified_sampler(
     B, N = size(weights)
     cdf = cumsum(weights, dims=2) |> cpu_device()
         
-    # Generate stratified thresholds
+    # Generate thresholds
     seed, rng = next_rng(seed)
     u = (rand(B, N) .+ (0:N-1)') ./ N
 
@@ -169,7 +169,7 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
-    resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; seed=seed)
+    resample_function = (weights, seed) -> @ignore_derivatives systematic_sampler(weights; seed=seed)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

@@ -59,7 +59,7 @@ bash benchmarking/run_benchmarks.sh
 
 Like all KANs, LV-KAM neither performs optimally nor scales effectively on a GPU. Our hardware offers significantly better performance, achieving **27.6x** the performance per Watt of GPUs in the [initial public revisions](https://exalaboratories.com/litepaper), with rapid ongoing private improvements. LV-KAM is especially well-suited to Exa hardware and will be scaled using such. 
 
-For this initial study however, experiments were conducted on a GPU due to its availability. To mitigate inefficiency as much as possible, [Julia](https://julialang.org/) was used, which leverages [JIT compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation). While initial compilation is slower than PyTorch, Julia excels in performance for repeated evaluations of the same code. Julia is also faster to compile than JAX and easier to read, so it's preferable for prototyping. 
+For this initial study however, experiments were conducted on a GPU due to its availability. To mitigate inefficiency as much as possible, [Julia](https://julialang.org/) was used, which leverages [JIT compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation). While initial compilation is slower than PyTorch, Julia excels in performance for repeated evaluations of the same code. Julia is also faster to compile than JAX and runs natively on the GPU, so it's preferable for prototyping. 
 
 **If Julia were a woman, she'd be a queen.**
 

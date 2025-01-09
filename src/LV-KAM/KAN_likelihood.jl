@@ -4,7 +4,7 @@ export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib
+using NNlib: sigmoid_fast, tanh_fast
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -15,23 +15,8 @@ using .Utils: device, next_rng
 using .ebm_mix_prior
 
 output_activation_mapping = Dict(
-    "tanh" => NNlib.tanh_fast,
-    "sigmoid" => NNlib.sigmoid_fast,
-    "none" => identity
-)
-
-gating_activation_mapping = Dict(
-    "relu" => NNlib.relu,
-    "leakyrelu" => NNlib.leakyrelu,
-    "tanh" => NNlib.tanh_fast,
-    "sigmoid" => NNlib.sigmoid_fast,
-    "swish" => NNlib.hardswish,
-    "gelu" => NNlib.gelu,
-    "selu" => NNlib.selu,
-    "tanh" => NNlib.tanh_fast,
-    "silu" => x -> x .* NNlib.sigmoid_fast(x),
-    "elu" => NNlib.elu,
-    "celu" => NNlib.celu,
+    "tanh" => tanh_fast,
+    "sigmoid" => sigmoid_fast,
     "none" => identity
 )
 
@@ -48,7 +33,6 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::Float32
     log_lkhood_model::Function
     output_activation::Function
-    gating_activation::Function
     resample_z::Function
 end
 
@@ -58,7 +42,6 @@ function generate_from_z(
     st, 
     z::AbstractArray;
     seed::Int=1,
-    noise::Bool=true,
     )
     """
     Generate data from the likelihood model.
@@ -86,7 +69,6 @@ function generate_from_z(
     # Add noise
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, Float32, size(z)) |> device
-    !noise && (ε .*= 0f0)
     return lkhood.output_activation(z + ε), seed
 end
 
@@ -186,7 +168,6 @@ function init_KAN_lkhood(
     gen_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
-    gating_act = retrieve(conf, "KAN_LIKELIHOOD", "gating_activation")
 
     resample_function = (weights, seed) -> @ignore_derivatives stratified_sampler(weights; seed=seed)
 
@@ -215,7 +196,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], gating_activation_mapping[gating_act], resample_function)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

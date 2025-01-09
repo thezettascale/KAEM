@@ -99,16 +99,15 @@ function RBF_basis(x, grid; degree=nothing, σ=1f0)
     grid = reshape(grid, 1, size(grid)...)
 
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 3) - 1)) * σ
-    @tullio B[d, n, m] := x[d, n, 1] - grid[1, n, m] 
-    B = B ./ σ
-
-    @tullio B[d, n, m] = exp(-5f-1 * (B[d, n, m])^2)
+    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m] 
+    diff = diff ./ σ
+    @tullio B[d, n, m] := exp(-5f-1 * (diff[d, n, m])^2)
 
     # any(isnan.(B)) && error("NaN in B")
     # B = removeNaN(B)
     # any(isnan.(B)) && println("NaN in RBF basis")
     
-    return norm .* B
+    return B
 end
 
 function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
@@ -128,13 +127,13 @@ function RSWAF_basis(x, grid; degree=nothing, σ=10f0)
     x = reshape(x, size(x)..., 1)
     grid = reshape(grid, 1, size(grid)...)
 
-    @tullio B[d, n, m] := x[d, n, 1] - grid[1, n, m]
+    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m]
     
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    B = NNlib.tanh_fast(B ./ σ) 
-    # B = tanh.(B ./ σ)
+    diff = NNlib.tanh_fast(diff ./ σ) 
+    # diff = tanh.(diff ./ σ)
     
-    @tullio B[d, n, m] = 1 - B[d, n, m]^2
+    @tullio B[d, n, m] := 1 - diff[d, n, m]^2
 
     # any(isnan.(B)) && error("NaN in B")
     # any(isnan.(B)) && println("NaN in RSWAF basis")

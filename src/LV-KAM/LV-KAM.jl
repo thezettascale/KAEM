@@ -151,7 +151,7 @@ function MLE_loss(
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     llhood_cpu = logllhood |> cpu_device() # For particle filter
-    ex_prior = mean(logprior)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : 0f0 
 
     function tempered_loss(t::Float32, Δt::Float32)
         """Returns the batched loss for a given temperature."""

@@ -31,6 +31,39 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
     sample_z::Function
+    contrastive_div::Bool
+end
+
+function log_partition_function(
+    mix::mix_prior,
+    ps,
+    st;
+    )
+    """
+    Compute the partition function of the mixture ebm-prior using trapezium rule.
+
+    ∫ exp(f(z)) π_0(z) dz ≈ ∑_g 0.5(Δg) [exp(f(z_{q,g})) π_0(z_{q,g}) + exp(f(z_{q,g+1})) π_0(z_{q,g+1})]
+
+    Args:
+        mix: The mixture ebm-prior.
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+
+    Returns:
+        The log-partition function of the mixture ebm-prior.
+    """
+    grid = mix.fcns_qp[Symbol("1")].grid'
+    grid_size, q_size = size(grid)
+    π_grid, Δg = mix.π_pdf(grid), grid[2:end, :] - grid[1:end-1, :] 
+    
+    for i in 1:mix.depth
+        grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
+        grid = i == 1 ? reshape(grid, grid_size*q_size, size(grid, 3)) : dropdims(sum(grid, dims=2); dims=2)
+    end
+    grid = reshape(grid, grid_size, q_size, size(grid, 2))
+    grid = exp.(grid) .* π_grid
+    trapz = 5f-1 .* Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :])
+    return log.(sum(trapz, dims=1) .+ eps(eltype(trapz)))
 end
 
 function log_prior(
@@ -71,7 +104,8 @@ function log_prior(
     z = reshape(z, b_size, q_size, p_size)
 
     # Unnormalized log-probability with logsumexp trick
-    z = log_απ .+ z
+    z = log_απ .+ z 
+    z = !mix.contrastive_div ? z .- log_partition_function(mix, ps, st) : z
     M = maximum(z, dims=3)
     z = sum(M .+ logsumexp(z .- M, dims=3); dims=2)
     return dropdims(z; dims=(2,3))
@@ -104,6 +138,7 @@ function init_mix_prior(
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
+    contrastive_divergence = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
     
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed)
     
@@ -132,7 +167,7 @@ function init_mix_prior(
         @reset functions[Symbol("$i")] = func
     end
 
-    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function)
+    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)

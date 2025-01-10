@@ -120,13 +120,14 @@ function systematic_sampler(
         
     # Generate thresholds
     seed, rng = next_rng(seed)
-    u = (rand(B, N) .+ (0:N-1)') ./ N
+    u = (rand(Float32, B, N) .+ (0:N-1)') ./ N
 
     # Find resampled indices in a parellel manner
     resampled_indices = zeros(Int, B, N)
     Threads.@threads for b in 1:B
         resampled_indices[b, :] = searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
     end
+    replace!(resampled_indices, N + 1 => N)
     return resampled_indices, seed
 end
 

@@ -63,6 +63,7 @@ function init_LV_KAM(
     temperatures = [1f0]
     Δt = [1f0]
     if N_t > 1
+        ENV["JULIA_threads_for_resampling"] = retrieve(conf, "KAN_LIKELIHOOD", "threads_for_resampling")
         p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 
         Δt = temperatures[2:end] .- temperatures[1:end-1]

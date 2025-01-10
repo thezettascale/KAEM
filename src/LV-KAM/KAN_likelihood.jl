@@ -171,7 +171,6 @@ function init_KAN_lkhood(
     gen_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
-    ENV["JULIA_threads_for_resampling"] = retrieve(conf, "KAN_LIKELIHOOD", "threads_for_resampling")
 
     resample_function = (weights, seed) -> @ignore_derivatives systematic_sampler(weights; seed=seed)
 

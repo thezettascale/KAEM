@@ -122,8 +122,11 @@ function systematic_sampler(
     seed, rng = next_rng(seed)
     u = (rand(B, N) .+ (0:N-1)') ./ N
 
-    # Find resampled indices in a vectorised manner
-    resampled_indices = map(b -> searchsortedfirst.(Ref(cdf[b, :]), u[b, :]), 1:B)
+    # Find resampled indices in a parellel manner
+    resampled_indices = zeros(Int, B, N)
+    Threads.@threads for b in 1:B
+        resampled_indices[b, :] = searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
+    end
     return resampled_indices, seed
 end
 
@@ -168,6 +171,7 @@ function init_KAN_lkhood(
     gen_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
+    ENV["JULIA_threads_for_resampling"] = retrieve(conf, "KAN_LIKELIHOOD", "threads_for_resampling")
 
     resample_function = (weights, seed) -> @ignore_derivatives systematic_sampler(weights; seed=seed)
 

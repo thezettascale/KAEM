@@ -27,7 +27,12 @@ function choose_component(alpha, num_samples, q_size, p_size; seed=1)
     """
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
-    idxs = map(q -> searchsortedfirst.(Ref(alpha[q, :]), rand_vals[q, :]), 1:q_size)
+    # idxs = map(q -> searchsortedfirst.(Ref(alpha[q, :]), rand_vals[q, :]), 1:q_size)
+    idxs = zeros(Int, q_size, num_samples)
+    Threads.@threads for q in 1:q_size
+        idxs[q, :] = searchsortedfirst.(Ref(alpha[q, :]), rand_vals[q, :])
+    end
+    replace!(idxs, p_size + 1 => p_size)
 
     function categorical_mask(i)
         """Returns sampled indices from a categorical distribution on alpha."""
@@ -35,7 +40,7 @@ function choose_component(alpha, num_samples, q_size, p_size; seed=1)
         return permutedims(idxs[:,:,:], [2, 3, 1])
     end
     
-    return reduce(hcat, categorical_mask.(idxs)) |> device, seed
+    return reduce(hcat, map(categorical_mask, eachrow(idxs))) |> device, seed
 end
 
 function get_trap_bounds(idxs, cdf)

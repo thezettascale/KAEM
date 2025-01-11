@@ -6,7 +6,7 @@ test_files=$(ls "$TEST_DIR"/*.jl)
 for test_file in $test_files; 
 do
     echo "Running $test_file"
-    julia -t auto "$test_file"
+    julia auto "$test_file"
     if [ $? -ne 0 ]; then
         echo "Test failed: $test_file"
         exit 1

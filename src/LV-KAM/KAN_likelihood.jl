@@ -123,14 +123,10 @@ function systematic_sampler(
     B, N = size(weights)
     cdf = cumsum(weights, dims=2) 
         
-    # Generate thresholds
+    # Generate thresholds and find the first cdf value greater than the random value
     seed, rng = next_rng(seed)
     u = (rand(quant, B, N) .+ (0:N-1)') ./ N |> device
-
-    # Find resampled indices in a parellel manner
-    resampled_indices = resample_idx(cdf, u, B, N)
-    replace!(resampled_indices, nothing => N)
-    return resampled_indices, seed
+    return resample_idx(cdf, u, B, N), seed
 end
 
 function init_KAN_lkhood(

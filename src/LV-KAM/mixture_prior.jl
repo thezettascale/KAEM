@@ -16,8 +16,8 @@ using .Utils: device, next_rng, quant
 using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
-    "uniform" => Uniform(0f0,1f0),
-    "gaussian" => Normal(0f0,1f0),
+    "uniform" => Uniform(quant(0),quant(1)),
+    "gaussian" => Normal(quant(0),quant(1)),
 )
 
 prior_pdf = Dict(
@@ -145,8 +145,8 @@ function init_mix_prior(
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)
-        base_scale = (μ_scale * (1f0 / √(quant(widths[i])))
-        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(quant(widths[i]))))
+        base_scale = (μ_scale * (quant(1) / √(quant(widths[i])))
+        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* 2f0 .- quant(1)) .* (quant(1) / √(quant(widths[i]))))
 
         func = init_function(
         widths[i],

@@ -32,9 +32,9 @@ function create_opt(conf::ConfParse)
     
     linesearch = Dict(
         "strongwolfe" => LineSearches.StrongWolfe{quant}(c_1=c_1, c_2=c_2, ρ=ρ),
-        "backtrack" => LineSearches.BackTracking{quant}(c_1=c_1, ρ_hi=ρ, ρ_lo=1f-1, maxstep=Inf32),
+        "backtrack" => LineSearches.BackTracking{quant}(c_1=c_1, ρ_hi=ρ, ρ_lo=quant(0.1), maxstep=Inf32),
         "hagerzhang" => LineSearches.HagerZhang{quant}(),
-        "morethuente" => LineSearches.MoreThuente{quant}(f_tol=0f0, gtol=0f0, x_tol=0f0),
+        "morethuente" => LineSearches.MoreThuente{quant}(f_tol=quant(0), gtol=quant(0), x_tol=quant(0)),
     )[ls_type]
 
     linesearch = (a...) -> linesearch(a...) 
@@ -50,7 +50,7 @@ function create_opt(conf::ConfParse)
         "adam" => ADAM(LR),
         "adamw" => ADAMW(LR),
         "sgd" => Descent(LR),
-        "rms" => RMSProp(LR, 9f-1, 1f-8),
+        "rms" => RMSProp(LR, 9f-1, quant(1e-8)),
     )
 
     init_fcn = () -> optimiser_map[opt_type]

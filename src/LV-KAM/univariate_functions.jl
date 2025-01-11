@@ -28,7 +28,7 @@ activation_mapping = Dict(
     "silu" => x -> x .* NNlib.sigmoid_fast(x),
     "elu" => NNlib.elu,
     "celu" => NNlib.celu,
-    "none" => x -> x .* 0f0
+    "none" => x -> x .* quant(0)
 )
 
 struct univariate_function <: Lux.AbstractLuxLayer
@@ -55,12 +55,12 @@ function init_function(
     base_activation::AbstractString="silu",
     spline_function::AbstractString="B-spline",
     grid_size::Int=5,
-    grid_update_ratio::quant=2f-2,
-    grid_range::Tuple{quant, quant}=(0f0, 1f0),
-    ε_scale::quant=1f-1,
-    σ_base::AbstractArray{quant}=[NaN32],
-    σ_spline::quant=1f0,
-    init_η::quant=1f0,
+    grid_update_ratio::quant=quant(quant(0.02)),
+    grid_range::Tuple{quant, quant}=(quant(0), quant(1)),
+    ε_scale::quant=quant(0.1),
+    σ_base::AbstractArray{quant}=[quant(NaN)],
+    σ_spline::quant=quant(1),
+    init_η::quant=quant(1),
     η_trainable::Bool=true
 )
 

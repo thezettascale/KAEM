@@ -60,8 +60,8 @@ function init_LV_KAM(
 
     # MLE or Thermodynamic Integration
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    temperatures = [1f0]
-    Δt = [1f0]
+    temperatures = [quant(1)]
+    Δt = [quant(1)]
     if N_t > 1
         ENV["JULIA_threads_for_resampling"] = retrieve(conf, "KAN_LIKELIHOOD", "threads_for_resampling")
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
@@ -151,7 +151,7 @@ function MLE_loss(
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     llhood_cpu = logllhood |> cpu_device() # For particle filter
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : 0f0 
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0) 
 
     function tempered_loss(t::quant, Δt::quant)
         """Returns the batched loss for a given temperature."""

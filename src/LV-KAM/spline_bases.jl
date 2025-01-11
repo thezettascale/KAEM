@@ -199,6 +199,9 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=quant(1), ε=quant(1e-
     BtB = BtB + eye 
     
     @tullio Bty[i, j, m, p] := Bt[i, j, m, n] * y_eval[i, j, n, p]
+
+    # Cusolver only supports Float32
+    BtB, Bty = BtB .|> Float32, Bty .|> Float32
     
     # x = (BtB)^-1 * Bty
     coef = zeros(quant, 0, out_dim, n_coeff) |> device
@@ -207,7 +210,7 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=quant(1), ε=quant(1e-
         for j in 1:out_dim
             lstq = qr(BtB[i, j, :, :]) \ Bty[i, j, :, :]
             lstq = lstq |> permutedims
-            coef_ = vcat(coef_, lstq)
+            coef_ = vcat(coef_, lstq .|> quant)
         end
         coef_ = reshape(coef_, 1, size(coef_)...)
         coef = vcat(coef, coef_)

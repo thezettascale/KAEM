@@ -73,10 +73,10 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mkpath(file_loc)
 
     try
-        h5write(file_loc * "real_images.h5", "samples", save_dataset)
+        h5write(file_loc * "real_images.h5", "samples", Float32.(save_dataset))
     catch
         rm(file_loc * "real_images.h5")
-        h5write(file_loc * "real_images.h5", "samples", save_dataset)
+        h5write(file_loc * "real_images.h5", "samples", Float32.(save_dataset))
     end
     
     return LV_KAM_trainer(
@@ -222,10 +222,10 @@ function train!(t::LV_KAM_trainer)
     end
 
     try
-        h5write(t.file_loc * "generated_images.h5", "samples", generated_images)
+        h5write(t.file_loc * "generated_images.h5", "samples", Float32.(generated_images))
     catch
         rm(t.file_loc * "generated_images.h5")
-        h5write(t.file_loc * "generated_images.h5", "samples", generated_images)
+        h5write(t.file_loc * "generated_images.h5", "samples", Float32.(generated_images))
     end
 
     # Save params, state, model

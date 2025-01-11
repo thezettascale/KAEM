@@ -75,7 +75,7 @@ function init_function(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    ε = ((rand(rng, quant, l.grid_size + 1, l.in_dim, l.out_dim) .- 0.5f0) .* l.ε_scale ./ l.grid_size) |> device
+    ε = ((rand(rng, quant, l.grid_size + 1, l.in_dim, l.out_dim) .- quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device
     coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η)))
     w_base = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_spline

@@ -100,7 +100,7 @@ function log_likelihood(
         permutedims(x[:,:,:], [2,3,1]),
         permutedims(x̂[:,:,:], [3,1,2]),
     )
-    return logllhood ./ (2f0*lkhood.σ_llhood^2), seed
+    return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
 
 function systematic_sampler(
@@ -199,7 +199,7 @@ function init_KAN_lkhood(
     for i in eachindex(expert_widths[1:end-1])
         lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (quant(1) / √(quant(expert_widths[i])))
-        .+ σ_base .* (randn(rng, quant, expert_widths[i], expert_widths[i+1]) .* 2f0 .- quant(1)) .* (quant(1) / √(quant(expert_widths[i]))))
+        .+ σ_base .* (randn(rng, quant, expert_widths[i], expert_widths[i+1]) .* quant(2) .- quant(1)) .* (quant(1) / √(quant(expert_widths[i]))))
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 

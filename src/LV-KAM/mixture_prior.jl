@@ -146,7 +146,7 @@ function init_mix_prior(
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)
         base_scale = (μ_scale * (quant(1) / √(quant(widths[i])))
-        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* 2f0 .- quant(1)) .* (quant(1) / √(quant(widths[i]))))
+        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* quant(2) .- quant(1)) .* (quant(1) / √(quant(widths[i]))))
 
         func = init_function(
         widths[i],

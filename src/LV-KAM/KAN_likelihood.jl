@@ -81,7 +81,7 @@ function log_likelihood(
     seed::Int=1,
     )
     """
-    Compute the log-likelihood of the data given the latent variable.
+    Evaluate the log-likelihood of the data given the latent variable.
     The updated seed is not returned, since noise is ignored by derivatives anyway.
 
     Args:
@@ -109,11 +109,14 @@ function systematic_sampler(
 )
     """
     Resample the latent variable using systematic sampling.
+
     Args:
         weights: A matrix of weights where each row corresponds to a sample's weights.
         seed: Random seed for reproducibility.
+
     Returns:
-        The resampled indices and the updated seed.
+        - The resampled indices
+        - The updated seed.
     """
     B, N = size(weights)
     cdf = cumsum(weights, dims=2) 

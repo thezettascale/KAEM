@@ -183,7 +183,7 @@ function MLE_loss(
 
     # Thermodynamic Integration
     losses = reduce(hcat, map(t -> tempered_loss(m.temperatures[t], m.Δt[t]), eachindex(m.Δt)))
-    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2) .- mean(logprior)), seed
+    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2) .+ (losses[:, 1:1] .- mean(logprior))), seed
 end
 
 function update_llhood_grid(

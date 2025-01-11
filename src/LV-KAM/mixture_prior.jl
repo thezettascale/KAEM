@@ -40,7 +40,7 @@ function log_partition_function(
     st;
     )
     """
-    Compute the partition function of the mixture ebm-prior using trapezium rule.
+    Approximate the partition function of the mixture ebm-prior using trapezium rule.
 
     ∫ exp(f(z)) π_0(z) dz ≈ ∑_g 0.5(Δg) [exp(f(z_{q,g})) π_0(z_{q,g}) + exp(f(z_{q,g+1})) π_0(z_{q,g+1})]
 
@@ -73,7 +73,7 @@ function log_prior(
     st;
     )
     """
-    Compute the unnormalized log-probability of the mixture ebm-prior.
+    Evaluate the unnormalized log-probability of the mixture ebm-prior.
     The likelihood of samples from each mixture model, z_q, is evaluated 
     for all components of the mixture model it has been sampled from , M_q.
 

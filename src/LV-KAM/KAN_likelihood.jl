@@ -21,8 +21,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray, x̂::AbstractArray) -> -sum((x .- x̂).^2, dims=3)[:,:,1],
-    "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3)[:,:,1],
+    "l2" => (x::AbstractArray, x̂::AbstractArray) -> -dropdims(sum((x .- x̂).^2, dims=3); dims=3),
+    "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3); dims=3),
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer

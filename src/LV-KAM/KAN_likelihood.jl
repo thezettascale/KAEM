@@ -11,7 +11,7 @@ include("univariate_functions.jl")
 include("mixture_prior.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, quant
+using .Utils: device, next_rng, quant, resample_idx
 using .ebm_mix_prior
 
 output_activation_mapping = Dict(
@@ -103,6 +103,8 @@ function log_likelihood(
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
 
+
+
 function systematic_sampler(
     weights::AbstractArray;
     seed::Int=1
@@ -123,14 +125,11 @@ function systematic_sampler(
         
     # Generate thresholds
     seed, rng = next_rng(seed)
-    u = (rand(quant, B, N) .+ (0:N-1)') ./ N
+    u = (rand(quant, B, N) .+ (0:N-1)') ./ N |> device
 
     # Find resampled indices in a parellel manner
-    resampled_indices = Matrix{Int}(undef, B, N)
-    Threads.@threads for b in 1:B
-        resampled_indices[b, :] = searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
-    end
-    replace!(resampled_indices, N + 1 => N)
+    resampled_indices = resample_idx(cdf, u, B, N)
+    replace!(resampled_indices, nothing => N)
     return resampled_indices, seed
 end
 

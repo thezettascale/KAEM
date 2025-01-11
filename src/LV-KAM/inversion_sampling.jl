@@ -8,7 +8,7 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng, removeZero, quant
+using .Utils: device, next_rng, removeZero, quant, resample_idx
 using .univariate_functions: fwd
 
 function choose_component(α, num_samples, q_size, p_size; seed=1)
@@ -26,15 +26,11 @@ function choose_component(α, num_samples, q_size, p_size; seed=1)
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
-    α = cpu_device()(cumsum(softmax(α; dims=2); dims=2))
+    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) |> device
+    α = cumsum(softmax(α; dims=2); dims=2)
 
     # Find the index of the first cdf value greater than the random value
-    idxs = Matrix{Int}(undef, q_size, num_samples)
-    Threads.@threads for q in 1:q_size
-        idxs[q, :] = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
-    end
-    replace!(idxs, p_size + 1 => p_size)
+    idxs = resample_idx(α, rand_vals, q_size, num_samples)
 
     function categorical_mask(i)
         """Returns sampled indices from a categorical distribution on alpha."""

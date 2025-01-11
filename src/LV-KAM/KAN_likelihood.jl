@@ -126,7 +126,7 @@ function systematic_sampler(
     u = (rand(quant, B, N) .+ (0:N-1)') ./ N
 
     # Find resampled indices in a parellel manner
-    resampled_indices = zeros(Int, B, N)
+    resampled_indices = Matrix{Int}(undef, B, N)
     Threads.@threads for b in 1:B
         resampled_indices[b, :] = searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
     end

@@ -30,7 +30,7 @@ function choose_component(α, num_samples, q_size, p_size; seed=1)
     α = cpu_device()(cumsum(softmax(α; dims=2); dims=2))
 
     # Find the index of the first cdf value greater than the random value
-    idxs = zeros(Int, q_size, num_samples)
+    idxs = Matrix{Int}(undef, q_size, num_samples)
     Threads.@threads for q in 1:q_size
         idxs[q, :] = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
     end

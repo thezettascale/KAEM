@@ -1,6 +1,7 @@
 using Test, Random, LinearAlgebra
 
 ENV["GPU"] = true
+ENV["QUANT"] = "FP32"
 
 include("../LV-KAM/spline_bases.jl")
 include("../utils.jl")
@@ -11,7 +12,7 @@ b, i, g, o, degree, σ = 5, 3, 7, 2, 2, 1.0
 
 function test_extend_grid()
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
 
@@ -20,10 +21,10 @@ end
 
 function test_B_spline_basis()
     Random.seed!(42)
-    x_eval = rand(Float32, b, i) |> device
+    x_eval = rand(quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
     B = B_spline_basis(x_eval, extended_grid; degree=degree)
@@ -34,10 +35,10 @@ end
 
 function test_RBF_basis()
     Random.seed!(42)
-    x_eval = rand(Float32, b, i) |> device
+    x_eval = rand(quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     B_rbf = RBF_basis(x_eval, grid; σ=σ)
 
@@ -47,10 +48,10 @@ end
 
 function test_RSWAF_basis()
     Random.seed!(42)
-    x_eval = rand(Float32, b, i) |> device
+    x_eval = rand(quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     B_rswaf = RSWAF_basis(x_eval, grid; σ=σ)
 
@@ -60,13 +61,13 @@ end
 
 function test_coef2curve()
     Random.seed!(42)
-    x_eval = rand(Float32, b, i) |> device
+    x_eval = rand(quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     Random.seed!(42)
-    coef = rand(Float32, i, o, g + degree - 1) |> device
+    coef = rand(quant, i, o, g + degree - 1) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
 
@@ -76,13 +77,13 @@ end
 
 function test_curve2coef()
     Random.seed!(42)
-    x_eval = rand(Float32, b, i) |> device
+    x_eval = rand(quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(Float32, i, g) |> device
+    grid = rand(quant, i, g) |> device
 
     Random.seed!(42)
-    coef = rand(Float32, i, o, g + degree - 1) |> device
+    coef = rand(quant, i, o, g + degree - 1) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree) 
     

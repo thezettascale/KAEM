@@ -7,7 +7,7 @@ using Tullio, LinearAlgebra
 using NNlib
 
 include("../utils.jl")
-using .Utils: removeNaN, device
+using .Utils: removeNaN, device, quant
 
 method = get(ENV, "method", "B-spline") 
 
@@ -55,8 +55,8 @@ function B_spline_basis(x, grid; degree::Int64, σ=nothing)
         # B0 is piecewise constant
         @tullio term1[i, j, l] := x[i, j, k] >= grid_1[p, j, l]
         @tullio term2[i, j, l] := x[i, j, k] < grid_2[p, j, l]
-        term1 = Float32.(term1)
-        term2 = Float32.(term2)
+        term1 = quant.(term1)
+        term2 = quant.(term2)
 
         @tullio B[d, p, n] := term1[d, p, n] * term2[d, p, n]
 
@@ -193,7 +193,7 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_fu
     
     @tullio BtB[i, j, m, p] := Bt[i, j, m, n] * B[i, j, n, p] # in_dim x out_dim x n_coeffs x n_coeffs
     n1, n2, n, _ = size(BtB)
-    eye = Matrix{Float32}(I, n, n) .* ε |> device
+    eye = Matrix{quant}(I, n, n) .* ε |> device
     eye = reshape(eye, 1, 1, n, n)
     eye = repeat(eye, n1, n2, 1, 1)
     BtB = BtB + eye 
@@ -201,9 +201,9 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=1f0, ε=1f-6, basis_fu
     @tullio Bty[i, j, m, p] := Bt[i, j, m, n] * y_eval[i, j, n, p]
     
     # x = (BtB)^-1 * Bty
-    coef = zeros(Float32, 0, out_dim, n_coeff) |> device
+    coef = zeros(quant, 0, out_dim, n_coeff) |> device
     for i in 1:in_dim
-        coef_ = zeros(Float32, 0, n_coeff) |> device
+        coef_ = zeros(quant, 0, n_coeff) |> device
         for j in 1:out_dim
             lstq = qr(BtB[i, j, :, :]) \ Bty[i, j, :, :]
             lstq = lstq |> permutedims

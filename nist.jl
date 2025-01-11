@@ -4,6 +4,7 @@ conf = ConfParse("nist_config.ini")
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
+ENV["QUANT"] = retrieve(conf, "TRAINING", "quantization")
 
 include("src/ML_pipeline/trainer.jl")
 using .trainer

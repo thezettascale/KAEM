@@ -7,7 +7,7 @@ include("optimizer.jl")
 include("../utils.jl")
 using .LV_KAM_model
 using .optimization
-using .Utils: device
+using .Utils: device, quant
 
 using CUDA, KernelAbstractions, Tullio
 using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -52,7 +52,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     img_shape = size(dataset)[1:end-1]
-    dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> Float32
+    dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> quant
     save_dataset = reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
     println("Resized dataset to $(img_shape)")
     
@@ -214,7 +214,7 @@ function train!(t::LV_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    generated_images = zeros(Float32, 0, t.img_shape...) 
+    generated_images = zeros(quant, 0, t.img_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
         batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))

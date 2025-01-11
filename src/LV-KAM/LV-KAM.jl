@@ -15,7 +15,7 @@ include("../utils.jl")
 using .ebm_mix_prior
 using .KAN_likelihood
 using .univariate_functions: update_fcn_grid, fwd
-using .Utils: device, next_rng
+using .Utils: device, next_rng, quant
 
 struct LV_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
@@ -24,12 +24,12 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     update_prior_grid::Bool
     update_llhood_grid::Bool
-    grid_update_decay::Float32
+    grid_update_decay::quant
     grid_updates_samples::Int
     MC_samples::Int
     verbose::Bool
-    temperatures::AbstractArray{Float32}
-    Δt::AbstractArray{Float32}
+    temperatures::AbstractArray{quant}
+    Δt::AbstractArray{quant}
 end
 
 function init_LV_KAM(
@@ -55,7 +55,7 @@ function init_LV_KAM(
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
 
-    grid_update_decay = parse(Float32, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
+    grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
     # MLE or Thermodynamic Integration
@@ -64,8 +64,8 @@ function init_LV_KAM(
     Δt = [1f0]
     if N_t > 1
         ENV["JULIA_threads_for_resampling"] = retrieve(conf, "KAN_LIKELIHOOD", "threads_for_resampling")
-        p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = [(k / N_t)^p for k in 0:N_t] .|> Float32 
+        p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
+        temperatures = [(k / N_t)^p for k in 0:N_t] .|> quant 
         Δt = temperatures[2:end] .- temperatures[1:end-1]
     end
 
@@ -153,7 +153,7 @@ function MLE_loss(
     llhood_cpu = logllhood |> cpu_device() # For particle filter
     ex_prior = m.prior.contrastive_div ? mean(logprior) : 0f0 
 
-    function tempered_loss(t::Float32, Δt::Float32)
+    function tempered_loss(t::quant, Δt::quant)
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch using particle filter

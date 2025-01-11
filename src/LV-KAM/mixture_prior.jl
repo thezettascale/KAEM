@@ -12,7 +12,7 @@ include("univariate_functions.jl")
 include("inversion_sampling.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng
+using .Utils: device, next_rng, quant
 using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
@@ -21,7 +21,7 @@ prior_distributions = Dict(
 )
 
 prior_pdf = Dict(
-    "uniform" => z -> Float32.(0 .<= z .<= 1) |> device,
+    "uniform" => z -> quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
 )
 
@@ -128,13 +128,13 @@ function init_mix_prior(
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
     grid_size = parse(Int, retrieve(conf, "MIX_PRIOR", "grid_size"))
-    grid_update_ratio = parse(Float32, retrieve(conf, "MIX_PRIOR", "grid_update_ratio"))
-    grid_range = parse.(Float32, retrieve(conf, "MIX_PRIOR", "grid_range"))
-    ε_scale = parse(Float32, retrieve(conf, "MIX_PRIOR", "ε_scale"))
-    μ_scale = parse(Float32, retrieve(conf, "MIX_PRIOR", "μ_scale"))
-    σ_base = parse(Float32, retrieve(conf, "MIX_PRIOR", "σ_base"))
-    σ_spline = parse(Float32, retrieve(conf, "MIX_PRIOR", "σ_spline"))
-    init_η = parse(Float32, retrieve(conf, "MIX_PRIOR", "init_η"))
+    grid_update_ratio = parse(quant, retrieve(conf, "MIX_PRIOR", "grid_update_ratio"))
+    grid_range = parse.(quant, retrieve(conf, "MIX_PRIOR", "grid_range"))
+    ε_scale = parse(quant, retrieve(conf, "MIX_PRIOR", "ε_scale"))
+    μ_scale = parse(quant, retrieve(conf, "MIX_PRIOR", "μ_scale"))
+    σ_base = parse(quant, retrieve(conf, "MIX_PRIOR", "σ_base"))
+    σ_spline = parse(quant, retrieve(conf, "MIX_PRIOR", "σ_spline"))
+    init_η = parse(quant, retrieve(conf, "MIX_PRIOR", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
@@ -145,8 +145,8 @@ function init_mix_prior(
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)
-        base_scale = (μ_scale * (1f0 / √(Float32(widths[i])))
-        .+ σ_base .* (randn(rng, Float32, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(widths[i]))))
+        base_scale = (μ_scale * (1f0 / √(quant(widths[i])))
+        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(quant(widths[i]))))
 
         func = init_function(
         widths[i],
@@ -174,7 +174,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     q_size = prior.fcns_qp[Symbol("1")].in_dim
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_normal(rng, Float32, q_size, p_size)
+    @reset ps[Symbol("α")] = glorot_normal(rng, quant, q_size, p_size)
     return ps
 end
  

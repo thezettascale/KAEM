@@ -11,7 +11,7 @@ include("univariate_functions.jl")
 include("mixture_prior.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng
+using .Utils: device, next_rng, quant
 using .ebm_mix_prior
 
 output_activation_mapping = Dict(
@@ -29,8 +29,8 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     Φ_fcns::NamedTuple
     depth::Int
     out_size::Int
-    σ_ε::Float32
-    σ_llhood::Float32
+    σ_ε::quant
+    σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
     resample_z::Function
@@ -68,7 +68,7 @@ function generate_from_z(
     
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, Float32, size(z)) |> device
+    ε = lkhood.σ_ε * randn(rng, quant, size(z)) |> device
     return lkhood.output_activation(z + ε), seed
 end
 
@@ -123,7 +123,7 @@ function systematic_sampler(
         
     # Generate thresholds
     seed, rng = next_rng(seed)
-    u = (rand(Float32, B, N) .+ (0:N-1)') ./ N
+    u = (rand(quant, B, N) .+ (0:N-1)') ./ N
 
     # Find resampled indices in a parellel manner
     resampled_indices = zeros(Int, B, N)
@@ -162,17 +162,17 @@ function init_KAN_lkhood(
     base_activation = retrieve(conf, "KAN_LIKELIHOOD", "base_activation")
     spline_function = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
     grid_size = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "grid_size"))
-    grid_update_ratio = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "grid_update_ratio"))
-    grid_range = parse.(Float32, retrieve(conf, "KAN_LIKELIHOOD", "grid_range"))
-    ε_scale = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "ε_scale"))
-    μ_scale = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "μ_scale"))
-    σ_base = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "σ_base"))
-    σ_spline = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "σ_spline"))
-    init_η = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "init_η"))
+    grid_update_ratio = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_update_ratio"))
+    grid_range = parse.(quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_range"))
+    ε_scale = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "ε_scale"))
+    μ_scale = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "μ_scale"))
+    σ_base = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_base"))
+    σ_spline = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_spline"))
+    init_η = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "init_η"))
     η_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "η_trainable"))
     η_trainable = spline_function == "B-spline" ? false : η_trainable
-    noise_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
-    gen_var = parse(Float32, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
+    noise_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
+    gen_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
@@ -198,8 +198,8 @@ function init_KAN_lkhood(
     Φ_functions = NamedTuple() # Expert functions
     for i in eachindex(expert_widths[1:end-1])
         lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (1f0 / √(Float32(expert_widths[i])))
-        .+ σ_base .* (randn(rng, Float32, expert_widths[i], expert_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(Float32(expert_widths[i]))))
+        base_scale = (μ_scale * (1f0 / √(quant(expert_widths[i])))
+        .+ σ_base .* (randn(rng, quant, expert_widths[i], expert_widths[i+1]) .* 2f0 .- 1f0) .* (1f0 / √(quant(expert_widths[i]))))
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 

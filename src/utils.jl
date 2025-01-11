@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, next_rng
+export removeNaN, device, removeZero, next_rng, quant
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random
 using CUDA, LuxCUDA, KernelAbstractions
@@ -24,5 +24,11 @@ function next_rng(seed)
     rng = @ignore_derivatives Random.seed!(seed)
     return seed + 1, rng
 end
+
+quant = Dict(
+    "FP32" => Float32,
+    "FP64" => Float64,
+    "FP16" => Float16,
+)[get(ENV, "QUANT", "FP32")]
 
 end

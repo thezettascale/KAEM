@@ -1,6 +1,7 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 
 ENV["GPU"] = true
+ENV["QUANT"] = "FP32"
 
 include("../LV-KAM/mixture_prior.jl")
 include("../LV-KAM/KAN_likelihood.jl")
@@ -22,8 +23,8 @@ function test_log_likelihood()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, MC_sample_size, z_dim) |> device
-    x_test = randn(Float32, b_size, out_dim) |> device
+    z_test = randn(quant, MC_sample_size, z_dim) |> device
+    x_test = randn(quant, b_size, out_dim) |> device
 
     log_lkhood, seed = log_likelihood(lkhood, ps, st, x_test, z_test)
     @test size(log_lkhood) == (b_size, MC_sample_size)
@@ -35,8 +36,8 @@ function test_log_likelihood_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
     ps, st = ps |> device, st |> device
 
-    z_test = randn(Float32, b_size, z_dim) |> device
-    x_test = randn(Float32, b_size, out_dim) |> device
+    z_test = randn(quant, b_size, z_dim) |> device
+    x_test = randn(quant, b_size, out_dim) |> device
     
     ∇ = first(gradient(z -> sum(first(log_likelihood(lkhood, ps, st, x_test, z))), z_test))
     @test size(∇) == size(z_test)

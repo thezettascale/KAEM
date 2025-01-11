@@ -8,7 +8,7 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng, removeZero
+using .Utils: device, next_rng, removeZero, quant
 using .univariate_functions: fwd
 
 function choose_component(alpha, num_samples, q_size, p_size; seed=1)
@@ -31,7 +31,7 @@ function choose_component(alpha, num_samples, q_size, p_size; seed=1)
 
     function categorical_mask(i)
         """Returns sampled indices from a categorical distribution on alpha."""
-        idxs = collect(Float32, onehotbatch(i, 1:p_size))   
+        idxs = collect(quant, onehotbatch(i, 1:p_size))   
         return permutedims(idxs[:,:,:], [2, 3, 1])
     end
     
@@ -40,10 +40,10 @@ end
 
 function get_trap_bounds(idxs, cdf)
     """Returns the CDF values bounding each trapezium defined by idxs."""
-    zero_prob = zeros(Float32, size(cdf, 1), 1, size(cdf, 3)) |> device
+    zero_prob = zeros(quant, size(cdf, 1), 1, size(cdf, 3)) |> device
     cdf = hcat(zero_prob, cdf)
 
-    cd1, cd2 = zeros(Float32, size(cdf,1 ), 0) |> device, zeros(Float32, size(cdf, 1), 0) |> device
+    cd1, cd2 = zeros(quant, size(cdf,1 ), 0) |> device, zeros(quant, size(cdf, 1), 0) |> device
     for (q, idx) in enumerate(idxs)
         bound1 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx)])
         bound2 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx .+ 1)])

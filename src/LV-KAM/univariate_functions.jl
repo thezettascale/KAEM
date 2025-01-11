@@ -8,7 +8,7 @@ using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 include("spline_bases.jl")
 include("../utils.jl")
 using .spline_functions
-using .Utils: device
+using .Utils: device, quant
 
 SplineBasis_mapping = Dict(
     "B-spline" => B_spline_basis,
@@ -37,14 +37,14 @@ struct univariate_function <: Lux.AbstractLuxLayer
     spline_degree::Int
     base_activation::Function
     spline_function::Function
-    grid::AbstractArray{Float32}
+    grid::AbstractArray{quant}
     grid_size::Int
-    grid_update_ratio::Float32
-    grid_range::Tuple{Float32, Float32}
-    ε_scale::Float32
-    σ_base::AbstractArray{Float32}
-    σ_spline::Float32
-    init_η::AbstractArray{Float32}
+    grid_update_ratio::quant
+    grid_range::Tuple{quant, quant}
+    ε_scale::quant
+    σ_base::AbstractArray{quant}
+    σ_spline::quant
+    init_η::AbstractArray{quant}
     η_trainable::Bool
 end
 
@@ -55,19 +55,19 @@ function init_function(
     base_activation::AbstractString="silu",
     spline_function::AbstractString="B-spline",
     grid_size::Int=5,
-    grid_update_ratio::Float32=2f-2,
-    grid_range::Tuple{Float32, Float32}=(0f0, 1f0),
-    ε_scale::Float32=1f-1,
-    σ_base::AbstractArray{Float32}=[NaN32],
-    σ_spline::Float32=1f0,
-    init_η::Float32=1f0,
+    grid_update_ratio::quant=2f-2,
+    grid_range::Tuple{quant, quant}=(0f0, 1f0),
+    ε_scale::quant=1f-1,
+    σ_base::AbstractArray{quant}=[NaN32],
+    σ_spline::quant=1f0,
+    init_η::quant=1f0,
     η_trainable::Bool=true
 )
 
-    grid = Float32.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
+    grid = quant.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
     grid = extend_grid(grid; k_extend=spline_degree)  
-    σ_base = any(isnan.(σ_base)) ? ones(Float32, in_dim, out_dim) : σ_base
+    σ_base = any(isnan.(σ_base)) ? ones(quant, in_dim, out_dim) : σ_base
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
     spline_function = get(SplineBasis_mapping, spline_function, B_spline_basis)
     
@@ -75,15 +75,15 @@ function init_function(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    ε = ((rand(rng, Float32, l.grid_size + 1, l.in_dim, l.out_dim) .- 0.5f0) .* l.ε_scale ./ l.grid_size) |> device
+    ε = ((rand(rng, quant, l.grid_size + 1, l.in_dim, l.out_dim) .- 0.5f0) .* l.ε_scale ./ l.grid_size) |> device
     coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η)))
-    w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base 
-    w_sp = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_spline
+    w_base = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_base 
+    w_sp = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_spline
     return l.η_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_η=l.init_η) : (w_base=w_base, w_sp=w_sp, coef=coef)
 end
 
 function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
-    mask = ones(Float32, l.in_dim, l.out_dim)
+    mask = ones(quant, l.in_dim, l.out_dim)
     return l.η_trainable ? (mask=mask) : (mask=mask, basis_η=l.init_η)
 end
 
@@ -141,7 +141,7 @@ function update_fcn_grid(l, ps, st, x)
 
     # Uniform grid
     h = (grid_adaptive[:, end:end] .- grid_adaptive[:, 1:1]) ./ num_interval # step size
-    range = collect(Float32, 0:num_interval)[:, :] |> permutedims |> device
+    range = collect(quant, 0:num_interval)[:, :] |> permutedims |> device
     grid_uniform = h .* range .+ grid_adaptive[:, 1:1] 
 
     # Grid is a convex combination of the uniform and adaptive grid

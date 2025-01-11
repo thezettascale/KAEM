@@ -11,7 +11,7 @@ include("univariate_functions.jl")
 using .Utils: device, next_rng, removeZero, quant
 using .univariate_functions: fwd
 
-function choose_component(alpha, num_samples, q_size, p_size; seed=1)
+function choose_component(α, num_samples, q_size, p_size; seed=1)
     """
     Creates a one-hot mask for each mixture model, q, to select one component, p.
     
@@ -27,11 +27,12 @@ function choose_component(alpha, num_samples, q_size, p_size; seed=1)
     """
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
+    α = cpu_device()(cumsum(softmax(α; dims=2); dims=2))
 
     # Find the index of the first cdf value greater than the random value
     idxs = zeros(Int, q_size, num_samples)
     Threads.@threads for q in 1:q_size
-        idxs[q, :] = searchsortedfirst.(Ref(alpha[q, :]), rand_vals[q, :])
+        idxs[q, :] = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
     end
     replace!(idxs, p_size + 1 => p_size)
 
@@ -118,7 +119,7 @@ function sample_prior(
     
     # Categorical component selection (per sample, per outer sum dimension)
     component_mask, seed = choose_component(
-        cpu_device()(cumsum(softmax(ps[Symbol("α")]; dims=2); dims=2)),
+        ps[Symbol("α")],
         num_samples,
         q_size,
         p_size;

@@ -2,7 +2,7 @@ module Utils
 
 export removeNaN, device, removeZero, next_rng, quant
 
-using Lux, Tullio, LinearAlgebra, Statistics, Random
+using Lux, Tullio, LinearAlgebra, Statistics, Random, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions
 using ChainRules: @ignore_derivatives
 
@@ -12,6 +12,7 @@ quant = Dict(
     "FP32" => Float32,
     "FP64" => Float64,
     "FP16" => Float16,
+    "BF16" => BFloat16
 )[get(ENV, "QUANT", "FP32")]
 
 function device(x)

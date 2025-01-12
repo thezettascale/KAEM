@@ -183,11 +183,11 @@ function MLE_loss(
     logllhood_pos = (m.Δt[2:end, :, :] .+ m.temperatures[2:end, :, :]) .* logllhood_pos
 
     # Importance sampling for adjactent power posteriors
-    @tullio loss_neg[b, t] := weights_neg[b, s, t] * (logprior_neg[b, s, t] + logllhood_neg[b, s, t])
-    @tullio loss_pos[b, t] := weights_pos[b, s, t] * (logprior_pos[b, s, t] + logllhood_pos[b, s, t])
+    @tullio loss_neg[t, b] := weights_neg[t, b, s] * (logprior_neg[t, b, s] + logllhood_neg[t, b, s])
+    @tullio loss_pos[t, b] := weights_pos[t, b, s] * (logprior_pos[t, b, s] + logllhood_pos[t, b, s])
     
     # Steppingstone estimator
-    return -mean(sum(loss_pos - loss_neg, dims=2) + (loss_neg[:, 1:1] .- mean(logprior))), seed
+    return -mean(sum(loss_pos - loss_neg, dims=1) + (loss_neg[1:1, :] .- mean(logprior))), seed
 end
 
 function update_llhood_grid(

@@ -167,8 +167,7 @@ function MLE_loss(
             return loss_llhood + loss_prior 
         end
 
-        loss = reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
-        return loss[:,:] # Singleton dimension for fast reduction across temperatures
+        return reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
     end
 
     # MLE loss is default
@@ -180,8 +179,11 @@ function MLE_loss(
     end
 
     # Thermodynamic Integration
-    losses = reduce(hcat, map(t -> tempered_loss(m.temperatures[t], m.Δt[t]), eachindex(m.Δt)))
-    return -mean(sum(losses[:, 2:end] - losses[:, 1:end-1]; dims=2) .+ (losses[:, 1:1] .- mean(logprior))), seed
+    loss = tempered_loss(m.temperatures[1], m.Δt[1]) .- mean(log_prior)
+    for t in 2:length(m.Δt)
+        loss += tempered_loss(m.temperatures[t], m.Δt[t]) - tempered_loss(m.temperatures[t-1], m.Δt[t-1])
+    end
+    return -mean(loss), seed
 end
 
 function update_llhood_grid(

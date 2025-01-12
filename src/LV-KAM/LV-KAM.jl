@@ -179,7 +179,7 @@ function MLE_loss(
     end
 
     # Thermodynamic Integration
-    loss = tempered_loss(m.temperatures[1], m.Δt[1]) .- mean(log_prior)
+    loss = tempered_loss(m.temperatures[1], m.Δt[1]) .- mean(logprior)
     for t in 2:length(m.Δt)
         loss += tempered_loss(m.temperatures[t], m.Δt[t]) - tempered_loss(m.temperatures[t-1], m.Δt[t-1])
     end

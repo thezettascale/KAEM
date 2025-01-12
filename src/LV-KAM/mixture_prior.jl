@@ -174,7 +174,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     q_size = prior.fcns_qp[Symbol("1")].in_dim
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = zeros(quant, q_size, p_size)
+    @reset ps[Symbol("α")] = glorot_uniform(rng, quant, q_size, p_size)
     return ps
 end
  

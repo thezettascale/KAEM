@@ -150,8 +150,7 @@ function MLE_loss(
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
-    logprior = length(m.temperatures) <= 1 ? dropdims(logprior; dims=2) : permutedims(logprior, [2, 1])
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0) 
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)     
 
     function tempered_loss(t::quant, Δt::quant)
         """Returns the batched loss for a given temperature."""
@@ -161,12 +160,11 @@ function MLE_loss(
         resampled_idxs, seed = m.lkhood.resample_z(previous_weights, seed)  
         
         # Re-evaluate weights and temper the likelihood 
-        llhood_t = view(logllhood, resampled_idxs)
+        llhood_t, logprior_t = logllhood[resampled_idxs], logprior[resampled_idxs'] .- ex_prior
         weights_t = @ignore_derivatives softmax(Δt .* llhood_t, dims=2)
         llhood_t = (t + Δt) .* llhood_t
-        logprior_t = view(logprior, resampled_idxs) .- ex_prior
 
-        @tullio loss_t := weights_t[b, s] * (llhood_t[b, s] .+ logprior_t[b, s])
+        @tullio loss_t[b] := weights_t[b, s] * (llhood_t[b, s] + logprior_t[s, b])
         return -mean(loss_t)
     end
 
@@ -175,7 +173,7 @@ function MLE_loss(
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
         loss_prior = weights * (logprior .- ex_prior)
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
-        return -mean(loss_prior + loss_llhood), seed
+        return -mean(loss_prior .+ loss_llhood), seed
     end
 
     # Thermodynamic Integration

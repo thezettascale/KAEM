@@ -1,5 +1,8 @@
 using BenchmarkTools, ConfParser, Lux, Zygote, Random
 
+ENV["GPU"] = true
+ENV["QUANT"] = "FP32"
+
 include("../src/LV-KAM/LV-KAM.jl")
 using .LV_KAM_model
 
@@ -18,6 +21,6 @@ function benchmark_temps(N_t)
     first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
 end
 
-@benchmark benchmark_temps(arg) setup=(arg=10)
-@benchmark benchmark_temps(arg) setup=(arg=50)
-@benchmark benchmark_temps(arg) setup=(arg=100)
+@benchmark CUDA.@sync benchmark_temps(10) 
+@benchmark CUDA.@sync benchmark_temps(50) 
+@benchmark CUDA.@sync benchmark_temps(100) 

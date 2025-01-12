@@ -8,7 +8,7 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng, removeZero, quant, resample_idx
+using .Utils: device, next_rng, removeZero, quant
 using .univariate_functions: fwd
 
 function choose_component(α, num_samples, q_size, p_size; seed=1)
@@ -26,33 +26,36 @@ function choose_component(α, num_samples, q_size, p_size; seed=1)
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) |> device
-    α = cumsum(softmax(α; dims=2); dims=2)
+    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
+    α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
 
     # Find the index of the first cdf value greater than the random value
-    idxs = resample_idx(α, rand_vals, q_size, num_samples)
-
-    function categorical_mask(i)
-        """Returns sampled indices from a categorical distribution on alpha."""
-        idxs = collect(quant, onehotbatch(i, 1:p_size))   
-        return permutedims(idxs[:,:,:], [2, 3, 1])
+    idxs = zeros(Int, q_size, num_samples) 
+    mask = zeros(quant, q_size, p_size, num_samples) 
+    Threads.@threads for q in 1:q_size
+        i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
+        replace!(i, p_size + 1 => p_size)
+        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> quant
     end
-    
-    return reduce(hcat, map(categorical_mask, eachrow(idxs))) |> device, seed
+
+    return permutedims(mask, [3, 1, 2]) |> device, seed
 end
 
 function get_trap_bounds(idxs, cdf)
     """Returns the CDF values bounding each trapezium defined by idxs."""
-    zero_prob = zeros(quant, size(cdf, 1), 1, size(cdf, 3)) |> device
-    cdf = hcat(zero_prob, cdf)
+    Q, N = size(idxs)
+    cdf = hcat(zeros(quant, N, 1, Q), cdf) # Zero prob
 
-    cd1, cd2 = zeros(quant, size(cdf,1 ), 0) |> device, zeros(quant, size(cdf, 1), 0) |> device
-    for (q, idx) in enumerate(idxs)
-        bound1 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx)])
-        bound2 = reduce(vcat,[cdf[i:i, g, q:q] for (i, g) in enumerate(idx .+ 1)])
-        cd1, cd2 = hcat(cd1, bound1), hcat(cd2, bound2)
+    cd1 = zeros(quant, N, Q) 
+    cd2 = zeros(quant, N, Q) 
+    for q in 1:Q
+        for n in 1:N
+            cd1[n, q] = cdf[n, idxs[q, n], q]
+            cd2[n, q] = cdf[n, idxs[q, n] + 1, q]
+        end
     end
-    return cd1, cd2
+
+    return device(cd1), device(cd2)
 end
 
 function interpolate_z(
@@ -82,8 +85,12 @@ function interpolate_z(
     cd1, cd2 = get_trap_bounds(indices, cdf)
 
     # Get trapezium bounds
-    z1 = reduce(hcat, map(i -> grid[indices[i], i:i], eachindex(indices)))
-    z2 = reduce(hcat, map(i -> grid[indices[i] .+ 1, i:i], eachindex(indices)))
+    z1 = zeros(quant, size(cdf, 1), 0) |> device
+    z2 = zeros(quant, size(cdf, 1), 0) |> device
+    for (q, idx) in enumerate(eachrow(indices))
+        z1 = hcat(z1, grid[idx, q:q])
+        z2 = hcat(z2, grid[idx .+ 1, q:q])
+    end
 
     # Linear interpolation
     return (z1 + (z2 - z1) .* ((rv - cd1) ./ removeZero(cd2 - cd1; ε=eps(eltype(cd1))))), seed
@@ -138,22 +145,20 @@ function sample_prior(
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
     cdf = cumsum(trapz, dims=2) 
-    cdf = cdf ./ cdf[:, end:end, :] # Normalization
+    cdf = cdf ./ cdf[:, end:end, :] |> cpu_device() # Normalization
 
-    # Inverse transform sampling
+     # Find index of trapezium where CDF > rand_val
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) |> device
-    @tullio geq_indices[b, g, q] := cdf[b, g, q] >= rand_vals[b, q]
-
-    function grid_index(q)
-    """Returns index of trapz where CDF > rand_val from a given mixture model, q."""
-        idxs = map(i -> findfirst(view(geq_indices, i, :, q)), 1:num_samples)
-        idxs = reduce(vcat, idxs)
-        return ifelse.(isnothing.(idxs), grid_size-1, idxs)
+    rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) 
+    idxs = zeros(Int, q_size, num_samples)
+    Threads.@threads for q in 1:q_size
+        for b in 1:num_samples
+            idxs[q, b] = searchsortedfirst(cdf[b, :, q], rand_vals[b, q])
+        end
     end
-     
-    indices = map(grid_index, 1:q_size)
-    return interpolate_z(indices, cdf, rand_vals, grid; seed=seed)
+    replace!(idxs, nothing => grid_size - 1)
+
+    return interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
 end
 
 end

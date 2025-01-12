@@ -6,7 +6,7 @@ JL_FILES=$(ls "$DIR"/*.jl)
 for benchmark in $JL_FILES; 
 do
     echo "Running $benchmark"
-    julia "$benchmark" > "$benchmark.txt"
+    julia --threads auto "$benchmark" > "$benchmark.txt"
     if [ $? -ne 0 ]; then
         echo "Benchmark failed: $benchmark"
         exit 1

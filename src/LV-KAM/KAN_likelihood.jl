@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z
+export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -11,7 +11,7 @@ include("univariate_functions.jl")
 include("mixture_prior.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, quant, resample_idx
+using .Utils: device, next_rng, quant
 using .ebm_mix_prior
 
 output_activation_mapping = Dict(
@@ -33,7 +33,6 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
-    resample_z::Function
 end
 
 function generate_from_z(
@@ -76,8 +75,8 @@ function log_likelihood(
     lkhood::KAN_lkhood, 
     ps, 
     st, 
-    x::AbstractArray, 
-    z::AbstractArray;
+    x::AbstractArray{quant},
+    z::AbstractArray{quant};
     seed::Int=1,
     )
     """
@@ -104,7 +103,8 @@ function log_likelihood(
 end
 
 function systematic_sampler(
-    weights::AbstractArray;
+    logllhood::AbstractArray{quant},
+    temps::AbstractArray{quant};
     seed::Int=1
 )
     """
@@ -118,13 +118,24 @@ function systematic_sampler(
         - The resampled indices
         - The updated seed.
     """
-    B, N = size(weights)
-    cdf = cumsum(weights, dims=2) 
+    B, N, T = size(logllhood)[2:3]..., size(temps, 1)
+    cdf = cumsum(softmax(temps .* logllhood, dims=3), dims=3) |> cpu_device()
         
     # Generate thresholds and find the first cdf value greater than the random value
     seed, rng = next_rng(seed)
-    u = (rand(quant, B, 1) .+ (0:N-1)') ./ N |> device
-    return resample_idx(cdf, u .% 1, B, N), seed
+    range = reshape(collect(quant, 0:N-1), 1, 1, N)
+    u = (rand(quant, T, B, 1) .+ range) ./ N 
+    
+    # Find the first cdf value greater than the random value
+    resample_indices = zeros(Int, T, B, N)
+    Threads.@threads for t in 1:T
+        for b in 1:B
+            resample_indices[t, b, :] = searchsortedfirst.(Ref(cdf[t, b, :]), u[t, b, :])
+        end
+    end
+    replace!(resample_indices, N+1 => N)
+
+    return resample_indices, seed
 end
 
 function init_KAN_lkhood(
@@ -169,8 +180,6 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
-    resample_function = (weights, seed) -> @ignore_derivatives systematic_sampler(weights; seed=seed)
-
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
         out_dim;
@@ -196,7 +205,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], resample_function)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

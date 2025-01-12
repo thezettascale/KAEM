@@ -46,7 +46,7 @@ nano nist_config.ini
 For main experiments run:
 
 ```bash
-julia auto nist.jl
+julia --threads auto nist.jl
 ```
 
 For benchmarking run:

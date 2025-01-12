@@ -64,9 +64,11 @@ function init_LV_KAM(
     Δt = [quant(1)]
     if N_t > 1
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = [(k / N_t)^p for k in 0:N_t] .|> quant 
+        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) |> device
         Δt = temperatures[2:end] .- temperatures[1:end-1]
     end
+
+    verbose && println("Using $(Threads.nthreads()) threads.")
 
     return LV_KAM(
             prior_model,
@@ -79,8 +81,8 @@ function init_LV_KAM(
             num_grid_updating_samples,
             MC_samples,
             verbose,
-            temperatures,
-            Δt
+            temperatures[1:end-1, :, :],
+            Δt[:,:,:]
         )
 end
 
@@ -149,26 +151,9 @@ function MLE_loss(
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    
     ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)     
 
-    function tempered_loss(t::quant, Δt::quant)
-        """Returns the batched loss for a given temperature."""
-
-        # Posterior samples, resamples are drawn per batch using particle filter
-        previous_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
-        resampled_idxs, seed = m.lkhood.resample_z(previous_weights, seed)  
-        
-        # Re-evaluate weights and temper the likelihood 
-        llhood_t, logprior_t = logllhood[resampled_idxs], logprior[resampled_idxs'] .- ex_prior
-        weights_t = @ignore_derivatives softmax(Δt .* llhood_t, dims=2)
-        llhood_t = (t + Δt) .* llhood_t
-
-        @tullio loss_t[b] := weights_t[b, s] * (llhood_t[b, s] + logprior_t[s, b])
-        return -mean(loss_t)
-    end
-
-    # MLE loss is default
+    ### MLE loss is default ###
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
         loss_prior = weights * (logprior .- ex_prior)
@@ -176,12 +161,33 @@ function MLE_loss(
         return -mean(loss_prior .+ loss_llhood), seed
     end
 
-    # Thermodynamic Integration
-    loss = tempered_loss(m.temperatures[1], m.Δt[1]) .- mean(logprior)
-    for t in 2:length(m.Δt)
-        loss += tempered_loss(m.temperatures[t], m.Δt[t]) - tempered_loss(m.temperatures[t-1], m.Δt[t-1])
-    end
-    return -mean(loss), seed
+    ### Thermodynamic Integration ###
+
+    # Prepare for broadcasting, temps and batch first for contiguous access
+    logprior = permutedims(logprior, [3, 2, 1])
+    logllhood = permutedims(logllhood[:,:,:], [3, 1, 2])
+    
+    # Resample the latent variable using systematic sampling for all adjacent power posteriors
+    resampled_idx_neg, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[1:end-1, :, :]; seed=seed) 
+    resampled_idx_pos, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[2:end, :, :]; seed=seed)
+
+    # Extract adjacent samples, and find importance weights
+    logprior_neg, logprior_pos = logprior[resampled_idx_neg] .- ex_prior, logprior[resampled_idx_pos] .- ex_prior
+    logllhood_neg, logllhood_pos = logllhood[resampled_idx_neg], logllhood[resampled_idx_pos]
+    
+    weights_neg = @ignore_derivatives softmax(m.Δt[1:end-1, :, :] .* logllhood_neg, dims=3)
+    weights_pos = @ignore_derivatives softmax(m.Δt[2:end, :, :] .* logllhood_pos, dims=3)
+
+    # Weight log likelihoods by current temperature
+    logllhood_neg = (m.Δt[1:end-1, :, :] .+ m.temperatures[1:end-1, :, :]) .* logllhood_neg
+    logllhood_pos = (m.Δt[2:end, :, :] .+ m.temperatures[2:end, :, :]) .* logllhood_pos
+
+    # Importance sampling for adjactent power posteriors
+    @tullio loss_neg[b, t] := weights_neg[b, s, t] * (logprior_neg[b, s, t] + logllhood_neg[b, s, t])
+    @tullio loss_pos[b, t] := weights_pos[b, s, t] * (logprior_pos[b, s, t] + logllhood_pos[b, s, t])
+    
+    # Steppingstone estimator
+    return -mean(sum(loss_pos - loss_neg, dims=2) + (loss_neg[:, 1:1] .- mean(logprior))), seed
 end
 
 function update_llhood_grid(

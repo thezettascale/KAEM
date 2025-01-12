@@ -1,4 +1,7 @@
-using BenchmarkTools, ConfParser, Lux, Zygote, Random
+using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA
+
+ENV["GPU"] = true
+ENV["QUANT"] = "FP32"
 
 include("../src/LV-KAM/LV-KAM.jl")
 using .LV_KAM_model
@@ -19,6 +22,6 @@ function benchmark_dim(n_z)
     first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
 end
 
-@benchmark benchmark_dim(10)
-@benchmark benchmark_dim(50)
-@benchmark benchmark_dim(100)
+@benchmark CUDA.@sync benchmark_dim(10)
+@benchmark CUDA.@sync benchmark_dim(50)
+@benchmark CUDA.@sync benchmark_dim(100)

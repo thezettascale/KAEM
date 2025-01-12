@@ -122,8 +122,8 @@ function systematic_sampler(
     cdf = cumsum(softmax(temps .* logllhood, dims=3), dims=3) |> cpu_device()
         
     # Generate thresholds and find the first cdf value greater than the random value
-    seed, rng = next_rng(seed)
     range = reshape(collect(quant, 0:N-1), 1, 1, N)
+    seed, rng = next_rng(seed)
     u = (rand(quant, T, B, 1) .+ range) ./ N 
     
     # Find the first cdf value greater than the random value

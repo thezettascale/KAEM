@@ -81,7 +81,7 @@ function init_LV_KAM(
             num_grid_updating_samples,
             MC_samples,
             verbose,
-            temperatures[1:end-1, :, :],
+            temperatures[:, :, :],
             Δt[:,:,:]
         )
 end
@@ -156,7 +156,7 @@ function MLE_loss(
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
-        loss_prior = weights * (logprior .- ex_prior)
+        loss_prior = weights * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior .+ loss_llhood), seed
     end
@@ -168,26 +168,25 @@ function MLE_loss(
     logllhood = permutedims(logllhood[:,:,:], [3, 1, 2])
     
     # Resample the latent variable using systematic sampling for all adjacent power posteriors
-    resampled_idx_neg, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[1:end-1, :, :]; seed=seed) 
-    resampled_idx_pos, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[2:end, :, :]; seed=seed)
+    resampled_idx_neg, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[1:end-2, :, :]; seed=seed) 
+    resampled_idx_pos, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[2:end-1, :, :]; seed=seed)
 
     # Extract adjacent samples, and find importance weights
     logprior_neg, logprior_pos = logprior[resampled_idx_neg] .- ex_prior, logprior[resampled_idx_pos] .- ex_prior
     logllhood_neg, logllhood_pos = logllhood[resampled_idx_neg], logllhood[resampled_idx_pos]
-    
     weights_neg = @ignore_derivatives softmax(m.Δt[1:end-1, :, :] .* logllhood_neg, dims=3)
     weights_pos = @ignore_derivatives softmax(m.Δt[2:end, :, :] .* logllhood_pos, dims=3)
 
-    # Weight log likelihoods by current temperature
-    logllhood_neg = (m.Δt[1:end-1, :, :] .+ m.temperatures[1:end-1, :, :]) .* logllhood_neg
-    logllhood_pos = (m.Δt[2:end, :, :] .+ m.temperatures[2:end, :, :]) .* logllhood_pos
+    # Weight log likelihoods by current (i.e. next) temperature
+    logllhood_neg = m.temperatures[2:end-1, :, :] .* logllhood_neg
+    logllhood_pos = m.temperatures[3:end, :, :] .* logllhood_pos
 
-    # Importance sampling for adjactent power posteriors
+    # Importance sampling for adjacent power posteriors
     @tullio loss_neg[t, b] := weights_neg[t, b, s] * (logprior_neg[t, b, s] + logllhood_neg[t, b, s])
     @tullio loss_pos[t, b] := weights_pos[t, b, s] * (logprior_pos[t, b, s] + logllhood_pos[t, b, s])
     
     # Steppingstone estimator
-    return -mean(sum(loss_pos - loss_neg, dims=1) + (loss_neg[1:1, :] .- mean(logprior))), seed
+    return -mean(sum(loss_pos - loss_neg, dims=1) .+ (loss_neg[1:1, :] .- mean(logprior))), seed
 end
 
 function update_llhood_grid(

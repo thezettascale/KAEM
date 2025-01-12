@@ -15,7 +15,7 @@ datasets = [
     ]
 
 for dataset in datasets
-    ## Thermodynamic Integration
+    # Thermodynamic Integration
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "30")
 
     Random.seed!(1)

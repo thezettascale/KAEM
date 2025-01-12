@@ -103,8 +103,6 @@ function log_likelihood(
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
 
-
-
 function systematic_sampler(
     weights::AbstractArray;
     seed::Int=1
@@ -125,8 +123,8 @@ function systematic_sampler(
         
     # Generate thresholds and find the first cdf value greater than the random value
     seed, rng = next_rng(seed)
-    u = (rand(quant, B, N) .+ (0:N-1)') ./ N |> device
-    return resample_idx(cdf, u, B, N), seed
+    u = (rand(quant, B, 1) .+ (0:N-1)') ./ N |> device
+    return resample_idx(cdf, u .% 1, B, N), seed
 end
 
 function init_KAN_lkhood(

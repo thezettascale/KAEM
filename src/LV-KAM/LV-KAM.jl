@@ -149,25 +149,25 @@ function MLE_loss(
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    
+    logprior = length(m.temperatures) <= 1 ? dropdims(logprior; dims=2) : permutedims(logprior, [2, 1])
     ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0) 
 
     function tempered_loss(t::quant, Δt::quant)
         """Returns the batched loss for a given temperature."""
 
         # Posterior samples, resamples are drawn per batch using particle filter
-        posterior_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
-        resampled_idxs, seed = m.lkhood.resample_z(posterior_weights, seed)  
+        previous_weights = @ignore_derivatives softmax(t .* logllhood, dims=2) 
+        resampled_idxs, seed = m.lkhood.resample_z(previous_weights, seed)  
+        
+        # Re-evaluate weights and temper the likelihood 
+        llhood_t = view(logllhood, resampled_idxs)
+        weights_t = @ignore_derivatives softmax(Δt .* llhood_t, dims=2)
+        llhood_t = (t + Δt) .* llhood_t
+        logprior_t = view(logprior, resampled_idxs) .- ex_prior
 
-        function posterior_expectation(batch_idx::Int)
-            """Returns the marginal likelihood for a single sample in the batch."""    
-            llhood_t = logllhood[batch_idx, resampled_idxs[batch_idx, :]]
-            weights_t = @ignore_derivatives softmax(Δt .* llhood_t)'
-            loss_prior = weights_t * (logprior[resampled_idxs[batch_idx, :]] .- ex_prior)
-            loss_llhood = weights_t * ((t + Δt) .* llhood_t)
-            return loss_llhood + loss_prior 
-        end
-
-        return reduce(vcat, map(posterior_expectation, 1:size(x, 2)))
+        @tullio loss_t := weights_t[b, s] * (llhood_t[b, s] .+ logprior_t[b, s])
+        return -mean(loss_t)
     end
 
     # MLE loss is default

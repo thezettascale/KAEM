@@ -11,6 +11,7 @@ const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device
 # Only FP32 is supported for now
 const quant = Dict(
     "FP32" => Float32,
+    "FP64" => Float64
 )[get(ENV, "QUANT", "FP32")]
 
 function device(x)

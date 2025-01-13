@@ -21,8 +21,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray, x̂::AbstractArray) -> -dropdims(sum((x .- x̂).^2, dims=3); dims=3),
-    "bernoulli" => (x::AbstractArray, x̂::AbstractArray) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3); dims=3),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -sum((x .- x̂).^2, dims=3),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3),
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -39,7 +39,7 @@ function generate_from_z(
     lkhood::KAN_lkhood, 
     ps, 
     st, 
-    z::AbstractArray;
+    z::AbstractArray{quant};
     seed::Int=1,
     )
     """

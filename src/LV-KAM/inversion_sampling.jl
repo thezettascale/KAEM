@@ -11,7 +11,7 @@ include("univariate_functions.jl")
 using .Utils: device, next_rng, removeZero, quant
 using .univariate_functions: fwd
 
-function choose_component(α, num_samples, q_size, p_size; seed=1)
+function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::Int, p_size::Int; seed::Int=1)
     """
     Creates a one-hot mask for each mixture model, q, to select one component, p.
     
@@ -41,7 +41,7 @@ function choose_component(α, num_samples, q_size, p_size; seed=1)
     return permutedims(mask, [3, 1, 2]) |> device, seed
 end
 
-function get_trap_bounds(idxs, cdf)
+function get_trap_bounds(idxs::AbstractArray{Int}, cdf::AbstractArray{quant})
     """Returns the CDF values bounding each trapezium defined by idxs."""
     Q, N = size(idxs)
     cdf = hcat(zeros(quant, N, 1, Q), cdf) # Zero prob
@@ -59,10 +59,10 @@ function get_trap_bounds(idxs, cdf)
 end
 
 function interpolate_z(
-    indices::AbstractArray,
-    cdf::AbstractArray,
-    rv::AbstractArray,
-    grid::AbstractArray;
+    indices::AbstractArray{Int},
+    cdf::AbstractArray{quant},
+    rv::AbstractArray{quant},
+    grid::AbstractArray{quant};
     seed::Int=1
     )
     """

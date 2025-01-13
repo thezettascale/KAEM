@@ -68,7 +68,7 @@ end
 
 function log_prior(
     mix::mix_prior, 
-    z::AbstractArray, 
+    z::AbstractArray{quant},
     ps, 
     st;
     )

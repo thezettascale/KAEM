@@ -33,7 +33,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
 end
 
 function init_LV_KAM(
-    dataset::AbstractArray,
+    dataset::AbstractArray{quant},
     conf::ConfParse;
     prior_seed::Int=1,
     lkhood_seed::Int=1,
@@ -130,7 +130,7 @@ function MLE_loss(
     m::LV_KAM, 
     ps, 
     st, 
-    x::AbstractArray;
+    x::AbstractArray{quant};
     seed::Int=1
     )
     """
@@ -157,15 +157,14 @@ function MLE_loss(
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=2) 
         loss_prior = weights * (logprior[:] .- ex_prior)
-        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
+        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s, 1]
         return -mean(loss_prior .+ loss_llhood), seed
     end
 
     ### Thermodynamic Integration ###
 
     # Prepare for broadcasting, temps and batch first for contiguous access
-    logprior = permutedims(logprior, [3, 2, 1])
-    logllhood = permutedims(logllhood[:,:,:], [3, 1, 2])
+    logprior, logllhood = permutedims(logprior, [3, 2, 1]), permutedims(logllhood, [3, 1, 2])
     
     # Resample the latent variable using systematic sampling for all adjacent power posteriors
     resampled_idx_neg, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[1:end-2, :, :]; seed=seed) 

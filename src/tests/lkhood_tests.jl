@@ -24,10 +24,10 @@ function test_log_likelihood()
     ps, st = ps |> device, st |> device
 
     z_test = randn(quant, MC_sample_size, z_dim) |> device
-    x_test = randn(quant, b_size, out_dim) |> device
+    x_test = randn(quant, out_dim, b_size) |> device
 
     log_lkhood, seed = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (b_size, MC_sample_size)
+    @test size(log_lkhood) == (MC_sample_size, b_size)
 end
 
 function test_log_likelihood_derivative()
@@ -37,7 +37,7 @@ function test_log_likelihood_derivative()
     ps, st = ps |> device, st |> device
 
     z_test = randn(quant, b_size, z_dim) |> device
-    x_test = randn(quant, b_size, out_dim) |> device
+    x_test = randn(quant, out_dim, b_size) |> device
     
     ∇ = first(gradient(z -> sum(first(log_likelihood(lkhood, ps, st, x_test, z))), z_test))
     @test size(∇) == size(z_test)

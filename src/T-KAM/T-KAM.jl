@@ -155,9 +155,9 @@ function MLE_loss(
 
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
-        weights = @ignore_derivatives softmax(logllhood, dims=2) 
-        loss_prior = weights * (logprior[:] .- ex_prior)
-        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
+        weights = @ignore_derivatives softmax(logllhood, dims=1) 
+        loss_prior = weights' * (logprior[:] .- ex_prior)
+        @tullio loss_llhood[b] := weights[s, b] * logllhood[s, b]
         return -mean(loss_prior .+ loss_llhood), seed
     end
 
@@ -182,16 +182,16 @@ function MLE_loss(
         logllhood_pos, logprior_pos = logllhood_pos[idxs_pos], logprior_pos[idxs_pos] .- ex_prior
 
         # Weight lkhoods by next temperature
-        weights_neg = @ignore_derivatives softmax(m.Δt[t] .* logllhood_neg, dims=2)
-        weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=2)
+        weights_neg = @ignore_derivatives softmax(m.Δt[t] .* logllhood_neg, dims=1)
+        weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=1)
 
         # Temper the log likelihoods
         logllhood_neg_t = m.temperatures[t] .* logllhood_neg
         logllhood_pos_t = m.temperatures[t+1] .* logllhood_pos
 
         # Importance sampling
-        @tullio loss_neg[b] := weights_neg[b, s] * (logprior_neg[b, s] + logllhood_neg_t[b, s])        
-        @tullio loss_pos[b] := weights_pos[b, s] * (logprior_pos[b, s] + logllhood_pos_t[b, s])
+        @tullio loss_neg[b] := weights_neg[s, b] * (logprior_neg[s, b] + logllhood_neg_t[s, b])        
+        @tullio loss_pos[b] := weights_pos[s, b] * (logprior_pos[s, b] + logllhood_pos_t[s, b])
         
         loss += (loss_pos - loss_neg)
     end

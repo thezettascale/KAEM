@@ -21,8 +21,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=3), dims=3),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3), dims=3),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=1), dims=1),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=1), dims=1),
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -96,8 +96,8 @@ function log_likelihood(
     """
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     logllhood = lkhood.log_lkhood_model(
-        permutedims(x[:,:,:], [2,3,1]),
-        permutedims(x̂[:,:,:], [3,1,2]),
+        permutedims(x[:,:,:], [1,3,2]),
+        permutedims(x̂[:,:,:], [2,1,3]),
     )
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
@@ -121,26 +121,28 @@ function particle_filter(
         - The resampled indices. Twice to ensure stochasticity in Steppingstone sum.
         - The updated seed.
     """
-    B, N = size(logllhood_neg)
+    N, B = size(logllhood_neg)
 
     # Uniform variate for multinonial resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, quant, 2, B, N)
+    u = rand(rng, quant, 2, N, B)
 
     # Residual weights
-    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg, dims=2), softmax(Δt_pos .* logllhood_pos, dims=2)
+    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg, dims=1), softmax(Δt_pos .* logllhood_pos, dims=1)
     r_neg, r_pos = floor.(weights_neg .* N) ./ N, floor.(weights_pos .* N) ./ N
     weights_neg, weights_pos = weights_neg .- r_neg, weights_pos .- r_pos
     
     # Renormalize and compute CDF
-    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=2), weights_pos ./ sum(weights_pos, dims=2)
-    cdf_neg, cdf_pos = cumsum(weights_neg, dims=2), cumsum(weights_pos, dims=2)
+    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=1), weights_pos ./ sum(weights_pos, dims=1)
+    cdf_neg, cdf_pos = cumsum(weights_neg, dims=1), cumsum(weights_pos, dims=1)
 
     # Find first CDF value greater than random variate
-    idxs_neg, idxs_pos = Array{Int}(undef, B, N), Array{Int}(undef, B, N)
-    Threads.@threads for b in 1:B
-        idxs_neg[b, :] .= searchsortedfirst.(Ref(cdf_neg[b, :]), u[1, b, :])
-        idxs_pos[b, :] .= searchsortedfirst.(Ref(cdf_pos[b, :]), u[2, b, :])
+    idxs_neg, idxs_pos = Array{Int}(undef, N, B), Array{Int}(undef, N, B)
+    Threads.@threads for s in 1:N
+        for b in 1:B
+            idxs_neg[s, b] = searchsortedfirst(cdf_neg[:, b], u[1, s, b])
+            idxs_pos[s, b] = searchsortedfirst(cdf_pos[:, b], u[2, s, b])
+        end
     end
     replace!(idxs_neg, N+1 => N)
     replace!(idxs_pos, N+1 => N)

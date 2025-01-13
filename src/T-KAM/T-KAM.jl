@@ -195,7 +195,7 @@ function MLE_loss(
         
         loss += (loss_neg - loss_pos)
     end
-    return -sum(loss) ./ b_size, seed
+    return -mean(loss), seed
 end
 
 function update_llhood_grid(

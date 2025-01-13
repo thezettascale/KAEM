@@ -136,8 +136,12 @@ function particle_filter(
 
     idxs_neg, idxs_pos = Array{Int}(undef, B, N), Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
-        idxs_neg[b, :] .= searchsortedfirst.(Ref(cdf_neg[b, :]), u[1, b, :])
-        idxs_pos[b, :] .= searchsortedfirst.(Ref(cdf_pos[b, :]), u[2, b, :])
+        i_neg .= searchsortedfirst.(Ref(cdf_neg[b, :]), u[1, b, :])
+        i_pos .= searchsortedfirst.(Ref(cdf_pos[b, :]), u[2, b, :])
+        replace!(i_neg, N+1 => N)
+        replace!(i_pos, N+1 => N)
+        idxs_neg[b, :] .= i_neg
+        idxs_pos[b, :] .= i_pos
     end
     
     return idxs_neg, idxs_pos, seed

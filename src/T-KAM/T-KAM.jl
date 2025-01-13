@@ -190,10 +190,11 @@ function MLE_loss(
         logllhood_pos_t = m.temperatures[t+1] .* logllhood_pos
 
         # Importance sampling
-        @tullio loss_neg[b] := weights_neg[b, s] * (logprior_neg[b, s] + logllhood_neg_t[b, s])
+        @tullio loss_neg[b] := weights_neg[b, s] * (logprior_neg[b, s] + logllhood_neg_t[b, s])        replace!(i_neg, N+1 => N)
+        replace!(i_pos, N+1 => N)
         @tullio loss_pos[b] := weights_pos[b, s] * (logprior_pos[b, s] + logllhood_pos_t[b, s])
         
-        loss += (loss_neg - loss_pos)
+        loss += (loss_pos - loss_neg)
     end
     return -mean(loss), seed
 end

@@ -136,7 +136,7 @@ function particle_filter(
     
     # Renormalize and check if ESS is below threshold
     weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=2), weights_pos ./ sum(weights_pos, dims=2)
-    ESS_neg, ESS_pos = quant(1) / sum(weights_neg.^2, dims=2), quant(1) / sum(weights_pos.^2, dims=2)
+    ESS_neg, ESS_pos = 1 ./ sum(weights_neg.^2, dims=2), 1 ./ sum(weights_pos.^2, dims=2)
     bool_neg, bool_pos = ESS_neg .< ESS_threshold * N, ESS_pos .< ESS_threshold * N
 
     # Find first CDF value greater than random variate

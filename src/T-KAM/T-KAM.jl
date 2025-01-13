@@ -168,26 +168,30 @@ function MLE_loss(
 
     # Initialize from prior
     previous = quant(0)
+    _, idx_init, seed = m.lkhood.resample_z(logllhood, logllhood, previous, m.Δt[1], seed)
+    w_init = @ignore_derivatives softmax(m.Δt[1] .* logllhood[idx_init], dims=1)
+    init_logprior = logprior[idx_init] .- ex_prior
+    @tullio loss[b] := w_init[s, b] * init_logprior[s, 1] 
+    loss .-= mean(logprior)
+
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
-    loss = zeros(quant, b_size) 
+    for (t, Δt) in enumerate(m.Δt[1:end-1])
 
-    for t in eachindex(m.temperatures[1:end-2])
-
-        # Resample from propogated particles
-        idxs_neg, idxs_pos, seed = @ignore_derivatives m.lkhood.resample_z(logllhood_neg, logllhood_pos, previous, m.Δt[t], seed)
-        previous = m.Δt[t]
+        # Resample from propogated particles using preceding power posteriors
+        idxs_neg, idxs_pos, seed = @ignore_derivatives m.lkhood.resample_z(logllhood_neg, logllhood_pos, previous, Δt, seed)
+        previous = Δt
         
         logllhood_neg, logprior_neg = logllhood_neg[idxs_neg], logprior_neg[idxs_neg] .- ex_prior
         logllhood_pos, logprior_pos = logllhood_pos[idxs_pos], logprior_pos[idxs_pos] .- ex_prior
 
-        # Weight lkhoods by next temperature
-        weights_neg = @ignore_derivatives softmax(m.Δt[t] .* logllhood_neg, dims=1)
+        # Weight lkhoods by current temperature chainge
+        weights_neg = @ignore_derivatives softmax(Δt .* logllhood_neg, dims=1)
         weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=1)
 
-        # Temper the log likelihoods
-        logllhood_neg_t = m.temperatures[t] .* logllhood_neg
-        logllhood_pos_t = m.temperatures[t+1] .* logllhood_pos
+        # Temper the log likelihoods by current temperature
+        logllhood_neg_t = m.temperatures[t+1] .* logllhood_neg
+        logllhood_pos_t = m.temperatures[t+2] .* logllhood_pos
 
         # Importance sampling
         @tullio loss_neg[b] := weights_neg[s, b] * (logprior_neg[s, b] + logllhood_neg_t[s, b])        

@@ -198,7 +198,7 @@ function init_KAN_lkhood(
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
     ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "ESS_threshold_factor"))
-    resample_function = (logllhood_neg, logllhood_pos, Δt_neg, Δt_pos, seed) -> particle_filter(logllhood_neg, logllhood_pos, Δt_neg, Δt_pos; seed=seed, ESS_threshold=ESS_threshold)
+    resample_function = (logllhood_neg, logllhood_pos, Δt_neg, Δt_pos, seed) -> @ignore_derivatives particle_filter(logllhood_neg, logllhood_pos, Δt_neg, Δt_pos; seed=seed, ESS_threshold=ESS_threshold)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

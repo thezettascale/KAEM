@@ -130,7 +130,8 @@ function particle_filter(
     # Residual weights
     weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg, dims=2), softmax(Δt_pos .* logllhood_pos, dims=2)
     r_neg, r_pos = floor.(weights_neg .* N) ./ N, floor.(weights_pos .* N) ./ N
-    weights_neg, weights_pos = softmax(weights_neg .- r_neg, dims=2), softmax(weights_pos .- r_pos, dims=2)
+    weights_neg, weights_pos = weights_neg .- r_neg, weights_pos .- r_pos
+    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=2), weights_pos ./ sum(weights_pos, dims=2)
     cdf_neg, cdf_pos = cumsum(weights_neg, dims=2), cumsum(weights_pos, dims=2)
 
     idxs_neg, idxs_pos = Array{Int}(undef, B, N), Array{Int}(undef, B, N)

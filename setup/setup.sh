@@ -3,13 +3,13 @@
 # Creates conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
 
-conda env list | grep -q 'LV-KAM'
+conda env list | grep -q 'T-KAM'
 if [ $? -ne 0 ]; then
-    echo "Creating conda environment LV-KAM..."
-    conda create -n LV-KAM python=3.11 -y  
+    echo "Creating conda environment T-KAM..."
+    conda create -n T-KAM python=3.11 -y  
 fi
 
-conda activate LV-KAM
+conda activate T-KAM
 
 # Install Python requirements
 echo "Installing Python requirements..."

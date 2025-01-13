@@ -1,11 +1,11 @@
-# LV-KAM
-Official implementation of the Latent Variable Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
+# T-KAM
+Official implementation of the Thermodynamic Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
 
 Go see our [litepaper!](https://exalaboratories.com/litepaper). We are able to train both MLPs and KANs more efficiently than a GPU, and we can certainly make KANs more efficient than anything else out there.
 
-## What is LV-KAM.
+## What is T-KAM.
 
-LV-KAM is a generative model that has been **entirely represented in two sums.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
+T-KAM is a generative model that has been **entirely represented in two sums.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
 
 It uses:
 
@@ -23,7 +23,7 @@ bash <conda-installer-name>-latest-Linux-x86_64.sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
-The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "LV-KAM". Just need to run:
+The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM". Just need to run:
 
 ```bash
 bash setup/setup.sh
@@ -57,7 +57,7 @@ bash benchmarking/run_benchmarks.sh
 
 ## Sustainability statement:
 
-Like all KANs, LV-KAM neither performs optimally nor scales effectively on a GPU. Our hardware offers significantly better performance, achieving **27.6x** the performance per Watt of GPUs in the [initial public revisions](https://exalaboratories.com/litepaper), with rapid ongoing private improvements. LV-KAM is especially well-suited to Exa hardware and will be scaled using such. 
+Like all KANs, T-KAM neither performs optimally nor scales effectively on a GPU. Our hardware offers significantly better performance, achieving **27.6x** the performance per Watt of GPUs in the [initial public revisions](https://exalaboratories.com/litepaper), with rapid ongoing private improvements. T-KAM is especially well-suited to Exa hardware and will be scaled using such. 
 
 For this initial study however, experiments were conducted on a GPU due to its availability. To mitigate inefficiency as much as possible, [Julia](https://julialang.org/) was used, which leverages [JIT compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation). While initial compilation is slower than PyTorch, Julia excels in performance for repeated evaluations of the same code. Julia is also faster to compile than JAX and runs natively on the GPU, so it's preferable for prototyping. 
 

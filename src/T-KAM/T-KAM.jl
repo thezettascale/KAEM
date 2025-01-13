@@ -1,6 +1,6 @@
-module LV_KAM_model
+module T_KAM_model
 
-export LV_KAM, init_LV_KAM, generate_batch, MLE_loss, update_llhood_grid
+export T_KAM, init_T_KAM, generate_batch, MLE_loss, update_llhood_grid
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -17,7 +17,7 @@ using .KAN_likelihood
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, quant
 
-struct LV_KAM <: Lux.AbstractLuxLayer
+struct T_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
     lkhood::KAN_lkhood 
     train_loader::DataLoader
@@ -32,7 +32,7 @@ struct LV_KAM <: Lux.AbstractLuxLayer
     Δt::AbstractArray{quant}
 end
 
-function init_LV_KAM(
+function init_T_KAM(
     dataset::AbstractArray{quant},
     conf::ConfParse;
     prior_seed::Int=1,
@@ -70,7 +70,7 @@ function init_LV_KAM(
 
     verbose && println("Using $(Threads.nthreads()) threads.")
 
-    return LV_KAM(
+    return T_KAM(
             prior_model,
             lkhood_model,
             train_loader,
@@ -86,14 +86,14 @@ function init_LV_KAM(
         )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, model::LV_KAM)
+function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialparameters(rng, model.prior), 
         gen = Lux.initialparameters(rng, model.lkhood)
         )
 end
 
-function Lux.initialstates(rng::AbstractRNG, model::LV_KAM)
+function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood)
@@ -101,7 +101,7 @@ function Lux.initialstates(rng::AbstractRNG, model::LV_KAM)
 end
 
 function generate_batch(
-    model::LV_KAM, 
+    model::T_KAM, 
     ps, 
     st,
     num_samples::Int; 
@@ -127,7 +127,7 @@ function generate_batch(
 end
 
 function MLE_loss(
-    m::LV_KAM, 
+    m::T_KAM, 
     ps, 
     st, 
     x::AbstractArray{quant};
@@ -199,7 +199,7 @@ function MLE_loss(
 end
 
 function update_llhood_grid(
-    model::LV_KAM,
+    model::T_KAM,
     ps, 
     st; 
     seed::Int=1

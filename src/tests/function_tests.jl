@@ -3,7 +3,7 @@ using Test, Random, LinearAlgebra, Lux
 ENV["GPU"] = true
 ENV["QUANT"] = "FP32"
 
-include("../LV-KAM/univariate_functions.jl")
+include("../T-KAM/univariate_functions.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils

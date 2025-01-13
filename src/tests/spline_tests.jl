@@ -3,7 +3,7 @@ using Test, Random, LinearAlgebra
 ENV["GPU"] = true
 ENV["QUANT"] = "FP32"
 
-include("../LV-KAM/spline_bases.jl")
+include("../T-KAM/spline_bases.jl")
 include("../utils.jl")
 using .spline_functions
 using .Utils

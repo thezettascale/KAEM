@@ -3,8 +3,8 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 ENV["GPU"] = true
 ENV["QUANT"] = "FP32"
 
-include("../LV-KAM/mixture_prior.jl")
-include("../LV-KAM/KAN_likelihood.jl")
+include("../T-KAM/mixture_prior.jl")
+include("../T-KAM/KAN_likelihood.jl")
 include("../utils.jl")
 using .ebm_mix_prior
 using .KAN_likelihood

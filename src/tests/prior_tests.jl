@@ -2,7 +2,7 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 
 ENV["GPU"] = true
 
-include("../LV-KAM/mixture_prior.jl")
+include("../T-KAM/mixture_prior.jl")
 include("../utils.jl")
 using .ebm_mix_prior
 using .Utils

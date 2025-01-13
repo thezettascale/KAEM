@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Activate LV-KAM environment
+# Activate T-KAM environment
 source ~/anaconda3/etc/profile.d/conda.sh
-echo "Activating conda environment LV-KAM..."
-conda activate LV-KAM
+echo "Activating conda environment T-KAM..."
+conda activate T-KAM
 if [ $? -ne 0 ]; then
-    echo "Failed to activate conda environment LV-KAM"
+    echo "Failed to activate conda environment T-KAM"
     exit 1
 fi
 

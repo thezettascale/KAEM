@@ -1,11 +1,11 @@
 module trainer
 
-export LV_KAM_trainer, init_trainer, train!
+export T_KAM_trainer, init_trainer, train!
 
-include("../LV-KAM/LV-KAM.jl")
+include("../T-KAM/T-KAM.jl")
 include("optimizer.jl")
 include("../utils.jl")
-using .LV_KAM_model
+using .T_KAM_model
 using .optimization
 using .Utils: device, quant
 
@@ -20,7 +20,7 @@ dataset_mapping = Dict(
     "SVHN" => MLDatasets.SVHN2(),
 )
 
-mutable struct LV_KAM_trainer
+mutable struct T_KAM_trainer
     model
     o::opt
     dataset_name::AbstractString
@@ -57,7 +57,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     println("Resized dataset to $(img_shape)")
     
     # Initialize model
-    model = init_LV_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
+    model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     optimizer = create_opt(conf)
     grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
@@ -79,7 +79,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         h5write(file_loc * "real_images.h5", "samples", Float32.(save_dataset))
     end
     
-    return LV_KAM_trainer(
+    return T_KAM_trainer(
         model, 
         optimizer, 
         dataset_name, 
@@ -98,7 +98,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         1)
 end
 
-function train!(t::LV_KAM_trainer)
+function train!(t::T_KAM_trainer)
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs

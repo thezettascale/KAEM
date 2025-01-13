@@ -134,14 +134,14 @@ function particle_filter(
     
     # Renormalize and compute CDF
     weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=1), weights_pos ./ sum(weights_pos, dims=1)
-    cdf_neg, cdf_pos = cumsum(weights_neg, dims=1), cumsum(weights_pos, dims=1)
+    cdf_neg, cdf_pos = cumsum(weights_neg', dims=2), cumsum(weights_pos', dims=2) # Transposed for contiguous access
 
     # Find first CDF value greater than random variate
     idxs_neg, idxs_pos = Array{Int}(undef, N, B), Array{Int}(undef, N, B)
     Threads.@threads for s in 1:N
         for b in 1:B
-            idxs_neg[s, b] = searchsortedfirst(cdf_neg[:, b], u[1, s, b])
-            idxs_pos[s, b] = searchsortedfirst(cdf_pos[:, b], u[2, s, b])
+            idxs_neg[s, b] = searchsortedfirst(cdf_neg[b, :], u[1, s, b])
+            idxs_pos[s, b] = searchsortedfirst(cdf_pos[b, :], u[2, s, b])
         end
     end
     replace!(idxs_neg, N+1 => N)

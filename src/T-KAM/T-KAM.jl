@@ -174,8 +174,8 @@ function MLE_loss(
     @tullio loss[b] := w_init[s, b] * init_logprior[s, 1] 
     loss = loss .- mean(logprior)
 
-    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
-    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
+    logprior_neg, logprior_pos = logprior, logprior[idx_init]
+    logllhood_neg, logllhood_pos = logllhood, logllhood[idx_init]
     for (t, Δt) in enumerate(m.Δt[1:end-1])
 
         # Resample from propogated particles using preceding power posteriors
@@ -185,7 +185,7 @@ function MLE_loss(
         logllhood_neg, logprior_neg = logllhood_neg[idxs_neg], logprior_neg[idxs_neg] .- ex_prior
         logllhood_pos, logprior_pos = logllhood_pos[idxs_pos], logprior_pos[idxs_pos] .- ex_prior
 
-        # Weight lkhoods by current temperature chainge
+        # Weight lkhoods by current temperature change
         weights_neg = @ignore_derivatives softmax(Δt .* logllhood_neg, dims=1)
         weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=1)
 

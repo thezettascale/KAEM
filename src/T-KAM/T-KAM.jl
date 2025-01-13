@@ -172,7 +172,7 @@ function MLE_loss(
     w_init = @ignore_derivatives softmax(m.Δt[1] .* logllhood[idx_init], dims=1)
     init_logprior = logprior[idx_init] .- ex_prior
     @tullio loss[b] := w_init[s, b] * init_logprior[s, 1] 
-    loss .-= mean(logprior)
+    loss = loss .- mean(logprior)
 
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)

@@ -33,6 +33,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
+    resample_z::Function
 end
 
 function generate_from_z(
@@ -107,7 +108,8 @@ function particle_filter(
     logllhood_pos::AbstractArray{quant},
     Δt_neg::quant,
     Δt_pos::quant;
-    seed::Int=1
+    seed::Int=1,
+    ESS_threshold::quant=0.5,
 )
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
@@ -127,21 +129,24 @@ function particle_filter(
     seed, rng = next_rng(seed)
     u = rand(rng, quant, 2, N, B)
 
-    # Residual weights
-    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg, dims=1), softmax(Δt_pos .* logllhood_pos, dims=1)
+    # Residual weights, (transposed for contiguous access in thread)
+    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg', dims=2), softmax(Δt_pos .* logllhood_pos', dims=2)
     r_neg, r_pos = floor.(weights_neg .* N) ./ N, floor.(weights_pos .* N) ./ N
     weights_neg, weights_pos = weights_neg .- r_neg, weights_pos .- r_pos
     
-    # Renormalize and compute CDF
-    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=1), weights_pos ./ sum(weights_pos, dims=1)
-    cdf_neg, cdf_pos = cumsum(weights_neg', dims=2), cumsum(weights_pos', dims=2) # Transposed for contiguous access
+    # Renormalize and check if ESS is below threshold
+    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=2), weights_pos ./ sum(weights_pos, dims=2)
+    ESS_neg, ESS_pos = quant(1) / sum(weights_neg.^2, dims=2), quant(1) / sum(weights_pos.^2, dims=2)
+    bool_neg, bool_pos = ESS_neg .< ESS_threshold * N, ESS_pos .< ESS_threshold * N
 
     # Find first CDF value greater than random variate
+    cdf_neg, cdf_pos = cumsum(weights_neg, dims=2), cumsum(weights_pos, dims=2) 
+        
     idxs_neg, idxs_pos = Array{Int}(undef, N, B), Array{Int}(undef, N, B)
-    Threads.@threads for s in 1:N
+    Threads.@threads for s in 1:N          
         for b in 1:B
-            idxs_neg[s, b] = searchsortedfirst(cdf_neg[b, :], u[1, s, b])
-            idxs_pos[s, b] = searchsortedfirst(cdf_pos[b, :], u[2, s, b])
+            idxs_neg[s, b] = bool_neg[s] ? searchsortedfirst(cdf_neg[b, :], u[1, s, b]) : s
+            idxs_pos[s, b] = bool_pos[s] ? searchsortedfirst(cdf_pos[b, :], u[2, s, b]) : s
         end
     end
     replace!(idxs_neg, N+1 => N)
@@ -192,6 +197,9 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
+    ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "ESS_threshold_factor"))
+    resample_function = (logllhood_neg, logllhood_pos, Δt_neg, Δt_pos, seed) -> particle_filter(logllhood_neg, logllhood_pos, Δt_neg, Δt_pos; seed=seed, ESS_threshold=ESS_threshold)
+
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
         out_dim;
@@ -217,7 +225,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act])
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], resample_function)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

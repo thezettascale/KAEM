@@ -175,7 +175,7 @@ function MLE_loss(
     for t in eachindex(m.temperatures[1:end-2])
 
         # Resample from propogated particles
-        idxs_neg, idxs_pos, seed = @ignore_derivatives particle_filter(logllhood_neg, logllhood_pos, previous, m.Δt[t]; seed=seed)
+        idxs_neg, idxs_pos, seed = @ignore_derivatives m.lkhood.resample_z(logllhood_neg, logllhood_pos, previous, m.Δt[t], seed)
         previous = m.Δt[t]
         
         logllhood_neg, logprior_neg = logllhood_neg[idxs_neg], logprior_neg[idxs_neg] .- ex_prior

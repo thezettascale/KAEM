@@ -64,7 +64,7 @@ function init_LV_KAM(
     Δt = [quant(1)]
     if N_t > 1
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) |> device
+        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
         Δt = temperatures[2:end] .- temperatures[1:end-1]
     end
 
@@ -81,8 +81,8 @@ function init_LV_KAM(
             num_grid_updating_samples,
             MC_samples,
             verbose,
-            temperatures[:, :, :],
-            Δt[:,:,:]
+            temperatures,
+            Δt
         )
 end
 
@@ -147,7 +147,7 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-
+    b_size = size(x, 2)
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
@@ -162,30 +162,40 @@ function MLE_loss(
     end
 
     ### Thermodynamic Integration ###
-
-    # Prepare for broadcasting, temps and batch first for contiguous access
-    logprior, logllhood = permutedims(logprior, [3, 2, 1]), permutedims(logllhood, [3, 1, 2])
     
-    # Resample the latent variable using systematic sampling for all adjacent power posteriors
-    resampled_idx_neg, seed = @ignore_derivatives residual_sampler(logllhood, m.temperatures[1:end-2, :, :]; seed=seed) 
-    resampled_idx_pos, seed = @ignore_derivatives residual_sampler(logllhood, m.temperatures[2:end-1, :, :]; seed=seed)
+    # Parallelized on CPU in particle filter, (which is thread safe)
+    logprior, logllhood = logprior |> cpu_device(), logllhood |> cpu_device()
 
-    # Extract adjacent samples, and find importance weights
-    logprior_neg, logprior_pos = logprior[resampled_idx_neg] .- ex_prior, logprior[resampled_idx_pos] .- ex_prior
-    logllhood_neg, logllhood_pos = logllhood[resampled_idx_neg], logllhood[resampled_idx_pos]
-    weights_neg = @ignore_derivatives softmax(m.Δt[1:end-1, :, :] .* logllhood_neg, dims=3)
-    weights_pos = @ignore_derivatives softmax(m.Δt[2:end, :, :] .* logllhood_pos, dims=3)
+    # Initialize from prior
+    previous = quant(0)
+    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
+    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
+    loss = zeros(quant, b_size) 
 
-    # Weight log likelihoods by current (i.e. next) temperature
-    logllhood_neg = m.temperatures[2:end-1, :, :] .* logllhood_neg
-    logllhood_pos = m.temperatures[3:end, :, :] .* logllhood_pos
+    for t in eachindex(m.temperatures[1:end-2])
 
-    # Importance sampling for adjacent power posteriors
-    @tullio loss_neg[t, b] := weights_neg[t, b, s] * (logprior_neg[t, b, s] + logllhood_neg[t, b, s])
-    @tullio loss_pos[t, b] := weights_pos[t, b, s] * (logprior_pos[t, b, s] + logllhood_pos[t, b, s])
-    
-    # Steppingstone estimator
-    return -mean(sum(loss_pos - loss_neg, dims=1) .+ (loss_neg[1:1, :] .- mean(logprior))), seed
+        # Resample from propogated particles
+        idxs_neg, idxs_pos, seed = @ignore_derivatives particle_filter(logllhood_neg, logllhood_pos, previous, m.Δt[t]; seed=seed)
+        previous = m.Δt[t]
+        
+        logllhood_neg, logprior_neg = logllhood_neg[idxs_neg], logprior_neg[idxs_neg] .- ex_prior
+        logllhood_pos, logprior_pos = logllhood_pos[idxs_pos], logprior_pos[idxs_pos] .- ex_prior
+
+        # Weight lkhoods by next temperature
+        weights_neg = @ignore_derivatives softmax(m.Δt[t] .* logllhood_neg, dims=2)
+        weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=2)
+
+        # Temper the log likelihoods
+        logllhood_neg_t = m.temperatures[t] .* logllhood_neg
+        logllhood_pos_t = m.temperatures[t+1] .* logllhood_pos
+
+        # Importance sampling
+        @tullio loss_neg[b] := weights_neg[b, s] * (logprior_neg[b, s] + logllhood_neg_t[b, s])
+        @tullio loss_pos[b] := weights_pos[b, s] * (logprior_pos[b, s] + logllhood_pos_t[b, s])
+        
+        loss += (loss_neg - loss_pos)
+    end
+    return -sum(loss) ./ b_size, seed
 end
 
 function update_llhood_grid(

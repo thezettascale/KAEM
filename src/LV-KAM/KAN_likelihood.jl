@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler, residual_sampler
+export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler, particle_filter
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -21,8 +21,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -sum((x .- x̂).^2, dims=3),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=3), dims=3),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3), dims=3),
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -102,80 +102,44 @@ function log_likelihood(
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
 
-function systematic_sampler(
-    logllhood::AbstractArray{quant},
-    temps::AbstractArray{quant};
+function particle_filter(
+    logllhood_neg::AbstractArray{quant},
+    logllhood_pos::AbstractArray{quant},
+    Δt_neg::quant,
+    Δt_pos::quant;
     seed::Int=1
 )
     """
-    Resample the latent variable using systematic sampling.
-
-    Args:
-        weights: A matrix of weights where each row corresponds to a sample's weights.
-        seed: Random seed for reproducibility.
-
-    Returns:
-        - The resampled indices
-        - The updated seed.
-    """
-    B, N, T = size(logllhood)[2:3]..., size(temps, 1)
-    weights = softmax(temps .* logllhood, dims=3)
-    cdf = cumsum(weights, dims=3) |> cpu_device()
-        
-    # Generate thresholds and find the first cdf value greater than the random value
-    range = reshape(collect(quant, 0:N-1), 1, 1, N)
-    seed, rng = next_rng(seed)
-    u = (rand(quant, T, B, 1) .+ range) ./ N 
-    
-    # Find the first cdf value greater than the random value
-    resample_indices = Array{Int}(undef, T, B, N)
-    Threads.@threads for t in 1:T
-        for b in 1:B
-            resample_indices[t, b, :] = searchsortedfirst.(Ref(cdf[t, b, :]), u[t, b, :])
-        end
-    end
-    replace!(resample_indices, N+1 => N)
-
-    return resample_indices, seed
-end
-
-function residual_sampler(
-    logllhood::AbstractArray{quant},
-    temps::AbstractArray{quant};
-    seed::Int=1
-)
-    """
-    Resample the latent variable using residual resampling.
+    Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 
     Args:
         logllhood: A matrix of log-likelihood values.
-        temps: The temperature values for scaling.
+        Δt: The change in temperature.
         seed: Random seed for reproducibility.
 
     Returns:
-        - The resampled indices
+        - The resampled indices. Twice to ensure stochasticity in Steppingstone sum.
         - The updated seed.
     """
-    B, N, T = size(logllhood)[2:3]..., size(temps, 1)
-    weights = softmax(temps .* logllhood, dims=3) 
-    
-    # Residual weights
-    r = floor.(weights .* N) ./ N
-    weights = softmax(weights .* r; dims=3)
-    
-    # Resample the residuals (uniformly)
-    cdf = cumsum(weights, dims=3) |> cpu_device()
-    seed, rng = next_rng(seed)
-    u = rand(quant, T, B, N)
-    resample_indices = Array{Int}(undef, T, B, N)
-    
-    Threads.@threads for t in 1:T
-        for b in 1:B
-            resample_indices[t, b, :] = searchsortedfirst.(Ref(cdf[t, b, :]), u[t, b, :])
-        end
-    end
+    B, N = size(logllhood_neg)
 
-    return resample_indices, seed
+    # Uniform variate for multinonial resampling
+    seed, rng = next_rng(seed)
+    u = rand(rng, quant, 2, B, N)
+
+    # Residual weights
+    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg, dims=2), softmax(Δt_pos .* logllhood_pos, dims=2)
+    r_neg, r_pos = floor.(weights_neg .* N) ./ N, floor.(weights_pos .* N) ./ N
+    weights_neg, weights_pos = softmax(weights_neg .- r_neg, dims=2), softmax(weights_pos .- r_pos, dims=2)
+    cdf_neg, cdf_pos = cumsum(weights_neg, dims=2), cumsum(weights_pos, dims=2)
+
+    idxs_neg, idxs_pos = Array{Int}(undef, B, N), Array{Int}(undef, B, N)
+    Threads.@threads for b in 1:B
+        idxs_neg[b, :] .= searchsortedfirst.(Ref(cdf_neg[b, :]), u[1, b, :])
+        idxs_pos[b, :] .= searchsortedfirst.(Ref(cdf_pos[b, :]), u[2, b, :])
+    end
+    
+    return idxs_neg, idxs_pos, seed
 end
 
 function init_KAN_lkhood(

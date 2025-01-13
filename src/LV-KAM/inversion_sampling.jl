@@ -30,8 +30,8 @@ function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::In
     α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
 
     # Find the index of the first cdf value greater than the random value
-    idxs = zeros(Int, q_size, num_samples) 
-    mask = zeros(quant, q_size, p_size, num_samples) 
+    idxs = Array{Int}(undef, q_size, num_samples) 
+    mask = Array{quant}(undef, q_size, p_size, num_samples) 
     Threads.@threads for q in 1:q_size
         i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
         replace!(i, p_size + 1 => p_size)
@@ -150,13 +150,13 @@ function sample_prior(
      # Find index of trapezium where CDF > rand_val
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) 
-    idxs = zeros(Int, q_size, num_samples)
+    idxs = Array{Int}(undef, q_size, num_samples)
     Threads.@threads for q in 1:q_size
         for b in 1:num_samples
             idxs[q, b] = searchsortedfirst(cdf[b, :, q], rand_vals[b, q])
         end
     end
-    replace!(idxs, nothing => grid_size - 1)
+    replace!(idxs, grid_size => grid_size - 1)
 
     return interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
 end

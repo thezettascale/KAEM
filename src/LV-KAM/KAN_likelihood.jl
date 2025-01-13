@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler
+export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler, residual_sampler
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -119,7 +119,8 @@ function systematic_sampler(
         - The updated seed.
     """
     B, N, T = size(logllhood)[2:3]..., size(temps, 1)
-    cdf = cumsum(softmax(temps .* logllhood, dims=3), dims=3) |> cpu_device()
+    weights = softmax(temps .* logllhood, dims=3)
+    cdf = cumsum(weights, dims=3) |> cpu_device()
         
     # Generate thresholds and find the first cdf value greater than the random value
     range = reshape(collect(quant, 0:N-1), 1, 1, N)
@@ -127,13 +128,52 @@ function systematic_sampler(
     u = (rand(quant, T, B, 1) .+ range) ./ N 
     
     # Find the first cdf value greater than the random value
-    resample_indices = zeros(Int, T, B, N)
+    resample_indices = Array{Int}(undef, T, B, N)
     Threads.@threads for t in 1:T
         for b in 1:B
             resample_indices[t, b, :] = searchsortedfirst.(Ref(cdf[t, b, :]), u[t, b, :])
         end
     end
     replace!(resample_indices, N+1 => N)
+
+    return resample_indices, seed
+end
+
+function residual_sampler(
+    logllhood::AbstractArray{quant},
+    temps::AbstractArray{quant};
+    seed::Int=1
+)
+    """
+    Resample the latent variable using residual resampling.
+
+    Args:
+        logllhood: A matrix of log-likelihood values.
+        temps: The temperature values for scaling.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        - The resampled indices
+        - The updated seed.
+    """
+    B, N, T = size(logllhood)[2:3]..., size(temps, 1)
+    weights = softmax(temps .* logllhood, dims=3) 
+    
+    # Residual weights
+    r = floor.(weights .* N) ./ N
+    weights = softmax(weights .* r; dims=3)
+    
+    # Resample the residuals (uniformly)
+    cdf = cumsum(weights, dims=3) |> cpu_device()
+    seed, rng = next_rng(seed)
+    u = rand(quant, T, B, N)
+    resample_indices = Array{Int}(undef, T, B, N)
+    
+    Threads.@threads for t in 1:T
+        for b in 1:B
+            resample_indices[t, b, :] = searchsortedfirst.(Ref(cdf[t, b, :]), u[t, b, :])
+        end
+    end
 
     return resample_indices, seed
 end

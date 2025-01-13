@@ -167,8 +167,8 @@ function MLE_loss(
     logprior, logllhood = permutedims(logprior, [3, 2, 1]), permutedims(logllhood, [3, 1, 2])
     
     # Resample the latent variable using systematic sampling for all adjacent power posteriors
-    resampled_idx_neg, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[1:end-2, :, :]; seed=seed) 
-    resampled_idx_pos, seed = @ignore_derivatives systematic_sampler(logllhood, m.temperatures[2:end-1, :, :]; seed=seed)
+    resampled_idx_neg, seed = @ignore_derivatives residual_sampler(logllhood, m.temperatures[1:end-2, :, :]; seed=seed) 
+    resampled_idx_pos, seed = @ignore_derivatives residual_sampler(logllhood, m.temperatures[2:end-1, :, :]; seed=seed)
 
     # Extract adjacent samples, and find importance weights
     logprior_neg, logprior_pos = logprior[resampled_idx_neg] .- ex_prior, logprior[resampled_idx_pos] .- ex_prior

@@ -127,7 +127,7 @@ function particle_filter(
 
     # Uniform variate for multinonial resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, quant, N, B)
+    u = rand(rng, quant, N, B) 
 
     # Update the weights
     weights = weights .* exp.(Δt .* logllhood)
@@ -152,8 +152,8 @@ function particle_filter(
         end
     end
     replace!(idxs, N+1 => N)
-
-    return idxs, weights[idxs], seed
+    
+    return idxs, weights[idxs] ./ sum(weights[idxs], dims=1), seed
 end
 
 function init_KAN_lkhood(

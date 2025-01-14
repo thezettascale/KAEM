@@ -169,23 +169,27 @@ function MLE_loss(
     weights_neg = ones(quant, size(logllhood)) .* quant(1 / m.MC_samples)
     resampled_idx_neg = reshape(1:m.MC_samples, m.MC_samples, 1)
     resampled_idx_neg = repeat(resampled_idx_neg, 1, size(x, 2))
-    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood, weights_pos, m.Δt[1], seed)
+    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood, weights_neg, m.Δt[1], seed)
 
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
-    loss = zeros(quant, 1, size(x, 2))
+    loss = zeros(quant, size(x, 2))
 
     for (t, Δt) in enumerate(m.Δt[1:end-1])
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
+        ex_prior_neg = m.prior.contrastive_div ? mean(logprior_neg; dims=1) : zeros(quant, 1, size(x, 2))
+        ex_prior_pos = m.prior.contrastive_div ? mean(logprior_pos; dims=1) : zeros(quant, 1, size(x, 2))
 
         # Unchanged log-prior
-        loss -= mean(logprior_pos .- ex_prior; dims=1) - mean(logprior_neg .- ex_prior; dims=1)
+        @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) - ex_prior_pos[1, b]
+        @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b]) - ex_prior_neg[1, b]
+        loss -= ex_llhood_pos .- ex_llhood_neg
         
         # Tempered log-likelihoods
-        @tullio loss_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
-        @tullio loss_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
-        loss -= Δt .* (mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1))
+        @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
+        @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
+        loss -= Δt .* (ex_llhood_pos .- ex_llhood_neg)
 
         # Filter particles
         resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)

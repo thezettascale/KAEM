@@ -190,10 +190,10 @@ function MLE_loss(
         # loss -= Δt .* (ex_llhood_pos .- ex_llhood_neg)
 
         # Unchanged log-prior
-        loss -= mean(logprior_pos; dims=1) .- mean(logprior_neg; dims=1)
+        loss -= dropdims(mean(logprior_pos; dims=1) - mean(logprior_neg; dims=1); dims=1)
 
         # Tempered log-likelihoods
-        loss -= Δt .* (mean(logllhood_pos; dims=1) .- mean(logllhood_neg; dims=1))
+        loss -= Δt .* dropdims(mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1); dims=1)
 
         # Filter particles
         resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)

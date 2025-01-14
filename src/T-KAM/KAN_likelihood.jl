@@ -21,8 +21,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=1), dims=1),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=1), dims=1),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=3), dims=3),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3), dims=3),
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -33,7 +33,6 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
-    pf_resample::Function
 end
 
 function generate_from_z(
@@ -97,8 +96,8 @@ function log_likelihood(
     """
     x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
     logllhood = lkhood.log_lkhood_model(
-        permutedims(x[:,:,:], [1,3,2]),
-        permutedims(x̂[:,:,:], [2,1,3]),
+        permutedims(x[:,:,:], [2,3,1]),
+        permutedims(x̂[:,:,:], [3,1,2]),
     )
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
@@ -108,7 +107,6 @@ function particle_filter(
     weights::AbstractArray{quant},
     Δt::quant;
     seed::Int=1,
-    ESS_threshold::quant=0.5,
 )
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
@@ -123,32 +121,41 @@ function particle_filter(
         - The updated weights
         - The updated seed.
     """
-    N, B = size(logllhood)
+    B, N = size(logllhood)
 
-    # Uniform variate for multinonial resampling
-    seed, rng = next_rng(seed)
-    u = rand(rng, quant, N, B) 
-
-    # Update the weights
+    # Update the weights to the next temperature
     weights = weights .* exp.(Δt .* logllhood)
-    weights = weights ./ sum(weights, dims=1)
+    weights = weights ./ sum(weights, dims=2)
 
-    # Residual weights, (transposed for contiguous access in thread)
-    r = floor.(weights' .* N) ./ N
-    residual_weights = weights' .- r
+    # Number times to replicate each particle
+    integer_counts = floor.(weights .* N) .|> Int
+    num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
+
+    # Residual weights to resample from
+    residual_weights = weights .- (integer_counts ./ N) 
     residual_weights = residual_weights ./ sum(residual_weights, dims=2)
 
-    # Check if ESS is below threshold
-    ESS = 1 ./ sum(residual_weights.^2, dims=2)
-    bool = ESS .< ESS_threshold * N
-
-    # Find first CDF value greater than random variate
+    # CDF and variate for resampling
+    seed, rng = next_rng(seed)
+    u = rand(rng, quant, B, maximum(num_remaining))
     cdf = cumsum(residual_weights, dims=2)
-    idxs = Array{Int}(undef, N, B)
 
-    Threads.@threads for s in 1:N
-        for b in 1:B
-            idxs[s, b] = bool[b] ? searchsortedfirst(cdf[b, :], u[s, b]) : s
+    idxs = Array{Int}(undef, B, N)
+    Threads.@threads for b in 1:B
+        c = 1
+
+        # Deterministic replication
+        for s in 1:N
+            count = integer_counts[b, s]
+            if count > 0
+                idxs[b, c:c+count-1] .= s
+                c += count
+            end
+        end
+
+        # Multinomial resampling
+        if num_remaining[b] > 0
+            idxs[b, c:c+num_remaining[b]-1] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
         end
     end
     replace!(idxs, N+1 => N)
@@ -198,9 +205,6 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
-    ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "ESS_threshold_factor"))
-    resample_function = (logllhood, weights, Δt, seed) -> @ignore_derivatives particle_filter(logllhood, weights, Δt; seed=seed, ESS_threshold=ESS_threshold)
-
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
         out_dim;
@@ -226,7 +230,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], resample_function)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

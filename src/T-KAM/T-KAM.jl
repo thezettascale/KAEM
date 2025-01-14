@@ -161,8 +161,8 @@ function MLE_loss(
         ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
 
         weights = @ignore_derivatives softmax(logllhood, dims=1) 
-        loss_prior = weights' * (logprior[:] .- ex_prior)
-        @tullio loss_llhood[b] := weights[s, b] * logllhood[s, b]
+        loss_prior = weights * (logprior[:] .- ex_prior)
+        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior .+ loss_llhood), seed
     end
 
@@ -170,39 +170,42 @@ function MLE_loss(
     
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
-    logprior = Buffer(Matrix{quant}(undef, m.num_particles, 1))
-    logllhood = Buffer(Matrix{quant}(undef, m.num_particles, size(x, 2)))
+    logprior = Buffer(Matrix{quant}(undef, 1, m.num_particles))
+    logllhood = Buffer(Matrix{quant}(undef, size(x, 2), m.num_particles))
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
-        logprior[1+(i-1)*m.MC_samples:i*m.MC_samples, :] = log_prior(m.prior, z, ps.ebm, st.ebm) |> cpu_device()
-        logllhood[1+(i-1)*m.MC_samples:i*m.MC_samples, :] = logllhood_i |> cpu_device()
+        logprior[:, 1+(i-1)*m.MC_samples:i*m.MC_samples] = log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device()
+        logllhood[:, 1+(i-1)*m.MC_samples:i*m.MC_samples] = logllhood_i |> cpu_device()
     end
 
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    weights_neg = ones(quant, size(logllhood_pos)) .* quant(1 / m.num_particles)
-    resampled_idx_neg = repeat(reshape(1:m.num_particles, m.num_particles, 1), 1, size(x, 2))
-    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_neg, m.Δt[1], seed)
+    weights = ones(quant, size(logllhood_pos)) .* quant(1 / m.num_particles)
+    resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
+    resampled_idx_pos, _, seed = @ignore_derivatives particle_filter(logllhood_pos, weights, m.Δt[1]; seed=seed)
     loss = zeros(quant, size(x, 2))
 
     # Particle filter at each power posterior
     for (t, Δt) in enumerate(m.Δt[1:end-1])
+        # Extract resampled particles
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
         # Unchanged log-prior, (KL divergence)
-        loss -= dropdims(mean(logprior_pos, dims=1) - mean(logprior_neg, dims=1); dims=1)
+        @tullio loss_prior[b] := weights_pos[b, s] * logprior_pos[b, s]
+        loss -= dropdims(mean(logprior_pos; dims=1) - mean(logprior_neg; dims=1); dims=1)
 
         # Tempered log-likelihoods, (trapezium rule)
-        loss -= Δt .* dropdims(mean(logllhood_pos, dims=1) - mean(logllhood_neg, dims=1); dims=1)
+        @tullio loss_llhood[b] := weights_pos[b, s] * logllhood_pos[b, s]
+        loss -= Δt .* dropdims(mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1); dims=1)
 
         # Filter particles
-        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)
-        resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_pos, m.Δt[t+1], seed)   
+        resampled_idx_neg, weights, seed = @ignore_derivatives particle_filter(logllhood_neg, weights, Δt; seed=seed)
+        resampled_idx_pos, _, seed = @ignore_derivatives particle_filter(logllhood_pos, weights, m.Δt[t+1]; seed=seed)  
     end 
     return mean(loss), seed
 end

@@ -178,18 +178,22 @@ function MLE_loss(
     for (t, Δt) in enumerate(m.Δt[1:end-1])
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
-        ex_prior_neg = m.prior.contrastive_div ? mean(logprior_neg; dims=1) : zeros(quant, 1, size(x, 2))
-        ex_prior_pos = m.prior.contrastive_div ? mean(logprior_pos; dims=1) : zeros(quant, 1, size(x, 2))
+
+        # # Unchanged log-prior
+        # @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b])
+        # @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b]) 
+        # loss -= ex_llhood_pos .- ex_llhood_neg
+        
+        # # Tempered log-likelihoods
+        # @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
+        # @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
+        # loss -= Δt .* (ex_llhood_pos .- ex_llhood_neg)
 
         # Unchanged log-prior
-        @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) - ex_prior_pos[1, b]
-        @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b]) - ex_prior_neg[1, b]
-        loss -= ex_llhood_pos .- ex_llhood_neg
-        
+        loss -= mean(logprior_pos; dims=1) .- mean(logprior_neg; dims=1)
+
         # Tempered log-likelihoods
-        @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
-        @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
-        loss -= Δt .* (ex_llhood_pos .- ex_llhood_neg)
+        loss -= Δt .* (mean(logllhood_pos; dims=1) .- mean(logllhood_neg; dims=1))
 
         # Filter particles
         resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)

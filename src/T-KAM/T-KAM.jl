@@ -7,6 +7,7 @@ using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
+using Zygote: Buffer
 
 include("mixture_prior.jl")
 include("KAN_likelihood.jl")
@@ -169,8 +170,8 @@ function MLE_loss(
     
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
-    logprior = Zygote.Buffer(Matrix{quant}(undef, m.num_particles, 1))
-    logllhood = Zygote.Buffer(Matrix{quant}(undef, m.num_particles, size(x, 2)))
+    logprior = Buffer(Matrix{quant}(undef, m.num_particles, 1))
+    logllhood = Buffer(Matrix{quant}(undef, m.num_particles, size(x, 2)))
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)

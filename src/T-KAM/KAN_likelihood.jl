@@ -33,6 +33,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
+    pf_resample::Function
 end
 
 function generate_from_z(
@@ -155,12 +156,12 @@ function particle_filter(
 
         # Multinomial resampling
         if num_remaining[b] > 0
-            idxs[b, c:c+num_remaining[b]-1] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
+            idxs[b, c:end] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
         end
     end
     replace!(idxs, N+1 => N)
     
-    return idxs, weights[idxs] ./ sum(weights[idxs], dims=1), seed
+    return idxs, weights[idxs] ./ sum(weights[idxs], dims=2), seed
 end
 
 function init_KAN_lkhood(
@@ -205,6 +206,8 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
+    resample_fcn = (logllhood, weights, Δt, seed) -> @ignore_derivatives particle_filter(logllhood, weights, Δt; seed=seed)
+
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
         out_dim;
@@ -230,7 +233,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act])
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, lkhood_models[lkhood_model], output_activation_mapping[output_act], resample_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

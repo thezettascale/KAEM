@@ -186,7 +186,7 @@ function MLE_loss(
     # Initialize for first sum
     weights = ones(quant, size(logllhood_pos)) .* quant(1 / m.num_particles)
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, _, seed = @ignore_derivatives particle_filter(logllhood_pos, weights, m.Δt[1]; seed=seed)
+    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
 
     # Particle filter at each power posterior
@@ -202,8 +202,8 @@ function MLE_loss(
         loss -= Δt .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
 
         # Filter particles
-        resampled_idx_neg, weights, seed = @ignore_derivatives particle_filter(logllhood_neg, weights, Δt; seed=seed)
-        resampled_idx_pos, _, seed = @ignore_derivatives particle_filter(logllhood_pos, weights, m.Δt[t+1]; seed=seed)  
+        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, Δt, seed)
+        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[t+1], seed)  
     end 
     return mean(loss), seed
 end

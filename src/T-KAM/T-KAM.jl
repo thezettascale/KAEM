@@ -147,13 +147,15 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)    
+      
     
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
+        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+        
         weights = @ignore_derivatives softmax(logllhood, dims=1) 
         loss_prior = weights' * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[s, b] * logllhood[s, b]
@@ -161,18 +163,25 @@ function MLE_loss(
     end
 
     ### Thermodynamic Integration ###
+    
+    # LHS of Steppingstone sum
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+
+    #   RHS of Steppingstone sum
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
     # Parallelized on CPU
-    logprior, logllhood = logprior |> cpu_device(), logllhood |> cpu_device()
+    logprior_neg, logprior_pos = logprior_neg |> cpu_device(), logprior_pos |> cpu_device()
+    logllhood_neg, logllhood_pos = logllhood_neg |> cpu_device(), logllhood_pos |> cpu_device()
     
     # Initialize for first sum
     weights_neg = ones(quant, size(logllhood)) .* quant(1 / m.MC_samples)
-    resampled_idx_neg = reshape(1:m.MC_samples, m.MC_samples, 1)
-    resampled_idx_neg = repeat(resampled_idx_neg, 1, size(x, 2))
-    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood, weights_neg, m.Δt[1], seed)
-
-    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
-    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
+    resampled_idx_neg = repeat(reshape(1:m.MC_samples, m.MC_samples, 1), 1, size(x, 2))
+    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_neg, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
 
     for (t, Δt) in enumerate(m.Δt[1:end-1])

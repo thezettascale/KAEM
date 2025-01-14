@@ -27,6 +27,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     grid_update_decay::quant
     grid_updates_samples::Int
     MC_samples::Int
+    num_particles::Int
     verbose::Bool
     temperatures::AbstractArray{quant}
     Δt::AbstractArray{quant}
@@ -62,10 +63,12 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     temperatures = [quant(1)]
     Δt = [quant(1)]
+    num_particles = 0
     if N_t > 1
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
         Δt = temperatures[2:end] .- temperatures[1:end-1]
+        num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")
@@ -80,6 +83,7 @@ function init_T_KAM(
             grid_update_decay,
             num_grid_updating_samples,
             MC_samples,
+            num_particles,
             verbose,
             temperatures,
             Δt
@@ -147,13 +151,14 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
     
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
+        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+
         weights = @ignore_derivatives softmax(logllhood, dims=1) 
         loss_prior = weights' * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[s, b] * logllhood[s, b]
@@ -161,15 +166,23 @@ function MLE_loss(
     end
 
     ### Thermodynamic Integration ###
+    
+    # Parallelized on CPU after evaluating log-distributions on GPU
+    logprior, logllhood = zeros(quant, 0, 1), zeros(quant, 0, size(x, 2))
+    iters = fld(m.num_particles, m.MC_samples)
+    for i in 1:iters
+        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        logprior = vcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm) |> cpu_device())
+        logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+        logllhood = vcat(logllhood, logllhood_i |> cpu_device())
+    end
 
-    # Parallelized on CPU
-    logprior, logllhood = logprior |> cpu_device(), logllhood |> cpu_device()
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    weights_neg = ones(quant, size(logllhood_pos)) .* quant(1 / m.MC_samples)
-    resampled_idx_neg = repeat(reshape(1:m.MC_samples, m.MC_samples, 1), 1, size(x, 2))
+    weights_neg = ones(quant, size(logllhood_pos)) .* quant(1 / m.num_particles)
+    resampled_idx_neg = repeat(reshape(1:m.num_particles, m.num_particles, 1), 1, size(x, 2))
     resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_neg, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
 
@@ -177,14 +190,14 @@ function MLE_loss(
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
-        # Unchanged log-prior
-        loss -= dropdims(mean(logprior_pos; dims=1) - mean(logprior_neg; dims=1); dims=1)
+        # Unchanged log-prior, (KL divergence)
+        loss -= dropdims(mean(logprior_pos, dims=1) - mean(logprior_neg, dims=1); dims=1)
 
-        # Tempered log-likelihoods
-        loss -= Δt .* dropdims(mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1); dims=1)
+        # Tempered log-likelihoods, (trapezium rule)
+        loss -= Δt .* dropdims(mean(logllhood_pos, dims=1) - mean(logllhood_neg, dims=1); dims=1)
 
         # Filter particles
-        resampled_idx_neg, weights_neg = resampled_idx_pos, weights_pos
+        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)
         resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_pos, m.Δt[t+1], seed)   
     end 
     return mean(loss), seed

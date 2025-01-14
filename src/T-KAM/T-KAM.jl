@@ -168,13 +168,15 @@ function MLE_loss(
     ### Thermodynamic Integration ###
     
     # Parallelized on CPU after evaluating log-distributions on GPU
-    logprior, logllhood = zeros(quant, 0, 1), zeros(quant, 0, size(x, 2))
     iters = fld(m.num_particles, m.MC_samples)
+    logprior = Zygote.Buffer(Matrix{quant}(undef, m.num_particles, 1))
+    logllhood = Zygote.Buffer(Matrix{quant}(undef, m.num_particles, size(x, 2)))
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-        logprior = vcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm) |> cpu_device())
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-        logllhood = vcat(logllhood, logllhood_i |> cpu_device())
+
+        logprior[1+(i-1)*m.MC_samples:i*m.MC_samples, :] = log_prior(m.prior, z, ps.ebm, st.ebm) |> cpu_device()
+        logllhood[1+(i-1)*m.MC_samples:i*m.MC_samples, :] = logllhood_i |> cpu_device()
     end
 
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
@@ -186,6 +188,7 @@ function MLE_loss(
     resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_neg, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
 
+    # Particle filter at each power posterior
     for (t, Δt) in enumerate(m.Δt[1:end-1])
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]

@@ -147,15 +147,13 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-      
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
     
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
-        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-        ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
-        
         weights = @ignore_derivatives softmax(logllhood, dims=1) 
         loss_prior = weights' * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[s, b] * logllhood[s, b]
@@ -163,23 +161,14 @@ function MLE_loss(
     end
 
     ### Thermodynamic Integration ###
-    
-    # LHS of Steppingstone sum
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-    #   RHS of Steppingstone sum
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
     # Parallelized on CPU
-    logprior_neg, logprior_pos = logprior_neg |> cpu_device(), logprior_pos |> cpu_device()
-    logllhood_neg, logllhood_pos = logllhood_neg |> cpu_device(), logllhood_pos |> cpu_device()
+    logprior, logllhood = logprior |> cpu_device(), logllhood |> cpu_device()
+    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
+    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    weights_neg = ones(quant, size(logllhood)) .* quant(1 / m.MC_samples)
+    weights_neg = ones(quant, size(logllhood_pos)) .* quant(1 / m.MC_samples)
     resampled_idx_neg = repeat(reshape(1:m.MC_samples, m.MC_samples, 1), 1, size(x, 2))
     resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_neg, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
@@ -188,16 +177,6 @@ function MLE_loss(
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
-        # # Unchanged log-prior
-        # @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b])
-        # @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b]) 
-        # loss -= ex_llhood_pos .- ex_llhood_neg
-        
-        # # Tempered log-likelihoods
-        # @tullio ex_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
-        # @tullio ex_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
-        # loss -= Δt .* (ex_llhood_pos .- ex_llhood_neg)
-
         # Unchanged log-prior
         loss -= dropdims(mean(logprior_pos; dims=1) - mean(logprior_neg; dims=1); dims=1)
 
@@ -205,7 +184,7 @@ function MLE_loss(
         loss -= Δt .* dropdims(mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1); dims=1)
 
         # Filter particles
-        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)
+        resampled_idx_neg, weights_neg = resampled_idx_pos, weights_pos
         resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_pos, m.Δt[t+1], seed)   
     end 
     return mean(loss), seed

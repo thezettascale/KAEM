@@ -153,7 +153,7 @@ function particle_filter(
     end
     replace!(idxs, N+1 => N)
     
-    return idxs, weights[idxs] ./ sum(weights[idxs], dims=1), seed
+    return idxs, softmax(weights[idxs]; dims=1), seed
 end
 
 function init_KAN_lkhood(

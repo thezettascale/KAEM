@@ -147,12 +147,11 @@ function MLE_loss(
     Returns:
         The negative marginal likelihood, averaged over the batch.
     """
-    b_size = size(x, 2)
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)     
-
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)    
+    
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
         weights = @ignore_derivatives softmax(logllhood, dims=1) 
@@ -162,44 +161,37 @@ function MLE_loss(
     end
 
     ### Thermodynamic Integration ###
-    
-    # Parallelized on CPU in particle filter, (which is thread safe)
+
+    # Parallelized on CPU
     logprior, logllhood = logprior |> cpu_device(), logllhood |> cpu_device()
+    
+    # Initialize for first sum
+    weights_neg = ones(quant, size(logllhood)) .* quant(1 / m.MC_samples)
+    resampled_idx_neg = reshape(1:m.MC_samples, m.MC_samples, 1)
+    resampled_idx_neg = repeat(resampled_idx_neg, 1, size(x, 2))
+    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood, weights_pos, m.Δt[1], seed)
 
-    # Initialize from prior
-    previous = quant(0)
-    _, idx_init, seed = m.lkhood.resample_z(logllhood, logllhood, previous, m.Δt[1], seed)
-    w_init = @ignore_derivatives softmax(m.Δt[1] .* logllhood[idx_init], dims=1)
-    init_logprior = logprior[idx_init] .- ex_prior
-    @tullio loss[b] := w_init[s, b] * init_logprior[s, 1] 
-    loss = loss .- mean(logprior)
+    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
+    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
+    loss = zeros(quant, 1, size(x, 2))
 
-    logprior_neg, logprior_pos = logprior, logprior[idx_init]
-    logllhood_neg, logllhood_pos = logllhood, logllhood[idx_init]
     for (t, Δt) in enumerate(m.Δt[1:end-1])
+        logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
+        logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
-        # Resample from propogated particles using preceding power posteriors
-        idxs_neg, idxs_pos, seed = @ignore_derivatives m.lkhood.resample_z(logllhood_neg, logllhood_pos, previous, Δt, seed)
-        previous = Δt
+        # Unchanged log-prior
+        loss -= mean(logprior_pos .- ex_prior; dims=1) - mean(logprior_neg .- ex_prior; dims=1)
         
-        logllhood_neg, logprior_neg = logllhood_neg[idxs_neg], logprior_neg[idxs_neg] .- ex_prior
-        logllhood_pos, logprior_pos = logllhood_pos[idxs_pos], logprior_pos[idxs_pos] .- ex_prior
+        # Tempered log-likelihoods
+        @tullio loss_llhood_pos[b] := (weights_pos[s, b] * logllhood_pos[s, b]) 
+        @tullio loss_llhood_neg[b] := (weights_neg[s, b] * logllhood_neg[s, b])
+        loss -= Δt .* (mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1))
 
-        # Weight lkhoods by current temperature change
-        weights_neg = @ignore_derivatives softmax(Δt .* logllhood_neg, dims=1)
-        weights_pos = @ignore_derivatives softmax(m.Δt[t+1] .* logllhood_pos, dims=1)
-
-        # Temper the log likelihoods by current temperature
-        logllhood_neg_t = m.temperatures[t+1] .* logllhood_neg
-        logllhood_pos_t = m.temperatures[t+2] .* logllhood_pos
-
-        # Importance sampling
-        @tullio loss_neg[b] := weights_neg[s, b] * (logprior_neg[s, b] + logllhood_neg_t[s, b])        
-        @tullio loss_pos[b] := weights_pos[s, b] * (logprior_pos[s, b] + logllhood_pos_t[s, b])
-        
-        loss += (loss_pos - loss_neg)
-    end
-    return -mean(loss), seed
+        # Filter particles
+        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, weights_neg, Δt, seed)
+        resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, weights_pos, m.Δt[t+1], seed)   
+    end 
+    return mean(loss), seed
 end
 
 function update_llhood_grid(

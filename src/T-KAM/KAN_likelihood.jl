@@ -33,7 +33,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
-    resample_z::Function
+    pf_resample::Function
 end
 
 function generate_from_z(
@@ -104,10 +104,9 @@ function log_likelihood(
 end
 
 function particle_filter(
-    logllhood_neg::AbstractArray{quant},
-    logllhood_pos::AbstractArray{quant},
-    Δt_neg::quant,
-    Δt_pos::quant;
+    logllhood::AbstractArray{quant},
+    weights::AbstractArray{quant},
+    Δt::quant;
     seed::Int=1,
     ESS_threshold::quant=0.5,
 )
@@ -120,39 +119,41 @@ function particle_filter(
         seed: Random seed for reproducibility.
 
     Returns:
-        - The resampled indices. Twice to ensure stochasticity in Steppingstone sum.
+        - The resampled indices.
+        - The updated weights
         - The updated seed.
     """
-    N, B = size(logllhood_neg)
+    N, B = size(logllhood)
 
     # Uniform variate for multinonial resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, quant, 2, N, B)
+    u = rand(rng, quant, N, B)
+
+    # Update the weights
+    weights = weights .* exp.(Δt .* logllhood)
+    weights = weights ./ sum(weights, dims=1)
 
     # Residual weights, (transposed for contiguous access in thread)
-    weights_neg, weights_pos = softmax(Δt_neg .* logllhood_neg', dims=2), softmax(Δt_pos .* logllhood_pos', dims=2)
-    r_neg, r_pos = floor.(weights_neg .* N) ./ N, floor.(weights_pos .* N) ./ N
-    weights_neg, weights_pos = weights_neg .- r_neg, weights_pos .- r_pos
-    
-    # Renormalize and check if ESS is below threshold
-    weights_neg, weights_pos = weights_neg ./ sum(weights_neg, dims=2), weights_pos ./ sum(weights_pos, dims=2)
-    ESS_neg, ESS_pos = 1 ./ sum(weights_neg.^2, dims=2), 1 ./ sum(weights_pos.^2, dims=2)
-    bool_neg, bool_pos = ESS_neg .< ESS_threshold * N, ESS_pos .< ESS_threshold * N
+    r = floor.(weights' .* N) ./ N
+    residual_weights = weights' .- r
+    residual_weights = residual_weights ./ sum(residual_weights, dims=2)
+
+    # Check if ESS is below threshold
+    ESS = 1 ./ sum(residual_weights.^2, dims=2)
+    bool = ESS .< ESS_threshold * N
 
     # Find first CDF value greater than random variate
-    cdf_neg, cdf_pos = cumsum(weights_neg, dims=2), cumsum(weights_pos, dims=2) 
-        
-    idxs_neg, idxs_pos = Array{Int}(undef, N, B), Array{Int}(undef, N, B)
-    Threads.@threads for s in 1:N          
+    cdf = cumsum(residual_weights, dims=2)
+    idxs = Array{Int}(undef, N, B)
+
+    Threads.@threads for s in 1:N
         for b in 1:B
-            idxs_neg[s, b] = bool_neg[b] ? searchsortedfirst(cdf_neg[b, :], u[1, s, b]) : s
-            idxs_pos[s, b] = bool_pos[b] ? searchsortedfirst(cdf_pos[b, :], u[2, s, b]) : s
+            idxs[s, b] = bool[b] ? searchsortedfirst(cdf[b, :], u[s, b]) : s
         end
     end
-    replace!(idxs_neg, N+1 => N)
-    replace!(idxs_pos, N+1 => N)
-    
-    return idxs_neg, idxs_pos, seed
+    replace!(idxs, N+1 => N)
+
+    return idxs, weights[idxs], seed
 end
 
 function init_KAN_lkhood(
@@ -198,7 +199,7 @@ function init_KAN_lkhood(
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
     ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "ESS_threshold_factor"))
-    resample_function = (logllhood_neg, logllhood_pos, Δt_neg, Δt_pos, seed) -> @ignore_derivatives particle_filter(logllhood_neg, logllhood_pos, Δt_neg, Δt_pos; seed=seed, ESS_threshold=ESS_threshold)
+    resample_function = (logllhood, weights, Δt, seed) -> @ignore_derivatives particle_filter(logllhood, weights, Δt; seed=seed, ESS_threshold=ESS_threshold)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

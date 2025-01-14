@@ -128,7 +128,7 @@ function particle_filter(
     weights = weights ./ sum(weights, dims=2)
 
     # Number times to replicate each particle
-    integer_counts = floor.(weights .* N) .|> Int
+    integer_counts = floor.(Int, weights .* N)
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
     # Residual weights to resample from

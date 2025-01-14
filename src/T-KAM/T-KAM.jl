@@ -196,12 +196,10 @@ function MLE_loss(
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
         # Unchanged log-prior, (KL divergence)
-        @tullio loss_prior[b] := weights_pos[b, s] * logprior_pos[b, s]
-        loss -= dropdims(mean(logprior_pos; dims=1) - mean(logprior_neg; dims=1); dims=1)
+        loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
 
         # Tempered log-likelihoods, (trapezium rule)
-        @tullio loss_llhood[b] := weights_pos[b, s] * logllhood_pos[b, s]
-        loss -= Δt .* dropdims(mean(logllhood_pos; dims=1) - mean(logllhood_neg; dims=1); dims=1)
+        loss -= Δt .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
 
         # Filter particles
         resampled_idx_neg, weights, seed = @ignore_derivatives particle_filter(logllhood_neg, weights, Δt; seed=seed)

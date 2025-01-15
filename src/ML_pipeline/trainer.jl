@@ -66,7 +66,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     x, loader_state = iterate(model.train_loader) 
 
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla"
+    p = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p")
+    model_type = N_t > 1 ? "Thermodynamic/$p" : "Vanilla"
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
 
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(prior_type)/$(dataset_name)_$(seed)/" : file_loc

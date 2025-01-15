@@ -125,6 +125,8 @@ function particle_filter(
         logllhood: A matrix of log-likelihood values.
         Δt: The change in temperature.
         seed: Random seed for reproducibility.
+        ESS_threshold: The threshold for the effective sample size.
+        resampler: The resampling function.
 
     Returns:
         - The resampled indices.

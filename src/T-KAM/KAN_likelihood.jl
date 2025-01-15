@@ -9,10 +9,12 @@ using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
 include("mixture_prior.jl")
+include("resamplers.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, quant
 using .ebm_mix_prior
+using .ParticleFilterResamplers
 
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
@@ -23,6 +25,11 @@ output_activation_mapping = Dict(
 lkhood_models = Dict(
     "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> -dropdims(sum((x .- x̂).^2, dims=3), dims=3),
     "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> dropdims(sum(x .* log.(x̂ .+ eps(eltype(x))) .+ (1 .- x) .* log.(1 .- x̂ .+ eps(eltype(x))), dims=3), dims=3),
+)
+
+resampler_map = Dict(
+    "residual" => residual_resampler,
+    "systematic" => systematic_resampler
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -103,11 +110,13 @@ function log_likelihood(
     return logllhood ./ (quant(2)*lkhood.σ_llhood^2), seed
 end
 
+
 function particle_filter(
     logllhood::AbstractArray{quant},
     t::quant;
     seed::Int=1,
     ESS_threshold::quant=quant(0.5),
+    resampler::Function=systematic_sampler,
 )
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
@@ -127,45 +136,8 @@ function particle_filter(
     # Update the weights to the next temperature
     weights = softmax(t .* logllhood, dims=2)
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
-
-    # Number times to replicate each particle
-    integer_counts = floor.(weights .* N) .|> Int
-    num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
-
-    # Residual weights to resample from
-    residual_weights = softmax(weights .* (N .- integer_counts), dims=2)
-
-    # CDF and variate for resampling
-    seed, rng = next_rng(seed)
-    u = rand(rng, quant, B, maximum(num_remaining))
-    cdf = cumsum(residual_weights, dims=2)
-
-    idxs = Array{Int}(undef, B, N)
-    Threads.@threads for b in 1:B
-        c = 1
-
-        if ESS[b] > ESS_threshold*N
-            idxs[b, :] .= 1:N
-            continue
-        end
-
-        # Deterministic replication
-        for s in 1:N
-            count = integer_counts[b, s]
-            if count > 0
-                idxs[b, c:c+count-1] .= s
-                c += count
-            end
-        end
-
-        # Multinomial resampling
-        if num_remaining[b] > 0
-            idxs[b, c:end] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
-        end
-    end
-    replace!(idxs, N+1 => N)
-    
-    return idxs, seed
+    ESS_bool = ESS .> ESS_threshold*N
+    return resampler(weights, ESS_bool; seed=seed)
 end
 
 function init_KAN_lkhood(
@@ -210,8 +182,10 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
+    resampler = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "resampler")
+    resampler = resampler_map[resampler]
 
-    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold)
+    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

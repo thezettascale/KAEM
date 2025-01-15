@@ -208,9 +208,11 @@ function MLE_loss(
     
     # Weights should be more or less uniform
     weights = @ignore_derivatives softmax(logllhood_pos, dims=2)
-    loss -= (weights * logprior_pos[:]) .- dropdims(mean(logprior_neg; dims=2); dims=2)
-    @tullio loss_llhood[b] := weights[b, s] * logllhood_pos[b, s]
-    loss -= loss_llhood .- dropdims(m.temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
+    @tullio ex_prior[b] := weights[b, s] * logprior_pos[b, s]
+    @tullio ex_llhood[b] := weights[b, s] * logllhood_pos[b, s]
+
+    loss -= ex_prior .- dropdims(mean(logprior_neg; dims=2); dims=2)
+    loss -= ex_llhood .- dropdims(m.temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
     return mean(loss), seed
 end
 

@@ -107,7 +107,7 @@ function MALA_thermo_loss(
 
     # Remaining indices of Steppingstone
     for (k, t) in enumerate(m.temperatures[3:end])
-        z, seed = m.posterior_sample(m, x, m.temperatures[k-1], ps, st, seed)
+        z, seed = m.posterior_sample(m, x, m.temperatures[k+1], ps, st, seed)
         logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
         logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
@@ -116,7 +116,7 @@ function MALA_thermo_loss(
         logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
         loss += mean(logprior_pos .- logprior_neg; dims=2)
-        loss += mean(t .* logllhood_pos; dims=2) - mean(m.temperatures[k-1] .* logllhood_neg; dims=2)
+        loss += mean(t .* logllhood_pos; dims=2) - mean(m.temperatures[k+1] .* logllhood_neg; dims=2)
     end
 
     return -mean(loss), seed

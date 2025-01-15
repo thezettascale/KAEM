@@ -11,10 +11,12 @@ using Zygote: Buffer
 
 include("mixture_prior.jl")
 include("KAN_likelihood.jl")
+include("langevin_sampling.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_mix_prior
 using .KAN_likelihood
+using .LangevinSampling
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, quant
 
@@ -31,6 +33,8 @@ struct T_KAM <: Lux.AbstractLuxLayer
     num_particles::Int
     verbose::Bool
     temperatures::AbstractArray{quant}
+    MALA::Bool
+    posterior_sample::Function
 end
 
 function init_T_KAM(
@@ -59,6 +63,18 @@ function init_T_KAM(
     grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
+    # Importance sampling or MALA
+    use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
+    posterior_fcn = (m, x, ps, st, seed) -> prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
+
+    if use_MALA
+        step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
+        noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
+        num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
+
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, seed=seed)
+    end
+        
     # MLE or Thermodynamic Integration
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     temperatures = [quant(1)]
@@ -85,6 +101,8 @@ function init_T_KAM(
             num_particles,
             verbose,
             temperatures,
+            use_MALA,
+            posterior_fcn
         )
 end
 
@@ -152,12 +170,12 @@ function MLE_loss(
     
     ### MLE loss is default ###
     if length(m.temperatures) <= 1
-        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        z, seed = m.posterior_sample(m, x, ps, st, seed)
         logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
         logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
         ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
 
-        weights = @ignore_derivatives softmax(logllhood, dims=2) 
+        weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
         loss_prior = weights * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior .+ loss_llhood), seed
@@ -199,7 +217,7 @@ function MLE_loss(
 
         # Filter particles
         resampled_idx_neg, seed = m.lkhood.pf_resample(logllhood_neg, m.temperatures[t+1], seed)
-        resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[t+2], seed)  
+        resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], m.temperatures[t+2], seed)  
     end 
 
     # Final importance sampling on entire population

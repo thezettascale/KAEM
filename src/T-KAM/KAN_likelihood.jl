@@ -44,7 +44,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
 end
 
 function generate_from_z(
-    lkhood::KAN_lkhood, 
+    lkhood, 
     ps, 
     st, 
     z::AbstractArray{quant};
@@ -80,7 +80,7 @@ function generate_from_z(
 end
 
 function log_likelihood(
-    lkhood::KAN_lkhood, 
+    lkhood, 
     ps, 
     st, 
     x::AbstractArray{quant},

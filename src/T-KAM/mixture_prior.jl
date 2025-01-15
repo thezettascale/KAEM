@@ -35,7 +35,7 @@ struct mix_prior <: Lux.AbstractLuxLayer
 end
 
 function log_partition_function(
-    mix::mix_prior,
+    mix,
     ps,
     st;
     )
@@ -67,7 +67,7 @@ function log_partition_function(
 end
 
 function log_prior(
-    mix::mix_prior, 
+    mix, 
     z::AbstractArray{quant},
     ps, 
     st;

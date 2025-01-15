@@ -36,10 +36,24 @@ function test_grid_update()
     model, ps, seed = update_llhood_grid(model, ps, st)
     @test all(size(model.lkhood.Φ_fcns[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
+end
 
+function test_mala()
+    Random.seed!(42)
+    dataset = randn(quant, 3, 50) 
+    commit!(conf, "MALA", "use_langevin", "true")
+    model = init_T_KAM(dataset, conf)
+    x_test = first(model.train_loader) |> device
+    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = ComponentArray(ps) |> device, st |> device
+
+    ∇ = first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
+    @test norm(∇) > 0
+    @test !any(isnan, ∇)
 end
 
 @testset "T-KAM Tests" begin
     test_ps_derivative()
     test_grid_update()
+    test_mala()
 end

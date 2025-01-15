@@ -137,7 +137,7 @@ function particle_filter(
     weights = softmax(t .* logllhood, dims=2)
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .> ESS_threshold*N
-    return resampler(weights, ESS_bool; seed=seed)
+    return resampler(weights, ESS_bool, B, N; seed=seed)
 end
 
 function init_KAN_lkhood(

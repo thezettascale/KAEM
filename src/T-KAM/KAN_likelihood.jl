@@ -117,6 +117,7 @@ function particle_filter(
     seed::Int=1,
     ESS_threshold::quant=quant(0.5),
     resampler::Function=systematic_sampler,
+    verbose::Bool=false,
 )
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
@@ -139,6 +140,7 @@ function particle_filter(
     weights = softmax(t .* logllhood, dims=2)
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .> ESS_threshold*N
+    verbose && (any(!ESS_bool) && println("Resampling at temperature $t"))
     return resampler(weights, ESS_bool, B, N; seed=seed)
 end
 
@@ -185,9 +187,10 @@ function init_KAN_lkhood(
     ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
     resampler = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "resampler")
+    verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
 
-    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler)
+    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

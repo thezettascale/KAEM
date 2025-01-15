@@ -184,16 +184,15 @@ function MLE_loss(
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    weights = ones(quant, size(logllhood_pos)) .* quant(1 / m.num_particles)
-    resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[1], seed)
     loss = zeros(quant, size(x, 2))
-
+    resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
+    resampled_idx_pos, logllhood_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[1], seed)
+    
     # Particle filter at each power posterior
-    for (t, Δt) in enumerate(m.Δt[1:end-1])
+    for (t, Δt) in enumerate(m.Δt)
+        
         # Extract resampled particles
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
-        logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
         # Unchanged log-prior, (KL divergence)
         loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
@@ -202,9 +201,15 @@ function MLE_loss(
         loss -= Δt .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
 
         # Filter particles
-        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, Δt, seed)
-        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[t+1], seed)  
+        resampled_idx_neg, logllhood_neg, seed = m.lkhood.pf_resample(logllhood_neg, m.temperatures[t], seed)
+        resampled_idx_pos, logllhood_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[t+1], seed)  
     end 
+
+    # Final temperature
+    logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
+    loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
+    loss -= m.Δt[end] .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
+
     return mean(loss), seed
 end
 

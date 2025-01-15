@@ -105,8 +105,7 @@ end
 
 function particle_filter(
     logllhood::AbstractArray{quant},
-    weights::AbstractArray{quant},
-    Δt::quant;
+    t::quant;
     seed::Int=1,
 )
     """
@@ -119,22 +118,20 @@ function particle_filter(
 
     Returns:
         - The resampled indices.
-        - The updated weights
+        - The resampled log-likelihoods.
         - The updated seed.
     """
     B, N = size(logllhood)
 
     # Update the weights to the next temperature
-    weights = weights .* exp.(Δt .* logllhood)
-    weights = weights ./ sum(weights, dims=2)
+    weights = softmax(t .* logllhood, dims=2)
 
     # Number times to replicate each particle
-    integer_counts = floor.(Int, weights .* N)
+    integer_counts = floor.(weights .* N) .|> Int
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
     # Residual weights to resample from
-    residual_weights = weights .- (integer_counts ./ N) 
-    residual_weights = residual_weights ./ sum(residual_weights, dims=2)
+    residual_weights = softmax(weights .- (integer_counts ./ N); dims=2)
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
@@ -161,7 +158,7 @@ function particle_filter(
     end
     replace!(idxs, N+1 => N)
     
-    return idxs, weights[idxs] ./ sum(weights[idxs], dims=2), seed
+    return idxs, logllhood[idxs], seed
 end
 
 function init_KAN_lkhood(
@@ -206,7 +203,7 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
-    resample_fcn = (logllhood, weights, Δt, seed) -> @ignore_derivatives particle_filter(logllhood, weights, Δt; seed=seed)
+    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

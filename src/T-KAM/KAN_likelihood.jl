@@ -131,7 +131,6 @@ function particle_filter(
 
     Returns:
         - The resampled indices.
-        - The resampled log-likelihoods.
         - The updated seed.
     """
     B, N = size(logllhood)
@@ -140,8 +139,12 @@ function particle_filter(
     weights = softmax(t .* logllhood, dims=2)
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .> ESS_threshold*N
+    
+    # Only resample when needed 
     verbose && (!all(ESS_bool) && println("Resampling at temperature $t"))
-    return resampler(weights, ESS_bool, B, N; seed=seed)
+    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)
+    
+    return repeat((1:N)', B, 1), seed
 end
 
 function init_KAN_lkhood(

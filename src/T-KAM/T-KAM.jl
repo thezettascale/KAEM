@@ -157,7 +157,7 @@ function MLE_loss(
         logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
         ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
 
-        weights = @ignore_derivatives softmax(logllhood, dims=1) 
+        weights = @ignore_derivatives softmax(logllhood, dims=2) 
         loss_prior = weights * (logprior[:] .- ex_prior)
         @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
         return -mean(loss_prior .+ loss_llhood), seed
@@ -168,12 +168,13 @@ function MLE_loss(
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
 
-    logprior = zeros(quant, 1, 0)
-    logllhood = zeros(quant, size(x, 2), 0)
+    z_population = zeros(quant, 0, m.prior.fcns_qp[Symbol("1")].in_dim) 
+    logprior, logllhood = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
+        z_population = vcat(z_population, z |> cpu_device())
         logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
         logllhood = hcat(logllhood, logllhood_i |> cpu_device())
     end
@@ -190,6 +191,7 @@ function MLE_loss(
     for t in eachindex(m.temperatures[1:end-2])
         
         # Extract resampled particles
+        z_population = z_population[resampled_idx_pos', :] # Updated for importance sampling at end
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
         logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
@@ -204,11 +206,23 @@ function MLE_loss(
         resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[t+2], seed)  
     end 
 
-    # Final temperature
-    logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
-    loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
-    loss -= dropdims(mean(m.temperatures[end] .* logllhood_pos; dims=2) - mean(m.temperatures[end-1] .* logllhood_neg; dims=2); dims=2)
+    # Final importance sampling on entire population
+    z_population = z_population[resampled_idx_pos', :] 
+    logprior_pos, logllhood_pos = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
+    logprior_neg, logllhood_neg = logprior_neg[resampled_idx_neg], logllhood_neg[resampled_idx_neg]
+    for i in 1:num_iters
+        z = z_population[(i-1)*m.MC_samples+1:i*m.MC_samples, :] |> device
+        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
+        logprior_pos = hcat(logprior_pos, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
+        logllhood_pos = hcat(logllhood_pos, logllhood |> cpu_device())
+    end
+    
+    # Weights should be more or less uniform
+    weights = @ignore_derivatives softmax(logllhood_pos, dims=2)
+    loss -= (weights * logprior_pos[:]) .- dropdims(mean(logprior_neg; dims=2); dims=2)
+    @tullio loss_llhood[b] := weights[b, s] * logllhood_pos[b, s]
+    loss -= loss_llhood .- dropdims(m.temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
     return mean(loss), seed
 end
 

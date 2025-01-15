@@ -107,6 +107,7 @@ function particle_filter(
     logllhood::AbstractArray{quant},
     t::quant;
     seed::Int=1,
+    ESS_threshold::quant=quant(0.5),
 )
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
@@ -125,13 +126,14 @@ function particle_filter(
 
     # Update the weights to the next temperature
     weights = softmax(t .* logllhood, dims=2)
+    ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
 
     # Number times to replicate each particle
     integer_counts = floor.(weights .* N) .|> Int
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
     # Residual weights to resample from
-    residual_weights = softmax(weights .- (integer_counts ./ N); dims=2)
+    residual_weights = softmax(weights .* (N .- integer_counts), dims=2)
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
@@ -141,6 +143,11 @@ function particle_filter(
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
         c = 1
+
+        if ESS[b] > ESS_threshold*N
+            idxs[b, :] .= 1:N
+            continue
+        end
 
         # Deterministic replication
         for s in 1:N
@@ -158,7 +165,7 @@ function particle_filter(
     end
     replace!(idxs, N+1 => N)
     
-    return idxs, logllhood[idxs], seed
+    return idxs, seed
 end
 
 function init_KAN_lkhood(
@@ -201,9 +208,10 @@ function init_KAN_lkhood(
     noise_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
     gen_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
+    ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
 
-    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed)
+    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

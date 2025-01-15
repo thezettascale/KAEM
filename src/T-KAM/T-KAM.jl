@@ -31,7 +31,6 @@ struct T_KAM <: Lux.AbstractLuxLayer
     num_particles::Int
     verbose::Bool
     temperatures::AbstractArray{quant}
-    Δt::AbstractArray{quant}
 end
 
 function init_T_KAM(
@@ -68,7 +67,6 @@ function init_T_KAM(
     if N_t > 1
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
-        Δt = temperatures[2:end] .- temperatures[1:end-1]
         num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
     end
 
@@ -87,7 +85,6 @@ function init_T_KAM(
             num_particles,
             verbose,
             temperatures,
-            Δt
         )
 end
 
@@ -170,14 +167,15 @@ function MLE_loss(
     
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
-    logprior = Buffer(Matrix{quant}(undef, 1, m.num_particles))
-    logllhood = Buffer(Matrix{quant}(undef, size(x, 2), m.num_particles))
+
+    logprior = zeros(quant, 1, 0)
+    logllhood = zeros(quant, size(x, 2), 0)
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
-        logprior[:, 1+(i-1)*m.MC_samples:i*m.MC_samples] = log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device()
-        logllhood[:, 1+(i-1)*m.MC_samples:i*m.MC_samples] = logllhood_i |> cpu_device()
+        logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
+        logllhood = hcat(logllhood, logllhood_i |> cpu_device())
     end
 
     logprior_neg, logprior_pos = copy(logprior), copy(logprior)
@@ -186,29 +184,30 @@ function MLE_loss(
     # Initialize for first sum
     loss = zeros(quant, size(x, 2))
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, logllhood_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[1], seed)
+    resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[2], seed)
     
     # Particle filter at each power posterior
-    for (t, Δt) in enumerate(m.Δt)
+    for t in eachindex(m.temperatures[1:end-2])
         
         # Extract resampled particles
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
+        logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
 
         # Unchanged log-prior, (KL divergence)
         loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
 
         # Tempered log-likelihoods, (trapezium rule)
-        loss -= Δt .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
+        loss -= dropdims(mean(m.temperatures[t+1] .* logllhood_pos; dims=2) - mean(m.temperatures[t] .* logllhood_neg; dims=2); dims=2)
 
         # Filter particles
-        resampled_idx_neg, logllhood_neg, seed = m.lkhood.pf_resample(logllhood_neg, m.temperatures[t], seed)
-        resampled_idx_pos, logllhood_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[t+1], seed)  
+        resampled_idx_neg, seed = m.lkhood.pf_resample(logllhood_neg, m.temperatures[t+1], seed)
+        resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[t+2], seed)  
     end 
 
     # Final temperature
     logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
     loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
-    loss -= m.Δt[end] .* dropdims(mean(logllhood_pos; dims=2) - mean(logllhood_neg; dims=2); dims=2)
+    loss -= dropdims(mean(m.temperatures[end] .* logllhood_pos; dims=2) - mean(m.temperatures[end-1] .* logllhood_neg; dims=2); dims=2)
 
     return mean(loss), seed
 end

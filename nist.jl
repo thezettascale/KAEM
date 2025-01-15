@@ -14,10 +14,12 @@ datasets = [
     "FMNIST"
     ]
 
+num_temps = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")
+
 for dataset in datasets
 
     # Thermodynamic Integration
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "5")
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
 
     Random.seed!(1)
     t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))

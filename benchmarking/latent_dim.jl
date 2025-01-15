@@ -19,7 +19,7 @@ function benchmark_dim(n_z)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     x_test = first(model.train_loader) 
 
-    first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
+    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
 end
 
 @benchmark CUDA.@sync benchmark_dim(10)

@@ -17,6 +17,7 @@ function MALA_sampler(
     ps,
     st,
     x::AbstractArray{quant};
+    t::quant=quant(1),
     η::quant=quant(0.1),
     σ::quant=quant(0.1),
     N::Int=20,
@@ -45,7 +46,7 @@ function MALA_sampler(
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i)
-        return sum(lp' .+ ll)
+        return sum(lp' .+ (t.*ll))
     end
 
     function MH_acceptance(proposal_i, z_i)

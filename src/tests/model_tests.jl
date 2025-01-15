@@ -20,7 +20,7 @@ function test_ps_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    ∇ = first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
+    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -47,7 +47,7 @@ function test_mala()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    ∇ = first(gradient(p -> first(MLE_loss(model, p, st, x_test)), ps))
+    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

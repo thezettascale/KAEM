@@ -66,9 +66,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     x, loader_state = iterate(model.train_loader) 
 
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    p = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p")
     mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
-    model_type = N_t > 1 ? "Thermodynamic/$p" : "Vanilla/$mala"
+    model_type = N_t > 1 ? "Thermodynamic/$mala" : "Vanilla/$mala"
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
 
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(prior_type)/$(dataset_name)_$(seed)/" : file_loc
@@ -134,7 +133,7 @@ function train!(t::T_KAM_trainer)
             t.model.verbose && println("Iter: $(t.iter), Grid updated")
         end
 
-        grads = first(gradient(pars -> first(MLE_loss(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
+        grads = first(gradient(pars -> first(t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
 
         t.model.verbose && println("Iter: $(t.iter), Grad norm: $(norm(grads))")
@@ -148,7 +147,7 @@ function train!(t::T_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        loss, t.seed = MLE_loss(t.model, t.ps, t.st, t.x)
+        loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
         train_loss += loss
         t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
 
@@ -157,7 +156,7 @@ function train!(t::T_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                loss, t.seed = MLE_loss(t.model, t.ps, t.st, device(x); seed=t.seed)
+                loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, device(x); seed=t.seed)
                 test_loss += loss
             end
             

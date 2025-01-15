@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, MLE_loss, update_llhood_grid
+export T_KAM, init_T_KAM, generate_batch, update_llhood_grid
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -35,89 +35,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     temperatures::AbstractArray{quant}
     MALA::Bool
     posterior_sample::Function
-end
-
-function init_T_KAM(
-    dataset::AbstractArray{quant},
-    conf::ConfParse;
-    prior_seed::Int=1,
-    lkhood_seed::Int=1,
-    data_seed::Int=1,
-)
-
-    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-    MC_samples = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
-    N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
-    N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
-    verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
-    update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
-    data_seed, rng = next_rng(data_seed)
-    train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
-    test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
-    out_dim = size(dataset, 1)
-    
-    prior_model = init_mix_prior(conf; prior_seed=prior_seed)
-    lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
-
-    grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
-    num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
-
-    # Importance sampling or MALA
-    use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    posterior_fcn = (m, x, ps, st, seed) -> prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
-
-    if use_MALA
-        step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
-        noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
-        num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
-
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, seed=seed)
-    end
-        
-    # MLE or Thermodynamic Integration
-    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    temperatures = [quant(1)]
-    Δt = [quant(1)]
-    num_particles = 0
-    if N_t > 1
-        p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
-        num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
-    end
-
-    verbose && println("Using $(Threads.nthreads()) threads.")
-
-    return T_KAM(
-            prior_model,
-            lkhood_model,
-            train_loader,
-            test_loader,
-            update_prior_grid,
-            update_llhood_grid,
-            grid_update_decay,
-            num_grid_updating_samples,
-            MC_samples,
-            num_particles,
-            verbose,
-            temperatures,
-            use_MALA,
-            posterior_fcn
-        )
-end
-
-function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
-    return (
-        ebm = Lux.initialparameters(rng, model.prior), 
-        gen = Lux.initialparameters(rng, model.lkhood)
-        )
-end
-
-function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
-    return (
-        ebm = Lux.initialstates(rng, model.prior), 
-        gen = Lux.initialstates(rng, model.lkhood)
-        )
+    loss_fcn::Function
 end
 
 function generate_batch(
@@ -146,42 +64,72 @@ function generate_batch(
     return x̂, seed
 end
 
-function MLE_loss(
+function importance_loss(
+    m::T_KAM,
+    ps,
+    st,
+    x::AbstractArray{quant};
+    seed::Int=1
+    )
+    """MLE loss with importance sampling."""
+    z, seed = m.posterior_sample(m, x, ps, st, seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+
+    weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
+    loss_prior = weights * (logprior[:] .- ex_prior)
+    @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
+    return -mean(loss_prior .+ loss_llhood), seed
+end
+
+function MALA_thermo_loss(
     m::T_KAM, 
     ps, 
     st, 
     x::AbstractArray{quant};
     seed::Int=1
-    )
-    """
-    Maximum likelihood estimation loss. Map is used to
-    conduct importance sampling per temperature.
+)
+    """Thermodynamic Integration loss with MALA."""
 
-    Args:
-        m: The model.
-        ps: The parameters of the model.
-        st: The states of the model.
-        x: The batch of data.
-        seed: The seed for the random number generator.
+    # Initialize for first sum
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
-    Returns:
-        The negative marginal likelihood, averaged over the batch.
-    """
-    
-    ### MLE loss is default ###
-    if length(m.temperatures) <= 1
-        z, seed = m.posterior_sample(m, x, ps, st, seed)
-        logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-        ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+    z, seed = m.posterior_sample(m, x, m.temperatures[2], ps, st, seed)
+    logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
+    logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
-        weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
-        loss_prior = weights * (logprior[:] .- ex_prior)
-        @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
-        return -mean(loss_prior .+ loss_llhood), seed
+    # First index of Steppingstone 
+    loss = mean(logprior_pos .- logprior_neg; dims=2)
+    loss += mean(m.temperatures[2] .* logllhood_pos; dims=2) - mean(m.temperatures[1] .* logllhood_neg; dims=2)
+
+    # Remaining indices of Steppingstone
+    for (k, t) in enumerate(m.temperatures[3:end])
+        z, seed = m.posterior_sample(m, x, m.temperatures[k-1], ps, st, seed)
+        logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+
+        z, seed = m.posterior_sample(m, x, t, ps, st, seed)
+        logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
+        logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+
+        loss += mean(logprior_pos .- logprior_neg; dims=2)
+        loss += mean(t .* logllhood_pos; dims=2) - mean(m.temperatures[k-1] .* logllhood_neg; dims=2)
     end
 
-    ### Thermodynamic Integration ###
+    return -mean(loss), seed
+end
+
+function particle_filter_loss(
+    m::T_KAM, 
+    ps, 
+    st, 
+    x::AbstractArray{quant};
+    seed::Int=1
+)
+    """Thermodynamic Integration loss with particle filtering."""
     
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
@@ -232,7 +180,7 @@ function MLE_loss(
     loss -= ex_prior .- dropdims(mean(logprior_neg; dims=2); dims=2)
     loss -= ex_llhood .- dropdims(m.temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
     return mean(loss), seed
-end
+end 
 
 function update_llhood_grid(
     model::T_KAM,
@@ -282,6 +230,93 @@ function update_llhood_grid(
     end
 
     return model, ps, seed
+end
+
+function init_T_KAM(
+    dataset::AbstractArray{quant},
+    conf::ConfParse;
+    prior_seed::Int=1,
+    lkhood_seed::Int=1,
+    data_seed::Int=1,
+)
+
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    MC_samples = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
+    N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
+    N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
+    verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
+    update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
+    update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
+    data_seed, rng = next_rng(data_seed)
+    train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
+    test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
+    out_dim = size(dataset, 1)
+    
+    prior_model = init_mix_prior(conf; prior_seed=prior_seed)
+    lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
+
+    grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
+    num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
+
+    # Importance sampling or MALA
+    use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
+    posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
+
+    if use_MALA
+        step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
+        noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
+        num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
+
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=quant(1), η=step_size, σ=noise_var, N=num_steps, seed=seed)
+    end
+        
+    # MLE or Thermodynamic Integration
+    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
+    temperatures = [quant(1)]
+    Δt = [quant(1)]
+    num_particles = 0
+    loss_fcn = importance_loss
+    if N_t > 1
+        p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
+        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
+        num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
+        loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
+    end
+
+    verbose && println("Using $(Threads.nthreads()) threads.")
+
+    return T_KAM(
+            prior_model,
+            lkhood_model,
+            train_loader,
+            test_loader,
+            update_prior_grid,
+            update_llhood_grid,
+            grid_update_decay,
+            num_grid_updating_samples,
+            MC_samples,
+            num_particles,
+            verbose,
+            temperatures,
+            use_MALA,
+            posterior_fcn,
+            loss_fcn
+        )
+end
+
+function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
+    return (
+        ebm = Lux.initialparameters(rng, model.prior), 
+        gen = Lux.initialparameters(rng, model.lkhood)
+        )
+end
+
+function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
+    return (
+        ebm = Lux.initialstates(rng, model.prior), 
+        gen = Lux.initialstates(rng, model.lkhood)
+        )
 end
 
 end

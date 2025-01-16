@@ -33,6 +33,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     num_particles::Int
     verbose::Bool
     temperatures::AbstractArray{quant}
+    Δt::AbstractArray{quant}
     MALA::Bool
     posterior_sample::Function
     loss_fcn::Function
@@ -146,9 +147,9 @@ function particle_filter_loss(
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    loss = zeros(quant, size(x, 2))
+    loss, weights = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, m.temperatures[2], seed)
+    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[1], seed)
     
     # Particle filter at each power posterior
     for t in eachindex(m.temperatures[1:end-2])
@@ -164,8 +165,8 @@ function particle_filter_loss(
         loss -= dropdims(mean(m.temperatures[t+1] .* logllhood_pos; dims=2) - mean(m.temperatures[t] .* logllhood_neg; dims=2); dims=2)
 
         # Filter particles
-        resampled_idx_neg, seed = m.lkhood.pf_resample(logllhood_neg, m.temperatures[t+1], seed)
-        resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], m.temperatures[t+2], seed)  
+        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, m.Δt[t], seed)
+        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights, m.Δt[t+1], seed)  
     end 
 
     # Final importance sampling on entire population
@@ -279,6 +280,7 @@ function init_T_KAM(
     if N_t > 1
         p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
         temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
+        Δt = temperatures[2:end] - temperatures[1:end-1]
         num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
         loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
@@ -299,6 +301,7 @@ function init_T_KAM(
             num_particles,
             verbose,
             temperatures,
+            Δt,
             use_MALA,
             posterior_fcn,
             loss_fcn

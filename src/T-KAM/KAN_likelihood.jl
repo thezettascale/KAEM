@@ -29,7 +29,8 @@ lkhood_models = Dict(
 
 resampler_map = Dict(
     "residual" => residual_resampler,
-    "systematic" => systematic_resampler
+    "systematic" => systematic_resampler,
+    "stratified" => stratified_resampler,
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
@@ -115,7 +116,8 @@ end
 
 function particle_filter(
     logllhood::AbstractArray{quant},
-    t::quant;
+    weights::AbstractArray{quant},
+    Δt::quant;
     seed::Int=1,
     ESS_threshold::quant=quant(0.5),
     resampler::Function=systematic_sampler,
@@ -126,6 +128,7 @@ function particle_filter(
 
     Args:
         logllhood: A matrix of log-likelihood values.
+        weights: The weights of the particles.
         Δt: The change in temperature.
         seed: Random seed for reproducibility.
         ESS_threshold: The threshold for the effective sample size.
@@ -138,15 +141,18 @@ function particle_filter(
     B, N = size(logllhood)
 
     # Update the weights to the next temperature
-    weights = softmax(t .* logllhood, dims=2)
+    weights = weights .* exp.(Δt .* logllhood)
+    weights = weights ./ sum(weights, dims=2)
+
+    # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .> ESS_threshold*N
     
     # Only resample when needed 
-    verbose && (!all(ESS_bool) && println("Resampling at temperature $t"))
+    verbose && (!all(ESS_bool) && println("Resampling at Δt=$Δt"))
     !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)
     
-    return repeat((1:N)', B, 1), seed
+    return repeat((1:N)', B, 1), weights, seed
 end
 
 function init_KAN_lkhood(
@@ -195,7 +201,7 @@ function init_KAN_lkhood(
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
 
-    resample_fcn = (logllhood, t, seed) -> @ignore_derivatives particle_filter(logllhood, t; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
+    resample_fcn = (logllhood, weights, Δt, seed) -> @ignore_derivatives particle_filter(logllhood, weights, Δt; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

@@ -1,6 +1,6 @@
 module ParticleFilterResamplers
 
-export residual_resampler, systematic_resampler
+export residual_resampler, systematic_resampler, stratified_resampler
 
 using Random, Distributions, LinearAlgebra
 using NNlib: softmax
@@ -58,7 +58,7 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
     end
     replace!(idxs, N+1 => N)
 
-    return idxs, seed
+    return idxs, weights[idxs], seed
 end
 
 function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
@@ -92,7 +92,41 @@ function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     end
     replace!(idxs, N+1 => N)
 
-    return idxs, seed
+    return idxs, weights[idxs], seed
+end
+
+function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
+    """
+    Systematic resampling for particle filtering.
+
+    Args:
+        weights: The weights of the particles.
+        ESS_bool: A boolean array indicating if the ESS is above the threshold.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        - The resampled indices.
+        - The updated seed.
+    """
+
+    cdf = cumsum(weights, dims=2)
+
+    # Systematic thresholds
+    seed, rng = next_rng(seed)
+    u = (rand(rng, quant, B, N) .+ (0:N-1)') ./ N
+
+    idxs = Array{Int}(undef, B, N)
+    Threads.@threads for b in 1:B
+        if ESS_bool[b]
+            idxs[b, :] .= 1:N
+            continue
+        end
+
+        idxs[b, :] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
+    end
+    replace!(idxs, N+1 => N)
+
+    return idxs, weights[idxs], seed
 end
 
 end

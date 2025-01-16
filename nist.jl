@@ -15,6 +15,7 @@ datasets = [
     ]
 
 num_temps = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")
+rng = Random.seed!(1)
 
 for dataset in datasets
 
@@ -23,19 +24,16 @@ for dataset in datasets
 
     # # Vanilla importance sampling
     # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-    # Random.seed!(1)
-    # t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
+    # t = init_trainer(rng, conf, dataset)#, img_resize=(14,14))
     # train!(t)
 
     # # MALA Vanilla
     # commit!(conf, "MALA", "use_langevin", "true")
-    # Random.seed!(1)
-    # t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
+    # t = init_trainer(rng, conf, dataset)#, img_resize=(14,14))
     # train!(t)
 
     # Particle filter
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
-    Random.seed!(1)
-    t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
+    t = init_trainer(rng, conf, dataset)#, img_resize=(14,14))
     train!(t)  
 end

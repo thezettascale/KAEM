@@ -157,7 +157,7 @@ function particle_filter_loss(
     # Initialize for first sum
     loss, weights_neg = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_pos, temperatures[1], seed)
+    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, temperatures[1], seed)
     
     # Particle filter at each power posterior
     for t in eachindex(temperatures[1:end-2])
@@ -172,14 +172,12 @@ function particle_filter_loss(
 
         # Tempered log-likelihoods, (trapezium rule)
         ll_pos_t, ll_neg_t = temperatures[t+1] .* logllhood_pos, temperatures[t] .* logllhood_neg
-        weights_neg = @ignore_derivatives softmax(ll_neg_t, dims=2)
-        weights_pos = @ignore_derivatives softmax(ll_pos_t, dims=2)
         @tullio loss_llhood[b] := (weights_pos[b, s] * ll_pos_t[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
         loss -= loss_llhood
 
         # Filter particles, (there is only one propagating population)
-        resampled_idx_neg, seed = m.lkhood.pf_resample(logllhood_neg, temperatures[t+1], seed)
-        resampled_idx_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], temperatures[t+2], seed)  
+        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, temperatures[t+1], seed)
+        resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], temperatures[t+2], seed)  
     end 
 
     # Final importance sampling on entire population
@@ -190,8 +188,6 @@ function particle_filter_loss(
     @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
     loss -= loss_prior
     ll_neg_t = temperatures[end-1] .* logllhood_neg
-    weights_neg = @ignore_derivatives softmax(ll_neg_t, dims=2)
-    weights_pos = @ignore_derivatives softmax(logllhood_pos, dims=2)
     @tullio loss_llhood[b] := (weights_pos[b, s] * logllhood_pos[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
     loss -= loss_llhood
     return mean(loss), seed

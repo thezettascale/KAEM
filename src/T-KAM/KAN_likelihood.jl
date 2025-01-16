@@ -142,7 +142,7 @@ function particle_filter(
     B, N = size(logllhood)
 
     # Update the weights to the next temperature
-    weights = softmax(exp.((t2 .* logllhood) .- (t_resample .* logllhood)); dims=2)
+    weights = softmax((t2 .* logllhood) .- (t_resample .* logllhood); dims=2)
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)

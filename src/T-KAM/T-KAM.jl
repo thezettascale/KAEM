@@ -278,7 +278,7 @@ function init_T_KAM(
         step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
         noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
-        @reset prior_model.contrastive_div = false
+        @reset prior_model.contrastive_div = true
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=quant(1), η=step_size, σ=noise_var, N=num_steps, seed=seed)
     end

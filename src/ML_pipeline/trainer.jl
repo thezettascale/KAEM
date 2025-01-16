@@ -11,7 +11,7 @@ using .Utils: device, quant
 
 using CUDA, KernelAbstractions, Tullio
 using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
-using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra
+using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 
 dataset_mapping = Dict(
     "MNIST" => MLDatasets.MNIST(),
@@ -147,6 +147,7 @@ function train!(t::T_KAM_trainer)
     function opt_loss(u, args...)
         t.ps = u
         loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
+        @reset t.st.train_idx = t.st.train_idx + 1
         train_loss += loss
         t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
 

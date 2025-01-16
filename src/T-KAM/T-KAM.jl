@@ -32,8 +32,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     MC_samples::Int
     num_particles::Int
     verbose::Bool
-    temperatures::AbstractArray{quant}
-    Δt::AbstractArray{quant}
+    p::AbstractArray{quant}
     MALA::Bool
     posterior_sample::Function
     loss_fcn::Function
@@ -93,22 +92,26 @@ function MALA_thermo_loss(
 )
     """Thermodynamic Integration loss with MALA."""
 
+    # Schedule temperatures
+    temperatures = collect(quant, [(k / N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    Δt = temperatures[2:end] - temperatures[1:end-1]
+
     # Initialize for first sum
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
-    z, seed = m.posterior_sample(m, x, m.temperatures[2], ps, st, seed)
+    z, seed = m.posterior_sample(m, x, temperatures[2], ps, st, seed)
     logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
     # First index of Steppingstone 
     loss = mean(logprior_pos .- logprior_neg; dims=2)
-    loss += mean(m.temperatures[2] .* logllhood_pos; dims=2) - mean(m.temperatures[1] .* logllhood_neg; dims=2)
+    loss += mean(temperatures[2] .* logllhood_pos; dims=2) - mean(temperatures[1] .* logllhood_neg; dims=2)
 
     # Remaining indices of Steppingstone
-    for (k, t) in enumerate(m.temperatures[3:end])
-        z, seed = m.posterior_sample(m, x, m.temperatures[k+1], ps, st, seed)
+    for (k, t) in enumerate(temperatures[3:end])
+        z, seed = m.posterior_sample(m, x, temperatures[k+1], ps, st, seed)
         logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
         logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
@@ -117,7 +120,7 @@ function MALA_thermo_loss(
         logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
         loss += mean(logprior_pos .- logprior_neg; dims=2)
-        loss += mean(t .* logllhood_pos; dims=2) - mean(m.temperatures[k+1] .* logllhood_neg; dims=2)
+        loss += mean(t .* logllhood_pos; dims=2) - mean(temperatures[k+1] .* logllhood_neg; dims=2)
     end
 
     return -mean(loss), seed
@@ -131,7 +134,11 @@ function particle_filter_loss(
     seed::Int=1
 )
     """Thermodynamic Integration loss with particle filtering."""
-    
+
+    # Schedule temperatures
+    temperatures = collect(quant, [(k / N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    Δt = temperatures[2:end] - temperatures[1:end-1]
+
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
     logprior, logllhood = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
@@ -149,10 +156,10 @@ function particle_filter_loss(
     # Initialize for first sum
     loss, weights = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, m.Δt[1], seed)
+    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, Δt[1], seed)
     
     # Particle filter at each power posterior
-    for t in eachindex(m.temperatures[1:end-2])
+    for t in eachindex(temperatures[1:end-2])
         
         # Extract resampled particles
         logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
@@ -162,11 +169,11 @@ function particle_filter_loss(
         loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
 
         # Tempered log-likelihoods, (trapezium rule)
-        loss -= dropdims(mean(m.temperatures[t+1] .* logllhood_pos; dims=2) - mean(m.temperatures[t] .* logllhood_neg; dims=2); dims=2)
+        loss -= dropdims(mean(temperatures[t+1] .* logllhood_pos; dims=2) - mean(temperatures[t] .* logllhood_neg; dims=2); dims=2)
 
         # Filter particles
-        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, m.Δt[t], seed)
-        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights, m.Δt[t+1], seed)  
+        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, Δt[t], seed)
+        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights, Δt[t+1], seed)  
     end 
 
     # Final importance sampling on entire population
@@ -179,7 +186,7 @@ function particle_filter_loss(
     @tullio ex_llhood[b] := weights[b, s] * logllhood_pos[b, s]
 
     loss -= ex_prior .- dropdims(mean(logprior_neg; dims=2); dims=2)
-    loss -= ex_llhood .- dropdims(m.temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
+    loss -= ex_llhood .- dropdims(temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
     return mean(loss), seed
 end 
 
@@ -278,12 +285,15 @@ function init_T_KAM(
     num_particles = 0
     loss_fcn = importance_loss
     if N_t > 1
-        p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p"))
-        temperatures = collect(quant, [(k / N_t)^p for k in 0:N_t]) 
-        Δt = temperatures[2:end] - temperatures[1:end-1]
         num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
         loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
+
+        # Linear p schedule
+        initial_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
+        end_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
+        num_param_updates = parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
+        p = range(initial_p, end_p, length=num_param_updates)
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")
@@ -300,8 +310,7 @@ function init_T_KAM(
             MC_samples,
             num_particles,
             verbose,
-            temperatures,
-            Δt,
+            p,
             use_MALA,
             posterior_fcn,
             loss_fcn
@@ -318,7 +327,8 @@ end
 function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
-        gen = Lux.initialstates(rng, model.lkhood)
+        gen = Lux.initialstates(rng, model.lkhood),
+        train_idx = 1
         )
 end
 

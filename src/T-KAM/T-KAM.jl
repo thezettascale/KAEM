@@ -288,11 +288,14 @@ function init_T_KAM(
         loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
 
-        # Linear p schedule
+        # Cyclic p schedule
         initial_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
         end_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
+        num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
         num_param_updates = parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
-        p = range(initial_p, end_p, length=num_param_updates)
+        
+        x = range(0, stop=2*π*num_cycles, length=num_param_updates)
+        p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> quant
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")

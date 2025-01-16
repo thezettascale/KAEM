@@ -116,7 +116,6 @@ end
 
 function particle_filter(
     logllhood::AbstractArray{quant},
-    weights::AbstractArray{quant},
     t_resample::quant,
     t2::quant;
     seed::Int=1,
@@ -143,7 +142,7 @@ function particle_filter(
     B, N = size(logllhood)
 
     # Update the weights to the next temperature
-    weights = softmax(weights .* exp.((t2 .* logllhood) .- (t_resample .* logllhood)); dims=2)
+    weights = softmax(exp.((t2 .* logllhood) .- (t_resample .* logllhood)); dims=2)
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
@@ -201,7 +200,7 @@ function init_KAN_lkhood(
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
 
-    resample_fcn = (logllhood, weights, t1, t2, seed) -> @ignore_derivatives particle_filter(logllhood, weights, t1, t2; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
+    resample_fcn = (logllhood, t1, t2, seed) -> @ignore_derivatives particle_filter(logllhood, t1, t2; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

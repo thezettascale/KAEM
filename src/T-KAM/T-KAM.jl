@@ -281,8 +281,6 @@ function init_T_KAM(
         
     # MLE or Thermodynamic Integration
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    temperatures = [quant(1)]
-    Δt = [quant(1)]
     num_particles = 0
     loss_fcn = importance_loss
     if N_t > 1

@@ -150,7 +150,7 @@ function particle_filter(
     
     # Only resample when needed 
     verbose && (!all(ESS_bool) && println("Resampling at t=$t2"))
-    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed), t2
+    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)..., t2
     return repeat((1:N)', B, 1), weights, seed, t_resample
 end
 

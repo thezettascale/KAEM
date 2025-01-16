@@ -33,6 +33,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     num_particles::Int
     verbose::Bool
     p::AbstractArray{quant}
+    N_t::Int
     MALA::Bool
     posterior_sample::Function
     loss_fcn::Function
@@ -93,7 +94,7 @@ function MALA_thermo_loss(
     """Thermodynamic Integration loss with MALA."""
 
     # Schedule temperatures
-    temperatures = collect(quant, [(k / N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:N_t]) 
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Initialize for first sum
@@ -136,7 +137,7 @@ function particle_filter_loss(
     """Thermodynamic Integration loss with particle filtering."""
 
     # Schedule temperatures
-    temperatures = collect(quant, [(k / N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:N_t]) 
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Parallelized on CPU after evaluating log-distributions on GPU
@@ -311,6 +312,7 @@ function init_T_KAM(
             num_particles,
             verbose,
             p,
+            N_t,
             use_MALA,
             posterior_fcn,
             loss_fcn

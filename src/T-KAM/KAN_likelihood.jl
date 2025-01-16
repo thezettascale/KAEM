@@ -149,7 +149,7 @@ function particle_filter(
     # Only resample when needed 
     verbose && (!all(ESS_bool) && println("Resampling at t=$t"))
     !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)
-    return repeat((1:N)', B, 1), weights, seed
+    return repeat((1:N)', B, 1), seed
 end
 
 function init_KAN_lkhood(

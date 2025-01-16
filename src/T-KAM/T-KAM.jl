@@ -163,8 +163,8 @@ function particle_filter_loss(
     for t in eachindex(temperatures[1:end-2])
         
         # Extract resampled particles
-        logprior_neg, logprior_pos = logprior_neg[resampled_idx_neg], logprior_pos[resampled_idx_pos]
-        logllhood_neg, logllhood_pos = logllhood_neg[resampled_idx_neg], logllhood_pos[resampled_idx_pos]
+        logprior_neg, logllhood_neg  = logprior_neg[resampled_idx_neg], logllhood_neg[resampled_idx_neg]
+        logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos] 
 
         # Unchanged log-prior, (KL divergence)
         loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
@@ -172,14 +172,14 @@ function particle_filter_loss(
         # Tempered log-likelihoods, (trapezium rule)
         loss -= dropdims(mean(temperatures[t+1] .* logllhood_pos; dims=2) - mean(temperatures[t] .* logllhood_neg; dims=2); dims=2)
 
-        # Filter particles
+        # Filter particles, (there is only one propagating population)
         resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, Δt[t], seed)
         resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights, Δt[t+1], seed)  
     end 
 
     # Final importance sampling on entire population
     logprior_neg, logllhood_neg = logprior_neg[resampled_idx_neg], logllhood_neg[resampled_idx_neg]
-    logprior_pos, logllhood_pos = logprior_pos[resampled_idx_pos], logllhood_pos[resampled_idx_pos]
+    logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos]
     
     # Weights should be more or less uniform
     weights = @ignore_derivatives softmax(logllhood_pos, dims=2)
@@ -283,6 +283,7 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     num_particles = 0
     loss_fcn = importance_loss
+    p = [quant(1)]
     if N_t > 1
         num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
         loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss

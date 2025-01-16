@@ -35,7 +35,6 @@ mutable struct T_KAM_trainer
     batch_size_for_gen::Int
     seed::Int
     grid_update_frequency::Int
-    iter::Int
     last_grid_update::Int
 end
 
@@ -94,7 +93,6 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         batch_size_for_gen,
         seed, 
         grid_update_frequency,
-        1, 
         1)
 end
 
@@ -123,19 +121,19 @@ function train!(t::T_KAM_trainer)
         t.ps = u
 
         # Grid updating for likelihood model
-        if  (t.iter == 1 || (t.iter - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
+        if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
             t.model, t.ps, t.seed = update_llhood_grid(t.model, t.ps, t.st; seed=t.seed)
-            t.grid_update_frequency = t.iter > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.iter) : t.grid_update_frequency
-            t.last_grid_update = t.iter
+            t.grid_update_frequency = t.st.train_idx > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.st.train_idx) : t.grid_update_frequency
+            t.last_grid_update = t.st.train_idx
             grid_updated = 1
 
-            t.model.verbose && println("Iter: $(t.iter), Grid updated")
+            t.model.verbose && println("Iter: $(t.st.train_idx), Grid updated")
         end
 
         grads = first(gradient(pars -> first(t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
 
-        t.model.verbose && println("Iter: $(t.iter), Grad norm: $(norm(grads))")
+        t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
 
         copy!(G, grads)
         return G
@@ -147,12 +145,11 @@ function train!(t::T_KAM_trainer)
     function opt_loss(u, args...)
         t.ps = u
         loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
-        @reset t.st.train_idx = t.st.train_idx + 1
         train_loss += loss
-        t.model.verbose && println("Iter: $(t.iter), Loss: $loss")
+        t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")
 
         # After one epoch, calculate test loss and log to CSV
-        if t.iter % num_batches == 0 || t.iter == 1
+        if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1
             
             test_loss = 0
             for x in t.model.test_loader
@@ -163,7 +160,7 @@ function train!(t::T_KAM_trainer)
             train_loss = train_loss / num_batches
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
-            epoch = t.iter == 1 ? 0 : fld(t.iter, num_batches)
+            epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
 
             open(loss_file, "a") do file
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
@@ -173,10 +170,10 @@ function train!(t::T_KAM_trainer)
             grid_updated = 0
         end
 
-        t.iter += 1
+        @reset t.st.train_idx += 1
 
         # Iterate loader, reset to first batch when epoch ends
-        x, t.train_loader_state = (t.iter % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
+        x, t.train_loader_state = (t.st.train_idx % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
         return loss
     end    

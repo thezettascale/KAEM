@@ -157,7 +157,8 @@ function particle_filter_loss(
     # Initialize for first sum
     loss, weights_neg = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, temperatures[1], seed)
+    t_resample = temperatures[1] # Temperature at which last resample occurred
+    resampled_idx_pos, weights_pos, seed, t_resample = m.lkhood.pf_resample(logllhood_pos, weights_neg, t_resample, temperatures[2], seed)
     
     # Particle filter at each power posterior
     for t in eachindex(temperatures[1:end-2])
@@ -176,8 +177,8 @@ function particle_filter_loss(
         loss -= loss_llhood
 
         # Filter particles, (there is only one propagating population)
-        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, temperatures[t+1], seed)
-        resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], temperatures[t+2], seed)  
+        resampled_idx_neg, weights_neg, seed, t_resample = m.lkhood.pf_resample(logllhood_neg, weights_neg, t_resample, temperatures[t+1], seed)
+        resampled_idx_pos, weights_pos, seed, _ = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights_neg, t_resample, temperatures[t+2], seed)  
     end 
 
     # Final importance sampling on entire population

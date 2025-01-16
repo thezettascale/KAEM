@@ -94,7 +94,7 @@ function MALA_thermo_loss(
     """Thermodynamic Integration loss with MALA."""
 
     # Schedule temperatures
-    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Initialize for first sum
@@ -137,7 +137,7 @@ function particle_filter_loss(
     """Thermodynamic Integration loss with particle filtering."""
 
     # Schedule temperatures
-    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:N_t]) 
+    temperatures = collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Parallelized on CPU after evaluating log-distributions on GPU

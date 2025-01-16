@@ -21,11 +21,11 @@ for dataset in datasets
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
     commit!(conf, "MALA", "use_langevin", "false")
 
-    # Vanilla importance sampling
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-    Random.seed!(1)
-    t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
-    train!(t)
+    # # Vanilla importance sampling
+    # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
+    # Random.seed!(1)
+    # t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
+    # train!(t)
 
     # MALA Vanilla
     commit!(conf, "MALA", "use_langevin", "true")

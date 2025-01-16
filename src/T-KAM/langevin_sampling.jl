@@ -43,19 +43,31 @@ function MALA_sampler(
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
 
+    # Pre-allocate buffers
+    noise = similar(z)
+    proposal = similar(z)
+    drift = similar(z)
+    drift_proposal = similar(z)
+    forward_drift = similar(z)
+    backward_drift = similar(z)
+
+    # Avoid looped stochasticity
+    seed, rng = next_rng(seed)
+    noise = randn(quant, N, size(z)...) .* sqrt(2 * η) |> device
+    seed, rng = next_rng(seed)
+    log_u = log.(rand(rng, quant, N)) 
+
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i)
         return sum(lp' .+ (t.*ll))
     end
 
-    function MH_acceptance(proposal_i, z_i)
-        grad_current = first(gradient(log_posterior, z_i))
-        grad_proposal = first(gradient(log_posterior, proposal_i))
+    function MH_acceptance(proposal_i, z_i, grad_current, grad_proposal)
 
         # Proposal densities (drift corrections)
-        forward_drift = proposal_i - z_i - η * grad_current
-        backward_drift = z_i - proposal_i - η * grad_proposal
+        forward_drift .= proposal_i - z_i - η * grad_current
+        backward_drift .= z_i - proposal_i - η * grad_proposal
 
         # Log-acceptance is the difference in log-posterior and drift corrections
         log_acceptance_ratio = log_posterior(proposal_i) - log_posterior(z_i)
@@ -65,21 +77,13 @@ function MALA_sampler(
         return log_acceptance_ratio
     end
 
-
     for i in 1:N
-        drift = first(gradient(log_posterior, z))
-        
-        seed, rng = next_rng(seed)
-        noise = randn(rng, quant, size(z)) .* sqrt(2 * η) |> device
+        drift .= first(gradient(log_posterior, z))
+        proposal .= z .+ (η .* drift) .+ (σ * noise[i, :, :])
+        drift_proposal .= first(gradient(log_posterior, proposal))
 
-        proposal = z .+ (η .* drift) .+ (σ * noise)
-        log_α = MH_acceptance(proposal, z)
-
-        seed, rng = next_rng(seed)
-        u = rand(rng, quant) |> device
-
-        if log(u) < log_α
-            z = proposal
+        if log_u[i] < MH_acceptance(proposal, z, drift, drift_proposal)
+            z .= proposal
         end
     end
 

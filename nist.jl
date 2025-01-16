@@ -27,11 +27,11 @@ for dataset in datasets
     # t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
     # train!(t)
 
-    # MALA Vanilla
-    commit!(conf, "MALA", "use_langevin", "true")
-    Random.seed!(1)
-    t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
-    train!(t)
+    # # MALA Vanilla
+    # commit!(conf, "MALA", "use_langevin", "true")
+    # Random.seed!(1)
+    # t = init_trainer(Random.GLOBAL_RNG, conf, dataset)#, img_resize=(14,14))
+    # train!(t)
 
     # Particle filter
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)

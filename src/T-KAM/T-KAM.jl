@@ -137,7 +137,7 @@ function particle_filter_loss(
     """Thermodynamic Integration loss with particle filtering."""
 
     # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t]) # Starts from 1, since 0 is the prior 
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Parallelized on CPU after evaluating log-distributions on GPU
@@ -155,9 +155,9 @@ function particle_filter_loss(
     logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
     # Initialize for first sum
-    loss, weights = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
+    loss, weights_neg = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
     resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_pos, weights, Δt[1], seed)
+    resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_pos, temperatures[1], seed)
     
     # Particle filter at each power posterior
     for t in eachindex(temperatures[1:end-2])
@@ -167,14 +167,17 @@ function particle_filter_loss(
         logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos] 
 
         # Unchanged log-prior, (KL divergence)
-        loss -= dropdims(mean(logprior_pos; dims=2) - mean(logprior_neg; dims=2); dims=2)
+        @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
+        loss -= loss_prior
 
         # Tempered log-likelihoods, (trapezium rule)
-        loss -= dropdims(mean(temperatures[t+1] .* logllhood_pos; dims=2) - mean(temperatures[t] .* logllhood_neg; dims=2); dims=2)
+        ll_pos_t, ll_neg_t = m.temperature[t+1] .* logllhood_pos, m.temperature[t] .* logllhood_neg
+        @tullio loss_llhood[b] := (weights_pos[b, s] * ll_pos_t[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
+        loss -= loss_llhood
 
         # Filter particles, (there is only one propagating population)
-        resampled_idx_neg, weights, seed = m.lkhood.pf_resample(logllhood_neg, weights, Δt[t], seed)
-        resampled_idx_pos, _, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], weights, Δt[t+1], seed)  
+        resampled_idx_neg, weights_neg, seed = m.lkhood.pf_resample(logllhood_neg, temperatures[t+1], seed)
+        resampled_idx_pos, weights_pos, seed = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], temperatures[t+2], seed)  
     end 
 
     # Final importance sampling on entire population
@@ -182,12 +185,10 @@ function particle_filter_loss(
     logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos]
     
     # Weights should be more or less uniform
-    weights = @ignore_derivatives softmax(logllhood_pos, dims=2)
-    @tullio ex_prior[b] := weights[b, s] * logprior_pos[b, s]
-    @tullio ex_llhood[b] := weights[b, s] * logllhood_pos[b, s]
-
-    loss -= ex_prior .- dropdims(mean(logprior_neg; dims=2); dims=2)
-    loss -= ex_llhood .- dropdims(temperatures[end-1] .* mean(logllhood_neg; dims=2); dims=2)
+    @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
+    loss -= loss_prior
+    @tullio loss_llhood[b] := (weights_pos[b, s] * logllhood_pos[b, s]) - (weights_neg[b, s] * logllhood_neg[b, s])
+    loss -= loss_llhood
     return mean(loss), seed
 end 
 

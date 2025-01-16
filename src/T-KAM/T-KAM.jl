@@ -171,7 +171,7 @@ function particle_filter_loss(
         loss -= loss_prior
 
         # Tempered log-likelihoods, (trapezium rule)
-        ll_pos_t, ll_neg_t = temperature[t+1] .* logllhood_pos, temperature[t] .* logllhood_neg
+        ll_pos_t, ll_neg_t = temperatures[t+1] .* logllhood_pos, temperatures[t] .* logllhood_neg
         @tullio loss_llhood[b] := (weights_pos[b, s] * ll_pos_t[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
         loss -= loss_llhood
 
@@ -187,7 +187,8 @@ function particle_filter_loss(
     # Weights should be more or less uniform
     @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
     loss -= loss_prior
-    @tullio loss_llhood[b] := (weights_pos[b, s] * logllhood_pos[b, s]) - (weights_neg[b, s] * logllhood_neg[b, s])
+    ll_neg_t = temperatures[end-1] .* logllhood_neg
+    @tullio loss_llhood[b] := (weights_pos[b, s] * logllhood_pos[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
     loss -= loss_llhood
     return mean(loss), seed
 end 

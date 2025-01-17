@@ -112,7 +112,7 @@ function MALA_thermo_loss(
 
     # Remaining indices of Steppingstone
     for (k, t) in enumerate(temperatures[3:end])
-        z, seed = m.posterior_sample(m, x, temperatures[k+1], ps, st, seed)
+        z, seed = m.posterior_sample(m, x, temperatures[k-1], ps, st, seed)
         logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
         logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
@@ -121,7 +121,7 @@ function MALA_thermo_loss(
         logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
         loss += mean(logprior_pos .- logprior_neg; dims=2)
-        loss += mean(t .* logllhood_pos; dims=2) - mean(temperatures[k+1] .* logllhood_neg; dims=2)
+        loss += mean(t .* logllhood_pos; dims=2) - mean(temperatures[k-1] .* logllhood_neg; dims=2)
     end
 
     return -mean(loss), seed
@@ -138,7 +138,6 @@ function particle_filter_loss(
 
     # Schedule temperatures
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t]) # Starts from 1, since 0 is the prior 
-    Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)

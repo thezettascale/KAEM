@@ -142,7 +142,7 @@ function particle_filter(
     B, N = size(logllhood)
 
     # Update the weights to the next temperature
-    weights = softmax((t2 .* logllhood) .- (t_resample .* logllhood); dims=2)
+    weights = softmax((t2 .* logllhood) - (t_resample .* logllhood); dims=2)
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
@@ -151,7 +151,7 @@ function particle_filter(
     # Only resample when needed 
     verbose && (!all(ESS_bool) && println("Resampling at t=$t2"))
     !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)..., t2
-    return repeat((1:N)', B, 1), seed, t_resample
+    return repeat((1:N)', B, 1), weights, seed, t_resample
 end
 
 function init_KAN_lkhood(

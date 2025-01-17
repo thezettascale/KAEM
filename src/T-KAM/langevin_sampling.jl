@@ -19,7 +19,7 @@ function MALA_sampler(
     x::AbstractArray{quant};
     t::quant=quant(1),
     η::quant=quant(0.1),
-    σ::quant=quant(0.1),
+    σ::quant=quant(1),
     N::Int=20,
     seed::Int=1,
     )
@@ -32,7 +32,7 @@ function MALA_sampler(
         st: The states of the model.
         x: The data
         η: The step size.
-        σ: The noise level.
+        σ: The noise level, (usually leave at 1)
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -53,7 +53,7 @@ function MALA_sampler(
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    noise = randn(quant, N, size(z)...) .* sqrt(2 * η) |> device
+    noise = randn(quant, N, size(z)...) .* σ .* sqrt(2 * η) |> device
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) 
 
@@ -79,7 +79,7 @@ function MALA_sampler(
 
     for i in 1:N
         drift .= first(gradient(log_posterior, z))
-        proposal .= z .+ (η .* drift) .+ (σ * noise[i, :, :])
+        proposal .= z .+ (η .* drift) .+ (noise[i, :, :])
         drift_proposal .= first(gradient(log_posterior, proposal))
 
         if log_u[i] < MH_acceptance(proposal, z, drift, drift_proposal)

@@ -58,7 +58,8 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
     end
     replace!(idxs, N+1 => N)
 
-    return idxs, seed
+    weights = weights[idxs]
+    return idxs, weights ./ sum(weights; dims=2), seed
 end
 
 function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
@@ -92,7 +93,8 @@ function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     end
     replace!(idxs, N+1 => N)
 
-    return idxs, seed
+    weights = weights[idxs]
+    return idxs, weights ./ sum(weights; dims=2), seed
 end
 
 function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
@@ -126,7 +128,8 @@ function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     end
     replace!(idxs, N+1 => N)
 
-    return idxs, seed
+    weights = weights[idxs]
+    return idxs, weights ./ sum(weights; dims=2), seed
 end
 
 end

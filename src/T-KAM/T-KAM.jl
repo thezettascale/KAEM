@@ -84,48 +84,6 @@ function importance_loss(
     return -mean(loss_prior .+ loss_llhood), seed
 end
 
-function MALA_thermo_loss(
-    m::T_KAM, 
-    ps, 
-    st, 
-    x::AbstractArray{quant};
-    seed::Int=1
-)
-    """Thermodynamic Integration loss with MALA."""
-
-    # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-
-    # Initialize for first sum
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-    z, seed = m.posterior_sample(m, x, temperatures[2], ps, st, seed)
-    logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-    # First index of Steppingstone 
-    loss = mean(logprior_pos .- logprior_neg; dims=2)
-    loss += mean(temperatures[2] .* logllhood_pos; dims=2) - mean(temperatures[1] .* logllhood_neg; dims=2)
-
-    # Remaining indices of Steppingstone
-    for (k, t) in enumerate(temperatures[3:end])
-        z, seed = m.posterior_sample(m, x, temperatures[k-1], ps, st, seed)
-        logprior_neg = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-        z, seed = m.posterior_sample(m, x, t, ps, st, seed)
-        logprior_pos = log_prior(m.prior, z, ps.ebm, st.ebm)
-        logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-        loss += mean(logprior_pos .- logprior_neg; dims=2)
-        loss += mean(t .* logllhood_pos; dims=2) - mean(temperatures[k-1] .* logllhood_neg; dims=2)
-    end
-
-    return -mean(loss), seed
-end
-
 function particle_filter_loss(
     m::T_KAM, 
     ps, 
@@ -133,47 +91,60 @@ function particle_filter_loss(
     x::AbstractArray{quant};
     seed::Int=1
 )
-    """Thermodynamic Integration loss with particle filtering."""
+    """Thermodynamic Integration loss with annealed particle filtering."""
 
     # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
+    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t])
 
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
     logprior, logllhood = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
+    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
         logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
         logllhood = hcat(logllhood, logllhood_i |> cpu_device())
+
+        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+        logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+
+        logprior_2 = hcat(logprior_2, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
+        logllhood_2 = hcat(loglhood_2, logllhood_i |> cpu_device())
     end
     
     # Initialize for first temperature = 0
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
+    ex_prior1 = m.prior.contrastive_div ? mean(logprior) : quant(0)
+    ex_prior2 = m.prior.contrastive_div ? mean(logprior_2) : quant(0)
     t1_resample, t2_resample = quant(0), quant(0) # Temperature at which last resample occurred
     resampled_idx1 = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx2 = copy(resampled_idx1)
-    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
+    resampled_idx2, = copy(resampled_idx1)
     
     # Particle filter at each power posterior
     KL_div = zeros(quant, size(x,2))
     for t in temperatures
-        resample_idx1, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
-        resample_idx2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
+        resample_idx1, weights_pos, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
+        resample_idx2, weights2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
         logprior, logllhood = logprior[resample_idx1], logllhood[resample_idx1]
         logprior_2, loglhood_2 = logprior_2[resample_idx2], loglhood_2[resample_idx2]
 
         if t != quant(1)
-            KL_div += dropdims(mean(logprior; dims=2) + mean(logllhood; dims=2) - mean(logprior_2; dims=2) - mean(loglhood_2; dims=2); dims=2)
-            KL_div += dropdims(mean(logprior_2; dims=2) + mean(loglhood_2; dims=2) - mean(logprior; dims=2) - mean(logllhood; dims=2); dims=2)
+            KL_div += dropdims(
+                sum(weights_pos .* (logprior .+ t.*logllhood); dims=2) - sum(weights2 .* (logprior_2 .+ t.*loglhood_2); dims=2)
+                + sum(weights2 .* (logprior_2 .+ t.*loglhood_2); dims=2) - sum(weights_pos .* (logprior .+ t.*logllhood); dims=2); dims=2
+            )
         end
     end
 
     # Final importance weights
-    weights_final = @ignore_derivatives softmax(logllhood - (t1_resample .* logllhood); dims=2)
-    @tullio loss[b] := weights_final[b, s] * (logprior[b, s] + logllhood[b, s])
-    return -mean(loss .- ex_prior .- (KL_div ./ 2)), seed
+    @tullio loss1[b] := weights_pos[b, s] * (logprior[b, s] + logllhood[b, s])
+    loss1 = loss1 - ex_prior1
+    @tullio loss2[b] := weights2[b, s] * (logprior_2[b, s] + loglhood_2[b, s])
+    loss2 = loss2 - ex_prior2
+    loss = mean(loss1 + loss2 + KL_div) / 2
+
+    return -loss, seed
 end
 
 function update_llhood_grid(
@@ -252,26 +223,28 @@ function init_T_KAM(
     grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
+    # MLE or Thermodynamic Integration
+    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
+    loss_fcn = importance_loss
+
     # Importance sampling or MALA
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
+        
 
-    if use_MALA
+    if use_MALA && !(N_t > 1) # Don't even try MALA plus Thermodynamic Integration
         step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
         noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=quant(1), η=step_size, σ=noise_var, N=num_steps, seed=seed)
     end
-        
-    # MLE or Thermodynamic Integration
-    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
+    
     num_particles = 0
-    loss_fcn = importance_loss
     p = [quant(1)]
     if N_t > 1
         num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
-        loss_fcn = use_MALA ? MALA_thermo_loss : particle_filter_loss
+        loss_fcn = particle_filter_loss
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
 
         # Cyclic p schedule

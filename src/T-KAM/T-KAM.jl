@@ -95,7 +95,6 @@ function MALA_thermo_loss(
 
     # Schedule temperatures
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    Δt = temperatures[2:end] - temperatures[1:end-1]
 
     # Initialize for first sum
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)

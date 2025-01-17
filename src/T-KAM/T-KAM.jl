@@ -136,7 +136,7 @@ function particle_filter_loss(
     """Thermodynamic Integration loss with particle filtering."""
 
     # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t]) # Starts from 1, since 0 is the prior 
+    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
 
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
@@ -151,19 +151,29 @@ function particle_filter_loss(
     
     # Initialize for first temperature = 0
     ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
-    t_resample = quant(0) # Temperature at which last resample occurred
-    resampled_idx = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
+    t1_resample, t2_resample = quant(0), quant(0) # Temperature at which last resample occurred
+    resampled_idx1 = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
+    resampled_idx2 = copy(resampled_idx1)
+    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
     
     # Particle filter at each power posterior
+    KL_div = zeros(quant, size(x,2))
     for t in temperatures
-        resampled_idx, seed, t_resample = m.lkhood.pf_resample(logllhood, t_resample, t, seed)
-        logprior, logllhood = logprior[resampled_idx], logllhood[resampled_idx] # Update particles
+        resample_idx1, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
+        resample_idx2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
+        logprior, logllhood = logprior[resample_idx1], logllhood[resample_idx1]
+        logprior_2, loglhood_2 = logprior_2[resample_idx2], loglhood_2[resample_idx2]
+
+        if t != quant(1)
+            KL_div += dropdims(mean(logprior; dims=2) + mean(logllhood; dims=2) - mean(logprior_2; dims=2) - mean(loglhood_2; dims=2); dims=2)
+            KL_div += dropdims(mean(logprior_2; dims=2) + mean(loglhood_2; dims=2) - mean(logprior; dims=2) - mean(logllhood; dims=2); dims=2)
+        end
     end
 
     # Final importance weights
-    weights_final = @ignore_derivatives softmax(logllhood - (t_resample .* logllhood); dims=2)
+    weights_final = @ignore_derivatives softmax(logllhood - (t1_resample .* logllhood); dims=2)
     @tullio loss[b] := weights_final[b, s] * (logprior[b, s] + logllhood[b, s])
-    return -mean(loss .- ex_prior), seed
+    return -mean(loss .- ex_prior .- (KL_div ./ 2)), seed
 end
 
 function update_llhood_grid(

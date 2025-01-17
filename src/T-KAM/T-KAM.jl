@@ -120,28 +120,30 @@ function particle_filter_loss(
     t1_resample, t2_resample = quant(0), quant(0) # Temperature at which last resample occurred
     resampled_idx1 = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
     resampled_idx2, = copy(resampled_idx1)
+    weights_neg = ones(quant, size(x, 2), m.num_particles) ./ m.num_particles
+    weights_pos = copy(weights_neg)
     
     # Particle filter at each power posterior
     KL_div = zeros(quant, size(x,2))
     for t in temperatures
         resample_idx1, weights_pos, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
-        resample_idx2, weights2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
+        resample_idx2, weights_neg, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
         logprior, logllhood = logprior[resample_idx1], logllhood[resample_idx1]
         logprior_2, loglhood_2 = logprior_2[resample_idx2], loglhood_2[resample_idx2]
 
         if t != quant(1)
             KL_div += dropdims(
-                sum(weights_pos .* (logprior .+ t.*logllhood); dims=2) - sum(weights2 .* (logprior_2 .+ t.*loglhood_2); dims=2)
-                + sum(weights2 .* (logprior_2 .+ t.*loglhood_2); dims=2) - sum(weights_pos .* (logprior .+ t.*logllhood); dims=2); dims=2
+                sum(weights_pos .* (logprior .+ t.*logllhood); dims=2) - sum(weights_neg .* (logprior_2 .+ t.*loglhood_2); dims=2)
+                + sum(weights_neg .* (logprior_2 .+ t.*loglhood_2); dims=2) - sum(weights_pos .* (logprior .+ t.*logllhood); dims=2); dims=2
             )
         end
     end
 
     # Final importance weights
     @tullio loss1[b] := weights_pos[b, s] * (logprior[b, s] + logllhood[b, s])
-    loss1 = loss1 - ex_prior1
-    @tullio loss2[b] := weights2[b, s] * (logprior_2[b, s] + loglhood_2[b, s])
-    loss2 = loss2 - ex_prior2
+    loss1 = loss1 .- ex_prior1
+    @tullio loss2[b] := weights_neg[b, s] * (logprior_2[b, s] + loglhood_2[b, s])
+    loss2 = loss2 .- ex_prior2
     loss = mean(loss1 + loss2 + KL_div) / 2
 
     return -loss, seed

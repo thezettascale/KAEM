@@ -103,7 +103,7 @@ function train!(t::T_KAM_trainer)
     
     loss_file = t.file_loc * "loss.csv"
     open(loss_file, "w") do file
-        write(file, "Time (s),Epoch,Train Loss,Test Loss,Grid Updated\n")
+        write(file, "Time (s),Epoch,Train Loss,Test MSE Loss,Grid Updated\n")
     end
 
     function find_nan(grads)
@@ -153,8 +153,8 @@ function train!(t::T_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, device(x); seed=t.seed)
-                test_loss += loss
+                x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x, 2); seed=t.seed)
+                test_loss += sum((x_gen' .- x).^2) / size(x, 2)
             end
             
             train_loss = train_loss / num_batches

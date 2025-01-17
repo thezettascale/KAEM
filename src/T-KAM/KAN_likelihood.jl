@@ -149,9 +149,9 @@ function particle_filter(
     ESS_bool = ESS .> ESS_threshold*N
     
     # Only resample when needed 
-    verbose && (!all(ESS_bool) && println("Resampling at t=$t2"))
-    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)..., t2
-    return repeat((1:N)', B, 1), weights, seed, t_resample
+    verbose && ((!all(ESS_bool) || (t2 == quant(1))) && println("Resampling at t=$t2"))
+    (!all(ESS_bool) || (t2 == quant(1))) && return resampler(weights, ESS_bool, B, N; seed=seed)..., t2
+    return repeat((1:N)', B, 1), seed, t_resample
 end
 
 function init_KAN_lkhood(

@@ -99,54 +99,39 @@ function particle_filter_loss(
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
     logprior, logllhood = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
-    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
     for i in 1:iters
         z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
         logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
         logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
         logllhood = hcat(logllhood, logllhood_i |> cpu_device())
-
-        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-        logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-
-        logprior_2 = hcat(logprior_2, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
-        logllhood_2 = hcat(loglhood_2, logllhood_i |> cpu_device())
     end
+    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
     
     # Initialize for first temperature = 0
-    ex_prior1 = m.prior.contrastive_div ? mean(logprior) : quant(0)
-    ex_prior2 = m.prior.contrastive_div ? mean(logprior_2) : quant(0)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
     t1_resample, t2_resample = quant(0), quant(0) # Temperature at which last resample occurred
     resampled_idx1 = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
     resampled_idx2, = copy(resampled_idx1)
-    weights_neg = ones(quant, size(x, 2), m.num_particles) ./ m.num_particles
-    weights_pos = copy(weights_neg)
     
     # Particle filter at each power posterior
-    KL_div = zeros(quant, size(x,2))
+    KL_div = zeros(quant, size(x,2), 1)
     for t in temperatures
-        resample_idx1, weights_pos, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
-        resample_idx2, weights_neg, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
+        resample_idx1, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
+        resample_idx2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
         logprior, logllhood = logprior[resample_idx1], logllhood[resample_idx1]
         logprior_2, loglhood_2 = logprior_2[resample_idx2], loglhood_2[resample_idx2]
 
-        if t != quant(1)
-            KL_div += dropdims(
-                sum(weights_pos .* (logprior .+ t.*logllhood); dims=2) - sum(weights_neg .* (logprior_2 .+ t.*loglhood_2); dims=2)
-                + sum(weights_neg .* (logprior_2 .+ t.*loglhood_2); dims=2) - sum(weights_pos .* (logprior .+ t.*logllhood); dims=2); dims=2
-            )
+        if t != quant(1) && (t1_resample == t || t2_resample == t)
+            KL_div += mean(logprior .+ t.*logllhood; dims=2) - mean(logprior_2 .+ t.*loglhood_2; dims=2)
+            KL_div += mean(logprior_2 .+ t.*loglhood_2; dims=2) - mean(logprior .+ t.*logllhood; dims=2)
         end
     end
 
-    # Final importance weights
-    @tullio loss1[b] := weights_pos[b, s] * (logprior[b, s] + logllhood[b, s])
-    loss1 = loss1 .- ex_prior1
-    @tullio loss2[b] := weights_neg[b, s] * (logprior_2[b, s] + loglhood_2[b, s])
-    loss2 = loss2 .- ex_prior2
-    loss = mean(loss1 + loss2 + KL_div) / 2
-
-    return -loss, seed
+    # Final particles at t=1
+    loss1 = mean(logprior .+ logllhood; dims=2) .- ex_prior
+    loss2 = mean(logprior_2 .+ loglhood_2; dims=2) .- ex_prior
+    return -mean(loss1 + loss2 + KL_div) / 2, seed
 end
 
 function update_llhood_grid(

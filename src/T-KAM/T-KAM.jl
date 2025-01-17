@@ -150,49 +150,23 @@ function particle_filter_loss(
         logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
         logllhood = hcat(logllhood, logllhood_i |> cpu_device())
     end
-
-    logprior_neg, logprior_pos = copy(logprior), copy(logprior)
-    logllhood_neg, logllhood_pos = copy(logllhood), copy(logllhood)
     
-    # Initialize for first sum
-    loss, weights_neg = zeros(quant, size(x, 2)), ones(quant, size(logllhood_neg)) ./ m.MC_samples
-    resampled_idx_neg = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    t_resample = temperatures[1] # Temperature at which last resample occurred
-    resampled_idx_pos, weights_pos, seed, _ = m.lkhood.pf_resample(logllhood_pos, t_resample, temperatures[2], seed)
+    # Initialize for first temperature = 0
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
+    t_resample = quant(0) # Temperature at which last resample occurred
+    resampled_idx = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
     
     # Particle filter at each power posterior
-    for t in eachindex(temperatures[1:end-2])
-        
-        # Extract resampled particles
-        logprior_neg, logllhood_neg  = logprior_neg[resampled_idx_neg], logllhood_neg[resampled_idx_neg]
-        logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos] 
+    for t in temperatures
+        resampled_idx, seed, t_resample = m.lkhood.pf_resample(logllhood, t_resample, t, seed)
+        logprior, logllhood = logprior[resampled_idx], logllhood[resampled_idx] # Update particles
+    end
 
-        # Unchanged log-prior, (KL divergence)
-        @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
-        loss -= loss_prior
-
-        # Tempered log-likelihoods, (trapezium rule)
-        ll_pos_t, ll_neg_t = temperatures[t+1] .* logllhood_pos, temperatures[t] .* logllhood_neg
-        @tullio loss_llhood[b] := (weights_pos[b, s] * ll_pos_t[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
-        loss -= loss_llhood
-
-        # Filter particles, (there is only one propagating population)
-        resampled_idx_neg, weights_neg, seed, t_resample = m.lkhood.pf_resample(logllhood_neg, t_resample, temperatures[t+1], seed)
-        resampled_idx_pos, weights_pos, seed, _ = m.lkhood.pf_resample(logllhood_neg[resampled_idx_neg], t_resample, temperatures[t+2], seed)  
-    end 
-
-    # Final importance sampling on entire population
-    logprior_neg, logllhood_neg = logprior_neg[resampled_idx_neg], logllhood_neg[resampled_idx_neg]
-    logprior_pos, logllhood_pos = logprior_neg[resampled_idx_pos], logllhood_neg[resampled_idx_pos]
-    
-    # Weights should be more or less uniform
-    @tullio loss_prior[b] := (weights_pos[b, s] * logprior_pos[b, s]) - (weights_neg[b, s] * logprior_neg[b, s])
-    loss -= loss_prior
-    ll_neg_t = temperatures[end-1] .* logllhood_neg
-    @tullio loss_llhood[b] := (weights_pos[b, s] * logllhood_pos[b, s]) - (weights_neg[b, s] * ll_neg_t[b, s])
-    loss -= loss_llhood
-    return mean(loss), seed
-end 
+    # Final importance weights
+    weights_final = @ignore_derivatives softmax(logllhood - (t_resample .* logllhood); dims=2)
+    @tullio loss[b] := weights_final[b, s] * (logprior[b, s] + logllhood[b, s])
+    return -mean(loss .- ex_prior), seed
+end
 
 function update_llhood_grid(
     model::T_KAM,
@@ -278,7 +252,6 @@ function init_T_KAM(
         step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
         noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
-        @reset prior_model.contrastive_div = true
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=quant(1), η=step_size, σ=noise_var, N=num_steps, seed=seed)
     end

@@ -11,7 +11,7 @@ using .trainer
 
 datasets = [
     "MNIST", 
-    "FMNIST"
+    # "FMNIST"
     ]
 
 num_temps = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")
@@ -24,16 +24,19 @@ for dataset in datasets
 
     # # Vanilla importance sampling
     # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-    # t = init_trainer(rng, conf, dataset)#, img_resize=(14,14))
+    # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
     # train!(t)
+
+    # Particle filter
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
+    t = init_trainer(rng, conf, dataset, img_resize=(14,14))
+    train!(t)  
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
     # MALA Vanilla
     commit!(conf, "MALA", "use_langevin", "true")
     t = init_trainer(rng, conf, dataset, img_resize=(14,14))
     train!(t)
 
-    # Particle filter
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
-    t = init_trainer(rng, conf, dataset, img_resize=(14,14))
-    train!(t)  
+
 end

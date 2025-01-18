@@ -49,8 +49,7 @@ function generate_from_z(
     ps, 
     st, 
     z::AbstractArray{quant};
-    seed::Int=1,
-    noise::Bool=true,
+    seed::Int=1
     )
     """
     Generate data from the likelihood model.
@@ -78,7 +77,6 @@ function generate_from_z(
     # Add noise
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, quant, size(z)) |> device
-    ε = !noise ? quant(0) .* ε : ε
     return lkhood.output_activation(z + ε), seed
 end
 
@@ -146,7 +144,7 @@ function particle_filter(
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
-    ESS_bool = ESS .> ESS_threshold*N
+    ESS_bool = ESS .< ESS_threshold*N
     
     # Only resample when needed 
     verbose && ((!all(ESS_bool) || (t2 == quant(1))) && println("Resampling at t=$t2"))

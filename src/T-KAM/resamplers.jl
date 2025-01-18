@@ -26,7 +26,7 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
     # Residual weights to resample from
-    residual_weights = softmax(weights .- (integer_counts ./ N), dims=2)
+    residual_weights = softmax(weights .* (N .- integer_counts), dims=2)
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
@@ -58,7 +58,6 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
     end
     replace!(idxs, N+1 => N)
 
-    weights = weights[idxs]
     return idxs, seed
 end
 
@@ -93,7 +92,6 @@ function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     end
     replace!(idxs, N+1 => N)
 
-    weights = weights[idxs]
     return idxs, seed
 end
 
@@ -128,7 +126,6 @@ function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     end
     replace!(idxs, N+1 => N)
 
-    weights = weights[idxs]
     return idxs, seed
 end
 

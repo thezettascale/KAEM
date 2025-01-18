@@ -10,10 +10,10 @@ using .Utils: next_rng, quant
 
 function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
     """
-    Residual resampling for particle filtering.
+    Residual resampling for weight filtering.
 
     Args:
-        weights: The weights of the particles.
+        weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
         seed: Random seed for reproducibility.
 
@@ -21,7 +21,7 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
         - The resampled indices.
         - The updated seed.
     """
-    # Number times to replicate each particle
+    # Number times to replicate each sample
     integer_counts = floor.(weights .* N) .|> Int
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
@@ -63,10 +63,10 @@ end
 
 function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
     """
-    Systematic resampling for particle filtering.
+    Systematic resampling for weight filtering.
 
     Args:
-        weights: The weights of the particles.
+        weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
         seed: Random seed for reproducibility.
 
@@ -97,10 +97,10 @@ end
 
 function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
     """
-    Systematic resampling for particle filtering.
+    Systematic resampling for weight filtering.
 
     Args:
-        weights: The weights of the particles.
+        weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
         seed: Random seed for reproducibility.
 

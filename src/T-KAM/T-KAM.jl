@@ -221,7 +221,6 @@ function init_T_KAM(
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, need_prior=false, seed=seed)
     end
     
-    num_particles = 0
     p = [quant(1)]
     if N_t > 1
         loss_fcn = thermo_loss

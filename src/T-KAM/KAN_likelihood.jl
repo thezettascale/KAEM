@@ -124,7 +124,7 @@ function importance_resampler(
 
     Args:
         logllhood: A matrix of log-likelihood values.
-        weights: The weights of the particles.
+        weights: The weights of the population.
         t_resample: The temperature at which the last resample occurred.
         t2: The temperature at which to update the weights.
         seed: Random seed for reproducibility.

@@ -31,7 +31,6 @@ struct T_KAM <: Lux.AbstractLuxLayer
     grid_updates_samples::Int
     MC_samples::Int
     verbose::Bool
-    num_particles::Int
     p::AbstractArray{quant}
     N_t::Int
     MALA::Bool
@@ -133,51 +132,6 @@ function thermo_loss(
     return -mean(loss), seed
 end
 
-function particle_filter_loss(
-    m::T_KAM, 
-    ps, 
-    st, 
-    x::AbstractArray{quant};
-    seed::Int=1
-)
-    """Thermodynamic Integration loss with annealed particle filtering."""
-
-    # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t])
-
-    # Parallelized on CPU after evaluating log-distributions on GPU
-    iters = fld(m.num_particles, m.MC_samples)
-    logprior, logllhood = zeros(quant, 1, 0), zeros(quant, size(x, 2), 0)
-    for i in 1:iters
-        z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-        logllhood_i, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-        logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
-        logllhood = hcat(logllhood, logllhood_i |> cpu_device())
-    end
-
-    # Initialize for first temperature = 0
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
-    loss = -ones(quant, size(x,2), 1) .* ex_prior
-    resample_idx = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-
-    for t in enumerate(temperatures)
-        weights = @ignore_derivatives softmax(t .* logllhood, dims=2)
-        resample_idx, seed = m.lkhood.resample_z(weights, seed)
-        
-        # KL divergence when resample has occurred
-        if t != quant(1)
-            loss += mean(logprior .+ t .* logllhood, dims=2) 
-            logprior, logllhood = logprior[resample_idx], logllhood[resample_idx]
-            loss -= mean(logprior .+ t .* logllhood, dims=2) 
-        end
-    end
-
-    # Final particles at t=1
-    logprior, logllhood = logprior[resample_idx], logllhood[resample_idx]
-    loss += mean(logprior .+ logllhood, dims=2)
-    return -mean(loss), seed
-end
-
 function update_llhood_grid(
     model::T_KAM,
     ps, 
@@ -274,14 +228,11 @@ function init_T_KAM(
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, need_prior=false, seed=seed)
     end
     
-    num_particles = 0
     p = [quant(1)]
     if N_t > 1
         posterior_fcn = (m, x, t, ps, st, need_prior, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=need_prior, seed=seed)
         @reset prior_model.contrastive_div = true
-
-        num_particles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_particles"))
-        loss_fcn = num_particles > 1 ? particle_filter_loss : thermo_loss
+        loss_fcn = thermo_loss
 
         # Cyclic p schedule
         initial_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
@@ -306,7 +257,6 @@ function init_T_KAM(
             num_grid_updating_samples,
             MC_samples,
             verbose,
-            num_particles,
             p,
             N_t,
             use_MALA,

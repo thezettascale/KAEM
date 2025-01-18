@@ -144,7 +144,7 @@ function particle_filter(
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
-    ESS_bool = ESS .< ESS_threshold*N
+    ESS_bool = ESS .> ESS_threshold*N
     
     # Only resample when needed 
     verbose && ((!all(ESS_bool) || (t2 == quant(1))) && println("Resampling at t=$t2"))

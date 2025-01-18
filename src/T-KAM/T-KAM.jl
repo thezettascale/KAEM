@@ -94,7 +94,7 @@ function particle_filter_loss(
     """Thermodynamic Integration loss with annealed particle filtering."""
 
     # Schedule temperatures
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 1:m.N_t])
+    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
 
     # Parallelized on CPU after evaluating log-distributions on GPU
     iters = fld(m.num_particles, m.MC_samples)
@@ -106,32 +106,29 @@ function particle_filter_loss(
         logprior = hcat(logprior, log_prior(m.prior, z, ps.ebm, st.ebm)' |> cpu_device())
         logllhood = hcat(logllhood, logllhood_i |> cpu_device())
     end
-    logprior_2, loglhood_2 = copy(logprior), copy(logllhood)
     
     # Initialize for first temperature = 0
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
-    t1_resample, t2_resample = quant(0), quant(0) # Temperature at which last resample occurred
-    resampled_idx1 = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
-    resampled_idx2, = copy(resampled_idx1)
+    t_resample = quant(0) # Temperature at which last resample occurred
     
     # Particle filter at each power posterior
-    KL_div = zeros(quant, size(x,2), 1)
-    for t in temperatures
-        resample_idx1, seed, t1_resample = m.lkhood.pf_resample(logllhood, t1_resample, t, seed)
-        resample_idx2, seed, t2_resample = m.lkhood.pf_resample(loglhood_2, t2_resample, t, seed)
-        logprior, logllhood = logprior[resample_idx1], logllhood[resample_idx1]
-        logprior_2, loglhood_2 = logprior_2[resample_idx2], loglhood_2[resample_idx2]
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)
+    loss, t_resample = -ones(quant, size(x,2), 1) .* ex_prior, quant(0)
+    resample_idx = repeat(reshape(1:m.num_particles, 1, m.num_particles), size(x, 2), 1)
+    for (k, t) in enumerate(temperatures[2:end])
+        resample_idx, seed, t_resample = m.lkhood.pf_resample(logllhood, t_resample, t, seed)
 
-        if t != quant(1) && (t1_resample == t || t2_resample == t)
-            KL_div += mean(logprior .+ t.*logllhood; dims=2) - mean(logprior_2 .+ t.*loglhood_2; dims=2)
-            KL_div += mean(logprior_2 .+ t.*loglhood_2; dims=2) - mean(logprior .+ t.*logllhood; dims=2)
+        # KL divergence when resample has occurred
+        if (t_resample == t) && (t != quant(1))
+            loss += mean(logprior .+ t .* logllhood, dims=2) 
+            logprior, logllhood = logprior[resample_idx], logllhood[resample_idx]
+            loss -= mean(logprior .+ t .* logllhood, dims=2) 
         end
     end
-
     # Final particles at t=1
-    loss1 = mean(logprior .+ logllhood; dims=2) .- ex_prior
-    loss2 = mean(logprior_2 .+ loglhood_2; dims=2) .- ex_prior
-    return -mean(loss1 + loss2 + KL_div) / 2, seed
+    logprior, logllhood = logprior[resample_idx], logllhood[resample_idx]
+    weights = @ignore_derivatives softmax(logllhood, dims=2)
+    loss += sum(weights .* (logprior .+ logllhood), dims=2)
+    return -mean(loss), seed
 end
 
 function update_llhood_grid(

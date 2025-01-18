@@ -66,7 +66,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
 
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
-    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
+    particles = parse(Int, retrieve(conf, "MALA", "num_particles")) > 1 ? "particles" : "MALA"
+    model_type = N_t > 1 ? "Thermodynamic/$particles" : "Vanilla/$mala"
 
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)

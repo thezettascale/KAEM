@@ -69,7 +69,7 @@ function MALA_sampler(
 
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
-        ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i)
+        ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
         return sum(lp .+ (t.*ll))
     end
@@ -90,14 +90,14 @@ function MALA_sampler(
     end
 
     # Global Replica Exchange accross temperatures
-    function RE_global(z_low, z_high)
-        ll_low, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_low)
-        ll_high, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_high)
+    function RE_global(z_low, z_high, t_low, t_high)
+        ll_low, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_low; seed=seed)
+        ll_high, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_high; seed=seed)
         ll_low, ll_high = sum(ll_low), sum(ll_high)
 
-        # Compute acceptance ratio
-        log_acceptance_ratio = (t[k] * ll_low) + (t[k-1] * ll_high)
-        log_acceptance_ratio -= (t[k] * ll_high) + (t[k-1] * ll_low)
+        # Log-acceptance is the likelihood of swap vs no swap
+        log_acceptance_ratio = (t_high .* ll_low) + (t_low .* ll_high)
+        log_acceptance_ratio -= (t_high .* ll_high) + (t_low .* ll_low)
 
         return log_acceptance_ratio
     end
@@ -121,8 +121,9 @@ function MALA_sampler(
            
             z_low = z[idx-1, :, :]
             z_high = z[idx, :, :] 
-            if log_u_global[i] < RE_global(z_low, z_high)
-                z[idx-1, :, :], z[idx, :, :] = z_high, z_low
+            if log_u_global[i] < RE_global(z_low, z_high, view(t ,idx-1), view(t, idx))
+                z[idx-1, :, :] .= z_high
+                z[idx, :, :] .= z_low
             end
             z = reshape(z, T * B, Q)
         end

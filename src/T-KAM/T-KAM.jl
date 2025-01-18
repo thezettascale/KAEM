@@ -82,8 +82,8 @@ function importance_loss(
     
     # Resample weights if degenarate
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled, logprior_resampled, logllhood_resampled = zeros(quant, 0, size(weights, 2)), zeros(quant, 0, size(logprior, 2)), zeros(quant, 0, size(logllhood, 2))
-    weights_resampled, logprior_resampled, logllhood_resampled = weights_resampled |> device, logprior_resampled |> device, logllhood_resampled |> device
+    weights_resampled = zeros(quant, 0, m.MC_samples) |> device
+    logprior_resampled, logllhood_resampled = copy(weights_resampled), copy(weights_resampled)
     for (b, idxs) in enumerate(eachrow(resampled_idxs))
         weights_resampled = vcat(weights_resampled, weights[b:b, idxs])
         logprior_resampled = vcat(logprior_resampled, logprior[idxs]')
@@ -118,7 +118,7 @@ function thermo_loss(
     logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_neg; seed=seed)
     logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_pos; seed=seed)
     
-    # Temper likelihood
+    # Temper likelihoods
     logprior_neg, logprior_pos = reshape(logprior_neg, T, 1, N), reshape(logprior_pos, T, 1, N)
     logllhood_neg = temperatures[1:end-1] .* reshape(logllhood_neg, T, B, N)
     logllhood_pos = temperatures[2:end] .* reshape(logllhood_pos, T, B, N)
@@ -223,6 +223,7 @@ function init_T_KAM(
         step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
         noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
+        @reset prior_model.contrastive_div = true
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, need_prior=false, seed=seed)
     end

@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, systematic_sampler, particle_filter
+export KAN_lkhood, init_KAN_lkhood, log_likelihood, generate_from_z, importance_resampler
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -14,7 +14,7 @@ include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, quant
 using .ebm_mix_prior
-using .ParticleFilterResamplers
+using .WeightResamplers
 
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
@@ -41,7 +41,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::quant
     log_lkhood_model::Function
     output_activation::Function
-    pf_resample::Function
+    resample_z::Function
 end
 
 function generate_from_z(
@@ -112,10 +112,8 @@ function log_likelihood(
 end
 
 
-function particle_filter(
-    logllhood::AbstractArray{quant},
-    t_resample::quant,
-    t2::quant;
+function importance_resampler(
+    weights::AbstractArray{quant};
     seed::Int=1,
     ESS_threshold::quant=quant(0.5),
     resampler::Function=systematic_sampler,
@@ -137,19 +135,16 @@ function particle_filter(
         - The resampled indices.
         - The updated seed.
     """
-    B, N = size(logllhood)
-
-    # Update the weights to the next temperature
-    weights = softmax((t2 .* logllhood) - (t_resample .* logllhood); dims=2)
+    B, N = size(weights)
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .> ESS_threshold*N
     
     # Only resample when needed 
-    verbose && ((!all(ESS_bool) || (t2 == quant(1))) && println("Resampling at t=$t2"))
-    (!all(ESS_bool) || (t2 == quant(1))) && return resampler(weights, ESS_bool, B, N; seed=seed)..., t2
-    return repeat((1:N)', B, 1), seed, t_resample
+    verbose && (!all(ESS_bool) && println("Resampling!"))
+    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)
+    return repeat((1:N)', B, 1), seed
 end
 
 function init_KAN_lkhood(
@@ -198,7 +193,7 @@ function init_KAN_lkhood(
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
 
-    resample_fcn = (logllhood, t1, t2, seed) -> @ignore_derivatives particle_filter(logllhood, t1, t2; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
+    resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
         in_dim,

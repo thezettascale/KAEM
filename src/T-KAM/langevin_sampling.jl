@@ -17,10 +17,11 @@ function MALA_sampler(
     ps,
     st,
     x::AbstractArray{quant};
-    t::quant=quant(1),
+    t::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
     σ::quant=quant(1),
     N::Int=20,
+    need_prior::Bool=false,
     seed::Int=1,
     )
     """
@@ -31,6 +32,7 @@ function MALA_sampler(
         ps: The parameters of the model.
         st: The states of the model.
         x: The data
+        t: The temperatures if using Thermodynamic Integration.
         η: The step size.
         σ: The noise level, (usually leave at 1)
         N: The number of iterations.
@@ -41,7 +43,11 @@ function MALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    z_init, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    T, B, Q = length(t), size(z_init)...
+    z_init = reshape(z_init, 1, B, Q)
+    z = repeat(z_init, T, 1, 1) # Parallelize across temperatures if using Thermodynamic Integration
+    z = reshape(z, T * B, Q)
 
     # Pre-allocate buffers
     noise = similar(z)
@@ -60,7 +66,8 @@ function MALA_sampler(
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i)
-        return sum(lp' .+ (t.*ll))
+        lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
+        return sum(lp .+ (t.*ll))
     end
 
     function MH_acceptance(proposal_i, z_i, grad_current, grad_proposal)
@@ -86,6 +93,9 @@ function MALA_sampler(
             z .= proposal
         end
     end
+
+    z = reshape(z, T, B, Q)
+    z = need_prior ? vcat(z_init, z) : z
 
     return z, seed
 end

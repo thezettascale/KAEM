@@ -22,21 +22,20 @@ for dataset in datasets
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
     commit!(conf, "MALA", "use_langevin", "false")
 
-    # # Vanilla importance sampling
-    # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-    # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
-    # train!(t)
-
-    # # Particle filter
-    # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
-    # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
-    # train!(t)  
-    # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-
-    # MALA Vanilla
-    commit!(conf, "MALA", "use_langevin", "true")
+    # Vanilla importance sampling
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
     t = init_trainer(rng, conf, dataset, img_resize=(14,14))
     train!(t)
 
+    # # MALA Vanilla
+    # commit!(conf, "MALA", "use_langevin", "true")
+    # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
+    # train!(t)
+
+    # Thermodynamic
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)
+    t = init_trainer(rng, conf, dataset, img_resize=(14,14))
+    train!(t)  
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 end

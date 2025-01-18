@@ -1,4 +1,4 @@
-module ParticleFilterResamplers
+module WeightResamplers
 
 export residual_resampler, systematic_resampler, stratified_resampler
 

@@ -189,7 +189,7 @@ function init_KAN_lkhood(
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
     ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
-    resampler = retrieve(conf, "THERMODYNAMIC_INTEGRATION", "resampler")
+    resampler = retrieve(conf, "KAN_LIKELIHOOD", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
 

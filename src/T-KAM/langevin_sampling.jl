@@ -61,7 +61,11 @@ function MALA_sampler(
     seed, rng = next_rng(seed)
     noise = randn(quant, N, size(z)...) .* σ .* sqrt(2 * η) |> device
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, quant, N)) 
+    log_u = log.(rand(rng, quant, N)) # Local proposals
+    seed, rng = next_rng(seed)
+    log_u_global = log.(rand(rng, quant, N)) # Global proposals
+    seed, rng = next_rng(seed)
+    swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
 
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
@@ -70,7 +74,8 @@ function MALA_sampler(
         return sum(lp .+ (t.*ll))
     end
 
-    function MH_acceptance(proposal_i, z_i, grad_current, grad_proposal)
+    # Local acceptance ratio within temperature
+    function MH_local(proposal_i, z_i, grad_current, grad_proposal)
 
         # Proposal densities (drift corrections)
         forward_drift .= proposal_i - z_i - η * grad_current
@@ -84,14 +89,44 @@ function MALA_sampler(
         return log_acceptance_ratio
     end
 
+    # Global Replica Exchange accross temperatures
+    function RE_global(z_low, z_high)
+        ll_low, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_low)
+        ll_high, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_high)
+        ll_low, ll_high = sum(ll_low), sum(ll_high)
+
+        # Compute acceptance ratio
+        log_acceptance_ratio = (t[k] * ll_low) + (t[k-1] * ll_high)
+        log_acceptance_ratio -= (t[k] * ll_high) + (t[k-1] * ll_low)
+
+        return log_acceptance_ratio
+    end
+
     for i in 1:N
         drift .= first(gradient(log_posterior, z))
         proposal .= z .+ (η .* drift) .+ (noise[i, :, :])
         drift_proposal .= first(gradient(log_posterior, proposal))
 
-        if log_u[i] < MH_acceptance(proposal, z, drift, drift_proposal)
+        # Local Metropolis-Hastings acceptance
+        if log_u[i] < MH_local(proposal, z, drift, drift_proposal)
             z .= proposal
         end
+
+        # Global Replica Exchange
+        if T > 1
+        
+            # Randomly select chain
+            z = reshape(z, T, B, Q)
+            idx = swap_indices[i]
+           
+            z_low = z[idx-1, :, :]
+            z_high = z[idx, :, :] 
+            if log_u_global[i] < RE_global(z_low, z_high)
+                z[idx-1, :, :], z[idx, :, :] = z_high, z_low
+            end
+            z = reshape(z, T * B, Q)
+        end
+
     end
 
     z = reshape(z, T, B, Q)

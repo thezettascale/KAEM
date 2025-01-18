@@ -78,15 +78,21 @@ function importance_loss(
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
-
-    # Importance weights, + resampling if degenerate
     weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
+    
+    # Resample weights if degenarate
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights, logprior, logllhood = weights[resampled_idxs], logprior[resampled_idxs], logllhood[resampled_idxs]
+    weights_resampled, logprior_resampled, logllhood_resampled = zeros(quant, 0, size(weights, 2)), zeros(quant, 0, size(logprior, 2)), zeros(quant, 0, size(logllhood, 2))
+    weights_resampled, logprior_resampled, logllhood_resampled = weights_resampled |> device, logprior_resampled |> device, logllhood_resampled |> device
+    for (b, idxs) in enumerate(eachrow(resampled_idxs))
+        weights_resampled = vcat(weights_resampled, weights[b:b, idxs])
+        logprior_resampled = vcat(logprior_resampled, logprior[idxs]')
+        logllhood_resampled = vcat(logllhood_resampled, logllhood[b:b, idxs])
+    end
 
-    @tullio loss_prior[b] := weights[b, s] * (logprior[b, s])
+    @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     loss_prior = loss_prior .- ex_prior
-    @tullio loss_llhood[b] := weights[b, s] * logllhood[b, s]
+    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
     return -mean(loss_prior .+ loss_llhood), seed
 end
 

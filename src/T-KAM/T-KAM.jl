@@ -82,9 +82,9 @@ function importance_loss(
     
     # Resample weights if degenarate
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b]], 1:size(x, 2)))
-    logprior_resampled = reduce(vcat, map(b -> logprior[resampled_idxs[b]]', 1:size(x, 2)))
-    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b]], 1:size(x, 2)))
+    weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
+    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
 
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     loss_prior = loss_prior .- ex_prior

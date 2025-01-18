@@ -107,7 +107,7 @@ function log_prior(
     z = log_απ .+ z 
     z = !mix.contrastive_div ? z .- log_partition_function(mix, ps, st) : z
     M = maximum(z, dims=3)
-    return dropdims(sum(M .+ logsumexp(z .- M, dims=3); dims=2); dims=(2,3))
+    return dropdims(sum(M .+ logsumexp(z .- M, dims=3); dims=2); dims=2)
 end
 
 function init_mix_prior(

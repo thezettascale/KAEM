@@ -143,7 +143,7 @@ function importance_resampler(
     
     # Only resample when needed 
     verbose && (!all(ESS_bool) && println("Resampling!"))
-    !all(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed=seed)
+    !all(ESS_bool) && return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed=seed)
     return repeat((1:N)', B, 1), seed
 end
 

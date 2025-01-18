@@ -75,7 +75,7 @@ function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
         - The updated seed.
     """
 
-    cdf = cumsum(weights, dims=2)
+    cdf = cumsum(weights, dims=2) 
 
     # Systematic thresholds
     seed, rng = next_rng(seed)
@@ -109,7 +109,7 @@ function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
         - The updated seed.
     """
 
-    cdf = cumsum(weights, dims=2)
+    cdf = cumsum(weights, dims=2) 
 
     # Systematic thresholds
     seed, rng = next_rng(seed)

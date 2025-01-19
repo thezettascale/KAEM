@@ -81,7 +81,7 @@ function importance_loss(
     # Posterior samples
     z, seed = m.posterior_sample(m, x, ps, st, seed)
     z = m.MALA ? z[1, :, :] : z # Only one temperature for standard MLE
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=contrastive_div)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
     # Weights and resampling degenerate, (importance sampling skipped if MALA)
@@ -106,7 +106,7 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss."""
 
-    # Schedule temperatures
+    # Schedule temperatures, and MALA
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) # With prior vcatted
     T, N, Q, B = size(z)..., size(x, 2)

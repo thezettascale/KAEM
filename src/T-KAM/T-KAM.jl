@@ -103,15 +103,15 @@ function thermo_loss(
 
     # Schedule temperatures
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z_neg, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, true, seed) # With prior vcatted
-    z_pos, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, false, seed) # Without prior
-    T, N, Q, B = size(z_neg)..., size(x, 2)
+    z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) # Prior is vcatted at the start
+    T, N, Q, B = size(z)..., size(x, 2)
+    T -= 1
 
     # Base partition function
-    ex_prior = mean(log_prior(m.prior, z_neg[1, :, :], ps.ebm, st.ebm))
+    ex_prior = mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm))
 
     # Log-distributions
-    z_neg, z_pos = reshape(z_neg, T*N, Q), reshape(z_pos, T*N, Q)
+    z_neg, z_pos = reshape(z[1:end-1,:,:], T*N, Q), reshape(z[2:end,:,:], T*N, Q)
     logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_neg; seed=seed)
     logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_pos; seed=seed)
     
@@ -224,7 +224,7 @@ function init_T_KAM(
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, need_prior, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=need_prior, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=true, seed=seed)
         @reset prior_model.contrastive_div = false
         loss_fcn = thermo_loss
 

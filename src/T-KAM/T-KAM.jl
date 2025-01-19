@@ -72,15 +72,20 @@ function importance_loss(
     seed::Int=1
     )
     """MLE loss with importance sampling."""
-    z, seed = m.posterior_sample(m, x, ps, st, seed)
-    z = m.MALA ? z[1, :, :] : z # Only one temperature
-
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
-    weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
     
-    # Resample weights if degenarate
+    # Expected prior, (if contrastive divergence)
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+
+    # Posterior samples
+    z, seed = m.posterior_sample(m, x, ps, st, seed)
+    z = m.MALA ? z[1, :, :] : z # Only one temperature for standard MLE
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=contrastive_div)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    
+    # Weights and resampling degenerate, (importance sampling skipped if MALA)
+    weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
@@ -105,21 +110,19 @@ function thermo_loss(
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) # With prior vcatted
     T, N, Q, B = size(z)..., size(x, 2)
-    T -= 1
-
-    # Base partition
-    ex_prior = mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm))
 
     # Log-distributions
-    z = reshape(z[2:end, :, :], T*N, Q)
+    z = reshape(z, T*N, Q)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=false)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    logllhood = reshape(logllhood, T, B, N)
+    logprior, logllhood = reshape(logprior, T, N, 1), reshape(logllhood, T, B, N)
+    logprior, logllhood = mean(logprior, dims=2), mean(logllhood, dims=3)
+    logllhood = temperatures .* logllhood
 
-    # Annealed importance sampling
-    Δt = temperatures[2:end] - temperatures[1:end-1]
-    weights = softmax(Δt .* logllhood; dims=3)
-    prod_weights = prod(mean(weights, dims=3), dims=1)
-    return -mean(ex_prior .* prod_weights), seed
+    # Steppingstone sum
+    logdist = logprior .+ logllhood
+    loss = sum(logdist[2:end, :, :] - logdist[1:end-1, :, :])
+    return -loss / B, seed
 end
 
 function update_llhood_grid(

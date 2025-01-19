@@ -69,7 +69,7 @@ function MALA_sampler(
     swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
 
     function log_posterior(z_i)
-        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm)
+        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
         return sum(lp .+ (t.*ll))

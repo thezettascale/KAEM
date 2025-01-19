@@ -71,6 +71,7 @@ function log_prior(
     z::AbstractArray{quant},
     ps, 
     st;
+    normalize::Bool=false
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -105,7 +106,7 @@ function log_prior(
 
     # Unnormalized log-probability with logsumexp trick
     z = log_απ .+ z 
-    z = !mix.contrastive_div ? z .- log_partition_function(mix, ps, st) : z
+    z = !normalize ? z .- log_partition_function(mix, ps, st) : z
     M = maximum(z, dims=3)
     return dropdims(sum(M .+ logsumexp(z .- M, dims=3); dims=2); dims=2)
 end

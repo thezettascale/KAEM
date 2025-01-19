@@ -124,7 +124,7 @@ function train!(t::T_KAM_trainer)
         t.ps = u
 
         # Grid updating for likelihood model
-        if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_model_grid || t.model.update_prior_grid)
+        if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
             t.model, t.ps, t.seed = update_model_grid(t.model, t.ps, t.st; seed=t.seed)
             t.grid_update_frequency = t.st.train_idx > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.st.train_idx) : t.grid_update_frequency
             t.last_grid_update = t.st.train_idx

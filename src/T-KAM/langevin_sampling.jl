@@ -83,6 +83,7 @@ function MALA_sampler(
         return log_acceptance_ratio
     end
 
+    num_rejections = Dict("t_$(i)" => 0 for i in 1:T)
     while k < T + 1
         t_k = view(temperatures, k)
         for i in 1:N
@@ -93,12 +94,15 @@ function MALA_sampler(
             # Local Metropolis-Hastings acceptance
             if log_u[i] < MH_local(proposal, z, drift, drift_proposal, t_k)
                 z .= proposal
+            else
+                num_rejections["t_$(k)"] += 1
             end
         end
         output = vcat(output, reshape(z, 1, B, Q))
         k += 1 # Move onto next temperature, retaining updated sample as initial state
     end
 
+    m.verbose && println("Rejection rates: ", num_rejections)
     return reshape(output, T+1, B, Q), seed
 end
 

@@ -107,25 +107,23 @@ function thermo_loss(
     z_pos, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, false, seed) # Without prior
     T, N, Q, B = size(z_neg)..., size(x, 2)
 
+    # Base partition function
+    ex_prior = mean(log_prior(m.prior, z_neg[1, :, :], ps.ebm, st.ebm))
+
     # Log-distributions
     z_neg, z_pos = reshape(z_neg, T*N, Q), reshape(z_pos, T*N, Q)
-    logprior_neg = log_prior(m.prior, z_neg, ps.ebm, st.ebm)
-    logprior_pos = log_prior(m.prior, z_pos, ps.ebm, st.ebm)
     logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_neg; seed=seed)
     logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_pos; seed=seed)
     
     # Temper likelihoods
-    logprior_neg, logprior_pos = reshape(logprior_neg, T, 1, N), reshape(logprior_pos, T, 1, N)
     logllhood_neg = temperatures[1:end-1] .* reshape(logllhood_neg, T, B, N)
     logllhood_pos = temperatures[2:end] .* reshape(logllhood_pos, T, B, N)
-    
-    # Adjacent power posterior expectation
-    mean_neg = mean(logprior_neg .+ logllhood_neg, dims=3)
-    mean_pos = mean(logprior_pos .+ logllhood_pos, dims=3)
 
-    # Steppingstone sum
-    loss = sum(mean_pos .- mean_neg, dims=1)
-    return -mean(loss), seed
+    # Weights 
+    weights = @ignore_derivatives softmax(logllhood_pos - logllhood_neg, dims=3)
+    weights = dropdims(prod(mean(weights, dims=3); dims=1); dims=(1,3)) # ∏ ​E[w_t​]
+
+    return -mean(ex_prior .* weights), seed
 end
 
 function update_llhood_grid(
@@ -227,7 +225,7 @@ function init_T_KAM(
     p = [quant(1)]
     if N_t > 1
         posterior_fcn = (m, x, t, ps, st, need_prior, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=need_prior, seed=seed)
-        @reset prior_model.contrastive_div = true
+        @reset prior_model.contrastive_div = false
         loss_fcn = thermo_loss
 
         # Cyclic p schedule

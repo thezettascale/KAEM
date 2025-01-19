@@ -166,7 +166,7 @@ function curve2coef(x_eval, y_eval, grid; k::Int64, scale=quant(1), ε=quant(1e-
     Args:
         x_eval: A matrix of size (b, i) containing the points at which the B-spline curves were evaluated.
         y_eval: A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
-        grid: A matrix of size (b, g) containing the grid of knots.
+        T-KAMgrid: A matrix of size (b, g) containing the grid of knots.
         k: The degree of the B-spline basis functions.
 
     Returns:

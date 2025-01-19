@@ -44,7 +44,8 @@ function MALA_sampler(
     """
     # Initialize from prior
     z_init, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    T, B, Q = length(t), size(z_init)...
+    T = length(t)
+    B, Q = size(z_init)
     z_init = reshape(z_init, 1, B, Q)
     z = repeat(z_init, T, 1, 1) # Parallelize across temperatures if using Thermodynamic Integration
     z = reshape(z, T * B, Q)

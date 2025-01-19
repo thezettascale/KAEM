@@ -81,7 +81,7 @@ function importance_loss(
 
     # Posterior samples
     z, seed = m.posterior_sample(m, x, ps, st, seed)
-    z = m.MALA ? z[1, :, :] : z # Only one temperature for standard MLE
+    z = m.MALA ? z[2, :, :] : z # Only one temperature for standard MLE
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     

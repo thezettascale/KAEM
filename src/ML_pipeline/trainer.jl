@@ -7,7 +7,7 @@ include("optimizer.jl")
 include("../utils.jl")
 using .T_KAM_model
 using .optimization
-using .Utils: device, quant
+using .Utils: device, quant, move_to_cpu
 
 using CUDA, KernelAbstractions, Tullio
 using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -36,10 +36,11 @@ mutable struct T_KAM_trainer
     seed::Int
     grid_update_frequency::Int
     last_grid_update::Int
+    save_model::Bool
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
-    seed=1, img_resize=nothing, file_loc=nothing)
+    seed=1, img_resize=nothing, file_loc=nothing, save_model=true)
 
     # Load dataset
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
@@ -93,7 +94,9 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         batch_size_for_gen,
         seed, 
         grid_update_frequency,
-        1)
+        1,
+        save_model
+    )
 end
 
 function train!(t::T_KAM_trainer)
@@ -121,8 +124,8 @@ function train!(t::T_KAM_trainer)
         t.ps = u
 
         # Grid updating for likelihood model
-        if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.seed = update_llhood_grid(t.model, t.ps, t.st; seed=t.seed)
+        if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_model_grid || t.model.update_prior_grid)
+            t.model, t.ps, t.seed = update_model_grid(t.model, t.ps, t.st; seed=t.seed)
             t.grid_update_frequency = t.st.train_idx > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.st.train_idx) : t.grid_update_frequency
             t.last_grid_update = t.st.train_idx
             grid_updated = 1
@@ -227,7 +230,10 @@ function train!(t::T_KAM_trainer)
     end
 
     # Save params, state, model
-    jldsave(t.file_loc * "saved_model.jld2"; params=cpu_device()(t.ps), state=cpu_device()(t.st), model=t.model)
+    if t.save_model
+        model, ps, st = move_to_cpu(t.model, t.ps, t.st)
+        jldsave(t.file_loc * "saved_model.jld2"; params=ps, state=st, model=model)
+    end
 end
 
 end

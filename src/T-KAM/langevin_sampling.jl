@@ -61,9 +61,6 @@ function MALA_sampler(
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
-    # log_u_global = log.(rand(rng, quant, N)) # Global proposals
-    # seed, rng = next_rng(seed)
-    # swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
 
     function log_posterior(z_i, t_k)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'

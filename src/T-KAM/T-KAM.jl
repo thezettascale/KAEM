@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, update_llhood_grid
+export T_KAM, init_T_KAM, generate_batch, update_model_grid
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -127,7 +127,7 @@ function thermo_loss(
     return -loss / B, seed
 end
 
-function update_llhood_grid(
+function update_model_grid(
     model::T_KAM,
     ps, 
     st; 

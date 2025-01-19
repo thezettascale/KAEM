@@ -49,7 +49,8 @@ function generate_from_z(
     ps, 
     st, 
     z::AbstractArray{quant};
-    seed::Int=1
+    seed::Int=1,
+    noise::Bool=true
     )
     """
     Generate data from the likelihood model.
@@ -77,6 +78,7 @@ function generate_from_z(
     # Add noise
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, quant, size(z)) |> device
+    ε = noise ? ε : zeros(quant, size(z)) |> device
     return lkhood.output_activation(z + ε), seed
 end
 
@@ -87,6 +89,7 @@ function log_likelihood(
     x::AbstractArray{quant},
     z::AbstractArray{quant};
     seed::Int=1,
+    noise::Bool=true
     )
     """
     Evaluate the log-likelihood of the data given the latent variable.
@@ -103,7 +106,7 @@ function log_likelihood(
     Returns:
         The log-likelihood of the batch given the latent samples.
     """
-    x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed)
+    x̂, seed = generate_from_z(lkhood, ps, st, z; seed=seed, noise=noise)
     logllhood = lkhood.log_lkhood_model(
         permutedims(x[:,:,:], [2,3,1]),
         permutedims(x̂[:,:,:], [3,1,2]),

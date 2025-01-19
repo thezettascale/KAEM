@@ -64,7 +64,7 @@ function MALA_sampler(
 
     function log_posterior(z_i, t_k)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
-        ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed)
+        ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed, noise=false)
         return sum(lp .+ (t_k .* ll))
     end
 

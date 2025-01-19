@@ -103,27 +103,23 @@ function thermo_loss(
 
     # Schedule temperatures
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) # With prior vcatted
+    z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) # With prior vcatted
     T, N, Q, B = size(z)..., size(x, 2)
     T -= 1
 
+    # Base partition
+    ex_prior = mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm))
+
     # Log-distributions
-    z_neg, z_pos = reshape(z[1:end-1, :, :], T*N, Q), reshape(z[2:end, :, :], T*N, Q)
-    logllhood_neg, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_neg; seed=seed)
-    logllhood_pos, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_pos; seed=seed)
-    
-    # Temper likelihoods
-    logprior_neg, logprior_pos = reshape(logprior_neg, T, 1, N), reshape(logprior_pos, T, 1, N)
-    logllhood_neg = temperatures[1:end-1] .* reshape(logllhood_neg, T, B, N)
-    logllhood_pos = temperatures[2:end] .* reshape(logllhood_pos, T, B, N)
+    z = reshape(z[2:end, :, :], T*N, Q)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    logllhood = reshape(logllhood, T, B, N)
 
-    # Adjacent power posterior expectation
-    mean_neg = mean(logprior_neg .+ logllhood_neg, dims=3)
-    mean_pos = mean(logprior_pos .+ logllhood_pos, dims=3)
-
-    # Steppingstone sum
-    loss = sum(mean_pos - mean_neg, dims=1)
-    return -mean(loss), seed
+    # Annealed importance sampling
+    Δt = temperatures[2:end] - temperatures[1:end-1]
+    weights = softmax(Δt .* logllhood; dims=3)
+    prod_weights = prod(mean(weights, dims=3), dims=1)
+    return -mean(ex_prior .* prod_weights), seed
 end
 
 function update_llhood_grid(
@@ -225,7 +221,7 @@ function init_T_KAM(
     p = [quant(1)]
     if N_t > 1
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=true, seed=seed)
-        @reset prior_model.contrastive_div = false
+        @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 
         # Cyclic p schedule

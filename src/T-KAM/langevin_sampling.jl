@@ -17,11 +17,10 @@ function MALA_sampler(
     ps,
     st,
     x::AbstractArray{quant};
-    t::AbstractArray{quant}=device([quant(1)]),
+    temperatures::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
     σ::quant=quant(1),
     N::Int=20,
-    need_prior::Bool=false,
     seed::Int=1,
     )
     """
@@ -34,7 +33,7 @@ function MALA_sampler(
         x: The data
         t: The temperatures if using Thermodynamic Integration.
         η: The step size.
-        σ: The noise level, (usually leave at 1)
+        σ: The noise level, (leave at 1)
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -43,12 +42,10 @@ function MALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z_init, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    T = length(t)
-    B, Q = size(z_init)
-    z_init = reshape(z_init, 1, B, Q)
-    z = repeat(z_init, T, 1, 1) # Parallelize across temperatures if using Thermodynamic Integration
-    z = reshape(z, T * B, Q)
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    T, B, Q = length(temperatures), size(z)...
+    output = reshape(z, 1, B, Q) # Initialize output, accumulated over temperatures
+    k = 1
 
     # Pre-allocate buffers
     noise = similar(z)
@@ -64,77 +61,48 @@ function MALA_sampler(
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
-    log_u_global = log.(rand(rng, quant, N)) # Global proposals
-    seed, rng = next_rng(seed)
-    swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
+    # log_u_global = log.(rand(rng, quant, N)) # Global proposals
+    # seed, rng = next_rng(seed)
+    # swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
 
-    function log_posterior(z_i)
-        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)
+    function log_posterior(z_i, t_k)
+        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed)
-        lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
-        return sum(lp .+ (t.*ll))
+        return sum(lp .+ (t_k .* ll))
     end
 
     # Local acceptance ratio within temperature
-    function MH_local(proposal_i, z_i, grad_current, grad_proposal)
+    function MH_local(proposal_i, z_i, grad_current, grad_proposal, t_k)
 
         # Proposal densities (drift corrections)
         forward_drift .= proposal_i - z_i - η * grad_current
         backward_drift .= z_i - proposal_i - η * grad_proposal
 
         # Log-acceptance is the difference in log-posterior and drift corrections
-        log_acceptance_ratio = log_posterior(proposal_i) - log_posterior(z_i)
+        log_acceptance_ratio = log_posterior(proposal_i, t_k) - log_posterior(z_i, t_k)
         log_acceptance_ratio += -sum(forward_drift.^2) / (2 * σ^2)
         log_acceptance_ratio += sum(backward_drift.^2) / (2 * σ^2)
 
         return log_acceptance_ratio
     end
 
-    # Global Replica Exchange accross temperatures
-    function RE_global(z_low, z_high, t_low, t_high)
-        ll_low, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_low; seed=seed)
-        ll_high, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_high; seed=seed)
-        ll_low, ll_high = sum(ll_low), sum(ll_high)
+    while k < T + 1
+        t_k = view(temperatures, k)
+        for i in 1:N
+            drift .= first(gradient(z_i -> log_posterior(z_i, t_k), z))
+            proposal .= z .+ (η .* drift) .+ (noise[i, :, :])
+            drift_proposal .= first(gradient(z_i -> log_posterior(z_i, t_k), proposal))
 
-        # Log-acceptance is the likelihood of swap vs no swap
-        log_acceptance_ratio = (t_high .* ll_low) + (t_low .* ll_high)
-        log_acceptance_ratio -= (t_high .* ll_high) + (t_low .* ll_low)
-
-        return log_acceptance_ratio
-    end
-
-    for i in 1:N
-        drift .= first(gradient(log_posterior, z))
-        proposal .= z .+ (η .* drift) .+ (noise[i, :, :])
-        drift_proposal .= first(gradient(log_posterior, proposal))
-
-        # Local Metropolis-Hastings acceptance
-        if log_u[i] < MH_local(proposal, z, drift, drift_proposal)
-            z .= proposal
-        end
-
-        # Global Replica Exchange
-        if T > 1
-        
-            # Randomly select chain
-            z = reshape(z, T, B, Q)
-            idx = swap_indices[i]
-           
-            z_low = z[idx-1, :, :]
-            z_high = z[idx, :, :] 
-            if log_u_global[i] < RE_global(z_low, z_high, view(t ,idx-1), view(t, idx))
-                z[idx-1, :, :] .= z_high
-                z[idx, :, :] .= z_low
+            # Local Metropolis-Hastings acceptance
+            if log_u[i] < MH_local(proposal, z, drift, drift_proposal, t_k)
+                z .= proposal
             end
-            z = reshape(z, T * B, Q)
         end
-
+        output = vcat(output, reshape(z, 1, B, Q))
+        k += 1 # Move onto next temperature, retaining updated sample as initial state
     end
 
-    z = reshape(z, T, B, Q)
-    z = need_prior ? vcat(z_init, z) : z
-
-    return z, seed
+    return reshape(output, T+1, B, Q), seed
 end
 
 end

@@ -74,9 +74,10 @@ function importance_loss(
     """MLE loss with importance sampling."""
     
     # Expected prior, (if contrastive divergence)
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : quant(0)  
+    z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    ex_prior = (m.prior.contrastive_div ? 
+        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    )
 
     # Posterior samples
     z, seed = m.posterior_sample(m, x, ps, st, seed)
@@ -115,13 +116,14 @@ function thermo_loss(
     z = reshape(z, T*N, Q)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=false)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    logprior, logllhood = reshape(logprior, T, N, 1), reshape(logllhood, T, B, N)
-    logprior, logllhood = mean(logprior, dims=2), mean(logllhood, dims=3)
+    logprior, logllhood = reshape(logprior, T, 1, N), reshape(logllhood, T, B, N)
     logllhood = temperatures .* logllhood
+
+    split_idx = fld(N, 2) # Split population in half
 
     # Steppingstone sum
     logdist = logprior .+ logllhood
-    loss = sum(logdist[2:end, :, :] - logdist[1:end-1, :, :])
+    loss = sum(mean(logdist[2:end, :, 1:split_idx]; dims=3) - mean(logdist[1:end-1, :, split_idx+1:end]; dims=3))
     return -loss / B, seed
 end
 
@@ -209,7 +211,6 @@ function init_T_KAM(
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
     noise_var = parse(quant, retrieve(conf, "MALA", "noise_var"))
-    num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
         
     if use_MALA && !(N_t > 1) # Don't even try MALA plus Thermodynamic Integration
@@ -218,12 +219,13 @@ function init_T_KAM(
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
         @reset prior_model.contrastive_div = true
 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, need_prior=false, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, σ=noise_var, N=num_steps, seed=seed)
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, σ=noise_var, N=num_steps, need_prior=true, seed=seed)
+        num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_langevin_per_temp"))
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; temperatures=t, η=step_size, σ=noise_var, N=num_steps, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

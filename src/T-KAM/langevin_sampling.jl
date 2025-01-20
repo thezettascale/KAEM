@@ -3,7 +3,7 @@ module LangevinSampling
 export MALA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA
-using Zygote: gradient
+using Zygote: withgradient
 
 include("mixture_prior.jl")
 include("KAN_likelihood.jl")
@@ -49,8 +49,8 @@ function MALA_sampler(
     # Pre-allocate buffers
     noise = similar(z)
     proposal = similar(z)
-    grad_z = similar(z)
-    grad_proposal = similar(z)
+    ∇z = similar(z)
+    ∇proposal = similar(z)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -58,26 +58,24 @@ function MALA_sampler(
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
-    log_u_global = log.(rand(rng, quant, N)) # Global proposals
-    seed, rng = next_rng(seed)
-    swap_indices = T > 1 ? rand(rng, 2:T, N) : nothing 
+    log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
 
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         ll, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed, noise=false)
-        lp, ll =reshape(lp, T, B, 1), reshape(ll, T, B, :)
+        lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
         return sum(lp .+ (t .* ll))
     end
 
     # Local acceptance ratio within temperature
-    function MH_local(proposal_i, z_i, grad_current, grad_proposal)
+    function MH_local(z_i, proposal_i, logpos_z, logpos_proposal, ∇z_i, ∇proposal_i)
 
         # Posterior ratio
-        log_acceptance_ratio = log_posterior(proposal_i) - log_posterior(z_i)
+        log_acceptance_ratio = logpos_proposal - logpos_z
 
         # Transition kernels or drift corrections (gaussian)
-        log_acceptance_ratio -= -sum((proposal_i - z_i - η * grad_current).^2) / 4η
-        log_acceptance_ratio += -sum((z_i - proposal_i - η * grad_proposal).^2) / 4η
+        log_acceptance_ratio -= -sum((proposal_i - z_i - η * ∇z_i).^2) / 4η
+        log_acceptance_ratio += -sum((z_i - proposal_i - η * ∇proposal_i).^2) / 4η
         
         return log_acceptance_ratio
     end
@@ -97,12 +95,17 @@ function MALA_sampler(
 
     num_rejections = 0
     for i in 1:N
-        grad_z .= first(gradient(z_i -> log_posterior(z_i), z))
-        proposal .= z .+ (η .* grad_z) .+ (noise[i, :, :])
-        grad_proposal .= first(gradient(z_i -> log_posterior(z_i), proposal))
+        logpos_z, grad = withgradient(z_i -> log_posterior(z_i), z)
+        ∇z .= first(grad)
+
+        proposal .= z .+ (η .* ∇z) .+ (noise[i, :, :])
+
+        logpos_proposal, grad = withgradient(z_i -> log_posterior(z_i), proposal)
+        ∇proposal .= first(grad)
 
         # Local Metropolis-Hastings acceptance
-        log_α = MH_local(proposal, z, grad_z, grad_proposal)
+        log_α = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal)
+        
         if log_u[i] < log_α || i < burn_in
             z .= proposal
         elseif i >= burn_in
@@ -112,12 +115,12 @@ function MALA_sampler(
         # Global Replica Exchange
         if T > 1
             z = reshape(z, T, B, Q)
-            for idx in 2:T
-                z_low = z[idx-1, :, :]
-                z_high = z[idx, :, :] 
-                if log_u_global[i] < RE_global(z_low, z_high, view(t, idx-1), view(t, idx))
-                    z[idx-1, :, :] .= z_high
-                    z[idx, :, :] .= z_low
+            for idx in 1:T-1
+                z_low = z[idx, :, :]
+                z_high = z[idx+1, :, :] 
+                if log_u_global[i, idx] < RE_global(z_low, z_high, view(t, idx), view(t, idx+1))
+                    z[idx, :, :] .= z_high
+                    z[idx+1, :, :] .= z_low
                 end
             end
             z = reshape(z, T * B, Q)

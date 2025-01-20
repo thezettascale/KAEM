@@ -22,7 +22,7 @@ function test_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     loss, _ = model.loss_fcn(model, ps, st, x_test)
-    @test loss > 0
+    @test loss != 0
     @test !isnan(loss)
 end
 

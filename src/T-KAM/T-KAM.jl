@@ -71,7 +71,7 @@ function importance_loss(
     x::AbstractArray{quant};
     seed::Int=1
     )
-    """MLE loss with importance sampling."""
+    """MLE loss with importance sampling or MALA."""
     
     # Expected prior, (if contrastive divergence)
     z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
@@ -81,7 +81,6 @@ function importance_loss(
 
     # Posterior samples
     z, seed = m.posterior_sample(m, x, ps, st, seed)
-    z = m.MALA ? z[2, :, :] : z # Only one temperature for standard MLE
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
@@ -107,22 +106,22 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
-    # Schedule temperatures, and MALA
+    # Expected prior, (if contrastive divergence)
+    z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    ex_prior = (m.prior.contrastive_div ? 
+        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    )
+
+    # Schedule temperatures, and Steppingstone MALA
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) # With prior vcatted
-    T, N, Q, B = size(z)..., size(x, 2)
-
-    # Log-distributions
-    z = reshape(z, T*N, Q)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=false)
+    z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) 
+    
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    logprior, logllhood = reshape(logprior, T, 1, N), reshape(logllhood, T, B, N)
-    logllhood = temperatures .* logllhood
 
-    # Steppingstone sum, (all that should be left is the posterior and prior)
-    logdist = logprior .+ logllhood
-    loss = sum(logdist[2:end, :, :] - logdist[1:end-1, :, :])
-    return -loss / (B*m.MC_samples), seed
+    # Posterior expectation
+    loss = mean(logprior .+ logllhood; dims=2) .- ex_prior
+    return -mean(loss), seed
 end
 
 function update_model_grid(

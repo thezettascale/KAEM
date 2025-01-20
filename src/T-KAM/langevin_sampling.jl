@@ -41,17 +41,13 @@ function MALA_sampler(
     """
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    T, B, Q = length(temperatures), size(z)...
-    output = reshape(z, 1, B, Q) # Initialize output, accumulated over temperatures
-    k = 1
+    T, k = length(temperatures), 1
 
     # Pre-allocate buffers
     noise = similar(z)
     proposal = similar(z)
     drift = similar(z)
     drift_proposal = similar(z)
-    forward_drift = similar(z)
-    backward_drift = similar(z)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -94,12 +90,11 @@ function MALA_sampler(
                 num_rejections["t_$(k)"] += 1
             end
         end
-        output = vcat(output, reshape(z, 1, B, Q))
         k += 1 # Move onto next temperature, retaining updated sample as initial state
     end
 
     m.verbose && println("Rejection rates: ", num_rejections)
-    return reshape(output, T+1, B, Q), seed
+    return z, seed
 end
 
 end

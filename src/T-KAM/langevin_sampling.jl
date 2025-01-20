@@ -18,7 +18,7 @@ function MALA_sampler(
     st,
     x::AbstractArray{quant};
     t::AbstractArray{quant}=device([quant(1)]),
-    η::quant=qugrad_z .= first(gradient(z_i -> log_posterior(z_i, t_k), z))ant(0.1),
+    η::quant=quant(0.1),
     N::Int=20,
     burn_in::Int=0,
     seed::Int=1,

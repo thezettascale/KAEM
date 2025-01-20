@@ -122,7 +122,7 @@ function thermo_loss(
     # Steppingstone sum, (all that should be left is the posterior and prior)
     logdist = logprior .+ logllhood
     loss = sum(logdist[2:end, :, :] - logdist[1:end-1, :, :])
-    return -loss / B, seed
+    return -loss / (B*m.MC_samples), seed
 end
 
 function update_model_grid(

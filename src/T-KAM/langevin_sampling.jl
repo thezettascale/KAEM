@@ -46,8 +46,8 @@ function MALA_sampler(
     # Pre-allocate buffers
     noise = similar(z)
     proposal = similar(z)
-    drift = similar(z)
-    drift_proposal = similar(z)
+    grad_z = similar(z)
+    grad_proposal = similar(z)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -79,12 +79,12 @@ function MALA_sampler(
     while k < T + 1
         t_k = view(temperatures, k)
         for i in 1:N
-            drift .= first(gradient(z_i -> log_posterior(z_i, t_k), z))
-            proposal .= z .+ (η .* drift) .+ (noise[i, :, :])
-            drift_proposal .= first(gradient(z_i -> log_posterior(z_i, t_k), proposal))
+            grad_z .= first(gradient(z_i -> log_posterior(z_i, t_k), z))
+            proposal .= z .+ (η .* grad_z) .+ (noise[i, :, :])
+            grad_proposal .= first(gradient(z_i -> log_posterior(z_i, t_k), proposal))
 
             # Local Metropolis-Hastings acceptance
-            if log_u[i] < MH_local(proposal, z, drift, drift_proposal, t_k)
+            if log_u[i] < MH_local(proposal, z, grad_z, grad_proposal, t_k)
                 z .= proposal
             else
                 num_rejections["t_$(k)"] += 1

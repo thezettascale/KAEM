@@ -20,7 +20,7 @@ function MALA_sampler(
     t::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
     N::Int=20,
-    burn_in::Int=0,
+    N_unadjusted::Int=0,
     seed::Int=1,
     )
     """
@@ -106,9 +106,9 @@ function MALA_sampler(
         # Local Metropolis-Hastings acceptance
         log_α = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal)
         
-        if log_u[i] < log_α || i < burn_in
+        if log_u[i] < log_α || i < N_unadjusted
             z .= proposal
-        elseif i >= burn_in
+        elseif i >= N_unadjusted
             num_rejections += 1
         end
 

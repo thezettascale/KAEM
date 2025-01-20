@@ -19,7 +19,6 @@ function MALA_sampler(
     x::AbstractArray{quant};
     temperatures::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
-    σ::quant=quant(1),
     N::Int=20,
     seed::Int=1,
     )
@@ -33,7 +32,6 @@ function MALA_sampler(
         x: The data
         t: The temperatures if using Thermodynamic Integration.
         η: The step size.
-        σ: The noise level, (leave at 1)
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -57,7 +55,7 @@ function MALA_sampler(
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    noise = randn(quant, N, size(z)...) .* σ .* sqrt(2 * η) |> device
+    noise = randn(quant, N, size(z)...) .* sqrt(2 * η) |> device
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
@@ -71,15 +69,13 @@ function MALA_sampler(
     # Local acceptance ratio within temperature
     function MH_local(proposal_i, z_i, grad_current, grad_proposal, t_k)
 
-        # Proposal densities (drift corrections)
-        forward_drift .= proposal_i - z_i - η * grad_current
-        backward_drift .= z_i - proposal_i - η * grad_proposal
-
-        # Log-acceptance is the difference in log-posterior and drift corrections
+        # Posterior ratio
         log_acceptance_ratio = log_posterior(proposal_i, t_k) - log_posterior(z_i, t_k)
-        log_acceptance_ratio += -sum(forward_drift.^2) / (2 * σ^2)
-        log_acceptance_ratio += sum(backward_drift.^2) / (2 * σ^2)
 
+        # Transition kernels or drift corrections (gaussian)
+        log_acceptance_ratio -= -norm(proposal_i - z_i - η * grad_current) / 4η
+        log_acceptance_ratio += -norm(z_i - proposal_i - η * grad_proposal) / 4η
+        
         return log_acceptance_ratio
     end
 

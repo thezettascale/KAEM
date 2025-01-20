@@ -81,6 +81,7 @@ function importance_loss(
 
     # Posterior samples
     z, seed = m.posterior_sample(m, x, ps, st, seed)
+    z = m.MALA ? z[end, :, :] : z
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
     
@@ -106,22 +107,20 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
-    # Expected prior, (if contrastive divergence)
-    z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
-    ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
-    )
-
-    # Schedule temperatures, and Steppingstone MALA
+    # Schedule temperatures, and Parallel Tempering
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
+    T = length(temperatures)
     z, seed = m.posterior_sample(m, x, temperatures, ps, st, seed) 
 
+    z = reshape(z, T*m.MC_samples, :)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    logprior, logllhood = reshape(logprior, T, m.MC_samples, 1), reshape(logllhood, T, m.MC_samples, :) 
 
     # Posterior expectation
-    loss = mean(logprior .+ logllhood; dims=2) .- ex_prior
-    return -mean(loss), seed
+    logpost = logprior .+ temperatures .* logllhood
+    loss = sum(logpost[2:end, :, :] - logpost[1:end-1, :, :])
+    return -loss / B*m.MC_samples, seed
 end
 
 function update_model_grid(

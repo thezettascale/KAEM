@@ -114,8 +114,8 @@ function thermo_loss(
 
     # Schedule temperatures, and Steppingstone MALA
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, seed = m.posterior_sample(m, x, temperatures[2:end], ps, st, seed) 
-    
+    z, seed = m.posterior_sample(m, x, temperatures, ps, st, seed) 
+
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
@@ -207,6 +207,7 @@ function init_T_KAM(
     # Importance sampling or MALA
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
+    num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
         
     if use_MALA && !(N_t > 1) # Don't even try MALA plus Thermodynamic Integration
@@ -219,8 +220,7 @@ function init_T_KAM(
     
     p = [quant(1)]
     if N_t > 1
-        num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_langevin_per_temp"))
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; temperatures=t, η=step_size, N=num_steps, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

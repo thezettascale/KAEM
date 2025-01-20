@@ -27,10 +27,10 @@ for dataset in datasets
     # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
     # train!(t)
 
-    # # MALA Vanilla
-    # commit!(conf, "MALA", "use_langevin", "true")
-    # t = init_trainer(rng, conf, dataset, img_resize=(14,14))
-    # train!(t)
+    # MALA Vanilla
+    commit!(conf, "MALA", "use_langevin", "true")
+    t = init_trainer(rng, conf, dataset, img_resize=(14,14))
+    train!(t)
 
     # Thermodynamic
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", num_temps)

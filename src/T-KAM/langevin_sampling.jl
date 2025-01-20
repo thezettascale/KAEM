@@ -18,7 +18,7 @@ function MALA_sampler(
     st,
     x::AbstractArray{quant};
     temperatures::AbstractArray{quant}=device([quant(1)]),
-    η::quant=quant(0.1),
+    η::quant=qugrad_z .= first(gradient(z_i -> log_posterior(z_i, t_k), z))ant(0.1),
     N::Int=20,
     seed::Int=1,
     )
@@ -69,8 +69,8 @@ function MALA_sampler(
         log_acceptance_ratio = log_posterior(proposal_i, t_k) - log_posterior(z_i, t_k)
 
         # Transition kernels or drift corrections (gaussian)
-        log_acceptance_ratio -= -norm(proposal_i - z_i - η * grad_current) / 4η
-        log_acceptance_ratio += -norm(z_i - proposal_i - η * grad_proposal) / 4η
+        log_acceptance_ratio -= -norm(proposal_i - z_i - η * grad_current)^2 / 4η
+        log_acceptance_ratio += -norm(z_i - proposal_i - η * grad_proposal)^2 / 4η
         
         return log_acceptance_ratio
     end

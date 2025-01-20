@@ -119,11 +119,9 @@ function thermo_loss(
     logprior, logllhood = reshape(logprior, T, 1, N), reshape(logllhood, T, B, N)
     logllhood = temperatures .* logllhood
 
-    split_idx = fld(N, 2) # Split population in half
-
-    # Steppingstone sum
+    # Steppingstone sum, (all that should be left is the posterior and prior)
     logdist = logprior .+ logllhood
-    loss = sum(mean(logdist[2:end, :, 1:split_idx]; dims=3) - mean(logdist[1:end-1, :, split_idx+1:end]; dims=3))
+    loss = sum(logdist[2:end, :, :] - logdist[1:end-1, :, :])
     return -loss / B, seed
 end
 

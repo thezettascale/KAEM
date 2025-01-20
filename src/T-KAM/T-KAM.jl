@@ -120,7 +120,7 @@ function thermo_loss(
     # Posterior expectation
     logpost = logprior .+ temperatures .* logllhood
     loss = sum(logpost[2:end, :, :] - logpost[1:end-1, :, :])
-    return -loss / B*m.MC_samples, seed
+    return -loss / size(x,2)*m.MC_samples, seed
 end
 
 function update_model_grid(

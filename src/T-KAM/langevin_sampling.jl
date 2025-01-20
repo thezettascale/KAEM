@@ -103,7 +103,6 @@ function MALA_sampler(
 
         # Local Metropolis-Hastings acceptance
         log_α = MH_local(proposal, z, grad_z, grad_proposal)
-        m.verbose && println("Local acceptance ratio: ", log_α, ", Log rv: ", log_u[i])
         if log_u[i] < log_α || i < burn_in
             z .= proposal
         elseif i >= burn_in
@@ -128,7 +127,7 @@ function MALA_sampler(
     m.verbose && println("Rejection rate: ", num_rejections / N)
 
     z = reshape(z, T, B, Q)
-    return z[end, :, :], seed
+    return z, seed
 end
 
 end

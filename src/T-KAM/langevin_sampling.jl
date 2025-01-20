@@ -20,6 +20,7 @@ function MALA_sampler(
     t::AbstractArray{quant}=device([quant(1)]),
     η::quant=qugrad_z .= first(gradient(z_i -> log_posterior(z_i, t_k), z))ant(0.1),
     N::Int=20,
+    burn_in::Int=0,
     seed::Int=1,
     )
     """
@@ -103,9 +104,9 @@ function MALA_sampler(
         # Local Metropolis-Hastings acceptance
         log_α = MH_local(proposal, z, grad_z, grad_proposal)
         m.verbose && println("Local acceptance ratio: ", log_α, ", Log rv: ", log_u[i])
-        if log_u[i] < log_α
+        if log_u[i] < log_α || i < burn_in
             z .= proposal
-        else
+        elseif i >= burn_in
             num_rejections += 1
         end
 

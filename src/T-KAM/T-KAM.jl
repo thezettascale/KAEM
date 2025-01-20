@@ -208,6 +208,7 @@ function init_T_KAM(
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
+    burn_in = parse(Int, retrieve(conf, "MALA", "burn_in"))
     posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
         
     if use_MALA && !(N_t > 1) # Don't even try MALA plus Thermodynamic Integration
@@ -215,12 +216,12 @@ function init_T_KAM(
         num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
         @reset prior_model.contrastive_div = true
 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, burn_in=burn_in, seed=seed)
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, burn_in=burn_in, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

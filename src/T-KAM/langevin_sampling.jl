@@ -65,7 +65,7 @@ function MALA_sampler(
     log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
 
     # Adaptive tuning
-    a, b = log.(momentum)
+    log_a, log_b = log.(momentum)
     min_step, max_step = minmax_η
 
     function log_posterior(z_i)
@@ -117,9 +117,9 @@ function MALA_sampler(
         # Adapt stepsize
         η_reverse = η
         if i >= N_unadjusted  
-            if log_α < a
+            if log_α < log_a
                 η = max(η / 2, min_step)
-            elseif log_α > b
+            elseif log_α > log_b
                 η = min(η * 2, max_step)
             end
         end

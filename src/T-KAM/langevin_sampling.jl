@@ -2,7 +2,7 @@ module LangevinSampling
 
 export MALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA
+using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions
 using Zygote: withgradient
 
 include("mixture_prior.jl")
@@ -65,7 +65,8 @@ function MALA_sampler(
     log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
 
     # Adaptive tuning
-    log_a, log_b = log.(momentum)
+    seed, rng = next_rng(seed)
+    log_a, log_b = log.(rand(rng, Uniform(momentum...), N))
     min_step, max_step = minmax_η
 
     function log_posterior(z_i)
@@ -118,9 +119,10 @@ function MALA_sampler(
         # Adapt stepsize
         η_reverse = η
         if i >= N_unadjusted  
-            if log_α < log_a
+            a, b = min(log_a[i], log_b[i]), max(log_a[i], log_b[i])
+            if log_α < a
                 η = max(η / 2, min_step)
-            elseif log_α > log_b
+            elseif log_α > b
                 η = min(η * 2, max_step)
             end
         end

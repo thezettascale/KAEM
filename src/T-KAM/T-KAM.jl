@@ -206,7 +206,7 @@ function init_T_KAM(
 
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
-    adjust_η = parse(quant, retrieve(conf, "MALA", "adjust_η"))
+    adjust_η = parse(Bool, retrieve(conf, "MALA", "adjust_η"))
     β = parse(quant, retrieve(conf, "MALA", "η_changerate"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))

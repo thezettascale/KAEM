@@ -104,7 +104,7 @@ function MALA_step(
     result = withgradient(z_i -> logpos(z_i, seed), z)
     logpos_z, seed, ∇z = result.val..., first(result.grad)
 
-    # Initial proposal
+    # Proposal
     proposal = z + (η .* ∇z) + (noise .* sqrt(2 * η))
     result = withgradient(z_i -> logpos(z_i, seed), proposal)
     logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
@@ -234,8 +234,8 @@ function MALA_sampler(
     if adjust_η
         st.η = st.η * exp(β * (acceptance_rate - 0.574))
     end
-    
-    m.verbose && println("Rejection rate: ", rejection_rate, ", η: ", st.η)
+
+    m.verbose && println("Acceptance rate: ", acceptance_rate, ", η: ", st.η)
 
     z = reshape(z, T, B, Q)
     return z, seed, st

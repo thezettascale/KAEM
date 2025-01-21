@@ -66,7 +66,7 @@ function MALA_sampler(
 
     # Adaptive tuning
     seed, rng = next_rng(seed)
-    log_momentum = log.(rand(rng, Uniform(momentum...), N, 2)) |> quant
+    log_momentum = log.(rand(rng, Uniform(momentum...), N, 2)) .|> quant
     min_step, max_step = minmax_η
 
     function log_posterior(z_i)

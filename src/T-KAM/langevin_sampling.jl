@@ -162,6 +162,7 @@ function MALA_sampler(
     N_unadjusted::Int=0,
     rejection_tol::quant=quant(0.1),
     Δη::quant=quant(0.1),
+    minmax_η::Tuple{quant, quant}=(quant(0.001), quant(1)),
     seed::Int=1,
     )
     """
@@ -232,9 +233,9 @@ function MALA_sampler(
 
     rejection_rate = num_rejections / (N - N_unadjusted)
     if rejection_rate > 0.426 + rejection_tol
-        @reset st.η = (1-Δη) * st.η
+        @reset st.η = max((1-Δη) * st.η, minmax_η[1])
     elseif rejection_rate < 0.426 - rejection_tol
-        @reset st.η = (1+Δη) * st.η
+        @reset st.η = min((1+Δη) * st.η, minmax_η[2])
     end
 
     m.verbose && println("Rejection rate: ", rejection_rate, ", η: ", st.η)

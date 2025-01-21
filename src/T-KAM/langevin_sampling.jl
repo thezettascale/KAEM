@@ -70,7 +70,6 @@ function RE_global(
 
     ll_low, seed = logll(z_low, seed)
     ll_high, seed = logll(z_high, seed)
-    ll_low, ll_high = sum(ll_low), sum(ll_high)
 
     log_acceptance_ratio = (t_high .* ll_low) + (t_low .* ll_high)
     log_acceptance_ratio -= (t_high .* ll_high) + (t_low .* ll_low)

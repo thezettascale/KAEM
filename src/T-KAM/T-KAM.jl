@@ -208,19 +208,19 @@ function init_T_KAM(
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
     max_search_iters = parse(Int, retrieve(conf, "MALA", "autoMALA_max_iters"))
-    log_minmax_η = log.(Tuple(parse.(quant, retrieve(conf, "MALA", "minmax_η"))))
+    log_minmax_r = log.(Tuple(parse.(quant, retrieve(conf, "MALA", "minmax_r"))))
         
     # Importance sampling or MALA
     posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_η=log_minmax_η, max_search_iters=max_search_iters, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed)
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_η=log_minmax_η, max_search_iters=max_search_iters, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

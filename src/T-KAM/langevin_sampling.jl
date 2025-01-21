@@ -84,7 +84,7 @@ function autoMH_diffusion(
     η::quant,
     log_u_accept::quant,
     logpos::Function;
-    log_minmax_η::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
+    log_minmax_r::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
     max_search_iters::Int=50,
     seed::Int=1
 )
@@ -97,7 +97,7 @@ function autoMH_diffusion(
         η: The step size.
         log_u_accept: The log of the acceptance threshold.
         logpos: The log-posterior function.
-        log_minmax_η: The minimum and maximum step size.
+        log_minmax_r: The minimum and maximum step size.
 
     Returns:
         The updated state.
@@ -116,17 +116,17 @@ function autoMH_diffusion(
     # Acceptance ratio
     log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal, η)
 
-    if (log_minmax_η[1] < log_r < log_minmax_η[2])
+    if (log_minmax_r[1] < log_r < log_minmax_r[2])
         return log_u_accept < log_r ? (proposal, η, seed) : (z, η, seed)
     else
-        geq = log_r > log_minmax_η[2]
+        geq = log_r > log_minmax_r[2]
         init_η, iter = η, 1
-        while !(log_minmax_η[1] < log_r < log_minmax_η[2])
+        while !(log_minmax_r[1] < log_r < log_minmax_r[2])
             if iter > max_search_iters
                 return (z, init_η, seed)
             end
 
-            η = log_r < log_minmax_η[1] ? η / 2 : η * 2
+            η = log_r < log_minmax_r[1] ? η / 2 : η * 2
             proposal .= z + (η .* ∇z) + (noise .* sqrt(2 * η))
             result = withgradient(z_i -> logpos(z_i, seed), proposal)
             logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
@@ -186,7 +186,7 @@ function MALA_sampler(
     x::AbstractArray{quant};
     t::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
-    log_minmax_η::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
+    log_minmax_r::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
     N::Int=20,
     N_unadjusted::Int=0,
     max_search_iters::Int=50,
@@ -203,7 +203,7 @@ function MALA_sampler(
         t: The temperatures if using Thermodynamic Integration.
         η: The step size.
         momentum: The momentum for adaptive tuning. Optimal rejection rate is 0.574.
-        minmax_η: The minimum and maximum step size.
+        minmax_r: The minimum and maximum step size.
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -237,7 +237,7 @@ function MALA_sampler(
         return sum(ll), seed_i
     end
 
-    adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_η=log_minmax_η, max_search_iters=max_search_iters, seed=seed_i)
+    adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed_i)
     global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
     
     num_rejections = 0

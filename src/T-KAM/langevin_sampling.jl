@@ -85,6 +85,7 @@ function autoMH_diffusion(
     log_u_accept::quant,
     logpos::Function;
     log_minmax_η::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
+    max_search_iters::Int=50,
     seed::Int=1
 )
     """
@@ -119,8 +120,12 @@ function autoMH_diffusion(
         return log_u_accept < log_r ? (proposal, η, seed) : (z, η, seed)
     else
         geq = log_r > log_minmax_η[2]
-        
+        init_η, iter = η, 1
         while !(log_minmax_η[1] < log_r < log_minmax_η[2])
+            if iter > max_search_iters
+                return (z, init_η, seed)
+            end
+
             η = log_r < log_minmax_η[1] ? η / 2 : η * 2
             proposal .= z + (η .* ∇z) + (noise .* sqrt(2 * η))
             result = withgradient(z_i -> logpos(z_i, seed), proposal)
@@ -128,6 +133,7 @@ function autoMH_diffusion(
 
             # Acceptance ratio
             log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal, η)
+            iter += 1
         end
         
         # Halve once at end if ratio was too high
@@ -183,6 +189,7 @@ function MALA_sampler(
     log_minmax_η::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
     N::Int=20,
     N_unadjusted::Int=0,
+    max_search_iters::Int=50,
     seed::Int=1,
     )
     """
@@ -230,7 +237,7 @@ function MALA_sampler(
         return sum(ll), seed_i
     end
 
-    adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_η=log_minmax_η, seed=seed_i)
+    adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_η=log_minmax_η, max_search_iters=max_search_iters, seed=seed_i)
     global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
     
     num_rejections = 0

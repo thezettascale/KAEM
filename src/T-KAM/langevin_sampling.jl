@@ -236,7 +236,7 @@ function MALA_sampler(
 
     function log_lkhood(z_i, seed_i)
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false) 
-        ll = logsumexp(ll; dims=2) # For single sample in batch!
+        ll = logsumexp(ll; dims=1) # For single sample in batch!
         return sum(ll), seed_i
     end
 

@@ -2,7 +2,7 @@ module LangevinSampling
 
 export MALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA
+using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Accessors
 using Zygote: withgradient
 using LogExpFunctions: logsumexp
 
@@ -19,8 +19,8 @@ function MH_local(
     logpos_z::quant,
     logpos_proposal::quant, 
     ∇z_i::AbstractArray{quant},
-    ∇proposal_i::AbstractArray{quant},
-    η::quant
+    ∇proposal_i::AbstractArray{quant};
+    η::quant=quant(0.1)
     )
     """
     Returns the local Metropolis-Hastings acceptance ratio.
@@ -78,18 +78,16 @@ function RE_global(
     return log_acceptance_ratio, seed
 end
 
-function autoMH_diffusion(
+function LA_diffusion(
     z::AbstractArray{quant},
     noise::AbstractArray{quant},
-    η::quant,
     log_u_accept::quant,
     logpos::Function;
-    log_minmax_r::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
-    max_search_iters::Int=50,
+    η::quant=quant(0.1),
     seed::Int=1
 )
     """
-    Auto MALA drift step. Adaptively tune step size.
+    MALA drift step. Adaptively tune step size.
 
     Args:
         z: The current state.
@@ -97,7 +95,6 @@ function autoMH_diffusion(
         η: The step size.
         log_u_accept: The log of the acceptance threshold.
         logpos: The log-posterior function.
-        log_minmax_r: The minimum and maximum step size.
 
     Returns:
         The updated state.
@@ -114,32 +111,8 @@ function autoMH_diffusion(
     logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
 
     # Acceptance ratio
-    log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal, η)
-
-    if (log_minmax_r[1] < log_r < log_minmax_r[2])
-        return log_u_accept < log_r ? (proposal, η, seed) : (z, η, seed)
-    else
-        geq = log_r > log_minmax_r[2]
-        init_η, iter = η, 1
-        while !(log_minmax_r[1] < log_r < log_minmax_r[2])
-            if iter > max_search_iters
-                return (z, init_η, seed)
-            end
-
-            η = log_r < log_minmax_r[1] ? η / 2 : η * 2
-            proposal .= z + (η .* ∇z) + (noise .* sqrt(2 * η))
-            result = withgradient(z_i -> logpos(z_i, seed), proposal)
-            logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
-
-            # Acceptance ratio
-            log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal, η)
-            iter += 1
-        end
-        
-        # Halve once at end if ratio was too high
-        η = geq ? η / 2 : η
-        return (z, η, seed) # Reversibility, always reject if step changes
-    end
+    log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal; η=η)
+    return log_u_accept < log_r ? (proposal, seed) : (z, seed)
 end
 
 function ReplicaExchange(
@@ -149,7 +122,7 @@ function ReplicaExchange(
     T::Int,
     B::Int,
     Q::Int,
-    logll::Function;
+    ll_fcn::Function;
     seed::Int=1
     )
     """
@@ -186,11 +159,10 @@ function MALA_sampler(
     st,
     x::AbstractArray{quant};
     t::AbstractArray{quant}=device([quant(1)]),
-    η::quant=quant(0.1),
-    log_minmax_r::Tuple{quant, quant}=(quant(log(0.274)), quant(log(0.874))),
     N::Int=20,
     N_unadjusted::Int=0,
-    max_search_iters::Int=50,
+    rejection_tol::quant=quant(0.1),
+    η_changerate::quant=quant(0.1),
     seed::Int=1,
     )
     """
@@ -202,9 +174,6 @@ function MALA_sampler(
         st: The states of the model.
         x: The data
         t: The temperatures if using Thermodynamic Integration.
-        η: The step size.
-        momentum: The momentum for adaptive tuning. Optimal rejection rate is 0.574.
-        minmax_r: The minimum and maximum step size.
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -240,37 +209,41 @@ function MALA_sampler(
         return sum(ll), seed_i
     end
 
-    adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed_i)
+    adaptive_step = (z, noise, log_u, seed_i) -> LA_diffusion(z, noise, log_u, log_posterior; η=st.η, seed=seed_i)
     global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
     
     num_rejections = 0
-    num_step_changes = 0
     for i in 1:N
         
-        z_reverse, η_reverse = z, η
+        z_reverse = z
         
         # Local Metropolis-Hastings, (after burn-in)
         if i > N_unadjusted
-            z, η, seed = adaptive_step(z, noise[i, :, :], η, log_u_local[i], seed)
+            z, seed = adaptive_step(z, noise[i, :, :], log_u_local[i], seed)
         else
             result = withgradient(z_i -> log_posterior(z_i, seed), z)
             _, seed, ∇z = result.val..., first(result.grad)
-            z .= z + (η .* ∇z) + (noise[i, :, :] .* sqrt(2 * η))
+            z .= z + (st.η .* ∇z) + (noise[i, :, :] .* sqrt(2 * st.η))
         end
 
         # Diagnostics
-        num_step_changes = η != η_reverse ? num_step_changes + 1 : num_step_changes
         num_rejections = z == z_reverse ? num_rejections + 1 : num_rejections
 
         # Global Replica Exchange
         z, seed = T > 1 ? global_swap(z, log_u_global[i, :], seed) : (z, seed)
     end
 
-    m.verbose && println("Rejection rate: ", num_rejections / N)
-    m.verbose && println("Final step size: ", η, " with ", num_step_changes, " step changes.")
+    rejection_rate = num_rejections / (N - N_unadjusted)
+    m.verbose && println("Rejection rate: ", rejection_rate)
+        
+    if rejection_rate > 0.426 + rejection_tol
+        @reset st.η = (1-η_changerate) * st.η
+    elseif rejection_rate < 0.426 - rejection_tol
+        @reset st.η = (1+η_changerate) * st.η
+    end
 
     z = reshape(z, T, B, Q)
-    return z, seed
+    return z, seed, st
 end
 
 end

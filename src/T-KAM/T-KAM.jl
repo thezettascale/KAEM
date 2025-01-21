@@ -34,6 +34,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     p::AbstractArray{quant}
     N_t::Int
     MALA::Bool
+    init_η::quant
     posterior_sample::Function
     loss_fcn::Function
 end
@@ -80,7 +81,7 @@ function importance_loss(
     )
 
     # Posterior samples
-    z, seed = m.posterior_sample(m, x, ps, st, seed)
+    z, seed, st = m.posterior_sample(m, x, ps, st, seed)
     z = m.MALA ? z[end, :, :] : z
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
@@ -95,7 +96,7 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     loss_prior = loss_prior .- ex_prior
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-    return -mean(loss_prior .+ loss_llhood), seed
+    return -mean(loss_prior .+ loss_llhood), st, seed
 end
 
 function thermo_loss(
@@ -110,7 +111,7 @@ function thermo_loss(
     # Schedule temperatures, and Parallel Tempering
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     T = length(temperatures)
-    z, seed = m.posterior_sample(m, x, temperatures, ps, st, seed) 
+    z, seed, st = m.posterior_sample(m, x, temperatures, ps, st, seed) 
 
     z = reshape(z, T*m.MC_samples, :)
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
@@ -120,7 +121,7 @@ function thermo_loss(
     # Posterior expectation
     logpost = logprior .+ temperatures .* logllhood
     loss = sum(logpost[2:end, :, :] - logpost[1:end-1, :, :])
-    return -loss / size(x,2)*m.MC_samples, seed
+    return -loss / size(x,2)*m.MC_samples, st, seed
 end
 
 function update_model_grid(
@@ -205,22 +206,21 @@ function init_T_KAM(
 
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
+    rejection_tol = parse(quant, retrieve(conf, "MALA", "rejection_tol"))
+    η_changerate = parse(quant, retrieve(conf, "MALA", "η_changerate"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
-    max_search_iters = parse(Int, retrieve(conf, "MALA", "autoMALA_max_iters"))
-    log_minmax_r = log.(Tuple(parse.(quant, retrieve(conf, "MALA", "minmax_r"))))
         
     # Importance sampling or MALA
-    posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
+    posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
-
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, η_changerate=η_changerate, seed=seed)
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, η=step_size, N=num_steps, N_unadjusted=N_unadjusted, log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, η_changerate=η_changerate, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 
@@ -250,6 +250,7 @@ function init_T_KAM(
             p,
             N_t,
             use_MALA,
+            step_size,
             posterior_fcn,
             loss_fcn
         )
@@ -266,6 +267,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
+        η = model.init_η,
         train_idx = 1
         )
 end

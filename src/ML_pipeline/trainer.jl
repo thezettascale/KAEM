@@ -147,7 +147,7 @@ function train!(t::T_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        loss, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
+        loss, t.st, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
         train_loss += loss
         t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")
 

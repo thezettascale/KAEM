@@ -151,6 +151,7 @@ function MALA_sampler(
     end
 
     m.verbose && println("Rejection rate: ", num_rejections / N)
+    m.verbose && println("Final step size: ", η)
 
     z = reshape(z, T, B, Q)
     return z, seed

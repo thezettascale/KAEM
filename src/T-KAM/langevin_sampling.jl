@@ -19,6 +19,8 @@ function MALA_sampler(
     x::AbstractArray{quant};
     t::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
+    momentum::Tuple{quant, quant}=(quant(0.474), quant(0.674)),
+    minmax_η::Tuple{quant, quant}=(quant(0.001), quant(1)),
     N::Int=20,
     N_unadjusted::Int=0,
     seed::Int=1,
@@ -33,6 +35,8 @@ function MALA_sampler(
         x: The data
         t: The temperatures if using Thermodynamic Integration.
         η: The step size.
+        momentum: The momentum for adaptive tuning. Optimal rejection rate is 0.574.
+        minmax_η: The minimum and maximum step size.
         N: The number of iterations.
         seed: The seed for the random number generator.
 
@@ -59,6 +63,10 @@ function MALA_sampler(
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
     log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
+
+    # Adaptive tuning
+    a, b = log.(momentum)
+    min_step, max_step = minmax_η
 
     function log_posterior(z_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
@@ -110,6 +118,15 @@ function MALA_sampler(
             z .= proposal
         elseif i >= N_unadjusted
             num_rejections += 1
+        end
+
+        # Adapt stepsize
+        if i >= N_unadjusted  
+            if log_α < a
+                η = max(η / 2, min_step)
+            elseif log_α > b
+                η = min(η * 2, max_step)
+            end
         end
 
         # Global Replica Exchange

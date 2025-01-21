@@ -15,7 +15,7 @@ for i in range(grid_size[0] * grid_size[1]):
     row, col = divmod(i, grid_size[1])
     ax = axes[row, col]
     
-    img = image_data[:, :, i].reshape(14, 14)
+    img = image_data[:, :, i].reshape(28, 28)
     
     ax.imshow(img, cmap='gray')
     ax.axis('off')  

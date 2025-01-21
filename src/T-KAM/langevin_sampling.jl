@@ -4,7 +4,6 @@ export MALA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Accessors
 using Zygote: withgradient
-using LogExpFunctions: logsumexp
 
 include("mixture_prior.jl")
 include("KAN_likelihood.jl")
@@ -199,13 +198,13 @@ function MALA_sampler(
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
-        ll = logsumexp(ll, dims=3) # For single sample in batch!
+        ll = maximum(ll, dims=3) # For single sample in batch!
         return sum(lp .+ t .* ll), seed_i
     end
 
     function log_lkhood(z_i, seed_i)
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false) 
-        ll = logsumexp(ll; dims=1) # For single sample in batch!
+        ll = maximum(ll; dims=1) # For single sample in batch!
         return sum(ll), seed_i
     end
 

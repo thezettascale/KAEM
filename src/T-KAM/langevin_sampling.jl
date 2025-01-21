@@ -231,7 +231,7 @@ function MALA_sampler(
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
         ll = logsumexp(ll, dims=3) # For single sample in batch!
-        return sum(lp .+ t .* ll; dims=3), seed_i
+        return sum(lp .+ t .* ll), seed_i
     end
 
     function log_lkhood(z_i, seed_i)

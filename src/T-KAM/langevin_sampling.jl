@@ -19,7 +19,7 @@ function MALA_sampler(
     x::AbstractArray{quant};
     t::AbstractArray{quant}=device([quant(1)]),
     η::quant=quant(0.1),
-    momentum::Tuple{quant, quant}=(quant(0.474), quant(0.674)),
+    momentum::Tuple{quant, quant}=(quant(0.374), quant(0.774)),
     minmax_η::Tuple{quant, quant}=(quant(0.001), quant(1)),
     N::Int=20,
     N_unadjusted::Int=0,

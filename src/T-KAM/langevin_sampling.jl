@@ -58,7 +58,7 @@ function MALA_sampler(
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    noise = randn(quant, N, size(z)...) .* sqrt(2 * η) |> device
+    noise = randn(quant, N, size(z)...) |> device
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N)) # Local proposals
     seed, rng = next_rng(seed)
@@ -107,7 +107,7 @@ function MALA_sampler(
         logpos_z, grad = withgradient(z_i -> log_posterior(z_i), z)
         ∇z .= first(grad)
 
-        proposal .= z .+ (η .* ∇z) .+ (noise[i, :, :])
+        proposal .= z .+ (η .* ∇z) .+ (noise[i, :, :] .* sqrt(2 * η))
 
         logpos_proposal, grad = withgradient(z_i -> log_posterior(z_i), proposal)
         ∇proposal .= first(grad)

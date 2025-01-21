@@ -203,16 +203,14 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     loss_fcn = importance_loss
 
-    # Importance sampling or MALA
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
+    step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
-    posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
         
-    if use_MALA && !(N_t > 1) # Don't even try MALA plus Thermodynamic Integration
-        step_size = parse(quant, retrieve(conf, "MALA", "step_size"))
-        num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
+    # Importance sampling or MALA
+    posterior_fcn = (m, x, ps, st, seed) -> m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)
+    if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; η=step_size, N=num_steps, N_unadjusted=N_unadjusted, seed=seed)

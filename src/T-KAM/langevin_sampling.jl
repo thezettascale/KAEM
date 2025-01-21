@@ -160,9 +160,8 @@ function MALA_sampler(
     t::AbstractArray{quant}=device([quant(1)]),
     N::Int=20,
     N_unadjusted::Int=0,
-    rejection_tol::quant=quant(0.1),
-    Δη::quant=quant(0.1),
-    minmax_η::Tuple{quant, quant}=(quant(0.001), quant(1)),
+    adjust_η::Bool=false,
+    β::quant=quant(0.1),
     seed::Int=1,
     )
     """
@@ -231,13 +230,11 @@ function MALA_sampler(
         z, seed = T > 1 ? global_swap(z, log_u_global[i, :], seed) : (z, seed)
     end
 
-    rejection_rate = num_rejections / (N - N_unadjusted)
-    if rejection_rate > 0.426 + rejection_tol
-        @reset st.η = max((1-Δη) * st.η, minmax_η[1])
-    elseif rejection_rate < 0.426 - rejection_tol
-        @reset st.η = min((1+Δη) * st.η, minmax_η[2])
+    acceptance_rate = 1 - (num_rejections / (N - N_unadjusted))
+    if adjust_η
+        st.η = st.η * exp(β * (acceptance_rate - 0.574))
     end
-
+    
     m.verbose && println("Rejection rate: ", rejection_rate, ", η: ", st.η)
 
     z = reshape(z, T, B, Q)

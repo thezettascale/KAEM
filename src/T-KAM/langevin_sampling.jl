@@ -132,7 +132,7 @@ function MALA_sampler(
             elseif i >= N_unadjusted
                 num_rejections += 1
             end
-        elseif i >= N_unadjusted
+        else
             num_step_changes += 1
         end
 

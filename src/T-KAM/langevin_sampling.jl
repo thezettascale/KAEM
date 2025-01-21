@@ -229,12 +229,14 @@ function MALA_sampler(
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
-        return sum(lp .+ mean(t .* ll; dims=3)), seed_i
+        ll = maximum(ll, dims=3) # For single sample in batch!
+        return sum(lp .+ t .* ll; dims=3), seed_i
     end
 
     function log_lkhood(z_i, seed_i)
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false) 
-        return sum(mean(ll; dims=1)), seed_i
+        ll = maximum(ll; dims=2) # For single sample in batch!
+        return sum(ll), seed_i
     end
 
     adaptive_step = (z, noise, η, log_u, seed_i) -> autoMH_diffusion(z, noise, η, log_u, log_posterior; log_minmax_r=log_minmax_r, max_search_iters=max_search_iters, seed=seed_i)

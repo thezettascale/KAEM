@@ -114,19 +114,25 @@ function MALA_sampler(
         # Local Metropolis-Hastings acceptance
         log_α = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal)
         
-        if log_u[i] < log_α || i < N_unadjusted
-            z .= proposal
-        elseif i >= N_unadjusted
-            num_rejections += 1
-        end
-
         # Adapt stepsize
+        η_reverse = η
         if i >= N_unadjusted  
             if log_α < a
                 η = max(η / 2, min_step)
             elseif log_α > b
                 η = min(η * 2, max_step)
             end
+        end
+
+        # Revesibility check
+        if η != η_reverse
+            continue
+        end
+
+        if log_u[i] < log_α || i < N_unadjusted
+            z .= proposal
+        elseif i >= N_unadjusted
+            num_rejections += 1
         end
 
         # Global Replica Exchange

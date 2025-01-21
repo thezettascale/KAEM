@@ -219,14 +219,12 @@ function MALA_sampler(
         # Local Metropolis-Hastings, (after burn-in)
         if i > N_unadjusted
             z, seed = local_step(z, noise[i, :, :], log_u_local[i], seed)
+            num_rejections = z == z_reverse ? num_rejections + 1 : num_rejections
         else
             result = withgradient(z_i -> log_posterior(z_i, seed), z)
             _, seed, ∇z = result.val..., first(result.grad)
             z .= z + (st.η .* ∇z) + (noise[i, :, :] .* sqrt(2 * st.η))
         end
-
-        # Diagnostics
-        num_rejections = z == z_reverse ? num_rejections + 1 : num_rejections
 
         # Global Replica Exchange
         z, seed = T > 1 ? global_swap(z, log_u_global[i, :], seed) : (z, seed)

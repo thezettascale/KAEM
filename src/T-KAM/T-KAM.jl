@@ -207,7 +207,7 @@ function init_T_KAM(
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
     rejection_tol = parse(quant, retrieve(conf, "MALA", "rejection_tol"))
-    η_changerate = parse(quant, retrieve(conf, "MALA", "η_changerate"))
+    Δη = parse(quant, retrieve(conf, "MALA", "η_changerate"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
         
@@ -215,12 +215,12 @@ function init_T_KAM(
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, η_changerate=η_changerate, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, Δη=Δη, seed=seed)
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, η_changerate=η_changerate, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, rejection_tol=rejection_tol, Δη=Δη, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

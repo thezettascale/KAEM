@@ -162,7 +162,7 @@ function MALA_sampler(
     N::Int=20,
     N_unadjusted::Int=0,
     rejection_tol::quant=quant(0.1),
-    η_changerate::quant=quant(0.1),
+    Δη::quant=quant(0.1),
     seed::Int=1,
     )
     """
@@ -237,9 +237,9 @@ function MALA_sampler(
     m.verbose && println("Rejection rate: ", rejection_rate)
         
     if rejection_rate > 0.426 + rejection_tol
-        @reset st.η = (1-η_changerate) * st.η
+        @reset st.η = (1-Δη) * st.η
     elseif rejection_rate < 0.426 - rejection_tol
-        @reset st.η = (1+η_changerate) * st.η
+        @reset st.η = (1+Δη) * st.η
     end
 
     z = reshape(z, T, B, Q)

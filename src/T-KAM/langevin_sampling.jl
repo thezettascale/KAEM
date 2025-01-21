@@ -50,7 +50,7 @@ function RE_global(
     z_high::AbstractArray{quant},
     t_low::AbstractArray{quant},
     t_high::AbstractArray{quant},
-    logll::Function;
+    ll_fcn::Function;
     seed::Int=1
     )
     """
@@ -62,14 +62,14 @@ function RE_global(
         z_high: The proposed state.
         t_low: The temperature of the current state.
         t_high: The temperature of the proposed state.
-        logll: The log-likelihood function.
+        ll_fcn: The log-likelihood function.
 
     Returns:
         The log-acceptance ratio.
     """
 
-    ll_low, seed = logll(z_low, seed)
-    ll_high, seed = logll(z_high, seed)
+    ll_low, seed = ll_fcn(z_low, seed)
+    ll_high, seed = ll_fcn(z_high, seed)
 
     log_acceptance_ratio = (t_high .* ll_low) + (t_low .* ll_high)
     log_acceptance_ratio -= (t_high .* ll_high) + (t_low .* ll_low)
@@ -166,15 +166,16 @@ function ReplicaExchange(
         The updated state.
     """
     z = reshape(z, T, B, Q)
-        for k in 1:T-1
-            z_low = z[k, :, :]
-            z_high = z[k+1, :, :] 
-            log_r, seed = RE_global(z_low, z_high, view(temperatures, k), view(temperatures, k+1), logll; seed=seed)
-            if log_u_accept[k] < log_r
-                z[k, :, :] .= z_high
-                z[k+1, :, :] .= z_low
-            end
+
+    for k in 1:T-1
+        z_low = z[k, :, :]
+        z_high = z[k+1, :, :] 
+        log_r, seed = RE_global(z_low, z_high, view(temperatures, k), view(temperatures, k+1), ll_fcn; seed=seed)
+        if log_u_accept[k] < log_r
+            z[k, :, :] .= z_high
+            z[k+1, :, :] .= z_low
         end
+    end
     return reshape(z, T * B, Q), seed
 end
 
@@ -228,7 +229,7 @@ function MALA_sampler(
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false)
         lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
-        return sum(lp .+ mean(t .* ll; dims=1)), seed_i
+        return sum(lp .+ mean(t .* ll; dims=3)), seed_i
     end
 
     function log_lkhood(z_i, seed_i)

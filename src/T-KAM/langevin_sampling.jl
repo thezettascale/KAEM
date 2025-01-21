@@ -102,6 +102,7 @@ function MALA_sampler(
     end
 
     num_rejections = 0
+    num_step_changes = 0
     for i in 1:N
         logpos_z, grad = withgradient(z_i -> log_posterior(z_i), z)
         ∇z .= first(grad)
@@ -131,6 +132,8 @@ function MALA_sampler(
             elseif i >= N_unadjusted
                 num_rejections += 1
             end
+        elseif i >= N_unadjusted
+            num_step_changes += 1
         end
 
         # Global Replica Exchange
@@ -149,7 +152,7 @@ function MALA_sampler(
     end
 
     m.verbose && println("Rejection rate: ", num_rejections / N)
-    m.verbose && println("Final step size: ", η)
+    m.verbose && println("Final step size: ", η, " with ", num_step_changes, " step changes.")
 
     z = reshape(z, T, B, Q)
     return z, seed

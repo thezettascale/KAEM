@@ -78,7 +78,7 @@ function RE_global(
     return log_acceptance_ratio, seed
 end
 
-function LA_diffusion(
+function MALA_step(
     z::AbstractArray{quant},
     noise::AbstractArray{quant},
     log_u_accept::quant,
@@ -87,7 +87,7 @@ function LA_diffusion(
     seed::Int=1
 )
     """
-    MALA drift step. Adaptively tune step size.
+    MALA drift step. 
 
     Args:
         z: The current state.
@@ -209,7 +209,7 @@ function MALA_sampler(
         return sum(ll), seed_i
     end
 
-    adaptive_step = (z, noise, log_u, seed_i) -> LA_diffusion(z, noise, log_u, log_posterior; η=st.η, seed=seed_i)
+    local_step = (z, noise, log_u, seed_i) -> MALA_step(z, noise, log_u, log_posterior; η=st.η, seed=seed_i)
     global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
     
     num_rejections = 0
@@ -219,7 +219,7 @@ function MALA_sampler(
         
         # Local Metropolis-Hastings, (after burn-in)
         if i > N_unadjusted
-            z, seed = adaptive_step(z, noise[i, :, :], log_u_local[i], seed)
+            z, seed = local_step(z, noise[i, :, :], log_u_local[i], seed)
         else
             result = withgradient(z_i -> log_posterior(z_i, seed), z)
             _, seed, ∇z = result.val..., first(result.grad)
@@ -234,13 +234,13 @@ function MALA_sampler(
     end
 
     rejection_rate = num_rejections / (N - N_unadjusted)
-    m.verbose && println("Rejection rate: ", rejection_rate)
-        
     if rejection_rate > 0.426 + rejection_tol
         @reset st.η = (1-Δη) * st.η
     elseif rejection_rate < 0.426 - rejection_tol
         @reset st.η = (1+Δη) * st.η
     end
+
+    m.verbose && println("Rejection rate: ", rejection_rate, ", η: ", st.η)
 
     z = reshape(z, T, B, Q)
     return z, seed, st

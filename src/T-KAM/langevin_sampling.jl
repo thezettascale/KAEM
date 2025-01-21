@@ -124,15 +124,13 @@ function MALA_sampler(
             end
         end
 
-        # Revesibility check
-        if η != η_reverse
-            continue
-        end
-
-        if log_u[i] < log_α || i < N_unadjusted
-            z .= proposal
-        elseif i >= N_unadjusted
-            num_rejections += 1
+        # Revesibility check, before local acceptance/rejection
+        if η == η_reverse
+            if log_u[i] < log_α || i < N_unadjusted
+                z .= proposal
+            elseif i >= N_unadjusted
+                num_rejections += 1
+            end
         end
 
         # Global Replica Exchange

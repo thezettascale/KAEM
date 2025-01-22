@@ -299,7 +299,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η = model.init_η,
+        η = model.N_t > 1 ? repeat([model.init_η], model.N_t+1) : [model.init_η],
         train_idx = 1
         )
 end

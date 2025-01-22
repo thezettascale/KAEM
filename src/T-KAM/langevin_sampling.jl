@@ -15,11 +15,11 @@ using .Utils: device, next_rng, quant
 function MH_local(
     z_i::AbstractArray{quant}, 
     proposal_i::AbstractArray{quant},
-    logpos_z::quant,
-    logpos_proposal::quant, 
+    logpos_z::AbstractArray{quant},
+    logpos_proposal::AbstractArray{quant},
     ∇z_i::AbstractArray{quant},
     ∇proposal_i::AbstractArray{quant};
-    η::quant=quant(0.1)
+    η::AbstractArray{quant}=[quant(0.1)],
     )
     """
     Returns the local Metropolis-Hastings acceptance ratio.
@@ -40,9 +40,9 @@ function MH_local(
 
     # Posterior ratio and transition kernels/drift corrections, (gaussian)
     log_acceptance_ratio = logpos_proposal - logpos_z
-    log_acceptance_ratio -= -sum((proposal_i - z_i - η * ∇z_i).^2) / 4η
-    log_acceptance_ratio += -sum((z_i - proposal_i - η * ∇proposal_i).^2) / 4η
-    return log_acceptance_ratio
+    log_acceptance_ratio -= -sum((proposal_i - z_i - η .* ∇z_i).^2; dims=(2,3)) ./ (4 .* η)
+    log_acceptance_ratio += -sum((z_i - proposal_i - η .* ∇proposal_i).^2; dims=(2,3)) ./ (4 .* η)
+    return dropdims(log_acceptance_ratio; dims=(2,3))
 end
 
 function RE_global(
@@ -80,9 +80,14 @@ end
 function MALA_step(
     z::AbstractArray{quant},
     noise::AbstractArray{quant},
-    log_u_accept::quant,
+    num_acceptances::AbstractArray{Int},
+    log_u_accept::AbstractArray{quant},
     logpos::Function;
-    η::quant=quant(0.1),
+    η::AbstractArray{quant}=[quant(0.1)],
+    η_accept::AbstractArray{quant}=[quant(0.1)],
+    T::Int=1,
+    B::Int=1,
+    Q::Int=1,
     seed::Int=1
 )
     """
@@ -102,16 +107,22 @@ function MALA_step(
 
     # Current state
     result = withgradient(z_i -> logpos(z_i, seed), z)
-    logpos_z, seed, ∇z = result.val..., first(result.grad)
+    _, logpos_z, seed, ∇z = result.val..., first(result.grad)
 
     # Proposal
-    proposal = z + (η .* ∇z) + (noise .* sqrt(2 * η))
+    proposal = z + (η .* ∇z) + noise # Noise is scaled by sqrt(2η) in intialization
     result = withgradient(z_i -> logpos(z_i, seed), proposal)
-    logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
+    _, logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
 
-    # Acceptance ratio
-    log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal; η=η)
-    return log_u_accept < log_r ? (proposal, seed) : (z, seed)
+    # Acceptance ratio PER TEMPERATURE
+    z, proposal = reshape(z, T, B, Q), reshape(proposal, T, B, Q)
+    ∇z, ∇proposal = reshape(∇z, T, B, Q), reshape(∇proposal, T, B, Q)
+    log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal; η=η_accept)
+    
+    accept_bool = log_u_accept .< log_r .|> quant |> device
+    z = accept_bool .* proposal .+ (1 .- accept_bool) .* z
+    num_acceptances = num_acceptances .+ accept_bool
+    return reshape(z, T * B, Q), num_acceptances, seed
 end
 
 function ReplicaExchange(
@@ -184,13 +195,14 @@ function MALA_sampler(
     z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
     z = repeat(reshape(z, 1, B, Q), T, 1, 1) 
+    η = reshape(repeat(st.η', B, 1), T*B)
     z = reshape(z, T*B, Q)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    noise = randn(quant, N, size(z)...) |> device
+    noise = device(randn(quant, N, size(z)...)) .* reshape(sqrt.(2 .* η), 1, T*B, 1)
     seed, rng = next_rng(seed)
-    log_u_local = log.(rand(rng, quant, N)) # Local proposals
+    log_u_local = log.(rand(rng, quant, N, T)) |> device # Local proposals
     seed, rng = next_rng(seed)
     log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
 
@@ -198,45 +210,43 @@ function MALA_sampler(
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         lp = reshape(lp, T, B)
 
-        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i, noise=false)
+        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
         x̂ = reshape(x̂, T, B, :)
         ll = m.lkhood.log_lkhood_model(x, x̂)
+        logpos = sum(lp .+ t .* ll; dims=(2,3))
 
-        return sum(lp .+ t .* ll), seed_i
+        return sum(logpos), logpos, seed_i
     end
 
     function log_lkhood(z_i, seed_i)
-        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i, noise=false)
+        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
         x̂ = permutedims(x̂[:,:,:], [3,1,2])
         ll = m.lkhood.log_lkhood_model(x, x̂)
         return sum(ll), seed_i
     end
 
-    local_step = (z, noise, log_u, seed_i) -> MALA_step(z, noise, log_u, log_posterior; η=st.η, seed=seed_i)
+    local_step = (z, noise, num_acceptances, log_u, seed_i) -> MALA_step(z, noise, num_acceptances, log_u, log_posterior; η=η, η_accept=st.η, T=T, B=B, Q=Q, seed=seed_i)
     global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
     
-    num_rejections = 0
+    num_acceptances = zeros(Int, T) |> device
     for i in 1:N
-        
-        z_reverse = z
-        
+                
         # Local Metropolis-Hastings, (after burn-in)
         if i > N_unadjusted
-            z, seed = local_step(z, noise[i, :, :], log_u_local[i], seed)
-            num_rejections = z == z_reverse ? num_rejections + 1 : num_rejections
+            z, num_acceptances, seed = local_step(z, noise[i, :, :], num_acceptances, log_u_local[i, :], seed)
         else
             result = withgradient(z_i -> log_posterior(z_i, seed), z)
-            _, seed, ∇z = result.val..., first(result.grad)
-            z .= z + (st.η .* ∇z) + (noise[i, :, :] .* sqrt(2 * st.η))
+            _, _, seed, ∇z = result.val..., first(result.grad)
+            z .= z + (η .* ∇z) + noise[i, :, :] # Noise is scaled by sqrt(2η) in intialization
         end
 
         # Global Replica Exchange
         z, seed = T > 1 ? global_swap(z, log_u_global[i, :], seed) : (z, seed)
     end
 
-    acceptance_rate = 1 - (num_rejections / (N - N_unadjusted))
+    acceptance_rate = (num_acceptances ./ (N - N_unadjusted)) 
     if adjust_η
-        @reset st.η = st.η * exp(β * (acceptance_rate - 0.574))
+        @reset st.η = st.η .* exp(β .* (acceptance_rate .- quant(0.574)))
     end
 
     m.verbose && println("Acceptance rate: ", acceptance_rate, ", η: ", st.η)

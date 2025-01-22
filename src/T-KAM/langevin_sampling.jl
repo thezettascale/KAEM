@@ -236,7 +236,7 @@ function MALA_sampler(
 
     acceptance_rate = 1 - (num_rejections / (N - N_unadjusted))
     if adjust_η
-        st.η = st.η * exp(β * (acceptance_rate - 0.574))
+        @reset st.η = st.η * exp(β * (acceptance_rate - 0.574))
     end
 
     m.verbose && println("Acceptance rate: ", acceptance_rate, ", η: ", st.η)

@@ -9,7 +9,7 @@ include("mixture_prior.jl")
 include("KAN_likelihood.jl")
 include("../utils.jl")
 using .ebm_mix_prior: log_prior
-using .KAN_likelihood: log_likelihood
+using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
 function MH_local(
@@ -180,8 +180,8 @@ function MALA_sampler(
         The posterior samples.
         The updated seed.
     """
-    # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    # Initialize from prior, (MALA pushes z in direction of x, therefore we sample batch_size samples)
+    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
     z = repeat(reshape(z, 1, B, Q), T, 1, 1) 
     z = reshape(z, T*B, Q)
@@ -196,15 +196,19 @@ function MALA_sampler(
 
     function log_posterior(z_i, seed_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
-        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false)
-        lp, ll = reshape(lp, T, B, 1), reshape(ll, T, B, :)
-        ll = maximum(ll, dims=3) # For single sample in batch!
+        lp = reshape(lp, T, B)
+
+        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i, noise=false)
+        x̂ = reshape(x̂, T, B, :)
+        ll = m.lkhood.log_lkhood_model(x, x̂)
+
         return sum(lp .+ t .* ll), seed_i
     end
 
     function log_lkhood(z_i, seed_i)
-        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i, noise=false) 
-        ll = maximum(ll; dims=1) # For single sample in batch!
+        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i, noise=false)
+        x̂ = permutedims(x̂[:,:,:], [3,1,2])
+        ll = m.lkhood.log_lkhood_model(x, x̂)
         return sum(ll), seed_i
     end
 

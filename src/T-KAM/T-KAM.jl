@@ -72,32 +72,60 @@ function importance_loss(
     x::AbstractArray{quant};
     seed::Int=1
     )
-    """MLE loss with importance sampling or MALA."""
+    """MLE loss with importance sampling."""
     
+    # Expected prior, (if contrastive divergence)
+    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    ex_prior = (m.prior.contrastive_div ? 
+        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    )
+
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
+    logllhood = m.lkhood.log_lkhood_model(x, x̂)
+
+    # Weights and resampling
+    weights = @ignore_derivatives softmax(logllhood, dims=2)
+    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+    weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
+    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+
+    # Expected posterior
+    @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
+    loss_prior = loss_prior .- ex_prior
+    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+    return -mean(loss_prior .+ loss_llhood), st, seed
+end
+
+function MALA_loss(
+    m::T_KAM,
+    ps,
+    st,
+    x::AbstractArray{quant};
+    seed::Int=1
+    )
+    """MLE loss with MALA."""
+    B = size(x, 2)
+
     # Expected prior, (if contrastive divergence)
     z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
         mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
 
-    # Posterior samples
-    z, seed, st = m.posterior_sample(m, x, ps, st, seed)
-    z = m.MALA ? z[end, :, :] : z
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    # MALA sampling
+    z, seed = m.posterior_sample(m, x, ps, st, seed)
+    z = dropdims(z; dims=1)
     
-    # Weights and resampling degenerate, (importance sampling skipped if MALA)
-    weights = m.MALA ? device(ones(quant, size(logllhood))) ./ m.MC_samples : @ignore_derivatives softmax(logllhood, dims=2)
-    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
-    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
-    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+    # Log-dists
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
+    logllhood = m.lkhood.log_lkhood_model(x, permutedims(x̂[:,:,:], [3,1,2]))
 
-    @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
-    loss_prior = loss_prior .- ex_prior
-    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-    return -mean(loss_prior .+ loss_llhood), st, seed
-end
+    # Expected posterior
+    return mean(logprior .+ logllhood) - ex_prior, st, seed
+end 
 
 function thermo_loss(
     m::T_KAM,
@@ -107,21 +135,24 @@ function thermo_loss(
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
+    B = size(x, 2)
 
     # Schedule temperatures, and Parallel Tempering
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     T = length(temperatures)
     z, seed, st = m.posterior_sample(m, x, temperatures, ps, st, seed) 
 
-    z = reshape(z, T*m.MC_samples, :)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
-    logprior, logllhood = reshape(logprior, T, m.MC_samples, 1), reshape(logllhood, T, m.MC_samples, :) 
+    z = reshape(z, T*B, :)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
+    logprior = reshape(logprior, T, B)
+
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
+    logllhood = m.lkhood.log_lkhood_model(x, reshape(x̂, T, B, :))
 
     # Posterior expectation
     logpost = logprior .+ temperatures .* logllhood
     loss = sum(logpost[2:end, :, :] - logpost[1:end-1, :, :])
-    return -loss / size(x,2)*m.MC_samples, st, seed
+    return -loss / B, st, seed
 end
 
 function update_model_grid(
@@ -216,6 +247,7 @@ function init_T_KAM(
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, adjust_η=adjust_η, β=β, seed=seed)
+        loss_fcn = MALA_loss
     end
     
     p = [quant(1)]

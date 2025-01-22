@@ -17,32 +17,6 @@ b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
 z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
-function test_log_likelihood()
-    Random.seed!(42)
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
-    ps, st = ps |> device, st |> device
-
-    z_test = randn(quant, MC_sample_size, z_dim) |> device
-    x_test = randn(quant, out_dim, b_size) |> device
-
-    log_lkhood, seed = log_likelihood(lkhood, ps, st, x_test, z_test)
-    @test size(log_lkhood) == (b_size, MC_sample_size)
-end
-
-function test_log_likelihood_derivative()
-    Random.seed!(42)
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, lkhood)
-    ps, st = ps |> device, st |> device
-
-    z_test = randn(quant, b_size, z_dim) |> device
-    x_test = randn(quant, out_dim, b_size) |> device
-    
-    ∇ = first(gradient(z -> sum(first(log_likelihood(lkhood, ps, st, x_test, z))), z_test))
-    @test size(∇) == size(z_test)
-end
-
 function test_generate()
     Random.seed!(42)
     lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
@@ -60,7 +34,5 @@ function test_generate()
 end
 
 @testset "KAN Likelihood Tests" begin
-    test_log_likelihood()
-    test_log_likelihood_derivative()
     test_generate()
 end

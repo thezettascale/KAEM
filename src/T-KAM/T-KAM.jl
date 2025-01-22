@@ -77,7 +77,7 @@ function importance_loss(
     # Expected prior, (if contrastive divergence)
     z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)

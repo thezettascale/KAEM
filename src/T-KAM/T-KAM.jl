@@ -29,7 +29,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     update_llhood_grid::Bool
     grid_update_decay::quant
     grid_updates_samples::Int
-    MC_samples::Int
+    IS_samples::Int
     verbose::Bool
     p::AbstractArray{quant}
     N_t::Int
@@ -75,7 +75,7 @@ function importance_loss(
     """MLE loss with importance sampling."""
     
     # Expected prior, (if contrastive divergence)
-    z, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
         mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
@@ -109,7 +109,7 @@ function MALA_loss(
     B = size(x, 2)
 
     # Expected prior, (if contrastive divergence)
-    z_prior, seed = m.prior.sample_z(m.prior, m.MC_samples, ps.ebm, st.ebm, seed)
+    z_prior, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
         mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
@@ -214,7 +214,7 @@ function init_T_KAM(
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-    MC_samples = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
+    IS_samples = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
@@ -243,7 +243,7 @@ function init_T_KAM(
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
         
     # Importance sampling or MALA
-    posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, MC_samples, ps.ebm, st.ebm, seed)..., st)
+    posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, adjust_η=adjust_η, β=β, seed=seed)
@@ -277,7 +277,7 @@ function init_T_KAM(
             update_llhood_grid,
             grid_update_decay,
             num_grid_updating_samples,
-            MC_samples,
+            IS_samples,
             verbose,
             p,
             N_t,

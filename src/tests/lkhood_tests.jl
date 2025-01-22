@@ -14,7 +14,7 @@ conf = ConfParse("src/tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "MC_expectation_sample_size"))
+MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))
 z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
 function test_generate()

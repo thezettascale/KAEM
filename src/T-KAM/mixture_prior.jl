@@ -12,7 +12,7 @@ include("univariate_functions.jl")
 include("inversion_sampling.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, quant, removeZero
+using .Utils: device, next_rng, quant, removeZero, removeNeg
 using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
@@ -31,12 +31,12 @@ MALA_logitinverse = Dict(
 )
 
 MALA_logit = Dict(
-    "uniform" => z -> log.(removeZero(z ./ removeZero(1 .- z))),
+    "uniform" => z -> log.(removeNeg(z ./ removeZero(1 .- z))),
     "gaussian" => identity,
 )
 
 MALA_jacobian = Dict(
-    "uniform" => z -> log.(removeZero(z .* (1 .- z))),
+    "uniform" => z -> log.(removeNeg(z .* (1 .- z))),
     "gaussian" => z -> device(ones(size(z))),
 )
 

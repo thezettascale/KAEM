@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, next_rng, quant
+export removeNaN, device, removeZero, removeNeg, next_rng, quant
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors
 using CUDA, LuxCUDA, KernelAbstractions
@@ -24,6 +24,10 @@ end
 
 function removeZero(x; ε=quant(1e-4))
     return ifelse.(abs.(x) .< ε, ε, x) |> device
+end
+
+function removeNeg(x; ε=quant(1e-4))
+    return ifelse.(x .< ε, ε, x) |> device
 end
 
 function next_rng(seed)

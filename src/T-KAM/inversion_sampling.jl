@@ -145,7 +145,6 @@ function sample_prior(
     trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
     cdf = cumsum(trapz, dims=2) 
     cdf = cdf ./ cdf[:, end:end, :] |> cpu_device() # Normalization
-    cdf = clamp.(cdf, 0, 1) # Numerical issues with cdf values = 1.000001
 
      # Find index of trapezium where CDF > rand_val
     seed, rng = next_rng(seed)
@@ -159,9 +158,7 @@ function sample_prior(
     replace!(idxs, grid_size => grid_size - 1)
 
     z, seed = interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
-
-    # Address numerical issues if any
-    z = typeof(prior.π_0) == Uniform ? ifelse.(z .< 0, quant(0), z) |> device : z
+    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : z
     return z, seed
 end
 

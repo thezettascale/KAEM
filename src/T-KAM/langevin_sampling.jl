@@ -34,7 +34,6 @@ function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity,
     Σ_AM = zeros(Q, Q) 
     for i in 1:Q
         Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
-        println(ε * sqrt(1/Σ[i,i]) + (1 - ε))
     end
 
     # Momentum

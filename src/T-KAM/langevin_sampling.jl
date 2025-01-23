@@ -12,7 +12,7 @@ using .ebm_mix_prior: log_prior
 using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
-function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
+function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity, seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -25,20 +25,20 @@ function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
         The positive-definite mass matrix.
         The updated seed.
     """
-    z = z |> cpu_device()
+    z = logit_func(z) |> cpu_device()
     Σ, Q = cov(z), size(z, 2)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
     ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> quant
-    Σ_AM = zeros(Q, Q) 
-    for i in 1:Q
-        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
-    end
+    Σ_AM = ε * inv(sqrtm(Σ)) + (1 - ε) * I
 
     # Momentum
     seed, rng = next_rng(seed)
     p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), inv(Σ_AM)), size(z, 1))'
+
+    # all(eigvals(Σ_AM) .> 0) && error("Mass matrix is not positive-definite.")
+
     return device(p), device(Σ_AM), seed
 end
 
@@ -173,7 +173,7 @@ function autoMALA_sampler(
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
-            momentum, M, seed = sample_momentum(z; seed=seed)
+            momentum, M, seed = sample_momentum(z; logit_func=m.prior.MALA_logitinverse, seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             result = withgradient(z_i -> logpos(z_i, seed), z)

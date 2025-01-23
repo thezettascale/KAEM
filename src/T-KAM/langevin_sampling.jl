@@ -219,7 +219,7 @@ function autoMALA_sampler(
     m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
     m.verbose && println("Mean step sizes: ", mean_η)
 
-    return m.prior.MALA_logitinverse(output), seed
+    return m.prior.MALA_logitinverse(output), st, seed
 end
 
 end

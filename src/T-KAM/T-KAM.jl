@@ -147,12 +147,13 @@ function thermo_loss(
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 
-    TI_loss = sum(weights .* logllhood) / B
+    TI_loss = sum(weights .* logllhood; dims=3)
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    MLE_loss = sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :] .- ex_prior)) / B
+    MLE_loss = sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :]); dims=2) .- ex_prior
 
-    return -(TI_loss + MLE_loss) / 2, st, seed
+    loss = (TI_loss .+ MLE_loss) / 2
+    return -mean(loss), st, seed
 end
 
 function update_model_grid(
@@ -245,13 +246,13 @@ function init_T_KAM(
     # Importance sampling or MALA
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
-        num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = MALA_loss
     end
     
     p = [quant(1)]
     if N_t > 1
+        num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = thermo_loss
 

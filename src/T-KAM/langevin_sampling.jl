@@ -181,7 +181,7 @@ function autoMALA_sampler(
                 burn_in += 1
             else
                 geq_bool = log_r >= log_b
-                while (log_a < log_r < log_b) && (η_min < η < η_max)
+                while (log_a < log_r < log_b) && (η_min <= η <= η_max)
                     η = geq_bool ? η * Δη : η / Δη
                     proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end
@@ -201,13 +201,13 @@ function autoMALA_sampler(
 
             
     # Update step size for next training iteration
-    mean_η = mean_η ./ num_acceptances
+    mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
     for k in 1:T
         mean_η[k] = ifelse(isnan(mean_η[k]), st.η_init[k], mean_η[k])
     end
     @reset st.η_init .= mean_η
 
-    m.verbose && println("Acceptance rates: ", num_acceptances)
+    m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
     m.verbose && println("Mean step sizes: ", st.η_init)
 
     return output, st, seed

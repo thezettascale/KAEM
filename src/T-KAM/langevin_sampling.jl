@@ -1,8 +1,8 @@
 module LangevinSampling
 
-export MALA_sampler
+export autoMALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Accessors
+using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions
 using Zygote: withgradient
 
 include("mixture_prior.jl")
@@ -12,167 +12,82 @@ using .ebm_mix_prior: log_prior
 using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
-function MH_local(
-    z_i::AbstractArray{quant}, 
-    proposal_i::AbstractArray{quant},
-    logpos_z::AbstractArray{quant},
-    logpos_proposal::AbstractArray{quant},
-    ∇z_i::AbstractArray{quant},
-    ∇proposal_i::AbstractArray{quant};
-    η::AbstractArray{quant}=[quant(0.1)],
-    )
-    """
-    Returns the local Metropolis-Hastings acceptance ratio.
-    i.e. [ posterior(z') x drift_correction(z, z') ] / [ posterior(z) x drift_correction(z', z) ]
-
-    Args:
-        z_i: The current state.
-        proposal_i: The proposed state.
-        logpos_z: The log-posterior of the current state.
-        logpos_proposal: The log-posterior of the proposed state.
-        ∇z_i: The gradient of the current state.
-        ∇proposal_i: The gradient of the proposed state.
-        η: The step size.
-
-    Returns:
-        The log-acceptance ratio.
-    """
-
-    # Posterior ratio and transition kernels/drift corrections, (gaussian)
-    log_acceptance_ratio = logpos_proposal - logpos_z
-    log_acceptance_ratio -= -sum((proposal_i - z_i - η .* ∇z_i).^2; dims=(2,3)) ./ (4 .* η)
-    log_acceptance_ratio += -sum((z_i - proposal_i - η .* ∇proposal_i).^2; dims=(2,3)) ./ (4 .* η)
-    return dropdims(log_acceptance_ratio; dims=(2,3))
-end
-
-function RE_global(
-    z_low::AbstractArray{quant}, 
-    z_high::AbstractArray{quant},
-    t_low::AbstractArray{quant},
-    t_high::AbstractArray{quant},
-    ll_fcn::Function;
-    seed::Int=1
-    )
-    """
-    Returns the global Replica Exchange acceptance ratio.
-    i.e., the tempered likelihoods of swap vs no swap
-
-    Args:
-        z_low: The current state.
-        z_high: The proposed state.
-        t_low: The temperature of the current state.
-        t_high: The temperature of the proposed state.
-        ll_fcn: The log-likelihood function.
-
-    Returns:
-        The log-acceptance ratio.
-    """
-
-    ll_low, seed = ll_fcn(z_low, seed)
-    ll_high, seed = ll_fcn(z_high, seed)
-
-    log_acceptance_ratio = (t_high .* ll_low) + (t_low .* ll_high)
-    log_acceptance_ratio -= (t_high .* ll_high) + (t_low .* ll_low)
-
-    return log_acceptance_ratio, seed
-end
-
-function MALA_step(
+function leapfrop_proposal(
     z::AbstractArray{quant},
-    noise::AbstractArray{quant},
-    num_acceptances::AbstractArray{Int},
-    log_u_accept::AbstractArray{quant},
+    momentum::AbstractArray{quant},
+    η::quant,
     logpos::Function;
-    η::AbstractArray{quant}=[quant(0.1)],
-    η_accept::AbstractArray{quant}=[quant(0.1)],
-    T::Int=1,
-    B::Int=1,
-    Q::Int=1,
-    seed::Int=1
-)
-    """
-    MALA drift step. 
-
-    Args:
-        z: The current state.
-        noise: The noise for the proposal.
-        η: The step size.
-        log_u_accept: The log of the acceptance threshold.
-        logpos: The log-posterior function.
-
-    Returns:
-        The updated state.
-        The updated step size.
-    """
-
-    # Current state
-    result = withgradient(z_i -> logpos(z_i, seed), z)
-    _, logpos_z, seed, ∇z = result.val..., first(result.grad)
-
-    # Proposal
-    proposal = z + (η .* ∇z) + noise # Noise is scaled by sqrt(2η) in intialization
-    result = withgradient(z_i -> logpos(z_i, seed), proposal)
-    _, logpos_proposal, seed, ∇proposal = result.val..., first(result.grad)
-
-    # Acceptance ratio PER TEMPERATURE
-    z, proposal = reshape(z, T, B, Q), reshape(proposal, T, B, Q)
-    ∇z, ∇proposal = reshape(∇z, T, B, Q), reshape(∇proposal, T, B, Q)
-    log_r = MH_local(z, proposal, logpos_z, logpos_proposal, ∇z, ∇proposal; η=η_accept)
-    
-    accept_bool = log_u_accept .< log_r .|> quant |> device
-    z = accept_bool .* proposal .+ (1 .- accept_bool) .* z
-    num_acceptances = num_acceptances .+ accept_bool
-    return reshape(z, T * B, Q), num_acceptances, seed
-end
-
-function ReplicaExchange(
-    z::AbstractArray{quant},
-    log_u_accept::AbstractArray{quant},
-    temperatures::AbstractArray{quant},
-    T::Int,
-    B::Int,
-    Q::Int,
-    ll_fcn::Function;
     seed::Int=1
     )
     """
-    Replica Exchange Monte Carlo, global swaps
+    Generate a proposal using the leapfrog method.
 
     Args:
-        z: The current state.
-        log_u_accept: The log of the acceptance threshold.
-        temperatures: Power posterior annealing parameter
-        T: Number of temperatures
-        B: MC sample size
-        Q: z dimension
+        z: The current position.
+        momentum: The current momentum.
+        η: The step size.
+        logpos: The log-posterior function.
+        seed: The seed for the random number generator.
 
     Returns:
-        The updated state.
+        The proposal.
+        The log-ratio.
+        The updated seed.
     """
-    z = reshape(z, T, B, Q)
+    result = withgradient(z_i -> logpos(z_i, seed), z)
+    logpos_z, seed, ∇z = result.val..., first(result.grad) 
 
-    for k in 1:T-1
-        z_low = z[k, :, :]
-        z_high = z[k+1, :, :] 
-        log_r, seed = RE_global(z_low, z_high, view(temperatures, k), view(temperatures, k+1), ll_fcn; seed=seed)
-        if log_u_accept[k] < log_r
-            z[k, :, :] .= z_high
-            z[k+1, :, :] .= z_low
-        end
-    end
-    return reshape(z, T * B, Q), seed
+    p = momentum + (η .* ∇z / 2) # Half-step momentum update
+    ẑ = z + η .* p # Full-step position update
+
+    result =  withgradient(z_i -> logpos(z_i, seed), ẑ)
+    logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
+    p = p + (η .* ∇ẑ / 2) # Half-step momentum update
+
+    # MH acceptance ratio
+    log_r = logpos_ẑ - logpos_z - ((sum(p.^2) - sum(momentum.^2)) / 2)
+
+    return ẑ, log_r, seed
 end
 
-function MALA_sampler(
+function reversibility_check(
+    z::AbstractArray{quant},
+    ẑ::AbstractArray{quant},
+    η::quant;
+    tol::quant=quant(1e-6),
+    seed::Int=1
+    )
+    """
+    Check if the leapfrog proposal is reversible.
+
+    Args:
+        z: The current position.
+        ẑ: The proposed position.
+        η: The step size.
+        tol: The tolerance.
+
+    Returns:
+        A boolean indicating if the proposal is reversible.
+        The updated seed.
+    """
+    result = withgradient(z_i -> logpos(z_i, seed), ẑ)
+    _, seed, ∇ẑ = result.val..., first(result.grad)
+
+    p_rev = ((ẑ - z) ./ η) - (η .* ∇ẑ / 2)
+    z_rev, _, seed = leapfrop_proposal(ẑ, -p_rev, η, logpos; seed=seed)
+
+    return norm(z_rev - z) < tol, seed
+end
+
+function autoMALA_sampler(
     m,
     ps,
     st,
     x::AbstractArray{quant};
-    t::AbstractArray{quant}=device([quant(1)]),
+    t::AbstractArray{quant}=[quant(1)],
     N::Int=20,
-    N_unadjusted::Int=0,
-    adjust_η::Bool=false,
-    β::quant=quant(0.1),
+    N_unadjusted::Int=1,
+    η_init::quant=quant(0.1),
     seed::Int=1,
     )
     """
@@ -185,78 +100,71 @@ function MALA_sampler(
         x: The data
         t: The temperatures if using Thermodynamic Integration.
         N: The number of iterations.
+        η_init: The initial step size.
         seed: The seed for the random number generator.
 
     Returns:
         The posterior samples.
         The updated seed.
     """
-    # Initialize from prior, (MALA pushes z in direction of x, therefore we sample batch_size samples)
-    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
+    # Initialize from prior
+    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
-    z = repeat(reshape(z, 1, B, Q), T, 1, 1) 
-    η = reshape(repeat(st.η', B, 1), T*B)
-    z = reshape(z, T*B, Q)
+    
+    output = reshape(z, 1, B, Q)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    noise = device(randn(quant, N, size(z)...)) .* reshape(sqrt.(2 .* η), 1, T*B, 1)
+    noise = device(randn(quant, N, T, size(z)...)) |> device
     seed, rng = next_rng(seed)
-    log_u_local = log.(rand(rng, quant, N, T)) |> device # Local proposals
+    log_u = log.(rand(rng, quant, N, T))  
     seed, rng = next_rng(seed)
-    log_u_global = log.(rand(rng, quant, N, T-1)) # Global proposals
+    ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> quant
 
-    function log_posterior(z_i, seed_i)
+    function log_posterior(z_i, t_k, seed_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
-        lp = reshape(lp, T, B)
-
         x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
-        x̂ = reshape(x̂, T, B, :)
         ll = m.lkhood.log_lkhood_model(x, x̂)
-        logpos = sum(lp .+ t .* ll; dims=(2,3))
-
-        return sum(logpos), logpos, seed_i
+        return sum(lp .+ t_k .* ll), seed_i
     end
 
-    function log_lkhood(z_i, seed_i)
-        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
-        x̂ = permutedims(x̂[:,:,:], [3,1,2])
-        ll = m.lkhood.log_lkhood_model(x, x̂)
-        return sum(ll), seed_i
-    end
+    k = 1
+    num_acceptances = Dict("t_$i" => 0 for i in 1:T)
+    while k < T + 1
+        logpos = (z_i, seed_i) -> log_posterior(z_i, t[k], seed_i)
+        burn_in = 0
+        for i in 1:N
+            η = η_init
+            momentum = noise[i, k, :, :] .* sqrt(2 * η)
+            log_a, log_b = ratio_bounds[i, k, :]
 
-    local_step = (z, noise, num_acceptances, log_u, seed_i) -> MALA_step(z, noise, num_acceptances, log_u, log_posterior; η=η, η_accept=st.η, T=T, B=B, Q=Q, seed=seed_i)
-    global_swap = (z, log_u, seed_i) -> ReplicaExchange(z, log_u, t, T, B, Q, log_lkhood; seed=seed_i)
-    
-    num_acceptances = zeros(Int, T) |> device
-    for i in 1:N
-                
-        # Local Metropolis-Hastings, (after burn-in)
-        if i > N_unadjusted
-            z, num_acceptances, seed = local_step(z, noise[i, :, :], num_acceptances, log_u_local[i, :], seed)
-        else
-            result = withgradient(z_i -> log_posterior(z_i, seed), z)
-            _, _, seed, ∇z = result.val..., first(result.grad)
-            z .= z + (η .* ∇z) + noise[i, :, :] # Noise is scaled by sqrt(2η) in intialization
+            proposal, log_r, seed = leapfrop_proposal(z, momentum, η, logpos; seed=seed)
+
+            if burn_in < N_unadjusted
+                z = proposal
+                burn_in += 1
+            else
+                geq_bool = log_r >= log_b
+                while !(log_a < log_r < log_b)
+                    η = geq_bool ? η * 2 : η / 2
+                    proposal, log_r, seed = leapfrop_proposal(z, momentum, η, logpos; seed=seed)
+                end
+                η = geq_bool ? η / 2 : η
+
+                reversibility, seed = reversibility_check(z, proposal, η; seed=seed)
+                if reversibility && (log_u[i, k] < log_r)
+                    z = proposal
+                    num_acceptances["t_$k"] += 1
+                end
+            end
         end
-
-        # Global Replica Exchange
-        z, seed = T > 1 ? global_swap(z, log_u_global[i, :], seed) : (z, seed)
+        output = vcat(output, reshape(z, 1, B, Q))
+        k += 1
     end
 
-    acceptance_rate = (num_acceptances ./ (N - N_unadjusted)) 
-    if adjust_η
-        @reset st.η = st.η .* exp(β .* (acceptance_rate .- quant(0.574)))
-    end
+    m.verbose && println("Acceptance rates: ", num_acceptances)
 
-    m.verbose && println("Acceptance rate: ", acceptance_rate, ", η: ", st.η)
-
-    z = reshape(z, T, B, Q)
-    return z, seed, st
+    return output, seed
 end
 
 end
-
-
-
-

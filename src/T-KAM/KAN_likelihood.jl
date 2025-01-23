@@ -27,9 +27,9 @@ lkhood_models = Dict(
     "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o] + eps)),
 )
 
-lkhood_models_mala = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b] := -(x[o, b] - x̂[t, b, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, b, o] + eps)),
+lkhood_models_tempered = Dict(
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b, s] := -(x[o, b] - x̂[t, s, o])^2),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b, s] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
 )
 
 resampler_map = Dict(
@@ -45,6 +45,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_ε::quant
     σ_llhood::quant
     log_lkhood_model::Function
+    log_lkhood_model_tempered::Function
     output_activation::Function
     resample_z::Function
 end
@@ -186,12 +187,10 @@ function init_KAN_lkhood(
     )
 
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
 
     ll_model = lkhood_models[lkhood_model]
-    ll_model = use_MALA ? lkhood_models_mala[lkhood_model] : ll_model
-    ll_model = N_t > 1 ? lkhood_models_mala[lkhood_model] : ll_model
+    ll_model_t = lkhood_models_tempered[lkhood_model]
 
     # KAN functions
     Φ_functions = NamedTuple() # Expert functions
@@ -202,7 +201,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, ll_model, ll_model_t, output_activation_mapping[output_act], resample_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

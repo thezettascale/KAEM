@@ -16,7 +16,7 @@ include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_mix_prior
 using .KAN_likelihood
-using .LangevinSampling
+using .LangevinSampling: autoMALA_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, quant
 
@@ -95,7 +95,7 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     loss_prior = loss_prior .- ex_prior
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-    return -mean(loss_prior .+ loss_llhood), st, seed
+    return -mean(loss_prior .+ loss_llhood), seed
 end
 
 function MALA_loss(
@@ -106,25 +106,20 @@ function MALA_loss(
     seed::Int=1
     )
     """MLE loss with MALA."""
-    B = size(x, 2)
-
-    # Expected prior, (if contrastive divergence)
-    z_prior, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z_prior, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
-    )
 
     # MALA sampling
     z, seed = m.posterior_sample(m, x, ps, st, seed)
-    z = dropdims(z; dims=1)
+    ex_prior = (m.prior.contrastive_div ? 
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    )
     
     # Log-dists
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
-    logllhood = m.lkhood.log_lkhood_model(x, permutedims(x̂[:,:,:], [3,1,2]))
+    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :]; seed=seed)
+    logllhood = m.lkhood.log_lkhood_model(x, x̂)
 
     # Expected posterior
-    return mean(logprior .+ logllhood) - ex_prior, st, seed
+    return mean(logprior .+ logllhood) - ex_prior, seed
 end 
 
 function thermo_loss(
@@ -135,24 +130,24 @@ function thermo_loss(
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
-    B = size(x, 2)
 
     # Schedule temperatures, and Parallel Tempering
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    T = length(temperatures)
-    z, seed, st = m.posterior_sample(m, x, temperatures, ps, st, seed) 
+    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    z, seed, st = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
+    temperatures = device(temperatures)
+    Δt = temperatures[2:end] - temperatures[1:end-1]
 
-    z = reshape(z, T*B, :)
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    logprior = reshape(logprior, T, B)
+    T, B, Q = size(z)
+    loss = mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm))
 
+    z = reshape(z, B*(T-1), Q)
     x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
-    logllhood = m.lkhood.log_lkhood_model(x, reshape(x̂, T, B, :))
+    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T-1, B, Q))
+    logllhood = Δt .* logllhood
+    weights = @ignore_derivatives softmax(logllhood, dims=3)
 
-    # Posterior expectation
-    logpost = logprior .+ temperatures .* logllhood
-    loss = sum(logpost[2:end, :, :] - logpost[1:end-1, :, :])
-    return -loss / B, st, seed
+    loss += sum(weights .* logllhood)
+    return -loss / B, seed
 end
 
 function update_model_grid(
@@ -236,9 +231,7 @@ function init_T_KAM(
     loss_fcn = importance_loss
 
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
-    adjust_η = parse(Bool, retrieve(conf, "MALA", "adjust_η"))
-    β = parse(quant, retrieve(conf, "MALA", "η_changerate"))
+    initial_step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
         
@@ -246,13 +239,14 @@ function init_T_KAM(
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, adjust_η=adjust_η, β=β, seed=seed)
+        num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, η_init=initial_step_size, N_unadjusted=N_unadjusted, seed=seed)
         loss_fcn = MALA_loss
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives MALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, adjust_η=adjust_η, β=β, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, η_init=initial_step_size, N_unadjusted=N_unadjusted, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 
@@ -282,7 +276,7 @@ function init_T_KAM(
             p,
             N_t,
             use_MALA,
-            step_size,
+            initial_step_size,
             posterior_fcn,
             loss_fcn
         )
@@ -299,7 +293,6 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η = model.N_t > 1 ? repeat([model.init_η], model.N_t+1) : [model.init_η],
         train_idx = 1
         )
 end

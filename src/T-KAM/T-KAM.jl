@@ -142,18 +142,16 @@ function thermo_loss(
     -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
 
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*T, Q); seed=seed)
+    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
+
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*T, Q); seed=seed)    
     logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T, B, :))
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 
-    TI_loss = sum(weights .* logllhood; dims=3)
-
-    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    MLE_loss = sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :]); dims=2) .- ex_prior
-
-    loss = (TI_loss .+ MLE_loss) / 2
-    return -mean(loss), st, seed
+    TI_loss = sum(weights .* logllhood)
+    MLE_loss = sum(sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :]); dims=2) .- ex_prior)
+    return -((TI_loss + MLE_loss) / 2B), st, seed
 end
 
 function update_model_grid(

@@ -27,9 +27,14 @@ lkhood_models = Dict(
     "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o] + eps)),
 )
 
+lkhood_models_mala = Dict(
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b] := -(x[o, b] - x̂[b, o])^2),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[b] := x[o, b] * log(x̂[b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[b, o] + eps)),
+)
+
 lkhood_models_tempered = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b, s] := -(x[o, b] - x̂[t, s, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b, s] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b] := -(x[o, b] - x̂[t, b, o])^2),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, b, o] + eps)),
 )
 
 resampler_map = Dict(
@@ -189,7 +194,7 @@ function init_KAN_lkhood(
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
 
-    ll_model = lkhood_models[lkhood_model]
+    ll_model = use_MALA ? lkhood_models_mala[lkhood_model] : lkhood_models[lkhood_model]
     ll_model_t = lkhood_models_tempered[lkhood_model]
 
     # KAN functions

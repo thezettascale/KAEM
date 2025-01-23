@@ -144,7 +144,7 @@ function thermo_loss(
     x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
     logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T-1, B, Q))
     logllhood = Δt .* logllhood
-    weights = @ignore_derivatives softmax(logllhood, dims=3)
+    weights = @ignore_derivatives softmax(logllhood, dims=2)
 
     loss += sum(weights .* logllhood)
     return -loss / B, seed

@@ -142,7 +142,7 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
+    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
     @reset st.η_init = st.η_init |> cpu_device()
     output = reshape(z, 1, B, Q)

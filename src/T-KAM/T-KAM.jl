@@ -142,8 +142,8 @@ function thermo_loss(
     -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
 
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*(T-1), Q); seed=seed)
-    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T-1, B, Q))
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*T, Q); seed=seed)
+    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T, B, Q))
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 

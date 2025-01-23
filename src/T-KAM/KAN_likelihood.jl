@@ -194,7 +194,8 @@ function init_KAN_lkhood(
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
 
-    ll_model = use_MALA ? lkhood_models_mala[lkhood_model] : lkhood_models[lkhood_model]
+    # ll_model = use_MALA ? lkhood_models_mala[lkhood_model] : lkhood_models[lkhood_model]
+    ll_model = lkhood_models[lkhood_model]
     ll_model_t = lkhood_models_tempered[lkhood_model]
 
     # KAN functions

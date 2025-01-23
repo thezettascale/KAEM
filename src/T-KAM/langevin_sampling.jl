@@ -12,7 +12,7 @@ using .ebm_mix_prior: log_prior
 using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
-function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity, seed::Int=1)
+function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity, eps::quant=quant(1e-6), seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -31,7 +31,11 @@ function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity,
     # Pre-conditioner
     seed, rng = next_rng(seed)
     ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> quant
-    Σ_AM = ε * inv(sqrtm(Σ)) + (1 - ε) * I
+    Σ_AM = zeros(Q, Q) 
+    for i in 1:Q
+        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
+        println(ε * sqrt(1/Σ[i,i]) + (1 - ε))
+    end
 
     # Momentum
     seed, rng = next_rng(seed)
@@ -157,12 +161,12 @@ function autoMALA_sampler(
 
     function log_posterior(z_i, t_k, seed_i)
         z_i = m.prior.MALA_logitinverse(z_i) # Inverse logit transform
-        J = sum(m.prior.MALA_jacobian(z_i)) # Jacobian correction
+        log_J = sum(m.prior.MALA_jacobian(z_i)) # Jacobian correction
 
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
         ll = m.lkhood.log_lkhood_model(x, x̂)
-        return sum(lp .+ t_k .* ll) + J, seed_i
+        return sum(lp .+ t_k .* ll) + log_J, seed_i
     end
 
     k = 1

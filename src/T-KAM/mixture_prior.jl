@@ -4,7 +4,7 @@ export mix_prior, init_mix_prior, log_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
-using NNlib: softmax, sigmoid_fast
+using NNlib: softmax, sigmoid_fast, sigmoid
 using ChainRules: @ignore_derivatives
 using LogExpFunctions: logsumexp
 
@@ -26,17 +26,17 @@ prior_pdf = Dict(
 )
 
 MALA_logitinverse = Dict(
-    "uniform" => z -> sigmoid_fast(z),
+    "uniform" => z -> sigmoid(z),
     "gaussian" => identity,
 )
 
 MALA_logit = Dict(
-    "uniform" => z -> log.(z ./ (1 .- z)),
+    "uniform" => z -> log.(z ./ (1 .- z) + eps(eltype(z))),
     "gaussian" => identity,
 )
 
 MALA_jacobian = Dict(
-    "uniform" => z -> -log.(z .* (1 .- z)),
+    "uniform" => z -> log.(z .* (1 .- z) + eps(eltype(z))),
     "gaussian" => z -> device(ones(size(z))),
 )
 

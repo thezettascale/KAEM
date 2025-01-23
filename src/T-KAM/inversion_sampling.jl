@@ -157,7 +157,8 @@ function sample_prior(
     end
     replace!(idxs, grid_size => grid_size - 1)
 
-    return interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
+    z = interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
+    return typeof(π_0) == Uniform ? removeZero(z) : z, seed
 end
 
 end

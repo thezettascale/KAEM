@@ -43,14 +43,13 @@ end
 function get_trap_bounds(idxs::AbstractArray{Int}, cdf::AbstractArray{quant})
     """Returns the CDF values bounding each trapezium defined by idxs."""
     Q, N = size(idxs)
-    cdf = hcat(zeros(quant, N, 1, Q), cdf) # Zero prob
 
     cd1 = zeros(quant, N, Q) 
     cd2 = zeros(quant, N, Q) 
     for q in 1:Q
         for n in 1:N
-            cd1[n, q] = cdf[n, idxs[q, n], q]
-            cd2[n, q] = cdf[n, idxs[q, n] + 1, q]
+            cd1[n, q] = cdf[n, idxs[q, n] - 1, q]
+            cd2[n, q] = cdf[n, idxs[q, n], q]
         end
     end
 
@@ -158,7 +157,7 @@ function sample_prior(
     replace!(idxs, grid_size => grid_size - 1)
 
     z, seed = interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
-    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : z
+    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : z # Correct precision issues
     return z, seed
 end
 

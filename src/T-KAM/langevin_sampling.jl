@@ -143,6 +143,8 @@ function autoMALA_sampler(
     """
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z = m.prior.MALA_logit(z) # Logit transform in case of [0,1] prior
+    
     T, B, Q = length(t), size(z)...
     @reset st.η_init = st.η_init |> cpu_device()
     output = reshape(z, 1, B, Q)
@@ -154,10 +156,13 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> quant
 
     function log_posterior(z_i, t_k, seed_i)
+        z_i = m.prior.MALA_logitinverse(z_i) # Inverse logit transform
+        J = sum(m.prior.MALA_jacobian(z_i)) # Jacobian correction
+
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
         ll = m.lkhood.log_lkhood_model(x, x̂)
-        return sum(lp .+ t_k .* ll), seed_i
+        return sum(lp .+ t_k .* ll) + J, seed_i
     end
 
     k = 1
@@ -208,9 +213,9 @@ function autoMALA_sampler(
     @reset st.η_init .= mean_η
 
     m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
-    m.verbose && println("Mean step sizes: ", st.η_init)
+    m.verbose && println("Mean step sizes: ", mean_η)
 
-    return output, st, seed
+    return m.prior.MALA_logitinverse(output), seed
 end
 
 end

@@ -25,6 +25,21 @@ prior_pdf = Dict(
     "gaussian" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
 )
 
+MALA_logitinverse = Dict(
+    "uniform" => z -> sigmoid_fast(z),
+    "gaussian" => identity,
+)
+
+MALA_logit = Dict(
+    "uniform" => z -> log.(z ./ (1 .- z)),
+    "gaussian" => identity,
+)
+
+MALA_jacobian = Dict(
+    "uniform" => z -> -log.(z .* (1 .- z)),
+    "gaussian" => z -> device(ones(size(z))),
+)
+
 struct mix_prior <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple
     depth::Int
@@ -32,6 +47,9 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_pdf::Function
     sample_z::Function
     contrastive_div::Bool
+    MALA_logitinverse::Function
+    MALA_logit::Function
+    MALA_jacobian::Function
 end
 
 function log_partition_function(
@@ -167,7 +185,7 @@ function init_mix_prior(
         @reset functions[Symbol("$i")] = func
     end
 
-    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence)
+    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence, MALA_logitinverse[prior_type], MALA_logit[prior_type], MALA_jacobian[prior_type])
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)

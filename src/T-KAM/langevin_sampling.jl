@@ -38,7 +38,7 @@ function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
 
     # Momentum
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), cholesky(Σ_AM).L), size(z, 1))'
+    p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), inv(Σ_AM)), size(z, 1))'
     return device(p), device(Σ_AM), seed
 end
 
@@ -86,7 +86,7 @@ function reversibility_check(
     M::AbstractArray{quant},
     η::quant,
     logpos::Function;
-    tol::quant=quant(1e-4),
+    tol::quant=quant(1e-6),
     seed::Int=1
     )
     """

@@ -87,6 +87,7 @@ function autoMALA_sampler(
     t::AbstractArray{quant}=[quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
+    Δη::quant=quant(2),
     seed::Int=1,
     )
     """
@@ -149,11 +150,11 @@ function autoMALA_sampler(
                 burn_in += 1
             else
                 while !(log_a < log_r_low < log_b) && !(log_a < log_r_high < log_b)
-                    η_low, η_high = η_low / 2, η_high * 2
+                    η_low, η_high = η_low / Δη, η_high * Δη
                     proposal_low, log_r_low, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_low, logpos; seed=seed)
                     proposal_high, log_r_high, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_high, logpos; seed=seed)
                 end
-                η = (log_a < log_r_low < log_b) ? η_low : η_high / 2
+                η = (log_a < log_r_low < log_b) ? η_low : η_high / Δη
                 proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η, logpos; seed=seed)
 
                 reversibility, seed = reversibility_check(z, proposal, η, logpos; seed=seed)

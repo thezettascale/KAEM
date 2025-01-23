@@ -53,7 +53,8 @@ end
 function reversibility_check(
     z::AbstractArray{quant},
     ẑ::AbstractArray{quant},
-    η::quant;
+    η::quant,
+    logpos::Function;
     tol::quant=quant(1e-6),
     seed::Int=1
     )
@@ -136,7 +137,7 @@ function autoMALA_sampler(
         for i in 1:N
             η = η_init
             momentum = noise[i, k, :, :] .* sqrt(2 * η)
-            log_a, log_b = ratio_bounds[i, k, :]
+            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             proposal, log_r, seed = leapfrop_proposal(z, momentum, η, logpos; seed=seed)
 
@@ -151,7 +152,7 @@ function autoMALA_sampler(
                 end
                 η = geq_bool ? η / 2 : η
 
-                reversibility, seed = reversibility_check(z, proposal, η; seed=seed)
+                reversibility, seed = reversibility_check(z, proposal, η, logpos; seed=seed)
                 if reversibility && (log_u[i, k] < log_r)
                     z = proposal
                     num_acceptances["t_$k"] += 1

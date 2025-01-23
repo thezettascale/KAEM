@@ -147,7 +147,6 @@ function thermo_loss(
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 
-    
     TI_loss = sum(weights .* logllhood) / B
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
@@ -246,7 +245,6 @@ function init_T_KAM(
     # Importance sampling or MALA
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
-        @reset prior_model.contrastive_div = true
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = MALA_loss
@@ -255,7 +253,6 @@ function init_T_KAM(
     p = [quant(1)]
     if N_t > 1
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
-        @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 
         # Cyclic p schedule

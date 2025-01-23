@@ -181,7 +181,7 @@ function autoMALA_sampler(
                 burn_in += 1
             else
                 geq_bool = log_r >= log_b
-                while (log_a < log_r < log_b) && all(η_min < η < η_max)
+                while (log_a < log_r < log_b) && (η_min < η < η_max)
                     η = geq_bool ? η * Δη : η / Δη
                     proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end

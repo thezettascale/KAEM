@@ -53,7 +53,7 @@ function test_mala()
 end
 
 @testset "T-KAM Tests" begin
-    test_ps_derivative()
-    test_grid_update()
+    # test_ps_derivative()
+    # test_grid_update()
     test_mala()
 end

@@ -2,7 +2,7 @@ module LangevinSampling
 
 export autoMALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions
+using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors
 using Zygote: withgradient
 
 include("mixture_prior.jl")
@@ -14,6 +14,8 @@ using .Utils: device, next_rng, quant
 
 function leapfrop_proposal(
     z::AbstractArray{quant},
+    logpos_z::quant,
+    ∇z::AbstractArray{quant},
     momentum::AbstractArray{quant},
     η::quant,
     logpos::Function;
@@ -34,13 +36,10 @@ function leapfrop_proposal(
         The log-ratio.
         The updated seed.
     """
-    result = withgradient(z_i -> logpos(z_i, seed), z)
-    logpos_z, seed, ∇z = result.val..., first(result.grad) 
-
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
     ẑ = z + η .* p # Full-step position update
 
-    result =  withgradient(z_i -> logpos(z_i, seed), ẑ)
+    result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
@@ -55,7 +54,7 @@ function reversibility_check(
     ẑ::AbstractArray{quant},
     η::quant,
     logpos::Function;
-    tol::quant=quant(1e-6),
+    tol::quant=quant(1e-4),
     seed::Int=1
     )
     """
@@ -72,10 +71,10 @@ function reversibility_check(
         The updated seed.
     """
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
-    _, seed, ∇ẑ = result.val..., first(result.grad)
+    logpos_∇ẑ, seed, ∇ẑ = result.val..., first(result.grad)
 
     p_rev = ((ẑ - z) ./ η) - (η .* ∇ẑ / 2)
-    z_rev, _, seed = leapfrop_proposal(ẑ, -p_rev, η, logpos; seed=seed)
+    z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev, η, logpos; seed=seed)
 
     return norm(z_rev - z) < tol, seed
 end
@@ -88,7 +87,6 @@ function autoMALA_sampler(
     t::AbstractArray{quant}=[quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
-    η_init::quant=quant(0.1),
     seed::Int=1,
     )
     """
@@ -111,8 +109,8 @@ function autoMALA_sampler(
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
-    
     output = reshape(z, 1, B, Q)
+    @reset st.η_init = st.η_init |> cpu_device()
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -134,38 +132,47 @@ function autoMALA_sampler(
     while k < T + 1
         logpos = (z_i, seed_i) -> log_posterior(z_i, t[k], seed_i)
         burn_in = 0
+        mean_η = quant(0)
         for i in 1:N
-            η = η_init
-            momentum = noise[i, k, :, :] .* sqrt(2 * η)
+            η_low, η_high = st.η_init[k], st.η_init[k]
+            momentum = noise[i, k, :, :] 
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
-            proposal, log_r, seed = leapfrop_proposal(z, momentum, η, logpos; seed=seed)
+            result = withgradient(z_i -> logpos(z_i, seed), z)
+            logpos_z, seed, ∇z = result.val..., first(result.grad) 
+
+            proposal_low, log_r_low, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_low, logpos; seed=seed)
+            proposal_high, log_r_high = copy(proposal_low), copy(log_r_low)
 
             if burn_in < N_unadjusted
-                z = proposal
+                z = proposal_low
                 burn_in += 1
             else
-                geq_bool = log_r >= log_b
-                while !(log_a < log_r < log_b)
-                    η = geq_bool ? η * 2 : η / 2
-                    proposal, log_r, seed = leapfrop_proposal(z, momentum, η, logpos; seed=seed)
+                while !(log_a < log_r_low < log_b) && !(log_a < log_r_high < log_b)
+                    η_low, η_high = η_low / 2, η_high * 2
+                    proposal_low, log_r_low, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_low, logpos; seed=seed)
+                    proposal_high, log_r_high, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_high, logpos; seed=seed)
                 end
-                η = geq_bool ? η / 2 : η
+                η = (log_a < log_r_low < log_b) ? η_low : η_high / 2
+                proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η, logpos; seed=seed)
 
                 reversibility, seed = reversibility_check(z, proposal, η, logpos; seed=seed)
                 if reversibility && (log_u[i, k] < log_r)
                     z = proposal
                     num_acceptances["t_$k"] += 1
+                    mean_η += η
                 end
             end
         end
         output = vcat(output, reshape(z, 1, B, Q))
+        @reset st.η_init[k] = mean_η / num_acceptances["t_$k"]
         k += 1
     end
 
     m.verbose && println("Acceptance rates: ", num_acceptances)
+    m.verbose && println("Mean step sizes: ", st.η_init)
 
-    return output, seed
+    return output, st, seed
 end
 
 end

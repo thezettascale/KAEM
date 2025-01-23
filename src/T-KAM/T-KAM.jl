@@ -34,7 +34,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     p::AbstractArray{quant}
     N_t::Int
     MALA::Bool
-    init_η::quant
+    η_init::quant
     posterior_sample::Function
     loss_fcn::Function
 end
@@ -95,7 +95,7 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     loss_prior = loss_prior .- ex_prior
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-    return -mean(loss_prior .+ loss_llhood), seed
+    return -mean(loss_prior .+ loss_llhood), st, seed
 end
 
 function MALA_loss(
@@ -108,7 +108,7 @@ function MALA_loss(
     """MLE loss with MALA."""
 
     # MALA sampling
-    z, seed = m.posterior_sample(m, x, ps, st, seed)
+    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     ex_prior = (m.prior.contrastive_div ? 
     mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
@@ -119,7 +119,7 @@ function MALA_loss(
     logllhood = m.lkhood.log_lkhood_model(x, x̂)
 
     # Expected posterior
-    return mean(logprior .+ logllhood) - ex_prior, seed
+    return mean(logprior .+ logllhood) - ex_prior, st, seed
 end 
 
 function thermo_loss(
@@ -133,21 +133,27 @@ function thermo_loss(
 
     # Schedule temperatures, and Parallel Tempering
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, seed, st = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
+    z, st, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
     temperatures = device(temperatures)
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     T, B, Q = size(z)
-    loss = mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm))
+    ex_prior = (m.prior.contrastive_div ? 
+    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    )
 
-    z = reshape(z, B*(T-1), Q)
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*(T-1), Q); seed=seed)
     logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T-1, B, Q))
     logllhood = Δt .* logllhood
-    weights = @ignore_derivatives softmax(logllhood, dims=2)
+    weights = @ignore_derivatives softmax(logllhood, dims=3)
 
-    loss += sum(weights .* logllhood)
-    return -loss / B, seed
+    
+    TI_loss = sum(weights .* logllhood) / B
+
+    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
+    MLE_loss = sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :] .- ex_prior)) / B
+
+    return -(TI_loss + MLE_loss) / 2, st, seed
 end
 
 function update_model_grid(
@@ -240,13 +246,13 @@ function init_T_KAM(
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, η_init=initial_step_size, N_unadjusted=N_unadjusted, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, seed=seed)
         loss_fcn = MALA_loss
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, η_init=initial_step_size, N_unadjusted=N_unadjusted, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 
@@ -293,6 +299,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t+1) : [model.η_init],
         train_idx = 1
         )
 end

@@ -241,19 +241,20 @@ function init_T_KAM(
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
     Δη = parse(quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
+    η_minmax = parse.(quant, retrieve(conf, "MALA", "step_size_bounds"))
         
     # Importance sampling or MALA
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
     if use_MALA && !(N_t > 1) 
         @reset prior_model.contrastive_div = true
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = MALA_loss
     end
     
     p = [quant(1)]
     if N_t > 1
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         @reset prior_model.contrastive_div = true
         loss_fcn = thermo_loss
 

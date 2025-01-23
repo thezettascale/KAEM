@@ -2,7 +2,7 @@ module LangevinSampling
 
 export autoMALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors
+using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: withgradient
 
 include("mixture_prior.jl")
@@ -12,11 +12,42 @@ using .ebm_mix_prior: log_prior
 using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
+function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
+    """
+    Sample momentum for the autoMALA sampler, (with pre-conditioner).
+
+    Args:
+        z: The current position.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The momentum.
+        The positive-definite mass matrix.
+        The updated seed.
+    """
+    z = z |> cpu_device()
+    Σ, Q = cov(z), size(z, 2)
+    
+    # Pre-conditioner
+    seed, rng = next_rng(seed)
+    ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> quant
+    Σ_AM = zeros(Q, Q) 
+    for i in 1:Q
+        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
+    end
+
+    # Momentum
+    seed, rng = next_rng(seed)
+    p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), cholesky(Σ_AM).L), size(z, 1))'
+    return device(p), device(Σ_AM), seed
+end
+
 function leapfrop_proposal(
     z::AbstractArray{quant},
     logpos_z::quant,
     ∇z::AbstractArray{quant},
     momentum::AbstractArray{quant},
+    M::AbstractArray{quant},
     η::quant,
     logpos::Function;
     seed::Int=1
@@ -37,7 +68,7 @@ function leapfrop_proposal(
         The updated seed.
     """
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
-    ẑ = z + η .* p # Full-step position update
+    ẑ = z + (η .* p*M) # Full-step position update
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
@@ -52,6 +83,7 @@ end
 function reversibility_check(
     z::AbstractArray{quant},
     ẑ::AbstractArray{quant},
+    M::AbstractArray{quant},
     η::quant,
     logpos::Function;
     tol::quant=quant(1e-4),
@@ -73,8 +105,8 @@ function reversibility_check(
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_∇ẑ, seed, ∇ẑ = result.val..., first(result.grad)
 
-    p_rev = ((ẑ - z) ./ η) - (η .* ∇ẑ / 2)
-    z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev, η, logpos; seed=seed)
+    p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
+    z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
 
     return norm(z_rev - z) < tol, seed
 end
@@ -88,6 +120,8 @@ function autoMALA_sampler(
     N::Int=20,
     N_unadjusted::Int=1,
     Δη::quant=quant(2),
+    η_min::quant=quant(1e-5),
+    η_max::quant=quant(1),
     seed::Int=1,
     )
     """
@@ -110,12 +144,10 @@ function autoMALA_sampler(
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, size(x, 2), ps.ebm, st.ebm, seed)
     T, B, Q = length(t), size(z)...
-    output = reshape(z, 1, B, Q)
     @reset st.η_init = st.η_init |> cpu_device()
+    output = reshape(z, 1, B, Q)
 
     # Avoid looped stochasticity
-    seed, rng = next_rng(seed)
-    noise = device(randn(quant, N, T, size(z)...)) |> device
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, quant, N, T))  
     seed, rng = next_rng(seed)
@@ -129,46 +161,51 @@ function autoMALA_sampler(
     end
 
     k = 1
-    num_acceptances = Dict("t_$i" => 0 for i in 1:T)
+    num_acceptances = zeros(Int, T) 
+    mean_η = zeros(quant, T) 
     while k < T + 1
         logpos = (z_i, seed_i) -> log_posterior(z_i, t[k], seed_i)
         burn_in = 0
-        mean_η = quant(0)
         for i in 1:N
-            η_low, η_high = st.η_init[k], st.η_init[k]
-            momentum = noise[i, k, :, :] 
+            η = st.η_init[k]
+            momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             result = withgradient(z_i -> logpos(z_i, seed), z)
             logpos_z, seed, ∇z = result.val..., first(result.grad) 
 
-            proposal_low, log_r_low, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_low, logpos; seed=seed)
-            proposal_high, log_r_high = copy(proposal_low), copy(log_r_low)
+            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
 
             if burn_in < N_unadjusted
-                z = proposal_low
+                z .= proposal
                 burn_in += 1
             else
-                while !(log_a < log_r_low < log_b) && !(log_a < log_r_high < log_b)
-                    η_low, η_high = η_low / Δη, η_high * Δη
-                    proposal_low, log_r_low, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_low, logpos; seed=seed)
-                    proposal_high, log_r_high, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η_high, logpos; seed=seed)
+                geq_bool = log_r >= log_b
+                while (log_a < log_r < log_b) && all(η_min < η < η_max)
+                    η = geq_bool ? η * Δη : η / Δη
+                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end
-                η = (log_a < log_r_low < log_b) ? η_low : η_high / Δη
-                proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, η, logpos; seed=seed)
+                η = geq_bool ? η / 2 : η
 
-                reversibility, seed = reversibility_check(z, proposal, η, logpos; seed=seed)
+                reversibility, seed = reversibility_check(z, proposal, M, η, logpos; seed=seed)
                 if reversibility && (log_u[i, k] < log_r)
-                    z = proposal
-                    num_acceptances["t_$k"] += 1
-                    mean_η += η
+                    z .= proposal
+                    num_acceptances[k] += 1
+                    mean_η[k] += η
                 end
             end
         end
         output = vcat(output, reshape(z, 1, B, Q))
-        @reset st.η_init[k] = mean_η / num_acceptances["t_$k"]
         k += 1
     end
+
+            
+    # Update step size for next training iteration
+    mean_η = mean_η ./ num_acceptances
+    for k in 1:T
+        mean_η[k] = ifelse(isnan(mean_η[k]), st.η_init[k], mean_η[k])
+    end
+    @reset st.η_init .= mean_η
 
     m.verbose && println("Acceptance rates: ", num_acceptances)
     m.verbose && println("Mean step sizes: ", st.η_init)

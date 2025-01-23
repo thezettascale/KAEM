@@ -33,8 +33,8 @@ lkhood_models_mala = Dict(
 )
 
 lkhood_models_tempered = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b] := -(x[o, b] - x̂[t, b, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, b, o] + eps)),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b, s] := -(x[o, b] - x̂[t, s, o])^2),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
 )
 
 resampler_map = Dict(

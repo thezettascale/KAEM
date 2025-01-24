@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler
+export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_likelihood
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -23,18 +23,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o] + eps)),
-)
-
-lkhood_models_mala = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b] := -(x[o, b] - x̂[b, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b] := x[o, b] * log(x̂[b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[b, o] + eps)),
-)
-
-lkhood_models_tempered = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b, s] := -(x[o, b] - x̂[t, s, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
+    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
 )
 
 resampler_map = Dict(
@@ -50,7 +40,6 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_ε::quant
     σ_llhood::quant
     log_lkhood_model::Function
-    log_lkhood_model_tempered::Function
     output_activation::Function
     resample_z::Function
 end
@@ -59,9 +48,7 @@ function generate_from_z(
     lkhood, 
     ps, 
     st, 
-    z::AbstractArray{quant};
-    seed::Int=1,
-    noise::Bool=true
+    z::AbstractArray{quant}    
     )
     """
     Generate data from the likelihood model.
@@ -85,12 +72,43 @@ function generate_from_z(
         z = fwd(lkhood.Φ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = dropdims(sum(z, dims=2); dims=2)
     end
-    
+
+    return z
+end
+
+function log_likelihood(
+    lkhood, 
+    ps, 
+    st, 
+    x::AbstractArray{quant}, 
+    z::AbstractArray{quant};
+    seed::Int=1
+    )
+    """
+    Evaluate the unnormalized log-likelihood of the KAN generator.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        tempered: Whether to use tempered likelihood.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The unnormalized log-likelihood.
+        The updated seed.
+    """
+    S, Q, B = size(z)..., size(x, 2)
+
+    x̂ = generate_from_z(lkhood, ps, st, z)
+
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, quant, size(z)) |> device
-    ε = noise ? ε : zeros(quant, size(z)) |> device
-    return lkhood.output_activation(z + ε), seed
+    ε = lkhood.σ_ε * randn(rng, quant, S, lkhood.out_size, B) |> device
+    x̂ = lkhood.output_activation(x̂ .+ ε)
+    return lkhood.log_lkhood_model(x, x̂), seed
 end
 
 function importance_resampler(
@@ -191,12 +209,8 @@ function init_KAN_lkhood(
         η_trainable=η_trainable,
     )
 
-    use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-
-    # ll_model = use_MALA ? lkhood_models_mala[lkhood_model] : lkhood_models[lkhood_model]
     ll_model = lkhood_models[lkhood_model]
-    ll_model_t = lkhood_models_tempered[lkhood_model]
 
     # KAN functions
     Φ_functions = NamedTuple() # Expert functions
@@ -207,7 +221,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, ll_model, ll_model_t, output_activation_mapping[output_act], resample_fcn)
+    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

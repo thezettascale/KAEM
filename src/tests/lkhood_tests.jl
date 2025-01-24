@@ -29,10 +29,28 @@ function test_generate()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
-    x, seed = generate_from_z(lkhood, ps.gen, st.gen, z)
+    x = generate_from_z(lkhood, ps.gen, st.gen, z)
     @test size(x) == (b_size, out_dim)
+end
+
+function test_logllhood()
+    Random.seed!(42)
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    prior = init_mix_prior(conf; prior_seed=1)
+    ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
+
+    ps = (ebm=ebm_ps, gen=gen_ps) |> device
+    st = (ebm=ebm_st, gen=gen_st) |> device
+
+    x = randn(Float32, out_dim, b_size) |> device
+    z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
+    logllhood, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
+    @test size(logllhood) == (b_size,b_size)
 end
 
 @testset "KAN Likelihood Tests" begin
     test_generate()
+    test_logllhood()
 end

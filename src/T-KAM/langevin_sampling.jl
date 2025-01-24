@@ -9,7 +9,7 @@ include("mixture_prior.jl")
 include("KAN_likelihood.jl")
 include("../utils.jl")
 using .ebm_mix_prior: log_prior
-using .KAN_likelihood: generate_from_z
+using .KAN_likelihood: log_likelihood
 using .Utils: device, next_rng, quant
 
 function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
@@ -157,8 +157,7 @@ function autoMALA_sampler(
 
     function log_posterior(z_i, t_k, seed_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
-        x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
-        ll = m.lkhood.log_lkhood_model(x, x̂)
+        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i)
         return sum(lp .+ t_k .* ll), seed_i
     end
 

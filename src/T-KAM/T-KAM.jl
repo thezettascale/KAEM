@@ -61,8 +61,8 @@ function generate_batch(
         The updated seed.
     """
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
-    x̂, seed = generate_from_z(model.lkhood, ps.gen, st.gen, z; seed=seed, noise=false)
-    return x̂, seed
+    x̂ = generate_from_z(model.lkhood, ps.gen, st.gen, z)
+    return model.lkhood.output_activation(x̂), seed
 end
 
 function importance_loss(
@@ -81,8 +81,7 @@ function importance_loss(
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z; seed=seed)
-    logllhood = m.lkhood.log_lkhood_model(x, x̂)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
     # Weights and resampling
     weights = @ignore_derivatives softmax(logllhood, dims=2)
@@ -115,11 +114,10 @@ function MALA_loss(
     
     # Log-dists
     logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :]; seed=seed)
-    logllhood = m.lkhood.log_lkhood_model(x, x̂)
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed)
 
     # Expected posterior
-    return -mean(mean(logprior .+ logllhood; dims=2) - ex_prior), st, seed
+    return -mean(mean(logprior .+ logllhood; dims=2) .- ex_prior), st, seed
 end 
 
 function thermo_loss(
@@ -144,9 +142,8 @@ function thermo_loss(
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, S*T, Q); seed=seed)    
-    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T, S, :))
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed)
+    logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 

@@ -11,7 +11,7 @@ using .Utils: removeNaN, device, quant
 
 method = get(ENV, "method", "B-spline") 
 
-function extend_grid(grid; k_extend=0)
+function extend_grid(grid::AbstractArray{quant}; k_extend::Int64=0)
     """
     Extend the grid of knots to include boundary knots.
 
@@ -32,7 +32,12 @@ function extend_grid(grid; k_extend=0)
     return grid
 end
 
-function B_spline_basis(x, grid; degree::Int64, σ=nothing)
+function B_spline_basis(
+    x::AbstractArray{quant},
+    grid::AbstractArray{quant};
+    degree::Int64=3, 
+    σ::quant=quant(1)
+    )
     """
     Compute the B-spline basis functions for a batch of points x and a grid of knots.
 
@@ -83,7 +88,12 @@ function B_spline_basis(x, grid; degree::Int64, σ=nothing)
     return B
 end
 
-function RBF_basis(x, grid; degree=nothing, σ=quant(1))
+function RBF_basis(
+    x::AbstractArray{quant},
+    grid::AbstractArray{quant};
+    degree::Int64=3, 
+    σ::quant=quant(1)
+    )
     """
     Compute the RBF basis functions for a batch of points x and a grid of knots.
 
@@ -110,7 +120,12 @@ function RBF_basis(x, grid; degree=nothing, σ=quant(1))
     return B
 end
 
-function RSWAF_basis(x, grid; degree=nothing, σ=quant(1))
+function RSWAF_basis(
+    x::AbstractArray{quant},
+    grid::AbstractArray{quant};
+    degree::Int64=3, 
+    σ::quant=quant(1)
+    )
     """
     Compute the RSWAF basis functions for a batch of points x and a grid of knots.
         Be careful of vanishing gradients when using this in a deep network.
@@ -141,7 +156,14 @@ function RSWAF_basis(x, grid; degree=nothing, σ=quant(1))
     return B
 end
 
-function coef2curve(x_eval, grid, coef; k::Int64, scale=quant(1), basis_function=nothing)
+function coef2curve(
+    x_eval::AbstractArray{quant},
+    grid::AbstractArray{quant},
+    coef::AbstractArray{quant};
+    k::Int64=3, 
+    scale::quant=quant(1), 
+    basis_function::Function=B_spline_basis
+    )
     """
     Compute the B-spline curves from the B-spline coefficients.
 
@@ -158,7 +180,15 @@ function coef2curve(x_eval, grid, coef; k::Int64, scale=quant(1), basis_function
     return @tullio y_eval[i, j, l] := splines[i, j, p] * coef[j, l, p]
 end
 
-function curve2coef(x_eval, y_eval, grid; k::Int64, scale=quant(1), ε=quant(1e-4), basis_function=B_spline_basis)
+function curve2coef(
+    x_eval::AbstractArray{quant},
+    y_eval::AbstractArray{quant},
+    grid::AbstractArray{quant};
+    k::Int64=3,
+    scale::quant=quant(1), 
+    ε::quant=quant(1e-4), 
+    basis_function::Function=B_spline_basis
+    )
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs.

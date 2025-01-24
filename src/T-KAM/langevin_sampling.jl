@@ -52,7 +52,6 @@ function leapfrop_proposal(
     M::AbstractArray{quant},
     η::quant,
     logpos::Function;
-    uniform_prior::Bool=false,
     seed::Int=1
     )
     """
@@ -72,12 +71,6 @@ function leapfrop_proposal(
     """
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
     ẑ = z + (η .* p*M) # Full-step position update
-
-    # Reflect within bounds if posterior domain is [0, 1]
-    if uniform_prior
-        ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
-        ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
-    end
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
@@ -151,9 +144,7 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    uniform_prior = isa(m.prior.π_0, Uniform)
-    
+    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)    
     T, B, Q = length(t), size(z)...
     @reset st.η_init = st.η_init |> cpu_device()
     output = reshape(z, 1, B, Q)
@@ -185,7 +176,7 @@ function autoMALA_sampler(
             result = withgradient(z_i -> logpos(z_i, seed), z)
             logpos_z, seed, ∇z = result.val..., first(result.grad) 
 
-            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; uniform_prior=uniform_prior, seed=seed)
+            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
 
             if burn_in < N_unadjusted
                 z .= proposal
@@ -194,7 +185,7 @@ function autoMALA_sampler(
                 geq_bool = log_r >= log_b
                 while (log_a < log_r < log_b) && (η_min <= η <= η_max)
                     η = geq_bool ? η * Δη : η / Δη
-                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; uniform_prior=uniform_prior, seed=seed)
+                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end
                 η = geq_bool ? η / 2 : η
 

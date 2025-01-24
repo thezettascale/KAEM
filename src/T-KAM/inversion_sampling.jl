@@ -11,7 +11,13 @@ include("univariate_functions.jl")
 using .Utils: device, next_rng, removeZero, quant
 using .univariate_functions: fwd
 
-function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::Int, p_size::Int; seed::Int=1)
+function choose_component(
+    α::AbstractArray{quant}, 
+    num_samples::Int, 
+    q_size::Int, 
+    p_size::Int; 
+    seed::Int=1
+    )
     """
     Creates a one-hot mask for each mixture model, q, to select one component, p.
     
@@ -26,7 +32,7 @@ function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::In
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0, 1), q_size, num_samples) 
+    rand_vals = rand(rng, quant, q_size, num_samples) 
     α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
 
     # Find the index of the first cdf value greater than the random value
@@ -97,7 +103,7 @@ function sample_prior(
     cdf = cat(zeros(num_samples, 1, q_size), cdf, dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0, 1), num_samples, q_size) .|> quant
+    rand_vals = rand(rng, quant, num_samples, q_size) 
     
     z = Array{quant}(undef, num_samples, q_size)
     Threads.@threads for b in 1:num_samples
@@ -115,7 +121,6 @@ function sample_prior(
         end
     end
 
-    println("minmax: ", maximum(z), " ", minimum(z))
     return device(z), seed
 end
 

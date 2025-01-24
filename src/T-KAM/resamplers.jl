@@ -8,7 +8,13 @@ using NNlib: softmax
 include("../utils.jl")
 using .Utils: next_rng, quant
 
-function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
+function residual_resampler(
+    weights::AbstractArray{quant}, 
+    ESS_bool::AbstractArray{Bool}, 
+    B::Int, 
+    N::Int; 
+    seed::Int=1
+    )
     """
     Residual resampling for weight filtering.
 
@@ -61,7 +67,13 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
     return idxs, seed
 end
 
-function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
+function systematic_resampler(
+    weights::AbstractArray{quant}, 
+    ESS_bool::AbstractArray{Bool}, 
+    B::Int, 
+    N::Int;
+    seed::Int=1
+    )
     """
     Systematic resampling for weight filtering.
 
@@ -95,7 +107,13 @@ function systematic_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractA
     return idxs, seed
 end
 
-function stratified_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArray{Bool}, B::Int, N::Int; seed::Int=1)
+function stratified_resampler(
+    weights::AbstractArray{quant}, 
+    ESS_bool::AbstractArray{Bool}, 
+    B::Int, 
+    N::Int; 
+    seed::Int=1
+    )
     """
     Systematic resampling for weight filtering.
 

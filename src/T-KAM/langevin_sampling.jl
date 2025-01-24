@@ -52,6 +52,7 @@ function leapfrop_proposal(
     M::AbstractArray{quant},
     η::quant,
     logpos::Function;
+    uniform_prior::Bool=false,
     seed::Int=1
     )
     """
@@ -71,6 +72,12 @@ function leapfrop_proposal(
     """
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
     ẑ = z + (η .* p*M) # Full-step position update
+
+    # Apply reflective boundary conditions, (which has a Jacobian of 1, so no need to adjust the log-ratio)
+    if uniform_prior
+        ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
+        ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
+    end
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)

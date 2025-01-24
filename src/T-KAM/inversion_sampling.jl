@@ -26,7 +26,7 @@ function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::In
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), q_size, num_samples) 
+    rand_vals = rand(rng, Uniform(0, 1), q_size, num_samples) 
     α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
 
     # Find the index of the first cdf value greater than the random value
@@ -79,31 +79,35 @@ function sample_prior(
     Δg = f_grid[2:end, :] - f_grid[1:end-1, :] 
     π_grid = prior.π_pdf(f_grid)
     grid_size = size(f_grid, 1)
+
+    # Energy function of each component, q -> p
     for i in 1:prior.depth
         f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
         f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : dropdims(sum(f_grid, dims=2); dims=2)
     end
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
+
+    # Filter out components
     @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
-    trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
+    trapz = (permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
     cdf = cumsum(trapz, dims=2) 
     cdf = cdf ./ cdf[:, end:end, :] |> cpu_device() # Normalization
-    cdf = cat(zeros(num_samples, 1, q_size), cdf, dims=2) # Add 0 to start of cdf
+    cdf = cat(zeros(num_samples, 1, q_size), cdf, dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) 
+    rand_vals = rand(rng, Uniform(0, 1), num_samples, q_size) .|> quant
     
     z = Array{quant}(undef, num_samples, q_size)
     Threads.@threads for b in 1:num_samples
         for q in 1:q_size
-            # First trapezium where CDF > rand_val
+            # First trapezium where CDF >= rand_val
             rv = rand_vals[b, q]
-            idx = searchsortedfirst(cdf[b, :, q], rv)
+            idx = searchsortedfirst(cdf[b, :, q], rv) # Index of upper trapezium bound
 
             # Trapezium bounds
-            z1, z2 = grid[idx-1, q], grid[idx, q]
+            z1, z2 = grid[idx-1, q], grid[idx, q] 
             cd1, cd2 = cdf[b, idx-1, q], cdf[b, idx, q] 
 
             # Linear interpolation
@@ -111,8 +115,8 @@ function sample_prior(
         end
     end
 
-    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : device(z) # Correct precision issues
-    return z, seed
+    println("minmax: ", maximum(z), " ", minimum(z))
+    return device(z), seed
 end
 
 end

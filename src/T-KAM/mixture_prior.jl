@@ -22,7 +22,7 @@ prior_distributions = Dict(
 
 prior_pdf = Dict(
     "uniform" => z -> quant.(0 .<= z .<= 1) |> device,
-    "gaussian" => z -> 1 ./ sqrt(2π) .* exp.(-z.^2 ./ 2),
+    "gaussian" => z -> quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
@@ -62,7 +62,7 @@ function log_partition_function(
     end
     grid = reshape(grid, grid_size, q_size, size(grid, 2))
     grid = exp.(grid) .* π_grid
-    trapz = 5f-1 .* Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :])
+    trapz =  Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :]) ./ 2
     return log.(sum(trapz, dims=1) .+ eps(eltype(trapz)))
 end
 

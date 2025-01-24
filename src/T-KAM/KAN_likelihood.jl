@@ -24,17 +24,17 @@ output_activation_mapping = Dict(
 
 lkhood_models = Dict(
     "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o] + eps)),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o] + eps)),
 )
 
 lkhood_models_mala = Dict(
     "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b] := -(x[o, b] - x̂[b, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[b] := x[o, b] * log(x̂[b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[b, o] + eps)),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b] := x[o, b] * log(x̂[b, o] + eps) + (1 - x[o, b]) * log(1 - x̂[b, o] + eps)),
 )
 
 lkhood_models_tempered = Dict(
     "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[t, b, s] := -(x[o, b] - x̂[t, s, o])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=quant(1e-6)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
+    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[t, b] := x[o, b] * log(x̂[t, s, o] + eps) + (1 - x[o, b]) * log(1 - x̂[t, s, o] + eps)),
 )
 
 resampler_map = Dict(

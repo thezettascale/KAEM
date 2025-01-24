@@ -25,8 +25,7 @@ function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
         The positive-definite mass matrix.
         The updated seed.
     """
-    z = z |> cpu_device()
-    Σ, Q = cov(z), size(z, 2)
+    Σ, Q = cov(cpu_device()(z)), size(z, 2)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
@@ -57,7 +56,7 @@ function leapfrop_proposal(
     seed::Int=1
     )
     """
-    Generate a proposal using the leapfrog method.
+    Generate a proposal.
 
     Args:
         z: The current position.
@@ -77,7 +76,7 @@ function leapfrop_proposal(
     # Reflect within bounds if posterior domain is [0, 1]
     if uniform_prior
         ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
-        ẑ = ẑ .% 1
+        ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
@@ -96,7 +95,7 @@ function reversibility_check(
     M::AbstractArray{quant},
     η::quant,
     logpos::Function;
-    tol::quant=quant(1e-6),
+    tol::quant=quant(1e-4),
     seed::Int=1
     )
     """

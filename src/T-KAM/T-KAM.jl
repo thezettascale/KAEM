@@ -119,7 +119,7 @@ function MALA_loss(
     logllhood = m.lkhood.log_lkhood_model(x, x̂)
 
     # Expected posterior
-    return mean(logprior .+ logllhood) - ex_prior, st, seed
+    return -mean(logprior .+ logllhood) - ex_prior, st, seed
 end 
 
 function thermo_loss(

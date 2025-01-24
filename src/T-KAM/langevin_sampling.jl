@@ -74,10 +74,10 @@ function leapfrop_proposal(
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
     ẑ = z + (η .* p*M) # Full-step position update
 
-    # Reflect within bounds if uniform prior
+    # Reflect within bounds if posterior domain is [0, 1]
     if uniform_prior
         ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
-        ẑ = ifelse.(ẑ .> 1, 2 - ẑ, ẑ) |> device
+        ẑ = ẑ .% 1
     end
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)

@@ -22,7 +22,7 @@ function residual_resampler(weights::AbstractArray{quant}, ESS_bool::AbstractArr
         - The updated seed.
     """
     # Number times to replicate each sample, (convert to FP64 because stability issues)
-    integer_counts = floor.(Float64.(weights .* N)) .|> Int
+    integer_counts = floor.(weights .* N) .|> Int
     num_remaining = dropdims(N .- sum(integer_counts, dims=2); dims=2)
 
     # Residual weights to resample from

@@ -120,12 +120,12 @@ function importance_resampler(
 
     # Check effective sample size
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
-    ESS_bool = ESS .> ESS_threshold*N
+    ESS_bool = ESS .< ESS_threshold*N
     
     # Only resample when needed 
-    verbose && (!all(ESS_bool) && println("Resampling!"))
-    !all(ESS_bool) && return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed=seed)
-    return repeat((1:N)', B, 1), seed
+    verbose && (any(ESS_bool) && println("Resampling!"))
+    any(ESS_bool) && return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed=seed)
+    return repeat(collect(1:N)', B, 1), seed
 end
 
 function init_KAN_lkhood(

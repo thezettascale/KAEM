@@ -43,23 +43,22 @@ function residual_resampler(
     Threads.@threads for b in 1:B
         c = 1
 
-        if ESS_bool[b]
+        if !ESS_bool[b]
             idxs[b, :] .= 1:N
-            continue
-        end
-
-        # Deterministic replication
-        for s in 1:N
-            count = integer_counts[b, s]
-            if count > 0
-                idxs[b, c:c+count-1] .= s
-                c += count
+        else
+            # Deterministic replication
+            for s in 1:N
+                count = integer_counts[b, s]
+                if count > 0
+                    idxs[b, c:c+count-1] .= s
+                    c += count
+                end
             end
-        end
 
-        # Multinomial resampling
-        if num_remaining[b] > 0
-            idxs[b, c:end] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
+            # Multinomial resampling
+            if num_remaining[b] > 0
+                idxs[b, c:end] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
+            end
         end
     end
     replace!(idxs, N+1 => N)
@@ -95,15 +94,9 @@ function systematic_resampler(
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
-        if ESS_bool[b]
-            idxs[b, :] .= 1:N
-            continue
-        end
-
-        idxs[b, :] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
+        idx[b, :] .= !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
     end
     replace!(idxs, N+1 => N)
-
     return idxs, seed
 end
 
@@ -135,15 +128,9 @@ function stratified_resampler(
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
-        if ESS_bool[b]
-            idxs[b, :] .= 1:N
-            continue
-        end
-
-        idxs[b, :] .= searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
+        idxs[b, :] .= !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
     end
     replace!(idxs, N+1 => N)
-
     return idxs, seed
 end
 

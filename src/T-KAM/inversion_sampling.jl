@@ -99,11 +99,10 @@ function sample_prior(
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = (permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
     cdf = cumsum(trapz, dims=2) 
-    cdf = cdf ./ cdf[:, end:end, :] |> cpu_device() # Normalization
-    cdf = cat(zeros(num_samples, 1, q_size), cdf, dims=2) # Add 0 to start of CDF
+    cdf = cat(zeros(num_samples, 1, q_size), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, quant, num_samples, q_size) 
+    rand_vals = rand(rng, quant, num_samples, q_size) .* cdf[:, end, :] 
     
     z = Array{quant}(undef, num_samples, q_size)
     Threads.@threads for b in 1:num_samples

@@ -40,60 +40,6 @@ function choose_component(α::AbstractArray{quant}, num_samples::Int, q_size::In
     return permutedims(mask, [3, 1, 2]) |> device, seed
 end
 
-function get_trap_bounds(idxs::AbstractArray{Int}, cdf::AbstractArray{quant})
-    """Returns the CDF values bounding each trapezium defined by idxs."""
-    Q, N = size(idxs)
-
-    cd1 = zeros(quant, N, Q) 
-    cd2 = zeros(quant, N, Q) 
-    for q in 1:Q
-        for n in 1:N
-            cd1[n, q] = cdf[n, idxs[q, n] - 1, q]
-            cd2[n, q] = cdf[n, idxs[q, n], q]
-        end
-    end
-
-    return device(cd1), device(cd2)
-end
-
-function interpolate_z(
-    indices::AbstractArray{Int},
-    cdf::AbstractArray{quant},
-    rv::AbstractArray{quant},
-    grid::AbstractArray{quant};
-    seed::Int=1
-    )
-    """
-    Returns samples of z from all mixture models, using linear interpolation
-    to place grid point inside trapezium's interval.
-
-    Args:
-        indices: The indices of the trapeziums, (q,).
-        cdf: The CDF values of the mixture ebm-prior, (grid_size-1, q).
-        grid: The grid points of the mixture ebm-prior, (grid_size, q).
-        Δg: The grid spacing of the mixture ebm-prior, (grid_size-1, q).
-        num_samples: The number of samples to generate.
-        seed: The seed for the random number generator.
-
-    Returns:
-        z: The samples from the mixture ebm-prior, (num_samples, q).
-        seed: The updated seed.
-    """
-    # Get indices of trapeziums, and their corresponding cdfs
-    cd1, cd2 = get_trap_bounds(indices, cdf)
-
-    # Get trapezium bounds
-    z1 = zeros(quant, size(cdf, 1), 0) |> device
-    z2 = zeros(quant, size(cdf, 1), 0) |> device
-    for (q, idx) in enumerate(eachrow(indices))
-        z1 = hcat(z1, grid[idx, q:q])
-        z2 = hcat(z2, grid[idx .+ 1, q:q])
-    end
-
-    # Linear interpolation
-    return (z1 + (z2 - z1) .* ((rv - cd1) ./ removeZero(cd2 - cd1; ε=eps(eltype(cd1))))), seed
-end
-
 function sample_prior(
     prior,
     num_samples::Int, 
@@ -128,8 +74,8 @@ function sample_prior(
     )
 
     # Evaluate prior on grid [0,1]
-    grid = prior.fcns_qp[Symbol("1")].grid'
-    f_grid = grid
+    f_grid = prior.fcns_qp[Symbol("1")].grid'
+    grid = f_grid |> cpu_device()
     Δg = f_grid[2:end, :] - f_grid[1:end-1, :] 
     π_grid = prior.π_pdf(f_grid)
     grid_size = size(f_grid, 1)
@@ -144,20 +90,28 @@ function sample_prior(
     trapz = 5f-1 .* permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :]) 
     cdf = cumsum(trapz, dims=2) 
     cdf = cdf ./ cdf[:, end:end, :] |> cpu_device() # Normalization
+    cdf = cat(zeros(num_samples, 1, q_size), cdf, dims=2) # Add 0 to start of cdf
 
-     # Find index of trapezium where CDF > rand_val
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, Uniform(0,1), num_samples, q_size) 
-    idxs = Array{Int}(undef, q_size, num_samples)
-    Threads.@threads for q in 1:q_size
-        for b in 1:num_samples
-            idxs[q, b] = searchsortedfirst(cdf[b, :, q], rand_vals[b, q])
+    
+    z = Array{quant}(undef, num_samples, q_size)
+    Threads.@threads for b in 1:num_samples
+        for q in 1:q_size
+            # First trapezium where CDF > rand_val
+            rv = rand_vals[b, q]
+            idx = searchsortedfirst(cdf[b, :, q], rv)
+
+            # Trapezium bounds
+            z1, z2 = grid[idx-1, q], grid[idx, q]
+            cd1, cd2 = cdf[b, idx-1, q], cdf[b, idx, q] 
+
+            # Linear interpolation
+            z[b, q] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
         end
     end
-    replace!(idxs, grid_size => grid_size - 1)
 
-    z, seed = interpolate_z(idxs, cdf, device(rand_vals), grid; seed=seed)
-    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : z # Correct precision issues
+    z = typeof(prior.π_0) == Uniform ? removeNeg(z) : device(z) # Correct precision issues
     return z, seed
 end
 

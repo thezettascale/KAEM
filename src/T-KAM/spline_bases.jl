@@ -36,7 +36,7 @@ function B_spline_basis(
     x::AbstractArray{quant},
     grid::AbstractArray{quant};
     degree::Int64=3, 
-    σ::quant=quant(1)
+    σ::Union{quant, AbstractArray{quant}}=quant(1)
     )
     """
     Compute the B-spline basis functions for a batch of points x and a grid of knots.
@@ -81,10 +81,6 @@ function B_spline_basis(
         @tullio B[d, n, m] := (numer1[d, n, m] / denom1[1, n, m]) * B_i1[d, n, m] + (numer2[d, n, m] / denom2[1, n, m]) * B_i2[d, n, m]
     end
     
-    # B = removeNaN(B)
-    # any(isnan.(B)) && error("NaN in B") 
-    # any(isnan.(B)) && error("NaN in B-spline basis")
-    
     return B
 end
 
@@ -92,7 +88,7 @@ function RBF_basis(
     x::AbstractArray{quant},
     grid::AbstractArray{quant};
     degree::Int64=3, 
-    σ::quant=quant(1)
+    σ::Union{quant, AbstractArray{quant}}=quant(1)
     )
     """
     Compute the RBF basis functions for a batch of points x and a grid of knots.
@@ -111,20 +107,14 @@ function RBF_basis(
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 3) - 1)) * σ
     @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m] 
     diff = diff ./ σ
-    @tullio B[d, n, m] := exp(-5f-1 * (diff[d, n, m])^2)
-
-    # any(isnan.(B)) && error("NaN in B")
-    # B = removeNaN(B)
-    # any(isnan.(B)) && println("NaN in RBF basis")
-    
-    return B
+    return @tullio B[d, n, m] := exp(-5f-1 * (diff[d, n, m])^2)    
 end
 
 function RSWAF_basis(
     x::AbstractArray{quant},
     grid::AbstractArray{quant};
     degree::Int64=3, 
-    σ::quant=quant(1)
+    σ::Union{quant, AbstractArray{quant}}=quant(1)
     )
     """
     Compute the RSWAF basis functions for a batch of points x and a grid of knots.
@@ -141,19 +131,11 @@ function RSWAF_basis(
     
     x = reshape(x, size(x)..., 1)
     grid = reshape(grid, 1, size(grid)...)
-
-    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m]
     
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    diff = NNlib.tanh_fast(diff ./ σ) 
-    # diff = tanh.(diff ./ σ)
-    
-    @tullio B[d, n, m] := 1 - diff[d, n, m]^2
-
-    # any(isnan.(B)) && error("NaN in B")
-    # any(isnan.(B)) && println("NaN in RSWAF basis")
-
-    return B
+    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m]
+    diff = NNlib.tanh_fast(diff ./ σ)     
+    return @tullio B[d, n, m] := 1 - diff[d, n, m]^2
 end
 
 function coef2curve(
@@ -161,7 +143,7 @@ function coef2curve(
     grid::AbstractArray{quant},
     coef::AbstractArray{quant};
     k::Int64=3, 
-    scale::quant=quant(1), 
+    scale::Union{quant, AbstractArray{quant}}=quant(1), 
     basis_function::Function=B_spline_basis
     )
     """
@@ -185,7 +167,7 @@ function curve2coef(
     y_eval::AbstractArray{quant},
     grid::AbstractArray{quant};
     k::Int64=3,
-    scale::quant=quant(1), 
+    scale::Union{quant, AbstractArray{quant}}=quant(1), 
     ε::quant=quant(1e-4), 
     basis_function::Function=B_spline_basis
     )

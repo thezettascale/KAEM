@@ -131,24 +131,26 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
+
     # Schedule temperatures, and Parallel Tempering
     temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
     temperatures = device(temperatures)
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
-    T, B, Q = size(z)
+    T, S, Q, B = size(z)..., size(x, 2)
     ex_prior = (m.prior.contrastive_div ? 
     -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
 
-    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, B*T, Q); seed=seed)    
-    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T, B, :))
+    x̂, seed = generate_from_z(m.lkhood, ps.gen, st.gen, reshape(z, S*T, Q); seed=seed)    
+    logllhood = m.lkhood.log_lkhood_model_tempered(x, reshape(x̂, T, S, :))
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(logllhood, dims=3)
 
+    # Expected posterior
     TI_loss = sum(weights .* logllhood)
     MLE_loss = sum(sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :]); dims=2) .- ex_prior)
     return -((TI_loss + MLE_loss) / 2B), st, seed

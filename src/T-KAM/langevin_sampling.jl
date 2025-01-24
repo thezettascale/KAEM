@@ -12,7 +12,7 @@ using .ebm_mix_prior: log_prior
 using .KAN_likelihood: generate_from_z
 using .Utils: device, next_rng, quant
 
-function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity, eps::quant=quant(1e-6), seed::Int=1)
+function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -25,7 +25,7 @@ function sample_momentum(z::AbstractArray{quant}; logit_func::Function=identity,
         The positive-definite mass matrix.
         The updated seed.
     """
-    z = logit_func(z) |> cpu_device()
+    z = z |> cpu_device()
     Σ, Q = cov(z), size(z, 2)
     
     # Pre-conditioner
@@ -53,6 +53,7 @@ function leapfrop_proposal(
     M::AbstractArray{quant},
     η::quant,
     logpos::Function;
+    uniform_prior::Bool=false,
     seed::Int=1
     )
     """
@@ -72,6 +73,12 @@ function leapfrop_proposal(
     """
     p = momentum + (η .* ∇z / 2) # Half-step momentum update
     ẑ = z + (η .* p*M) # Full-step position update
+
+    # Reflect within bounds if uniform prior
+    if uniform_prior
+        ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
+        ẑ = ifelse.(ẑ .> 1, 2 - ẑ, ẑ) |> device
+    end
 
     result = withgradient(z_i -> logpos(z_i, seed), ẑ)
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
@@ -146,7 +153,7 @@ function autoMALA_sampler(
     """
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    z = m.prior.MALA_logit(z) # Logit transform in case of [0,1] prior
+    uniform_prior = isa(m.prior.π_0, Uniform)
     
     T, B, Q = length(t), size(z)...
     @reset st.η_init = st.η_init |> cpu_device()
@@ -159,13 +166,10 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> quant
 
     function log_posterior(z_i, t_k, seed_i)
-        z_i = m.prior.MALA_logitinverse(z_i) # Inverse logit transform
-        log_J = sum(m.prior.MALA_jacobian(z_i)) # Jacobian correction
-
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
         x̂, seed_i = generate_from_z(m.lkhood, ps.gen, st.gen, z_i; seed=seed_i)
         ll = m.lkhood.log_lkhood_model(x, x̂)
-        return sum(lp .+ t_k .* ll) + log_J, seed_i
+        return sum(lp .+ t_k .* ll), seed_i
     end
 
     k = 1
@@ -176,13 +180,13 @@ function autoMALA_sampler(
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
-            momentum, M, seed = sample_momentum(z; logit_func=m.prior.MALA_logitinverse, seed=seed)
+            momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             result = withgradient(z_i -> logpos(z_i, seed), z)
             logpos_z, seed, ∇z = result.val..., first(result.grad) 
 
-            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
+            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; uniform_prior=uniform_prior, seed=seed)
 
             if burn_in < N_unadjusted
                 z .= proposal
@@ -191,7 +195,7 @@ function autoMALA_sampler(
                 geq_bool = log_r >= log_b
                 while (log_a < log_r < log_b) && (η_min <= η <= η_max)
                     η = geq_bool ? η * Δη : η / Δη
-                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
+                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; uniform_prior=uniform_prior, seed=seed)
                 end
                 η = geq_bool ? η / 2 : η
 
@@ -218,7 +222,7 @@ function autoMALA_sampler(
     m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
     m.verbose && println("Mean step sizes: ", mean_η)
 
-    return m.prior.MALA_logitinverse(output), st, seed
+    return output, st, seed
 end
 
 end

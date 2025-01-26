@@ -11,7 +11,7 @@ using .Utils: device, next_rng, quant
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
     log_prior(m, z, ps, st; normalize=false) = quant(0)
-    log_likelihood(m, ps, st, x, z; seed=1) = reshape(-sum(z.^2; dims=2) ./ 2, size(x,2), size(z,1)), seed
+    log_likelihood(m, ps, st, x, z; seed=1) = -sum(z.^2) ./ 2, seed
 else
     include("mixture_prior.jl")
     include("KAN_likelihood.jl")

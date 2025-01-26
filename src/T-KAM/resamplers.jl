@@ -62,7 +62,6 @@ function residual_resampler(
         end
     end
     replace!(idxs, N+1 => N)
-
     return idxs, seed
 end
 
@@ -94,7 +93,7 @@ function systematic_resampler(
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
-        idx[b, :] .= !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
+        idxs[b, :] .= !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
     end
     replace!(idxs, N+1 => N)
     return idxs, seed
@@ -122,7 +121,7 @@ function stratified_resampler(
 
     cdf = cumsum(weights, dims=2) 
 
-    # Systematic thresholds
+    # Stratified thresholds
     seed, rng = next_rng(seed)
     u = (rand(rng, quant, B, N) .+ (0:N-1)') ./ N
 

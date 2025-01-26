@@ -39,7 +39,6 @@ function choose_component(
     mask = Array{quant}(undef, q_size, p_size, num_samples) 
     Threads.@threads for q in 1:q_size
         i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
-        replace!(i, p_size + 1 => p_size)
         mask[q, :, :] = onehotbatch(i, 1:p_size) .|> quant
     end
 
@@ -94,7 +93,7 @@ function sample_prior(
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
 
     # Filter out components
-    @tullio exp_fg[b, g, q] := exp(f_grid[g, q, p]) * π_grid[g, q] * component_mask[b, q, p]
+    @tullio exp_fg[b, g, q] := (exp(f_grid[g, q, p]) * π_grid[g, q]) * component_mask[b, q, p]
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = (permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2

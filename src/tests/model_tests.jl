@@ -38,7 +38,7 @@ function test_grid_update()
     @test !any(isnan, ps)
 end
 
-function test_mala()
+function test_mala_loss()
     Random.seed!(42)
     dataset = randn(quant, 3, 50) 
     commit!(conf, "MALA", "use_langevin", "true")
@@ -55,5 +55,5 @@ end
 @testset "T-KAM Tests" begin
     test_ps_derivative()
     test_grid_update()
-    test_mala()
+    test_mala_loss()
 end

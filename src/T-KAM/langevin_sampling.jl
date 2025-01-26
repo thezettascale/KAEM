@@ -5,12 +5,19 @@ export autoMALA_sampler
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: withgradient
 
-include("mixture_prior.jl")
-include("KAN_likelihood.jl")
 include("../utils.jl")
-using .ebm_mix_prior: log_prior
-using .KAN_likelihood: log_likelihood
 using .Utils: device, next_rng, quant
+
+# Gaussian for testing purposes
+if occursin("langevin_tests.jl", string(@__FILE__))
+    log_prior(m, z, ps, st; normalize=false) = quant(0)
+    log_likelihood(m, ps, st, x, z; seed=1) = reshape(-sum(z.^2; dims=2) ./ 2, size(x,2), size(z,1)), seed
+else
+    include("mixture_prior.jl")
+    include("KAN_likelihood.jl")
+    using .ebm_mix_prior: log_prior
+    using .KAN_likelihood: log_likelihood
+end
 
 function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
     """
@@ -190,11 +197,11 @@ function autoMALA_sampler(
                 burn_in += 1
             else
                 geq_bool = log_r >= log_b
-                while (log_a < log_r < log_b) && (η_min <= η <= η_max)
+                while !(log_a < log_r < log_b) && (η_min <= η <= η_max)
                     η = geq_bool ? η * Δη : η / Δη
                     proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end
-                η = geq_bool ? η / 2 : η
+                η = geq_bool ? η / Δη : η
 
                 reversibility, seed = reversibility_check(z, proposal, M, η, logpos; seed=seed)
                 if reversibility && (log_u[i, k] < log_r)

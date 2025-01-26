@@ -75,6 +75,7 @@ function leapfrop_proposal(
 
     # Apply reflective boundary conditions, (which has a Jacobian of 1, so no need to adjust the log-ratio)
     if uniform_prior
+        p = ifelse.(0 .< ẑ .< 1, p, -p) |> device
         ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
         ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end

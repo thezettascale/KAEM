@@ -58,12 +58,12 @@ function B_spline_basis(
         grid_2 = grid[:, :, 2:end] 
     
         # B0 is piecewise constant
-        @tullio term1[i, j, l] := x[i, j, k] >= grid_1[p, j, l]
-        @tullio term2[i, j, l] := x[i, j, k] < grid_2[p, j, l]
+        @tullio term1[b, i, g] := x[b, i, 1] >= grid_1[1, i, g]
+        @tullio term2[b, i, g] := x[b, i, 1] < grid_2[1, i, g]
         term1 = quant.(term1)
         term2 = quant.(term2)
 
-        @tullio B[d, p, n] := term1[d, p, n] * term2[d, p, n]
+        @tullio B[b, i, g] := term1[b, i, g] * term2[b, i, g]
 
     else
         # k-th degree
@@ -78,7 +78,7 @@ function B_spline_basis(
         B_i1 = B[:, :, 1:end - 1]
         B_i2 = B[:, :, 2:end]
 
-        @tullio B[d, n, m] := (numer1[d, n, m] / denom1[1, n, m]) * B_i1[d, n, m] + (numer2[d, n, m] / denom2[1, n, m]) * B_i2[d, n, m]
+        @tullio B[b, i, g] := (numer1[b, i, g] / denom1[1, i, g]) * B_i1[b, i, g] + (numer2[b, i, g] / denom2[1, i, g]) * B_i2[b, i, g]
     end
     
     return B
@@ -101,13 +101,10 @@ function RBF_basis(
     Returns:
         A matrix of size (b, i, g) containing the RBF basis functions evaluated at the points x.
     """
-    x = reshape(x, size(x)..., 1)
-    grid = reshape(grid, 1, size(grid)...)
-
-    σ = ((maximum(grid) - minimum(grid)) / (size(grid, 3) - 1)) * σ
-    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m] 
+    σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
+    @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
     diff = diff ./ σ
-    return @tullio B[d, n, m] := exp(-5f-1 * (diff[d, n, m])^2)    
+    return @tullio B[b, i, g] := exp(-5f-1 * (diff[b, i, g])^2)    
 end
 
 function RSWAF_basis(
@@ -128,14 +125,10 @@ function RSWAF_basis(
     Returns:
         A matrix of size (b, i, g) containing the RSWAF basis functions evaluated at the points x.
     """
-    
-    x = reshape(x, size(x)..., 1)
-    grid = reshape(grid, 1, size(grid)...)
-    
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    @tullio diff[d, n, m] := x[d, n, 1] - grid[1, n, m]
+    @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
     diff = NNlib.tanh_fast(diff ./ σ)     
-    return @tullio B[d, n, m] := 1 - diff[d, n, m]^2
+    return @tullio B[b, i, g] := 1 - diff[b, i, g]^2
 end
 
 function coef2curve(
@@ -152,14 +145,14 @@ function coef2curve(
     Args:
         x_eval: A matrix of size (b, i) containing the points at which to evaluate the B-spline curves.
         grid: A matrix of size (b, g) containing the grid of knots.
-        coef: A matrix of size (i, o, nc) containing the B-spline coefficients.
+        coef: A matrix of size (i, o, g) containing the B-spline coefficients.
         k: The degree of the B-spline basis functions.
 
     Returns:
         A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
     """
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    return @tullio y_eval[i, j, l] := splines[i, j, p] * coef[j, l, p]
+    return @tullio y_eval[b, i, o] := splines[b, i, g] * coef[i, o, g]
 end
 
 function curve2coef(
@@ -178,24 +171,21 @@ function curve2coef(
     Args:
         x_eval: A matrix of size (b, i) containing the points at which the B-spline curves were evaluated.
         y_eval: A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
-        T-KAMgrid: A matrix of size (b, g) containing the grid of knots.
+        grid: A matrix of size (b, g) containing the grid of knots.
         k: The degree of the B-spline basis functions.
 
     Returns:
-        A matrix of size (i, o, nc) containing the B-spline coefficients.
+        A matrix of size (i, o, g) containing the B-spline coefficients.
     """
-    b_size = size(x_eval, 1)
-    in_dim = size(x_eval, 2)
+    b_size, in_dim = size(x_eval)
     out_dim = size(y_eval, 3)
 
-    # b_size x in_dim x n_coeff
+    # b_size x in_dim x n_grid
     B = basis_function(x_eval, grid; degree=k, σ=scale)  
+    n_grid = size(B, 3)
 
-    n_coeff = size(B, 3)
-
-    B = permutedims(B, [2, 1, 3])
-    B = reshape(B, in_dim, 1, b_size, size(B, 3))
-    B = repeat(B, 1, out_dim, 1, 1) # in_dim x out_dim x b_size x n_coeffs
+    B = reshape(B, in_dim, 1, b_size, n_grid)
+    B = repeat(B, 1, out_dim, 1, 1) # in_dim x out_dim x b_size x n_grids
 
     y_eval = permutedims(y_eval, [2, 3, 1]) # in_dim x out_dim x b_size
     y_eval = reshape(y_eval, size(y_eval)..., 1)
@@ -203,24 +193,24 @@ function curve2coef(
     # Get BtB and Bty
     Bt = permutedims(B, [1, 2, 4, 3])
     
-    @tullio BtB[i, j, m, p] := Bt[i, j, m, n] * B[i, j, n, p] # in_dim x out_dim x n_coeffs x n_coeffs
+    @tullio BtB[i, o, g, j] := Bt[i, o, g, b] * B[i, o, b, j] # in_dim x out_dim x n_grids x n_grids
     n1, n2, n, _ = size(BtB)
     eye = Matrix{quant}(I, n, n) .* ε |> device
     eye = reshape(eye, 1, 1, n, n)
     eye = repeat(eye, n1, n2, 1, 1)
     BtB = BtB + eye 
     
-    @tullio Bty[i, j, m, p] := Bt[i, j, m, n] * y_eval[i, j, n, p]
+    @tullio Bty[i, o, g, j] := Bt[i, o, g, b] * y_eval[i, o, b, j]
 
     # Cusolver only supports Float32
     BtB, Bty = BtB .|> Float32, Bty .|> Float32
     
     # x = (BtB)^-1 * Bty
-    coef = zeros(quant, 0, out_dim, n_coeff) |> device
+    coef = zeros(quant, 0, out_dim, n_grid) |> device
     for i in 1:in_dim
-        coef_ = zeros(quant, 0, n_coeff) |> device
-        for j in 1:out_dim
-            lstq = qr(BtB[i, j, :, :]) \ Bty[i, j, :, :]
+        coef_ = zeros(quant, 0, n_grid) |> device
+        for o in 1:out_dim
+            lstq = qr(BtB[i, o, :, :]) \ Bty[i, o, :, :]
             lstq = lstq |> permutedims
             coef_ = vcat(coef_, lstq .|> quant)
         end

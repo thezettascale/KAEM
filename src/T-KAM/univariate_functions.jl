@@ -63,20 +63,19 @@ function init_function(
     init_η::quant=quant(1),
     η_trainable::Bool=true
 )
-
+    spline_degree = spline_function == "B-spline" ? spline_degree : 0
     grid = quant.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
-    grid = extend_grid(grid; k_extend=spline_degree)  
+    grid = extend_grid(grid; k_extend=spline_degree) 
     σ_base = any(isnan.(σ_base)) ? ones(quant, in_dim, out_dim) : σ_base
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
     spline_function = get(SplineBasis_mapping, spline_function, B_spline_basis)
-    
     return univariate_function(in_dim, out_dim, spline_degree, base_activation, spline_function, grid, grid_size, grid_update_ratio, grid_range, ε_scale, σ_base, σ_spline, [init_η], η_trainable)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    ε = ((rand(rng, quant, l.grid_size + 1, l.in_dim, l.out_dim) .- quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device
-    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η)))
+    ε = ((rand(rng, quant, l.grid_size + 1, l.in_dim, l.out_dim) .- quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
+    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(l.init_η), basis_function=l.spline_function))
     w_base = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, quant, l.in_dim, l.out_dim) .* l.σ_spline
     return l.η_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_η=l.init_η) : (w_base=w_base, w_sp=w_sp, coef=coef)
@@ -106,7 +105,7 @@ function fwd(l, ps, st, x)
     η = l.η_trainable ? ps.basis_η : st.basis_η
 
     base = l.base_activation(x)
-    y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=η)
+    y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=η, basis_function=l.spline_function)
 
     return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
 end
@@ -130,7 +129,7 @@ function update_fcn_grid(l, ps, st, x)
     η = l.η_trainable ? ps.basis_η : st.basis_η
     
     x_sort = sort(x, dims=1)
-    current_splines = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=η)
+    y = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=η, basis_function=l.spline_function)
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(l.grid, 2) - 2*l.spline_degree - 1
@@ -146,9 +145,9 @@ function update_fcn_grid(l, ps, st, x)
 
     # Grid is a convex combination of the uniform and adaptive grid
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
-    new_grid = extend_grid(grid; k_extend=l.spline_degree) 
-    new_coef = curve2coef(x_sort, current_splines, new_grid; k=l.spline_degree, scale=η, basis_function=l.spline_function)
-
+    new_grid = extend_grid(grid; k_extend=l.spline_degree)
+    new_coef = curve2coef(x_sort, y, new_grid; k=l.spline_degree, scale=η, basis_function=l.spline_function)
+    
     return new_grid, new_coef
 end
 

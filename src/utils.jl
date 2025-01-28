@@ -2,7 +2,7 @@ module Utils
 
 export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, move_to_cpu, move_to_gpu
 
-using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
+using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors
 using CUDA, LuxCUDA, KernelAbstractions
 using ChainRules: @ignore_derivatives
 
@@ -11,7 +11,6 @@ const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device
 # Mixed precision
 const half_quant = Dict(
     "FP16" => Float16,
-    "BF16" => BFloat16, # I wish I could use BF16, but it's not supported very well yet.
     "FP32" => Float32
 )[get(ENV, "HALF_QUANT", "FP32")]
 

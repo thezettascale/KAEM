@@ -112,7 +112,7 @@ function log_likelihood(
 end
 
 function importance_resampler(
-    weights::AbstractArray{half_quant};
+    weights::AbstractArray{full_quant};
     seed::Int=1,
     ESS_threshold::full_quant=full_quant(0.5),
     resampler::Function=systematic_sampler,
@@ -137,7 +137,6 @@ function importance_resampler(
     B, N = size(weights)
 
     # Check effective sample size
-    weights = weights .|> full_quant
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .< ESS_threshold*N
     

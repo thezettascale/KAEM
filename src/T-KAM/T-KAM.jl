@@ -37,6 +37,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     η_init::full_quant
     posterior_sample::Function
     loss_fcn::Function
+    loss_scaling::half_quant    
 end
 
 function generate_batch(
@@ -80,24 +81,24 @@ function importance_loss(
     # Expected prior, (if contrastive divergence)
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
+        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
 
     # Weights and resampling
-    weights = @ignore_derivatives softmax(logllhood, dims=2)
+    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
 
     # Expected posterior
+    logprior_resampled = logprior_resampled .- ex_prior
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
-    loss_prior = loss_prior .- ex_prior
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-    return -mean(loss_prior .+ loss_llhood), st, seed
+    return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
 function MALA_loss(
@@ -112,7 +113,7 @@ function MALA_loss(
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
     )
     
     # Log-dists
@@ -120,7 +121,7 @@ function MALA_loss(
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed)
 
     # Expected posterior
-    return -mean(mean(logprior .+ logllhood; dims=2) .- ex_prior), st, seed
+    return -mean(logprior .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
 end 
 
 function thermo_loss(
@@ -140,19 +141,19 @@ function thermo_loss(
 
     T, S, Q, B = size(z)..., size(x, 2)
     ex_prior = (m.prior.contrastive_div ? 
-    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
+    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed)
     logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood
-    weights = @ignore_derivatives softmax(logllhood, dims=3)
+    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) .|> half_quant
 
     # Expected posterior
     TI_loss = sum(weights .* logllhood)
-    MLE_loss = sum(sum(weights[end, :, :] .* (logprior .+ logllhood[end, :, :]); dims=2) .- ex_prior)
-    return -((TI_loss + MLE_loss) / 2B), st, seed
+    MLE_loss = sum(sum(weights[end, :, :] .* (logprior .- ex_prior .+ logllhood[end, :, :]); dims=2))
+    return -((TI_loss + MLE_loss) / 2B)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(
@@ -223,6 +224,7 @@ function init_T_KAM(
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
+    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
@@ -283,7 +285,8 @@ function init_T_KAM(
             use_MALA,
             initial_step_size,
             posterior_fcn,
-            loss_fcn
+            loss_fcn,
+            loss_scaling
         )
 end
 

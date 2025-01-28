@@ -2,13 +2,14 @@ using CUDA, Lux, LuxCUDA
 using Test, Random, LinearAlgebra, ConfParser, ComponentArrays, Plots, Distributions
 
 ENV["GPU"] = true
-ENV["QUANT"] = "FP32"
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../T-KAM/T-KAM.jl")
 include("../T-KAM/langevin_sampling.jl")
 include("../utils.jl")
 using .T_KAM_model
-using .Utils: device, quant
+using .Utils: device, half_quant
 using .LangevinSampling
 
 conf = ConfParse("src/tests/test_conf.ini")
@@ -17,14 +18,14 @@ out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 
 function plot_final_distribution()
     Random.seed!(42)
-    dataset = randn(quant, 3, 50) 
+    dataset = randn(half_quant, 3, 50) 
     commit!(conf, "MALA", "use_langevin", "true")
     commit!(conf, "MALA", "iters", "150")
     commit!(conf, "TRAINING", "importance_sample_size", "100")
     model = init_T_KAM(dataset, conf)
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
+    ps, st = ComponentArray(ps) .|> half_quant |> device, st |> device
 
     output = first(model.posterior_sample(model, x_test, ps, st, 1)) |> cpu_device()
     

@@ -18,7 +18,7 @@ using .ebm_mix_prior
 using .KAN_likelihood
 using .LangevinSampling: autoMALA_sampler
 using .univariate_functions: update_fcn_grid, fwd
-using .Utils: device, next_rng, quant
+using .Utils: device, next_rng, half_quant, full_quant
 
 struct T_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
@@ -27,14 +27,14 @@ struct T_KAM <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     update_prior_grid::Bool
     update_llhood_grid::Bool
-    grid_update_decay::quant
+    grid_update_decay::half_quant
     grid_updates_samples::Int
     IS_samples::Int
     verbose::Bool
-    p::AbstractArray{quant}
+    p::AbstractArray{full_quant}
     N_t::Int
     MALA::Bool
-    η_init::quant
+    η_init::full_quant
     posterior_sample::Function
     loss_fcn::Function
 end
@@ -60,6 +60,9 @@ function generate_batch(
         The generated data.
         The updated seed.
     """
+    # Reduce precision, 
+    ps = ps .|> half_quant
+
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
     x̂ = generate_from_z(model.lkhood, ps.gen, st.gen, z)
     return model.lkhood.output_activation(x̂), seed
@@ -69,7 +72,7 @@ function importance_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss with importance sampling."""
@@ -77,7 +80,7 @@ function importance_loss(
     # Expected prior, (if contrastive divergence)
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
@@ -101,7 +104,7 @@ function MALA_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss with MALA."""
@@ -109,7 +112,7 @@ function MALA_loss(
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
     )
     
     # Log-dists
@@ -124,21 +127,20 @@ function thermo_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
-
     # Schedule temperatures, and Parallel Tempering
-    temperatures = @ignore_derivatives collect(quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    temperatures = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
     temperatures = device(temperatures)
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     T, S, Q, B = size(z)..., size(x, 2)
     ex_prior = (m.prior.contrastive_div ? 
-    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : quant(0)  
+    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : full_quant(0)  
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
@@ -172,11 +174,11 @@ function update_model_grid(
         The updated params.
         The updated seed.
     """
-    
-    if model.update_prior_grid
-        p_size = model.prior.fcns_qp[Symbol("1")].in_dim
-        z = rand(model.prior.π_0, model.grid_updates_samples, p_size) |> device
+    ps = ps .|> half_quant
 
+    if model.update_prior_grid
+        z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+        
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             @reset ps.ebm[Symbol("$i")].coef = new_coef
@@ -200,11 +202,11 @@ function update_model_grid(
         z = dropdims(sum(z, dims=2); dims=2)
     end
 
-    return model, ps, seed
+    return model, full_quant.(ps), seed
 end
 
 function init_T_KAM(
-    dataset::AbstractArray{quant},
+    dataset::AbstractArray{half_quant},
     conf::ConfParse;
     prior_seed::Int=1,
     lkhood_seed::Int=1,
@@ -226,7 +228,7 @@ function init_T_KAM(
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
 
-    grid_update_decay = parse(quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
+    grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
     # MLE or Thermodynamic Integration
@@ -234,11 +236,11 @@ function init_T_KAM(
     loss_fcn = importance_loss
 
     use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    initial_step_size = parse(quant, retrieve(conf, "MALA", "initial_step_size"))
+    initial_step_size = parse(full_quant, retrieve(conf, "MALA", "initial_step_size"))
     num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
-    Δη = parse(quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
-    η_minmax = parse.(quant, retrieve(conf, "MALA", "step_size_bounds"))
+    Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
+    η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
         
     # Importance sampling or MALA
     posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
@@ -247,20 +249,20 @@ function init_T_KAM(
         loss_fcn = MALA_loss
     end
     
-    p = [quant(1)]
+    p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = thermo_loss
 
         # Cyclic p schedule
-        initial_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
-        end_p = parse(quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
+        initial_p = parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
+        end_p = parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
         num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
         num_param_updates = parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
         
         x = range(0, stop=2*π*num_cycles, length=num_param_updates)
-        p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> quant
+        p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")
@@ -286,7 +288,7 @@ function init_T_KAM(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
-    return (
+    return ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
         gen = Lux.initialparameters(rng, model.lkhood)
         )

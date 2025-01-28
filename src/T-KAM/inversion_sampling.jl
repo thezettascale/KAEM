@@ -8,11 +8,11 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng, removeZero, quant
+using .Utils: device, next_rng, removeZero, half_quant
 using .univariate_functions: fwd
 
 function choose_component(
-    α::AbstractArray{quant}, 
+    α::AbstractArray{half_quant}, 
     num_samples::Int, 
     q_size::Int, 
     p_size::Int; 
@@ -32,14 +32,14 @@ function choose_component(
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, quant, q_size, num_samples) 
+    rand_vals = rand(rng, half_quant, q_size, num_samples) 
     α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
 
     # Find the index of the first cdf value greater than the random value
-    mask = Array{quant}(undef, q_size, p_size, num_samples) 
+    mask = Array{half_quant}(undef, q_size, p_size, num_samples) 
     Threads.@threads for q in 1:q_size
         i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
-        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> quant
+        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> half_quant
     end
 
     return permutedims(mask, [3, 1, 2]) |> device, seed
@@ -101,9 +101,9 @@ function sample_prior(
     cdf = cat(zeros(num_samples, 1, q_size), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, quant, num_samples, q_size) .* cdf[:, end, :] 
+    rand_vals = rand(rng, half_quant, num_samples, q_size) .* cdf[:, end, :] 
     
-    z = Array{quant}(undef, num_samples, q_size)
+    z = Array{half_quant}(undef, num_samples, q_size)
     Threads.@threads for b in 1:num_samples
         for q in 1:q_size
             # First trapezium where CDF >= rand_val

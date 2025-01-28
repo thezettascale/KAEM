@@ -6,10 +6,10 @@ using Random, Distributions, LinearAlgebra
 using NNlib: softmax
 
 include("../utils.jl")
-using .Utils: next_rng, quant
+using .Utils: next_rng, half_quant
 
 function residual_resampler(
-    weights::AbstractArray{quant}, 
+    weights::AbstractArray{half_quant}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 
@@ -36,7 +36,7 @@ function residual_resampler(
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, quant, B, maximum(num_remaining))
+    u = rand(rng, half_quant, B, maximum(num_remaining))
     cdf = cumsum(residual_weights, dims=2)
 
     idxs = Array{Int}(undef, B, N)
@@ -66,7 +66,7 @@ function residual_resampler(
 end
 
 function systematic_resampler(
-    weights::AbstractArray{quant}, 
+    weights::AbstractArray{half_quant}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int;
@@ -89,7 +89,7 @@ function systematic_resampler(
 
     # Systematic thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, quant, B, 1) .+ (0:N-1)') ./ N
+    u = (rand(rng, half_quant, B, 1) .+ (0:N-1)') ./ N
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
@@ -100,7 +100,7 @@ function systematic_resampler(
 end
 
 function stratified_resampler(
-    weights::AbstractArray{quant}, 
+    weights::AbstractArray{half_quant}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 
@@ -123,7 +123,7 @@ function stratified_resampler(
 
     # Stratified thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, quant, B, N) .+ (0:N-1)') ./ N
+    u = (rand(rng, half_quant, B, N) .+ (0:N-1)') ./ N
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B

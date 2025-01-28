@@ -11,17 +11,17 @@ include("univariate_functions.jl")
 include("inversion_sampling.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, quant, removeZero, removeNeg
+using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg
 using .InverseSampling: sample_prior
 
 prior_distributions = Dict(
-    "uniform" => Uniform(quant(0),quant(1)),
-    "gaussian" => Normal(quant(0),quant(1)),
+    "uniform" => Uniform(half_quant(0),half_quant(1)),
+    "gaussian" => Normal(half_quant(0),half_quant(1)),
 )
 
 prior_pdf = Dict(
-    "uniform" => z -> quant.(0 .<= z .<= 1) |> device,
-    "gaussian" => z -> quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
+    "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
+    "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
@@ -67,7 +67,7 @@ end
 
 function log_prior(
     mix, 
-    z::AbstractArray{quant},
+    z::AbstractArray{half_quant},
     ps, 
     st;
     normalize::Bool=false
@@ -125,15 +125,15 @@ function init_mix_prior(
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
     grid_size = parse(Int, retrieve(conf, "MIX_PRIOR", "grid_size"))
-    grid_update_ratio = parse(quant, retrieve(conf, "MIX_PRIOR", "grid_update_ratio"))
-    grid_range = parse.(quant, retrieve(conf, "MIX_PRIOR", "grid_range"))
-    ε_scale = parse(quant, retrieve(conf, "MIX_PRIOR", "ε_scale"))
-    μ_scale = parse(quant, retrieve(conf, "MIX_PRIOR", "μ_scale"))
-    σ_base = parse(quant, retrieve(conf, "MIX_PRIOR", "σ_base"))
-    σ_spline = parse(quant, retrieve(conf, "MIX_PRIOR", "σ_spline"))
-    init_η = parse(quant, retrieve(conf, "MIX_PRIOR", "init_η"))
-    η_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "η_trainable"))
-    η_trainable = spline_function == "B-spline" ? false : η_trainable
+    grid_update_ratio = parse(half_quant, retrieve(conf, "MIX_PRIOR", "grid_update_ratio"))
+    grid_range = parse.(half_quant, retrieve(conf, "MIX_PRIOR", "grid_range"))
+    ε_scale = parse(half_quant, retrieve(conf, "MIX_PRIOR", "ε_scale"))
+    μ_scale = parse(full_quant, retrieve(conf, "MIX_PRIOR", "μ_scale"))
+    σ_base = parse(full_quant, retrieve(conf, "MIX_PRIOR", "σ_base"))
+    σ_spline = parse(full_quant, retrieve(conf, "MIX_PRIOR", "σ_spline"))
+    init_τ = parse(full_quant, retrieve(conf, "MIX_PRIOR", "init_τ"))
+    τ_trainable = parse(Bool, retrieve(conf, "MIX_PRIOR", "τ_trainable"))
+    τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     contrastive_divergence = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
     
@@ -142,8 +142,8 @@ function init_mix_prior(
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)
-        base_scale = (μ_scale * (quant(1) / √(quant(widths[i])))
-        .+ σ_base .* (randn(rng, quant, widths[i], widths[i+1]) .* quant(2) .- quant(1)) .* (quant(1) / √(quant(widths[i]))))
+        base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
+        .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
 
         func = init_function(
         widths[i],
@@ -157,8 +157,8 @@ function init_mix_prior(
         ε_scale=ε_scale,
         σ_base=base_scale,
         σ_spline=σ_spline,
-        init_η=init_η,
-        η_trainable=η_trainable,
+        init_τ=init_τ,
+        τ_trainable=τ_trainable,
         )
 
         @reset functions[Symbol("$i")] = func
@@ -171,7 +171,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     q_size = prior.fcns_qp[Symbol("1")].in_dim
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_uniform(rng, quant, q_size, p_size)
+    @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, q_size, p_size)
     return ps
 end
  

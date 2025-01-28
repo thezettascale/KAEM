@@ -1,6 +1,8 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 
 ENV["GPU"] = true
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP32"
 
 include("../T-KAM/mixture_prior.jl")
 include("../utils.jl")
@@ -30,7 +32,7 @@ function test_log_prior()
 
     z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
     log_p = log_prior(prior, z_test, ps, st)
-    @test size(log_p) == (b_size, 1)
+    @test size(log_p) == (b_size,)
 end
 
 function test_log_prior_derivative()

@@ -1,18 +1,19 @@
 using Test, Random, LinearAlgebra
 
 ENV["GPU"] = true
-ENV["QUANT"] = "FP32"
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP32"
 
 include("../T-KAM/spline_bases.jl")
 include("../utils.jl")
 using .spline_functions
 using .Utils
 
-b, i, g, o, degree, σ = 5, 3, 7, 2, 2, quant(1)
+b, i, g, o, degree, σ = 5, 3, 7, 2, 2, half_quant(1)
 
 function test_extend_grid()
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
 
@@ -21,10 +22,10 @@ end
 
 function test_B_spline_basis()
     Random.seed!(42)
-    x_eval = rand(quant, b, i) |> device
+    x_eval = rand(half_quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
     B = B_spline_basis(x_eval, extended_grid; degree=degree)
@@ -35,10 +36,10 @@ end
 
 function test_RBF_basis()
     Random.seed!(42)
-    x_eval = rand(quant, b, i) |> device
+    x_eval = rand(half_quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     B_rbf = RBF_basis(x_eval, grid; σ=σ)
 
@@ -48,10 +49,10 @@ end
 
 function test_RSWAF_basis()
     Random.seed!(42)
-    x_eval = rand(quant, b, i) |> device
+    x_eval = rand(half_quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     B_rswaf = RSWAF_basis(x_eval, grid; σ=σ)
 
@@ -61,13 +62,13 @@ end
 
 function test_coef2curve()
     Random.seed!(42)
-    x_eval = rand(quant, b, i) |> device
+    x_eval = rand(half_quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     Random.seed!(42)
-    coef = rand(quant, i, o, g + degree - 1) |> device
+    coef = rand(half_quant, i, o, g + degree - 1) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree)
 
@@ -77,22 +78,22 @@ end
 
 function test_curve2coef()
     Random.seed!(42)
-    x_eval = rand(quant, b, i) |> device
+    x_eval = rand(half_quant, b, i) |> device
 
     Random.seed!(42)
-    grid = rand(quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     Random.seed!(42)
-    coef = rand(quant, i, o, g + degree - 1) |> device
+    coef = rand(half_quant, i, o, g + degree - 1) |> device
 
     extended_grid = extend_grid(grid; k_extend=degree) 
     
     y_eval = coef2curve(x_eval, extended_grid, coef; k=degree, scale=σ)
-    recovered_coef = curve2coef(x_eval, y_eval, extended_grid; k=degree, scale=σ, ε=quant(1e-4))
+    recovered_coef = curve2coef(x_eval, y_eval, extended_grid; k=degree, scale=σ, ε=half_quant(1e-4))
     @test size(recovered_coef) == size(coef)
 
     y_reconstructed = coef2curve(x_eval, extended_grid, recovered_coef; k=degree, scale=σ)
-    @test norm(y_eval - y_reconstructed) / norm(y_eval) < quant(1e-3)
+    @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(1e-3)
 end
 
 @testset "Spline Tests" begin

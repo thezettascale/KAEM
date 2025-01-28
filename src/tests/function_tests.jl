@@ -1,7 +1,8 @@
 using Test, Random, LinearAlgebra, Lux
 
 ENV["GPU"] = true
-ENV["QUANT"] = "FP32"
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP32"
 
 include("../T-KAM/univariate_functions.jl")
 include("../utils.jl")
@@ -10,7 +11,7 @@ using .Utils
 
 function test_fwd()
     Random.seed!(42)
-    x = rand(quant, 5, 3) |> device
+    x = rand(half_quant, 5, 3) |> device
     f = init_function(3, 2)
 
     Random.seed!(42)
@@ -23,7 +24,7 @@ end
 
 function test_grid_update()
     Random.seed!(42)
-    x = rand(quant, 5, 3) |> device
+    x = rand(half_quant, 5, 3) |> device
     f = init_function(3, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ps |> device, st |> device

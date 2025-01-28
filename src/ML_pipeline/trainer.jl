@@ -7,7 +7,7 @@ include("optimizer.jl")
 include("../utils.jl")
 using .T_KAM_model
 using .optimization
-using .Utils: device, quant, move_to_cpu
+using .Utils: device, half_quant, full_quant, move_to_cpu
 
 using CUDA, KernelAbstractions, Tullio
 using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -26,7 +26,7 @@ mutable struct T_KAM_trainer
     dataset_name::AbstractString
     img_shape::Tuple
     ps::ComponentArray
-    st::NamedTuple
+    st::ComponentArray
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
     x::AbstractArray
@@ -52,7 +52,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     img_shape = size(dataset)[1:end-1]
-    dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> quant
+    dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> half_quant
     save_dataset = reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
     println("Resized dataset to $(img_shape)")
     
@@ -84,7 +84,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         optimizer, 
         dataset_name, 
         img_shape, 
-        ComponentArray(params) |> device, 
+        device(params), 
         device(state), 
         N_epochs, 
         loader_state, 
@@ -100,6 +100,11 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
 end
 
 function train!(t::T_KAM_trainer)
+    
+    # (Move off GPU)
+    @reset t.st.train_idx = t.st.train_idx |> cpu_device()
+    @reset t.st.η_init = t.st.η_init |> cpu_device()
+
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
@@ -133,8 +138,8 @@ function train!(t::T_KAM_trainer)
             t.model.verbose && println("Iter: $(t.st.train_idx), Grid updated")
         end
 
-        grads = first(gradient(pars -> first(t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed)), t.ps))
-        isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
+        grads = first(gradient(pars -> first(t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed)), half_quant.(t.ps))) .|> full_quant
+        isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
 
@@ -147,7 +152,8 @@ function train!(t::T_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        loss, t.st, t.seed = t.model.loss_fcn(t.model, t.ps, t.st, t.x)
+        loss, t.st, t.seed = t.model.loss_fcn(t.model, half_quant.(t.ps), t.st, t.x)
+        loss = loss .|> full_quant
         train_loss += loss
         t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")
 
@@ -190,23 +196,23 @@ function train!(t::T_KAM_trainer)
     res = Optimization.solve(optprob, t.o.init_optimizer();
         maxiters=num_param_updates, 
         verbose=true,
-        abstol=-quant(1),
-        reltol=-quant(1),
-        x_tol=-quant(1), 
-        x_abstol=-quant(1), 
-        x_reltol=-quant(1), 
-        f_tol=-quant(1), 
-        f_abstol=-quant(1), 
-        f_reltol=-quant(1), 
-        g_tol=-quant(1),
-        g_abstol=-quant(1), 
-        g_reltol=-quant(1),
-        outer_x_abstol=-quant(1), 
-        outer_x_reltol=-quant(1), 
-        outer_f_abstol=-quant(1), 
-        outer_f_reltol=-quant(1), 
-        outer_g_abstol=-quant(1), 
-        outer_g_reltol=-quant(1), 
+        abstol=-full_quant(1),
+        reltol=-full_quant(1),
+        x_tol=-full_quant(1), 
+        x_abstol=-full_quant(1), 
+        x_reltol=-full_quant(1), 
+        f_tol=-full_quant(1), 
+        f_abstol=-full_quant(1), 
+        f_reltol=-full_quant(1), 
+        g_tol=-full_quant(1),
+        g_abstol=-full_quant(1), 
+        g_reltol=-full_quant(1),
+        outer_x_abstol=-full_quant(1), 
+        outer_x_reltol=-full_quant(1), 
+        outer_f_abstol=-full_quant(1), 
+        outer_f_reltol=-full_quant(1), 
+        outer_g_abstol=-full_quant(1), 
+        outer_g_reltol=-full_quant(1), 
         successive_f_tol=num_param_updates,
         allow_f_increases=true, 
         allow_outer_f_increases=true,
@@ -215,7 +221,7 @@ function train!(t::T_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    generated_images = zeros(quant, 0, t.img_shape...) 
+    generated_images = zeros(half_quant, 0, t.img_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
         batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))

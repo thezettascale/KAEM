@@ -1,7 +1,8 @@
 using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA
 
 ENV["GPU"] = true
-ENV["QUANT"] = "FP32"
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../src/T-KAM/T-KAM.jl")
 using .T_KAM_model

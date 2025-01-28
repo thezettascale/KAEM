@@ -12,7 +12,7 @@ include("mixture_prior.jl")
 include("resamplers.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, quant
+using .Utils: device, next_rng, half_quant, full_quant
 using .ebm_mix_prior
 using .WeightResamplers
 
@@ -23,8 +23,8 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models = Dict(
-    "l2" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
-    "bernoulli" => (x::AbstractArray{quant}, x̂::AbstractArray{quant}; eps=eps(quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
+    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
+    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; eps=eps(half_quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
 )
 
 resampler_map = Dict(
@@ -37,8 +37,8 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     Φ_fcns::NamedTuple
     depth::Int
     out_size::Int
-    σ_ε::quant
-    σ_llhood::quant
+    σ_ε::half_quant
+    σ_llhood::half_quant
     log_lkhood_model::Function
     output_activation::Function
     resample_z::Function
@@ -48,7 +48,7 @@ function generate_from_z(
     lkhood, 
     ps, 
     st, 
-    z::AbstractArray{quant}    
+    z::AbstractArray{half_quant}    
     )
     """
     Generate data from the likelihood model.
@@ -80,8 +80,8 @@ function log_likelihood(
     lkhood, 
     ps, 
     st, 
-    x::AbstractArray{quant}, 
-    z::AbstractArray{quant};
+    x::AbstractArray{half_quant}, 
+    z::AbstractArray{half_quant};
     seed::Int=1
     )
     """
@@ -106,15 +106,15 @@ function log_likelihood(
 
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, quant, S, lkhood.out_size, B) |> device
+    ε = lkhood.σ_ε * randn(rng, half_quant, S, lkhood.out_size, B) |> device
     x̂ = lkhood.output_activation(x̂ .+ ε)
     return lkhood.log_lkhood_model(x, x̂), seed
 end
 
 function importance_resampler(
-    weights::AbstractArray{quant};
+    weights::AbstractArray{half_quant};
     seed::Int=1,
-    ESS_threshold::quant=quant(0.5),
+    ESS_threshold::full_quant=full_quant(0.5),
     resampler::Function=systematic_sampler,
     verbose::Bool=false,
 )
@@ -137,6 +137,7 @@ function importance_resampler(
     B, N = size(weights)
 
     # Check effective sample size
+    weights = weights .|> full_quant
     ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
     ESS_bool = ESS .< ESS_threshold*N
     
@@ -174,18 +175,18 @@ function init_KAN_lkhood(
     base_activation = retrieve(conf, "KAN_LIKELIHOOD", "base_activation")
     spline_function = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
     grid_size = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "grid_size"))
-    grid_update_ratio = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_update_ratio"))
-    grid_range = parse.(quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_range"))
-    ε_scale = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "ε_scale"))
-    μ_scale = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "μ_scale"))
-    σ_base = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_base"))
-    σ_spline = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_spline"))
-    init_η = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "init_η"))
-    η_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "η_trainable"))
-    η_trainable = spline_function == "B-spline" ? false : η_trainable
-    noise_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
-    gen_var = parse(quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
-    ESS_threshold = parse(quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
+    grid_update_ratio = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_update_ratio"))
+    grid_range = parse.(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "grid_range"))
+    ε_scale = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "ε_scale"))
+    μ_scale = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "μ_scale"))
+    σ_base = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_base"))
+    σ_spline = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "σ_spline"))
+    init_τ = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "init_τ"))
+    τ_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "τ_trainable"))
+    τ_trainable = spline_function == "B-spline" ? false : τ_trainable
+    noise_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
+    gen_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
+    ESS_threshold = parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
     resampler = retrieve(conf, "KAN_LIKELIHOOD", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
@@ -205,8 +206,8 @@ function init_KAN_lkhood(
         ε_scale=ε_scale,
         σ_base=base_scale,
         σ_spline=σ_spline,
-        init_η=init_η,
-        η_trainable=η_trainable,
+        init_τ=init_τ,
+        τ_trainable=τ_trainable,
     )
 
     lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
@@ -216,8 +217,8 @@ function init_KAN_lkhood(
     Φ_functions = NamedTuple() # Expert functions
     for i in eachindex(expert_widths[1:end-1])
         lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (quant(1) / √(quant(expert_widths[i])))
-        .+ σ_base .* (randn(rng, quant, expert_widths[i], expert_widths[i+1]) .* quant(2) .- quant(1)) .* (quant(1) / √(quant(expert_widths[i]))))
+        base_scale = (μ_scale * (full_quant(1) / √(full_quant(expert_widths[i])))
+        .+ σ_base .* (randn(rng, full_quant, expert_widths[i], expert_widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(expert_widths[i]))))
         @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
     end
 

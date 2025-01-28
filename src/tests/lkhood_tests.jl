@@ -1,7 +1,8 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
 
 ENV["GPU"] = true
-ENV["QUANT"] = "FP32"
+ENV["FULL_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP32"
 
 include("../T-KAM/mixture_prior.jl")
 include("../T-KAM/KAN_likelihood.jl")
@@ -47,7 +48,7 @@ function test_logllhood()
     x = randn(Float32, out_dim, b_size) |> device
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
     logllhood, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
-    @test size(logllhood) == (b_size,b_size)
+    @test size(logllhood) == (b_size, b_size)
 end
 
 function test_derivative()

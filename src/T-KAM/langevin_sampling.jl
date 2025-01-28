@@ -6,12 +6,12 @@ using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Dis
 using Zygote: withgradient
 
 include("../utils.jl")
-using .Utils: device, next_rng, quant
+using .Utils: device, next_rng, half_quant, full_quant
 
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
-    log_prior(m, z, ps, st; normalize=false) = quant(0)
-    log_likelihood(m, ps, st, x, z; seed=1) = -sum(z.^2) ./ 2, seed
+    log_prior(m, z, ps, st; normalize=false) = full_quant(0)
+    log_likelihood(m, ps, st, x, z; seed=1) = -sum(full_quant(z).^2) ./ 2, seed
 else
     include("mixture_prior.jl")
     include("KAN_likelihood.jl")
@@ -19,7 +19,7 @@ else
     using .KAN_likelihood: log_likelihood
 end
 
-function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
+function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -36,7 +36,7 @@ function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
-    ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> quant
+    ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
     Σ_AM = zeros(Q, Q) 
     for i in 1:Q
         Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
@@ -52,12 +52,12 @@ function sample_momentum(z::AbstractArray{quant}; seed::Int=1)
 end
 
 function leapfrop_proposal(
-    z::AbstractArray{quant},
-    logpos_z::quant,
-    ∇z::AbstractArray{quant},
-    momentum::AbstractArray{quant},
-    M::AbstractArray{quant},
-    η::quant,
+    z::AbstractArray{full_quant},
+    logpos_z::full_quant,
+    ∇z::AbstractArray{full_quant},
+    momentum::AbstractArray{full_quant},
+    M::AbstractArray{full_quant},
+    η::full_quant,
     logpos::Function;
     uniform_prior::Bool=false,
     seed::Int=1
@@ -87,8 +87,10 @@ function leapfrop_proposal(
         ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end
 
-    result = withgradient(z_i -> logpos(z_i, seed), ẑ)
+    result = withgradient(z_i -> logpos(z_i, seed), half_quant.(ẑ))
     logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
+    logpos_ẑ, ∇ẑ = full_quant(logpos_ẑ), ∇ẑ .|> full_quant
+
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
     # MH acceptance ratio
@@ -98,12 +100,12 @@ function leapfrop_proposal(
 end
 
 function reversibility_check(
-    z::AbstractArray{quant},
-    ẑ::AbstractArray{quant},
-    M::AbstractArray{quant},
-    η::quant,
+    z::AbstractArray{full_quant},
+    ẑ::AbstractArray{full_quant},
+    M::AbstractArray{full_quant},
+    η::full_quant,
     logpos::Function;
-    tol::quant=quant(1e-4),
+    tol::full_quant=full_quant(1e-4),
     seed::Int=1
     )
     """
@@ -119,8 +121,9 @@ function reversibility_check(
         A boolean indicating if the proposal is reversible.
         The updated seed.
     """
-    result = withgradient(z_i -> logpos(z_i, seed), ẑ)
+    result = withgradient(z_i -> logpos(z_i, seed), half_quant.(ẑ))
     logpos_∇ẑ, seed, ∇ẑ = result.val..., first(result.grad)
+    logpos_∇ẑ, ∇ẑ = full_quant(logpos_∇ẑ), ∇ẑ .|> full_quant
 
     p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
     z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
@@ -132,13 +135,13 @@ function autoMALA_sampler(
     m,
     ps,
     st,
-    x::AbstractArray{quant};
-    t::AbstractArray{quant}=[quant(1)],
+    x::AbstractArray{half_quant};
+    t::AbstractArray{full_quant}=[full_quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
-    Δη::quant=quant(2),
-    η_min::quant=quant(1e-5),
-    η_max::quant=quant(1),
+    Δη::full_quant=full_quant(2),
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1),
     seed::Int=1,
     )
     """
@@ -159,16 +162,21 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)    
+    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z = z .|> full_quant
+
+    if isa(st.η_init, CuArray)
+        @reset st.η_init = st.η_init |> cpu_device()
+    end
+
     T, B, Q = length(t), size(z)...
-    @reset st.η_init = st.η_init |> cpu_device()
     output = reshape(z, 1, B, Q)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, quant, N, T))  
+    log_u = log.(rand(rng, full_quant, N, T))  
     seed, rng = next_rng(seed)
-    ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> quant
+    ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     function log_posterior(z_i, t_k, seed_i)
         lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
@@ -178,7 +186,7 @@ function autoMALA_sampler(
 
     k = 1
     num_acceptances = zeros(Int, T) 
-    mean_η = zeros(quant, T) 
+    mean_η = zeros(full_quant, T) 
     while k < T + 1
         logpos = (z_i, seed_i) -> log_posterior(z_i, t[k], seed_i)
         burn_in = 0
@@ -187,8 +195,9 @@ function autoMALA_sampler(
             momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
-            result = withgradient(z_i -> logpos(z_i, seed), z)
+            result = withgradient(z_i -> logpos(z_i, seed), half_quant.(z))
             logpos_z, seed, ∇z = result.val..., first(result.grad) 
+            logpos_z, ∇z = full_quant(logpos_z), ∇z .|> full_quant
 
             proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
 
@@ -226,7 +235,7 @@ function autoMALA_sampler(
     m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
     m.verbose && println("Mean step sizes: ", mean_η)
 
-    return output, st, seed
+    return half_quant.(output), st, seed
 end
 
 end

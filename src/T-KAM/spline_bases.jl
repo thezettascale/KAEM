@@ -7,11 +7,11 @@ using Tullio, LinearAlgebra
 using NNlib
 
 include("../utils.jl")
-using .Utils: removeNaN, device, quant
+using .Utils: removeNaN, device, half_quant, full_quant
 
 method = get(ENV, "method", "B-spline") 
 
-function extend_grid(grid::AbstractArray{quant}; k_extend::Int64=0)
+function extend_grid(grid::AbstractArray{half_quant}; k_extend::Int64=0)
     """
     Extend the grid of knots to include boundary knots.
 
@@ -33,10 +33,10 @@ function extend_grid(grid::AbstractArray{quant}; k_extend::Int64=0)
 end
 
 function B_spline_basis(
-    x::AbstractArray{quant},
-    grid::AbstractArray{quant};
+    x::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
     degree::Int64=3, 
-    σ::Union{quant, AbstractArray{quant}}=quant(1)
+    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
     )
     """
     Compute the B-spline basis functions for a batch of points x and a grid of knots.
@@ -60,8 +60,8 @@ function B_spline_basis(
         # B0 is piecewise constant
         @tullio term1[b, i, g] := x[b, i, 1] >= grid_1[1, i, g]
         @tullio term2[b, i, g] := x[b, i, 1] < grid_2[1, i, g]
-        term1 = quant.(term1)
-        term2 = quant.(term2)
+        term1 = half_quant.(term1)
+        term2 = half_quant.(term2)
 
         @tullio B[b, i, g] := term1[b, i, g] * term2[b, i, g]
 
@@ -85,10 +85,10 @@ function B_spline_basis(
 end
 
 function RBF_basis(
-    x::AbstractArray{quant},
-    grid::AbstractArray{quant};
+    x::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
     degree::Int64=3, 
-    σ::Union{quant, AbstractArray{quant}}=quant(1)
+    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
     )
     """
     Compute the RBF basis functions for a batch of points x and a grid of knots.
@@ -108,10 +108,10 @@ function RBF_basis(
 end
 
 function RSWAF_basis(
-    x::AbstractArray{quant},
-    grid::AbstractArray{quant};
+    x::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
     degree::Int64=3, 
-    σ::Union{quant, AbstractArray{quant}}=quant(1)
+    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
     )
     """
     Compute the RSWAF basis functions for a batch of points x and a grid of knots.
@@ -132,11 +132,11 @@ function RSWAF_basis(
 end
 
 function coef2curve(
-    x_eval::AbstractArray{quant},
-    grid::AbstractArray{quant},
-    coef::AbstractArray{quant};
+    x_eval::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant},
+    coef::AbstractArray{half_quant};
     k::Int64=3, 
-    scale::Union{quant, AbstractArray{quant}}=quant(1), 
+    scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
     basis_function::Function=B_spline_basis
     )
     """
@@ -156,12 +156,12 @@ function coef2curve(
 end
 
 function curve2coef(
-    x_eval::AbstractArray{quant},
-    y_eval::AbstractArray{quant},
-    grid::AbstractArray{quant};
+    x_eval::AbstractArray{half_quant},
+    y_eval::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
     k::Int64=3,
-    scale::Union{quant, AbstractArray{quant}}=quant(1), 
-    ε::quant=quant(1e-4), 
+    scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
+    ε::half_quant=half_quant(1e-4), 
     basis_function::Function=B_spline_basis
     )
     """
@@ -195,24 +195,23 @@ function curve2coef(
     
     @tullio BtB[i, o, g, j] := Bt[i, o, g, b] * B[i, o, b, j] # in_dim x out_dim x n_grids x n_grids
     n1, n2, n, _ = size(BtB)
-    eye = Matrix{quant}(I, n, n) .* ε |> device
+    eye = Matrix{half_quant}(I, n, n) .* ε |> device
     eye = reshape(eye, 1, 1, n, n)
     eye = repeat(eye, n1, n2, 1, 1)
     BtB = BtB + eye 
     
     @tullio Bty[i, o, g, j] := Bt[i, o, g, b] * y_eval[i, o, b, j]
 
-    # Cusolver only supports Float32
-    BtB, Bty = BtB .|> Float32, Bty .|> Float32
+    BtB, Bty = BtB .|> full_quant, Bty .|> full_quant
     
     # x = (BtB)^-1 * Bty
-    coef = zeros(quant, 0, out_dim, n_grid) |> device
+    coef = zeros(full_quant, 0, out_dim, n_grid) |> device
     for i in 1:in_dim
-        coef_ = zeros(quant, 0, n_grid) |> device
+        coef_ = zeros(full_quant, 0, n_grid) |> device
         for o in 1:out_dim
             lstq = qr(BtB[i, o, :, :]) \ Bty[i, o, :, :]
             lstq = lstq |> permutedims
-            coef_ = vcat(coef_, lstq .|> quant)
+            coef_ = vcat(coef_, lstq .|> full_quant)
         end
         coef_ = reshape(coef_, 1, size(coef_)...)
         coef = vcat(coef, coef_)

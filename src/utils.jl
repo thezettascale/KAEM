@@ -1,32 +1,39 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, quant
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, move_to_cpu, move_to_gpu
 
-using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors
+using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions
 using ChainRules: @ignore_derivatives
 
 const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
-# Only FP32 is supported for now
-const quant = Dict(
+# Mixed precision
+const half_quant = Dict(
+    "FP16" => Float16,
+    "BF16" => BFloat16, # I wish I could use BF16, but I just get LLVM errors
+    "FP32" => Float32
+)[get(ENV, "HALF_QUANT", "FP32")]
+
+const full_quant = Dict(
+    "FP16" => Float16,
     "FP32" => Float32,
-    "FP64" => Float64
-)[get(ENV, "QUANT", "FP32")]
+    "FP64" => Float64,
+)[get(ENV, "FULL_QUANT", "FP32")]
 
 function device(x)
     return pu(x)
 end
 
 function removeNaN(x)
-    return ifelse.(isnan.(x), quant(0), x) |> device
+    return ifelse.(isnan.(x), half_quant(0), x) |> device
 end
 
-function removeZero(x; ε=quant(1e-4))
+function removeZero(x; ε=half_quant(1e-4))
     return ifelse.(abs.(x) .< ε, ε, x) |> device
 end
 
-function removeNeg(x; ε=quant(1e-4))
+function removeNeg(x; ε=half_quant(1e-4))
     return ifelse.(x .< ε, ε, x) |> device
 end
 

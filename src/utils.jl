@@ -11,7 +11,7 @@ const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device
 # Mixed precision
 const half_quant = Dict(
     "FP16" => Float16,
-    "BF16" => BFloat16, # I wish I could use BF16, but I just get LLVM errors
+    "BF16" => BFloat16, # I wish I could use BF16, but it's not supported very well yet.
     "FP32" => Float32
 )[get(ENV, "HALF_QUANT", "FP32")]
 

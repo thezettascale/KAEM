@@ -26,7 +26,7 @@ mutable struct T_KAM_trainer
     dataset_name::AbstractString
     img_shape::Tuple
     ps::ComponentArray
-    st::ComponentArray
+    st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
     x::AbstractArray

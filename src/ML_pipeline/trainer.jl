@@ -157,7 +157,6 @@ function train!(t::T_KAM_trainer)
         
         loss, t.st, t.seed = t.model.loss_fcn(t.model, half_quant.(t.ps), t.st, t.x)
         loss = full_quant(loss) / loss_scaling
-        error(loss)
         
         train_loss += loss
         t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")

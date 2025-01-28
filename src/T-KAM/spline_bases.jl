@@ -104,7 +104,7 @@ function RBF_basis(
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
     @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
     diff = diff ./ σ
-    return @tullio B[b, i, g] := exp(-5f-1 * (diff[b, i, g])^2)    
+    return @tullio B[b, i, g] := exp(-half_quant(0.5) * (diff[b, i, g])^2)    
 end
 
 function RSWAF_basis(

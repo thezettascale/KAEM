@@ -106,7 +106,7 @@ function fwd(l, ps, st, x)
 
     base = l.base_activation(x)
     y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
-
+    
     return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
 end
 
@@ -128,8 +128,8 @@ function update_fcn_grid(l, ps, st, x)
     coef = ps.coef
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     
-    x_sort = sort(x, dims=1)
-    y = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
+    x_sort = sort(x, dims=1) 
+    y = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function) .|> half_quant
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(l.grid, 2) - 2*l.spline_degree - 1

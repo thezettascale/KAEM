@@ -8,7 +8,7 @@ using Flux: onehotbatch
 
 include("../utils.jl")
 include("univariate_functions.jl")
-using .Utils: device, next_rng, removeZero, half_quant
+using .Utils: device, next_rng, removeZero, half_quant, full_quant
 using .univariate_functions: fwd
 
 function choose_component(
@@ -32,8 +32,8 @@ function choose_component(
         seed: The updated seed.
     """
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, half_quant, q_size, num_samples) 
-    α = cumsum(softmax(α; dims=2); dims=2) |> cpu_device()
+    rand_vals = rand(rng, full_quant, q_size, num_samples) 
+    α = cumsum(softmax(α .|> full_quant; dims=2); dims=2) |> cpu_device() 
 
     # Find the index of the first cdf value greater than the random value
     mask = Array{half_quant}(undef, q_size, p_size, num_samples) 
@@ -80,8 +80,9 @@ function sample_prior(
 
     # Evaluate prior on grid [0,1]
     f_grid = prior.fcns_qp[Symbol("1")].grid'
-    grid = f_grid |> cpu_device()
-    Δg = f_grid[2:end, :] - f_grid[1:end-1, :] 
+    grid = f_grid |> cpu_device() .|> full_quant
+    Δg = f_grid[2:end, :] - f_grid[1:end-1, :] .|> full_quant
+    
     π_grid = prior.π_pdf(f_grid)
     grid_size = size(f_grid, 1)
 
@@ -94,6 +95,7 @@ function sample_prior(
 
     # Filter out components
     @tullio exp_fg[b, g, q] := (exp(f_grid[g, q, p]) * π_grid[g, q]) * component_mask[b, q, p]
+    exp_fg = exp_fg .|> full_quant
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = (permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
@@ -101,9 +103,9 @@ function sample_prior(
     cdf = cat(zeros(num_samples, 1, q_size), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, half_quant, num_samples, q_size) .* cdf[:, end, :] 
+    rand_vals = rand(rng, full_quant, num_samples, q_size) .* cdf[:, end, :] 
     
-    z = Array{half_quant}(undef, num_samples, q_size)
+    z = Array{full_quant}(undef, num_samples, q_size)
     Threads.@threads for b in 1:num_samples
         for q in 1:q_size
             # First trapezium where CDF >= rand_val
@@ -119,7 +121,7 @@ function sample_prior(
         end
     end
 
-    return device(z), seed
+    return device(half_quant.(z)), seed
 end
 
 end

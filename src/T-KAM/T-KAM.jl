@@ -178,7 +178,7 @@ function update_model_grid(
 
     if model.update_prior_grid
         z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-        
+
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             @reset ps.ebm[Symbol("$i")].coef = new_coef

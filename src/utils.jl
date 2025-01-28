@@ -8,7 +8,7 @@ using ChainRules: @ignore_derivatives
 
 const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
-# Mixed precision
+# Mixed precision - very unstable
 const half_quant = Dict(
     "FP16" => Float16,
     "FP32" => Float32

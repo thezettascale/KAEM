@@ -90,7 +90,7 @@ function importance_loss(
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2))) 
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
 
@@ -148,7 +148,7 @@ function thermo_loss(
     logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed)
     logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood
-    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) .|> half_quant
+    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) 
 
     # Expected posterior
     TI_loss = sum(weights .* logllhood)

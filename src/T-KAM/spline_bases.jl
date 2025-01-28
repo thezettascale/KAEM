@@ -127,7 +127,7 @@ function RSWAF_basis(
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
     @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
     diff = NNlib.tanh_fast(diff ./ σ)     
-    return 1 - diff.^2
+    return 1 .- diff.^2
 end
 
 function coef2curve(

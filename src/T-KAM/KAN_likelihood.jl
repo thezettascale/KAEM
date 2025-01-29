@@ -27,7 +27,7 @@ lkhood_models_flat = Dict(
     "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; eps=eps(half_quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
 )
 
-lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[h, w, c, b] - x̂[h, w, c, s])^2)
+lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[h, w, c, b] - x̂[h, w, c, s, b])^2)
 
 llhoods_dict = Dict(
     false => lkhood_models_flat,
@@ -150,13 +150,13 @@ function log_likelihood(
         The unnormalized log-likelihood.
         The updated seed.
     """
-    S, Q, B = size(z)..., size(x, 2)
+    S, Q, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
 
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, half_quant, S, lkhood.out_size, B) |> device
+    ε = lkhood.σ_ε * randn(rng, half_quant, size(x)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ ε)
     ll = lkhood.log_lkhood_model(x, x̂)
     

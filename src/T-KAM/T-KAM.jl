@@ -74,14 +74,16 @@ function importance_loss(
     ps,
     st,
     x::AbstractArray{half_quant};
+    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
     seed::Int=1
     )
     """MLE loss with importance sampling."""
     
     # Expected prior, (if contrastive divergence)
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-        mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
+    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
@@ -106,19 +108,21 @@ function MALA_loss(
     ps,
     st,
     x::AbstractArray{half_quant};
+    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
     seed::Int=1
     )
     """MLE loss with MALA."""
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
+    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
     )
     
     # Log-dists
-    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed)
+    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed)
 
     # Expected posterior
     return -mean(logprior .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
@@ -129,6 +133,7 @@ function thermo_loss(
     ps,
     st,
     x::AbstractArray{half_quant};
+    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
@@ -140,12 +145,13 @@ function thermo_loss(
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     T, S, Q, B = size(z)..., size(x, 2)
+    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    -mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)) : half_quant(0)  
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
     )
 
-    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div)'
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed)
+    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
+    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed)
     logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) 

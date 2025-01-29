@@ -37,7 +37,7 @@ struct univariate_function <: Lux.AbstractLuxLayer
     spline_degree::Int
     base_activation::Function
     spline_function::Function
-    grid::AbstractArray{half_quant}
+    grid::Union{AbstractArray{half_quant}, AbstractArray{full_quant}}
     grid_size::Int
     grid_update_ratio::half_quant
     grid_range::Tuple{half_quant, half_quant}

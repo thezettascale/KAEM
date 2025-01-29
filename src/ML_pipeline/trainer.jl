@@ -139,7 +139,17 @@ function train!(t::T_KAM_trainer)
             t.model.verbose && println("Iter: $(t.st.train_idx), Grid updated")
         end
 
-        grads = first(gradient(pars -> first(t.model.loss_fcn(t.model, pars, t.st, t.x; seed=t.seed)), half_quant.(t.ps))) .|> full_quant
+        # Reduced precision grads
+        grads = CUDA.@fastmath first(gradient(pars -> first(t.model.loss_fcn(
+            t.model, 
+            pars, 
+            t.st, 
+            t.x; 
+            full_precision=false,
+            seed=t.seed
+            )), 
+            half_quant.(t.ps))) .|> full_quant
+
         grads = grads ./ loss_scaling
         
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
@@ -155,8 +165,17 @@ function train!(t::T_KAM_trainer)
     function opt_loss(u, args...)
         t.ps = u
         
-        loss, t.st, t.seed = t.model.loss_fcn(t.model, half_quant.(t.ps), t.st, t.x)
-        loss = full_quant(loss) / loss_scaling
+        # Full precision loss, (switches to full precision for accumulation, not forward passes)
+        loss, t.st, t.seed = CUDA.@fastmath t.model.loss_fcn(
+            t.model, 
+            half_quant.(t.ps), 
+            t.st, 
+            t.x; 
+            full_precision=true, 
+            seed=t.seed
+            )
+
+        loss = loss / loss_scaling
         
         train_loss += loss
         t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")

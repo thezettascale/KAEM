@@ -70,7 +70,8 @@ function log_prior(
     z::AbstractArray{half_quant},
     ps, 
     st;
-    normalize::Bool=false
+    normalize::Bool=false,
+    full_precision::Bool=false
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -105,6 +106,7 @@ function log_prior(
     @tullio prob[b,q,p] := exp(z[b,q,p]) * alpha[q,p] * π_0[b,q]
     prob = log.(prob .+ eps(eltype(prob)))
     prob = !normalize ? prob .- log_partition_function(mix, ps, st) : prob
+    prob = full_precision ? full_quant.(prob) : prob
     return dropdims(sum(prob; dims=(2,3)); dims=(2,3))
 end
 

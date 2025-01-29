@@ -82,6 +82,7 @@ function log_likelihood(
     st, 
     x::AbstractArray{half_quant}, 
     z::AbstractArray{half_quant};
+    full_precision::Bool=false,
     seed::Int=1
     )
     """
@@ -108,7 +109,9 @@ function log_likelihood(
     seed, rng = next_rng(seed)
     ε = lkhood.σ_ε * randn(rng, half_quant, S, lkhood.out_size, B) |> device
     x̂ = lkhood.output_activation(x̂ .+ ε)
-    return lkhood.log_lkhood_model(x, x̂), seed
+    ll = lkhood.log_lkhood_model(x, x̂)
+    ll = full_precision ? full_quant.(ll) : ll
+    return ll, seed
 end
 
 function importance_resampler(

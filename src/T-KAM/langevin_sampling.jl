@@ -3,7 +3,7 @@ module LangevinSampling
 export autoMALA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
-using Zygote: withgradient
+using Zygote: gradient
 
 include("../utils.jl")
 using .Utils: device, next_rng, half_quant, full_quant
@@ -87,9 +87,8 @@ function leapfrop_proposal(
         ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end
 
-    result = withgradient(z_i -> logpos(z_i, seed), half_quant.(ẑ))
-    logpos_ẑ, seed, ∇ẑ = result.val..., first(result.grad)
-    logpos_ẑ, ∇ẑ = full_quant(logpos_ẑ), ∇ẑ .|> full_quant
+    ∇ẑ = first(gradient(z -> first(logpos(z, false, seed)), ẑ)) .|> full_quant
+    logpos_ẑ, seed = logpos(ẑ, true, seed)
 
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
@@ -121,9 +120,8 @@ function reversibility_check(
         A boolean indicating if the proposal is reversible.
         The updated seed.
     """
-    result = withgradient(z_i -> logpos(z_i, seed), half_quant.(ẑ))
-    logpos_∇ẑ, seed, ∇ẑ = result.val..., first(result.grad)
-    logpos_∇ẑ, ∇ẑ = full_quant(logpos_∇ẑ), ∇ẑ .|> full_quant
+    ∇ẑ = first(gradient(z -> first(logpos(z, false, seed)), ẑ)) .|> full_quant
+    logpos_∇ẑ, seed = logpos(ẑ, true, seed)
 
     p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
     z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
@@ -178,9 +176,9 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
-    function log_posterior(z_i, t_k, seed_i)
-        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false)'
-        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed_i)
+    function log_posterior(z_i::AbstractArray{half_quant}, t_k::full_quant; full_precision::Bool=false, seed_i::Int=1)
+        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false, full_precision=full_precision)'
+        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; full_precision=full_precision, seed=seed_i)
         return sum(lp .+ t_k .* ll), seed_i
     end
 
@@ -188,16 +186,15 @@ function autoMALA_sampler(
     num_acceptances = zeros(Int, T) 
     mean_η = zeros(full_quant, T) 
     while k < T + 1
-        logpos = (z_i, seed_i) -> log_posterior(z_i, t[k], seed_i)
+        logpos = (z_i, prec, seed_i) -> log_posterior(z_i, t[k]; full_precision=prec, seed_i=seed_i)
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
             momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
-            result = withgradient(z_i -> logpos(z_i, seed), half_quant.(z))
-            logpos_z, seed, ∇z = result.val..., first(result.grad) 
-            logpos_z, ∇z = full_quant(logpos_z), ∇z .|> full_quant
+            ∇z = first(gradient(z -> first(logpos(z, false, seed)), z)) .|> full_quant
+            logpos_z, seed = logpos(z, true, seed)
 
             proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
 

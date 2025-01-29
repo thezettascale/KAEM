@@ -30,8 +30,28 @@ function test_generate()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
-    x = generate_from_z(lkhood, ps.gen, st.gen, z)
+    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
     @test size(x) == (b_size, out_dim)
+end
+
+function test_cnn_generate()
+    Random.seed!(42)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    prior = init_mix_prior(conf; prior_seed=1)
+    ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
+
+    ps = (ebm=ebm_ps, gen=gen_ps) |> device
+    st = (ebm=ebm_st, gen=gen_st) |> device
+
+    z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
+    x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
+    @test size(x) == (32, 32, out_dim, b_size)
+
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
 function test_logllhood()
@@ -47,7 +67,7 @@ function test_logllhood()
 
     x = randn(Float32, out_dim, b_size) |> device
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
-    logllhood, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
+    logllhood, _, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
     @test size(logllhood) == (b_size, b_size)
 end
 
@@ -68,8 +88,31 @@ function test_derivative()
     @test size(∇) == size(z)
 end
 
+function test_cnn_derivative()
+    Random.seed!(42)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    prior = init_mix_prior(conf; prior_seed=1)
+    ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
+
+    ps = (ebm=ebm_ps, gen=gen_ps) |> device
+    st = (ebm=ebm_st, gen=gen_st) |> device
+
+    x = randn(Float32, 32, 32, out_dim, b_size) |> device
+    z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
+    ∇ = first(gradient(z_i -> sum(first(log_likelihood(lkhood, ps.gen, st.gen, x, z_i))), z))
+    @test size(∇) == size(z)
+
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
+end
+
 @testset "KAN Likelihood Tests" begin
     test_generate()
+    test_cnn_generate()
     test_logllhood()
     test_derivative()
+    test_cnn_derivative()
 end

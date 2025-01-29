@@ -1,6 +1,6 @@
 using ConfParser, Random
 
-conf = ConfParse("nist_config.ini")
+conf = ConfParse("img_config.ini")
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
@@ -11,6 +11,8 @@ include("src/ML_pipeline/trainer.jl")
 using .trainer
 
 datasets = [
+    "CIFAR10",
+    "SVHN",
     "MNIST", 
     "FMNIST"
     ]

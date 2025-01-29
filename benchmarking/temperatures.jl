@@ -7,7 +7,7 @@ ENV["HALF_QUANT"] = "FP16"
 include("../src/T-KAM/T-KAM.jl")
 using .T_KAM_model
 
-conf = ConfParse("nist_config.ini")#
+conf = ConfParse("img_config.ini")
 parse_conf!(conf)
 
 function benchmark_temps(N_t)

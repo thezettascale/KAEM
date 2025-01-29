@@ -65,7 +65,7 @@ function generate_batch(
     ps = ps .|> half_quant
 
     z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
-    x̂ = generate_from_z(model.lkhood, ps.gen, st.gen, z)
+    x̂, _ = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
     return model.lkhood.output_activation(x̂), seed
 end
 
@@ -87,13 +87,13 @@ function importance_loss(
     )
 
     logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    @ignore_derivatives @reset st.gen = st_gen
 
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2))) 
-    weights_resampled = @ignore_derivatives full_precision ? weights_resampled : half_quant.(weights_resampled)
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
 
@@ -123,7 +123,8 @@ function MALA_loss(
     
     # Log-dists
     logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed)
+    @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
     return -mean(logprior .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
@@ -152,11 +153,12 @@ function thermo_loss(
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
-    logllhood, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed)
+    @ignore_derivatives @reset st.gen = st_gen
+
     logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) 
-    weights = @ignore_derivatives full_precision ? weights : half_quant.(weights)
 
     # Expected posterior
     TI_loss = sum(weights .* logllhood)
@@ -198,7 +200,7 @@ function update_model_grid(
         end
     end
          
-    !model.update_llhood_grid && return model, ps, seed
+    (!model.update_llhood_grid && !model.lkhood.CNN) && return model, ps, seed
 
     z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
 
@@ -229,11 +231,15 @@ function init_T_KAM(
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
+    cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
+
     data_seed, rng = next_rng(data_seed)
-    train_loader = DataLoader(dataset[:, 1:N_train], batchsize=batch_size, shuffle=true, rng=rng)
-    test_loader = DataLoader(dataset[:, N_train+1:N_train+N_test], batchsize=batch_size, shuffle=false)
+    train_data = cnn ? dataset[:,:,:,1:N_train] : dataset[:, 1:N_train]
+    test_data = cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : dataset[:, N_train+1:N_train+N_test]
+    train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
+    test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
     loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
-    out_dim = size(dataset, 1)
+    out_dim = cnn ? size(dataset, 3) : size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)

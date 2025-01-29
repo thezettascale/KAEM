@@ -48,12 +48,15 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     dataset = dataset_mapping[dataset_name][1:N_train+N_test].features
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
+    cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
+    commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
 
     # Option to resize dataset 
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     img_shape = size(dataset)[1:end-1]
-    dataset = reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end]) .|> half_quant
-    save_dataset = reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
+    dataset = cnn ? dataset : reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end])
+    dataset = dataset .|> half_quant
+    save_dataset = cnn ? dataset[:,:,:,1:num_generated_samples] : reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
     println("Resized dataset to $(img_shape)")
     
     # Initialize model
@@ -169,7 +172,7 @@ function train!(t::T_KAM_trainer)
         loss, t.st, t.seed = CUDA.@fastmath t.model.loss_fcn(
             t.model, 
             half_quant.(t.ps), 
-            t.st, 
+            Lux.testmode(t.st), 
             t.x; 
             full_precision=true, 
             seed=t.seed

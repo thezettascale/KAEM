@@ -10,7 +10,7 @@ T-KAM is a generative model that has been **entirely represented in two sums.** 
 It uses:
 
 - **The Kolmogorov-Arnold theorem** - any continous function can be represented in a finite manner.
-- **Empirical Bayes** - the prior is updated using observations from the data.
+- **Empirical Bayes** - the prior is initialized and updated using observations from the data. It can also be recovered by visualizing its components.
 - **Thermodynamic Integration** - the practicality of the theorem is improved using another means of marginal likelihood estimation.
 
 ## Setup:
@@ -45,7 +45,7 @@ nano nist_config.ini
 For main experiments run:
 
 ```bash
-julia --threads auto nist.jl
+julia --threads auto main.jl
 ```
 
 For benchmarking run:

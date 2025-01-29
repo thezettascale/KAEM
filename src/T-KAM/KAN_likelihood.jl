@@ -4,7 +4,7 @@ export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_l
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib: sigmoid_fast, tanh_fast
+using NNlib: sigmoid_fast, tanh_fast, relu
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
@@ -22,9 +22,18 @@ output_activation_mapping = Dict(
     "none" => identity
 )
 
-lkhood_models = Dict(
+lkhood_models_flat = Dict(
     "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
     "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; eps=eps(half_quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
+)
+
+lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[h, w, c, b] - x̂[h, w, c, s])^2)
+
+llhoods_dict = Dict(
+    false => lkhood_models_flat,
+    true => Dict(
+        "l2" => lkhood_model_rgb,
+    )
 )
 
 resampler_map = Dict(
@@ -42,16 +51,18 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     log_lkhood_model::Function
     output_activation::Function
     resample_z::Function
+    generate_from_z::Function
+    CNN::Bool
 end
 
-function generate_from_z(
+function KAN_gen(
     lkhood, 
     ps, 
     st, 
     z::AbstractArray{half_quant}    
     )
     """
-    Generate data from the likelihood model.
+    Generate data from the KAN likelihood model.
 
     Args:
         lkhood: The likelihood model.
@@ -73,7 +84,45 @@ function generate_from_z(
         z = dropdims(sum(z, dims=2); dims=2)
     end
 
-    return z
+    return z, st
+end
+
+function CNN_gen(
+    lkhood, 
+    ps, 
+    st, 
+    z::AbstractArray{half_quant}    
+    )
+    """
+    Generate data from the CNN likelihood model.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The generated data.
+        The updated seed.
+    """
+    num_samples, q_size = size(z)
+    z = reshape(z, 1, 1, q_size, num_samples)
+
+    for i in 1:lkhood.depth
+        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
+        @ignore_derivatives @reset st[Symbol("$i")] = st_new    
+
+        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
+        @ignore_derivatives @reset st[Symbol("bn_$i")] = st_new
+    end
+
+    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")], z, ps[Symbol("$(lkhood.depth+1)")], st[Symbol("$(lkhood.depth+1)")])
+    @reset st[Symbol("$(lkhood.depth+1)")] = st_new
+
+    return z, st
 end
 
 function log_likelihood(
@@ -103,7 +152,7 @@ function log_likelihood(
     """
     S, Q, B = size(z)..., size(x, 2)
 
-    x̂ = generate_from_z(lkhood, ps, st, z)
+    x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
 
     # Add noise
     seed, rng = next_rng(seed)
@@ -116,7 +165,7 @@ function log_likelihood(
         ll = full_quant.(ll)
     end
     
-    return ll, seed
+    return ll, st, seed
 end
 
 function importance_resampler(
@@ -201,44 +250,79 @@ function init_KAN_lkhood(
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
-    initialize_function = (in_dim, out_dim, base_scale) -> init_function(
-        in_dim,
-        out_dim;
-        spline_degree=spline_degree,
-        base_activation=base_activation,
-        spline_function=spline_function,
-        grid_size=grid_size,
-        grid_update_ratio=grid_update_ratio,
-        grid_range=Tuple(grid_range),
-        ε_scale=ε_scale,
-        σ_base=base_scale,
-        σ_spline=σ_spline,
-        init_τ=init_τ,
-        τ_trainable=τ_trainable,
-    )
+    CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
 
-    lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    ll_model = lkhood_models[lkhood_model]
+    lkhood_model = CNN ? "l2" : retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
+    ll_model = llhoods_dict[CNN][lkhood_model]
+    generate_fcn = CNN ? CNN_gen : KAN_gen
 
-    # KAN functions
-    Φ_functions = NamedTuple() # Expert functions
-    for i in eachindex(expert_widths[1:end-1])
-        lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (full_quant(1) / √(full_quant(expert_widths[i])))
-        .+ σ_base .* (randn(rng, full_quant, expert_widths[i], expert_widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(expert_widths[i]))))
-        @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
+    Φ_functions = NamedTuple() 
+    depth = length(expert_widths)-1
+
+    if !CNN
+        initialize_function = (in_dim, out_dim, base_scale) -> init_function(
+            in_dim,
+            out_dim;
+            spline_degree=spline_degree,
+            base_activation=base_activation,
+            spline_function=spline_function,
+            grid_size=grid_size,
+            grid_update_ratio=grid_update_ratio,
+            grid_range=Tuple(grid_range),
+            ε_scale=ε_scale,
+            σ_base=base_scale,
+            σ_spline=σ_spline,
+            init_τ=init_τ,
+            τ_trainable=τ_trainable,
+        )
+
+        for i in eachindex(expert_widths[1:end-1])
+            lkhood_seed, rng = next_rng(lkhood_seed)
+            base_scale = (μ_scale * (full_quant(1) / √(full_quant(expert_widths[i])))
+            .+ σ_base .* (randn(rng, full_quant, expert_widths[i], expert_widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(expert_widths[i]))))
+            @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
+        end
+    else
+        channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
+        hidden_c = (q_size, channels...)
+        depth = length(hidden_c)-1
+        strides = parse.(Int, retrieve(conf, "CNN", "strides"))
+        k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
+        paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
+
+        length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
+        length(k_size) != length(hidden_c) && (error("Number of kernel sizes must be equal to the number of hidden layers + 1."))
+        length(paddings) != length(hidden_c) && (error("Number of paddings must be equal to the number of hidden layers + 1."))
+
+        for i in eachindex(hidden_c[1:end-1])
+            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose((k_size[i], k_size[i]), hidden_c[i] => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i])
+            @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], relu)
+        end
+        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
     end
 
-    return KAN_lkhood(Φ_functions, length(expert_widths)-1, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn)
+    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn, generate_fcn, CNN)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    if lkhood.CNN
+        @reset ps[Symbol("$(lkhood.depth+1)")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
+        for i in 1:lkhood.depth
+            @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+        end
+    end
     return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
     st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    if lkhood.CNN
+        @reset st[Symbol("$(lkhood.depth+1)")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
+        for i in 1:lkhood.depth
+            @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+        end
+    end
     return st
 end
 

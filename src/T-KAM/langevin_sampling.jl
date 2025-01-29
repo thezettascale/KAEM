@@ -11,7 +11,7 @@ using .Utils: device, next_rng, half_quant, full_quant
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
     log_prior(m, z, ps, st; normalize=false) = full_quant(0)
-    log_likelihood(m, ps, st, x, z; seed=1) = -sum(full_quant(z).^2) ./ 2, seed
+    log_likelihood(m, ps, st, x, z; seed=1) = -sum(full_quant(z).^2) ./ 2, st, seed
 else
     include("mixture_prior.jl")
     include("KAN_likelihood.jl")
@@ -53,6 +53,7 @@ end
 
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
+    st,
     logpos_z::full_quant,
     ∇z::AbstractArray{full_quant},
     momentum::AbstractArray{full_quant},
@@ -87,19 +88,21 @@ function leapfrop_proposal(
         ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end
 
-    ∇ẑ = first(gradient(z -> first(logpos(z, false, seed)), ẑ)) .|> full_quant
-    logpos_ẑ, seed = logpos(ẑ, true, seed)
+    ∇ẑ = first(gradient(z_i -> first(logpos(z_i, st, false, seed)), half_quant.(ẑ))) .|> full_quant
+    logpos_ẑ, st_new, seed = logpos(half_quant.(ẑ), Lux.testmode(st), true, seed)
+    @reset st.gen = st_new
 
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
     # MH acceptance ratio
     log_r = logpos_ẑ - logpos_z - ((sum(p.^2) - sum(momentum.^2)) / 2)
 
-    return ẑ, log_r, seed
+    return ẑ, log_r, st, seed
 end
 
 function reversibility_check(
     z::AbstractArray{full_quant},
+    st,
     ẑ::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
     η::full_quant,
@@ -120,13 +123,14 @@ function reversibility_check(
         A boolean indicating if the proposal is reversible.
         The updated seed.
     """
-    ∇ẑ = first(gradient(z -> first(logpos(z, false, seed)), ẑ)) .|> full_quant
-    logpos_∇ẑ, seed = logpos(ẑ, true, seed)
+    ∇ẑ = first(gradient(z_i -> first(logpos(z_i, st, false, seed)), half_quant.(ẑ))) .|> full_quant
+    logpos_∇ẑ, st_new, seed = logpos(half_quant.(ẑ), Lux.testmode(st), true, seed)
+    @reset st.gen = st_new
 
     p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
-    z_rev, _, seed = leapfrop_proposal(ẑ, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
+    z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
 
-    return norm(z_rev - z) < tol, seed
+    return norm(z_rev - z) < tol, st, seed
 end
 
 function autoMALA_sampler(
@@ -176,27 +180,28 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
-    function log_posterior(z_i::AbstractArray{half_quant}, t_k::full_quant; full_precision::Bool=false, seed_i::Int=1)
-        lp = log_prior(m.prior, z_i, ps.ebm, st.ebm; normalize=false, full_precision=full_precision)'
-        ll, seed_i = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; full_precision=full_precision, seed=seed_i)
-        return sum(lp .+ t_k .* ll), seed_i
+    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; full_precision::Bool=false, seed_i::Int=1)
+        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision)'
+        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; full_precision=full_precision, seed=seed_i)
+        return sum(lp .+ t_k .* ll), st_new, seed_i
     end
 
     k = 1
     num_acceptances = zeros(Int, T) 
     mean_η = zeros(full_quant, T) 
     while k < T + 1
-        logpos = (z_i, prec, seed_i) -> log_posterior(z_i, t[k]; full_precision=prec, seed_i=seed_i)
+        logpos = (z_i, st_i, prec, seed_i) -> log_posterior(z_i, st_i, t[k]; full_precision=prec, seed_i=seed_i)
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
             momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
-            ∇z = first(gradient(z -> first(logpos(z, false, seed)), z)) .|> full_quant
-            logpos_z, seed = logpos(z, true, seed)
+            ∇z = first(gradient(z_i -> first(logpos(z_i, st, false, seed)), half_quant.(z))) .|> full_quant
+            logpos_z, st_gen, seed = logpos(half_quant.(z), Lux.testmode(st), true, seed)
+            @reset st.gen = st_gen
 
-            proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
+            proposal, log_r, st, seed = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
 
             if burn_in < N_unadjusted
                 z .= proposal
@@ -205,11 +210,11 @@ function autoMALA_sampler(
                 geq_bool = log_r >= log_b
                 while !(log_a < log_r < log_b) && (η_min <= η <= η_max)
                     η = geq_bool ? η * Δη : η / Δη
-                    proposal, log_r, seed = leapfrop_proposal(z, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
+                    proposal, log_r, st, seed = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos; seed=seed)
                 end
                 η = geq_bool ? η / Δη : η
 
-                reversibility, seed = reversibility_check(z, proposal, M, η, logpos; seed=seed)
+                reversibility, st, seed = reversibility_check(z, st, proposal, M, η, logpos; seed=seed)
                 if reversibility && (log_u[i, k] < log_r)
                     z .= proposal
                     num_acceptances[k] += 1

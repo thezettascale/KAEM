@@ -106,7 +106,12 @@ function log_prior(
     @tullio prob[b,q,p] := exp(z[b,q,p]) * alpha[q,p] * π_0[b,q]
     prob = log.(prob .+ eps(eltype(prob)))
     prob = !normalize ? prob .- log_partition_function(mix, ps, st) : prob
-    prob = full_precision ? full_quant.(prob) : prob
+
+    # Loss unstable if accumulated in half precision, grads are fine though
+    @ignore_derivatives if full_precision
+        prob = full_quant.(prob)
+    end
+
     return dropdims(sum(prob; dims=(2,3)); dims=(2,3))
 end
 

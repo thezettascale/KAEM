@@ -112,7 +112,7 @@ function train!(t::T_KAM_trainer)
     
     loss_file = t.file_loc * "loss.csv"
     open(loss_file, "w") do file
-        write(file, "Time (s),Epoch,Train Loss,Test MSE Loss,Grid Updated\n")
+        write(file, "Time (s),Epoch,Train MLE Loss,Test MSE Loss,Grid Updated\n")
     end
 
     function find_nan(grads)

@@ -110,7 +110,12 @@ function log_likelihood(
     ε = lkhood.σ_ε * randn(rng, half_quant, S, lkhood.out_size, B) |> device
     x̂ = lkhood.output_activation(x̂ .+ ε)
     ll = lkhood.log_lkhood_model(x, x̂)
-    ll = full_precision ? full_quant.(ll) : ll
+    
+    # Loss unstable if accumulated in half precision, grads are fine though
+    @ignore_derivatives if full_precision
+        ll = full_quant.(ll)
+    end
+    
     return ll, seed
 end
 

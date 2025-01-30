@@ -158,7 +158,7 @@ function log_likelihood(
 
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, half_quant, size(x)..., B) |> device
+    ε = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ ε)
     ll = lkhood.log_lkhood_model(x, x̂)
     

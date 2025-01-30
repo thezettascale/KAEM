@@ -41,9 +41,6 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1, ε::full_qua
     for i in 1:Q
         Σ_AM[i,i] = β * sqrt(1/Σ[i,i]) + (1 - β) 
     end
-    println(Σ_AM)
-
-    all(eigvals(Σ_AM) .> 0) && error("Mass matrix is not positive-definite.")
 
     # Momentum
     seed, rng = next_rng(seed)

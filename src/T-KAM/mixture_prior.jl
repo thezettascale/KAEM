@@ -94,7 +94,7 @@ function log_prior(
     b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     
     # Mixture proportions and prior
-    alpha = softmax(ps[Symbol("α")]; dims=2) 
+    alpha = softmax(ps[Symbol("α")]; dims=2) # Might be problematic with FP16
     π_0 = mix.π_pdf(z)
 
     # Energy functions of each component, q -> p

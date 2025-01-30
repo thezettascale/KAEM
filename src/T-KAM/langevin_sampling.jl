@@ -39,14 +39,14 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
     Σ_AM = zeros(Q, Q) 
     for i in 1:Q
-        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε)
+        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε) + eps(full_quant)
     end
 
     # Momentum
     seed, rng = next_rng(seed)
     p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), Σ_AM), size(z, 1))'
 
-    # all(eigvals(Σ_AM) .> 0) && error("Mass matrix is not positive-definite.")
+    all(eigvals(Σ_AM) .> 0) && error("Mass matrix is not positive-definite.")
 
     return device(p), device(Σ_AM), seed
 end

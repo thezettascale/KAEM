@@ -55,6 +55,7 @@ function sample_prior(
     ps,
     st;
     seed::Int=1,
+    ε::half_quant=eps(half_quant)
     )
     """
     Component-wise inverse transform sampling for the mixture ebm-prior.
@@ -125,7 +126,7 @@ function sample_prior(
             cd1, cd2 = cdf[b, idx-1, q], cdf[b, idx, q] 
 
             # Linear interpolation
-            z[b, q] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
+            z[b, q] = z1 + (z2 - z1) * ((rv - cd1) / removeZero(cd2 - cd1; ε=ε))
         end
     end
 

@@ -89,7 +89,7 @@ function test_curve2coef()
     extended_grid = extend_grid(grid; k_extend=degree) 
     
     y_eval = coef2curve(x_eval, extended_grid, coef; k=degree, scale=σ)
-    recovered_coef = curve2coef(x_eval, y_eval, extended_grid; k=degree, scale=σ, ε=half_quant(1e-4))
+    recovered_coef = curve2coef(x_eval, y_eval, extended_grid; k=degree, scale=σ)
     @test size(recovered_coef) == size(coef)
 
     y_reconstructed = coef2curve(x_eval, extended_grid, recovered_coef; k=degree, scale=σ)

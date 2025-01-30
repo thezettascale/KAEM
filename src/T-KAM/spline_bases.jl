@@ -160,7 +160,7 @@ function curve2coef(
     grid::AbstractArray{half_quant};
     k::Int64=3,
     scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
-    ε::half_quant=half_quant(1e-4), 
+    ε::half_quant=half_quant(1e-6), 
     basis_function::Function=B_spline_basis
     )
     """
@@ -179,41 +179,21 @@ function curve2coef(
     b_size, in_dim = size(x_eval)
     out_dim = size(y_eval, 3)
 
-    # b_size x in_dim x n_grid
     B = basis_function(x_eval, grid; degree=k, σ=scale)  
     n_grid = size(B, 3)
 
-    B = reshape(B, in_dim, 1, b_size, n_grid)
-    B = repeat(B, 1, out_dim, 1, 1) # in_dim x out_dim x b_size x n_grids
-
+    B = permutedims(B, [2, 1, 3]) # in_dim x b_size x n_grid
     y_eval = permutedims(y_eval, [2, 3, 1]) # in_dim x out_dim x b_size
-    y_eval = reshape(y_eval, size(y_eval)..., 1)
 
-    # Get BtB and Bty
-    Bt = permutedims(B, [1, 2, 4, 3])
-    
-    @tullio BtB[i, o, g, j] := Bt[i, o, g, b] * B[i, o, b, j] # in_dim x out_dim x n_grids x n_grids
-    n1, n2, n, _ = size(BtB)
-    eye = Matrix{half_quant}(I, n, n) .* ε |> device
-    eye = reshape(eye, 1, 1, n, n)
-    eye = repeat(eye, n1, n2, 1, 1)
-    BtB = BtB + eye 
-    
-    @tullio Bty[i, o, g, j] := Bt[i, o, g, b] * y_eval[i, o, b, j]
-
-    BtB, Bty = BtB .|> full_quant, Bty .|> full_quant
-    
-    # x = (BtB)^-1 * Bty
-    coef = zeros(full_quant, 0, out_dim, n_grid) |> device
+    # Least squares for each in/out dimension
+    coef = Array{full_quant}(undef, in_dim, out_dim, n_grid) |> device
     for i in 1:in_dim
-        coef_ = zeros(full_quant, 0, n_grid) |> device
         for o in 1:out_dim
-            lstq = qr(BtB[i, o, :, :]) \ Bty[i, o, :, :]
-            lstq = lstq |> permutedims
-            coef_ = vcat(coef_, lstq .|> full_quant)
+            coef[i, o, :] .= (
+                (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
+                \ (B[i, :, :]' * y_eval[i, o, :]) # Bty
+                ) .|> full_quant
         end
-        coef_ = reshape(coef_, 1, size(coef_)...)
-        coef = vcat(coef, coef_)
     end
 
     any(isnan.(coef)) && error("NaN in coef")

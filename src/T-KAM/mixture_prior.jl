@@ -145,8 +145,9 @@ function init_mix_prior(
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     contrastive_divergence = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
+    eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed)
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed, ε=eps)
     
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

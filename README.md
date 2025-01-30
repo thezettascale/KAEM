@@ -27,11 +27,16 @@ The [shell script](setup/setup.sh) will install all requirements auto-magically.
 ```bash
 bash setup/setup.sh
 ```
+[Optional;] Install tmux - very useful
+
+```
+bash sudo apt install tmux
+```
 
 [Optional;] Test all Julia scripts:
 
 ```bash
-bash src/tests/run_tests.sh
+tmux new-session -d -s T_KAM_tests "bash src/tests/run_tests.sh"
 ```
 
 ## To run experiments:

@@ -48,8 +48,10 @@ function move_to_cpu(model, ps, st)
         @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> cpu_device()
     end
 
-    for i in 1:model.lkhood.depth
-        @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> cpu_device()
+    if !model.lkhood.CNN
+        for i in 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> cpu_device()
+        end
     end
 
     return model, ps, st
@@ -62,8 +64,10 @@ function move_to_gpu(model, ps, st)
         @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> device
     end
 
-    for i in 1:model.lkhood.depth
-        @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> device
+    if !model.lkhood.CNN
+        for i in 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> device
+        end
     end
 
     return model, ps, st

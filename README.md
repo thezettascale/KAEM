@@ -36,7 +36,7 @@ bash sudo apt install tmux
 [Optional;] Test all Julia scripts:
 
 ```bash
-tmux new-session -d -s T_KAM_tests "bash src/tests/run_tests.sh"
+tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 ```
 
 ## To run experiments:

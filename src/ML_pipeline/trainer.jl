@@ -202,8 +202,8 @@ function train!(t::T_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x, 2); seed=t.seed)
-                test_loss += !t.cnn ? sum((x_gen' .- device(x)).^2) / size(x, 2) : sum((x_gen .- device(x)).^2) / size(x, 2)
+                x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x)[end]; seed=t.seed)
+                test_loss += !t.cnn ? sum((x_gen' .- device(x)).^2) / size(x)[end] : sum((x_gen .- device(x)).^2) / size(x)[end]
             end
             
             train_loss = train_loss / num_batches

@@ -123,7 +123,7 @@ function reversibility_check(
     logpos_∇ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), Lux.testmode(st), seed)
 
     p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
-    z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos; seed=seed)
+    z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos_withgrad; seed=seed)
 
     return norm(z_rev - z) < tol, st, seed
 end
@@ -177,9 +177,10 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::Union{full_quant, half_quant}; full_precision::Bool=false, seed_i::Int=1)
-        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision, ε=m.ε)'
+        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision, ε=m.ε)
         ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; full_precision=full_precision, seed=seed_i, ε=m.ε)
-        return sum(lp .+ t_k .* ll)*m.loss_scaling, st_new, seed_i
+        logpos = mean(lp) + t_k * mean(ll)
+        return logpos * m.loss_scaling, st_new, seed_i
     end
 
     k = 1
@@ -190,8 +191,10 @@ function autoMALA_sampler(
         logpos_withgrad = (z_i, st_i, seed_i) -> begin
             logpos_z, st_gen, seed_i = CUDA.@fastmath log_posterior(z_i, st_i, t[k]; full_precision=true, seed_i=seed_i)
             ∇z = CUDA.@fastmath first(gradient(z_j -> first(log_posterior(z_j, st_i, half_quant(t[k]), full_precision=false, seed_i=seed_i)), z_i))
+            logpos_z = (logpos_z * m.IS_samples) / loss_scaling
+            ∇z = (full_quant.(∇z) .* m.IS_samples) ./ loss_scaling
             @reset st_i.gen = st_gen
-            return logpos_z / loss_scaling, full_quant.(∇z) ./ loss_scaling, st_i, seed_i
+            return logpos_z, ∇z, st_i, seed_i
         end
         
         burn_in = 0
@@ -201,7 +204,6 @@ function autoMALA_sampler(
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             logpos_z, ∇z, st, seed = logpos_withgrad(half_quant.(z), Lux.testmode(st), seed)
-
             proposal, log_r, st, seed = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad; seed=seed)
 
             if burn_in < N_unadjusted

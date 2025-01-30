@@ -219,16 +219,16 @@ function init_KAN_lkhood(
         end
     )
 
-    expert_widths = (
+    widths = (
         try 
-            parse.(Int, retrieve(conf, "KAN_LIKELIHOOD", "expert_widths"))
+            parse.(Int, retrieve(conf, "KAN_LIKELIHOOD", "widths"))
         catch
-            parse.(Int, split(retrieve(conf, "KAN_LIKELIHOOD", "expert_widths"), ","))
+            parse.(Int, split(retrieve(conf, "KAN_LIKELIHOOD", "widths"), ","))
         end
     )
 
-    expert_widths = (expert_widths..., output_dim)
-    first(expert_widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
+    widths = (widths..., output_dim)
+    first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
 
     spline_degree = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "spline_degree"))
     base_activation = retrieve(conf, "KAN_LIKELIHOOD", "base_activation")
@@ -260,7 +260,7 @@ function init_KAN_lkhood(
     generate_fcn = CNN ? CNN_gen : KAN_gen
 
     Φ_functions = NamedTuple() 
-    depth = length(expert_widths)-1
+    depth = length(widths)-1
 
     if !CNN
         initialize_function = (in_dim, out_dim, base_scale) -> init_function(
@@ -279,11 +279,11 @@ function init_KAN_lkhood(
             τ_trainable=τ_trainable,
         )
 
-        for i in eachindex(expert_widths[1:end-1])
+        for i in eachindex(widths[1:end-1])
             lkhood_seed, rng = next_rng(lkhood_seed)
-            base_scale = (μ_scale * (full_quant(1) / √(full_quant(expert_widths[i])))
-            .+ σ_base .* (randn(rng, full_quant, expert_widths[i], expert_widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(expert_widths[i]))))
-            @reset Φ_functions[Symbol("$i")] = initialize_function(expert_widths[i], expert_widths[i+1], base_scale)
+            base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
+            .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
+            @reset Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
         end
     else
         channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))

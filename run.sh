@@ -7,7 +7,7 @@ for dataset in "${datasets[@]}"; do
     echo "Starting $dataset Importance Sampling run..."
     
     # Runs sequentially
-    tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_importance.jl.jl > Vanilla_${dataset}.log 2>&1; tmux kill-session -t $session_name"
+    tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_importance.jl > Vanilla_${dataset}.log 2>&1; tmux kill-session -t $session_name"
     
     while tmux has-session -t "$session_name" 2>/dev/null; do
         sleep 5
@@ -21,7 +21,7 @@ for dataset in "${datasets[@]}"; do
     echo "Starting $dataset Thermodynamic Integration run..."
     
     # Runs sequentially
-    tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_thermodynamic.jl.jl > Thermo_${dataset}.log 2>&1; tmux kill-session -t $session_name"
+    tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_thermodynamic.jl > Thermo_${dataset}.log 2>&1; tmux kill-session -t $session_name"
     
     while tmux has-session -t "$session_name" 2>/dev/null; do
         sleep 5

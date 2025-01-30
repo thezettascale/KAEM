@@ -115,8 +115,8 @@ function sample_prior(
             idx = searchsortedfirst(cdf[b, :, q], rv) # Index of upper trapezium bound
 
             # Edge cases
-            replace!(idx, idx == 1 => 2) 
-            replace!(idx, idx == grid_size + 1 => grid_size) 
+            replace!(idx, 1 => 2) 
+            replace!(idx, grid_size + 1 => grid_size) 
 
             # Trapezium bounds
             z1, z2 = grid[idx-1, q], grid[idx, q] 

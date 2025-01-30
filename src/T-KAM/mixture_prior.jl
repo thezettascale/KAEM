@@ -37,6 +37,7 @@ function log_partition_function(
     mix,
     ps,
     st;
+    ε::half_quant=eps(half_quant)
     )
     """
     Approximate the partition function of the mixture ebm-prior using trapezium rule.
@@ -62,7 +63,7 @@ function log_partition_function(
     grid = reshape(grid, grid_size, q_size, size(grid, 2))
     grid = exp.(grid) .* π_grid
     trapz =  Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :]) ./ 2
-    return log.(sum(trapz, dims=1) .+ eps(eltype(trapz)))
+    return log.(sum(trapz, dims=1) .+ ε)
 end
 
 function log_prior(
@@ -71,7 +72,8 @@ function log_prior(
     ps, 
     st;
     normalize::Bool=false,
-    full_precision::Bool=false
+    full_precision::Bool=false,
+    ε::half_quant=eps(half_quant)
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -104,7 +106,7 @@ function log_prior(
     
     # Unnormalized or normalized log-probability
     @tullio prob[b,q,p] := exp(z[b,q,p]) * alpha[q,p] * π_0[b,q]
-    prob = log.(prob .+ eps(eltype(prob)))
+    prob = log.(prob .+ ε)
     prob = !normalize ? prob .- log_partition_function(mix, ps, st) : prob
 
     # Loss unstable if accumulated in half precision, grads are fine though

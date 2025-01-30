@@ -19,7 +19,7 @@ else
     using .KAN_likelihood: log_likelihood
 end
 
-function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
+function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1, ε::full_quant=eps(full_quant))
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -36,10 +36,10 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
-    ε = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
+    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
     Σ_AM = zeros(Q, Q) 
     for i in 1:Q
-        Σ_AM[i,i] = ε * sqrt(1/Σ[i,i]) + (1 - ε) + eps(full_quant)
+        Σ_AM[i,i] = β * sqrt(1/Σ[i,i]) + (1 - β) + ε
     end
 
     # Momentum
@@ -181,8 +181,8 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; full_precision::Bool=false, seed_i::Int=1)
-        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision)'
-        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; full_precision=full_precision, seed=seed_i)
+        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision, ε=m.ε)'
+        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; full_precision=full_precision, seed=seed_i, ε=m.ε)
         return sum(lp .+ t_k .* ll), st_new, seed_i
     end
 
@@ -194,7 +194,7 @@ function autoMALA_sampler(
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
-            momentum, M, seed = sample_momentum(z; seed=seed)
+            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             ∇z = first(gradient(z_i -> first(logpos(z_i, st, false, seed)), half_quant.(z))) .|> full_quant

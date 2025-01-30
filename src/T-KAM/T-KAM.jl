@@ -38,6 +38,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     posterior_sample::Function
     loss_fcn::Function
     loss_scaling::half_quant    
+    ε::half_quant
 end
 
 function generate_batch(
@@ -83,11 +84,11 @@ function importance_loss(
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
+    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
     )
 
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; full_precision=full_precision, seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     # Weights and resampling
@@ -118,12 +119,12 @@ function MALA_loss(
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
     )
     
     # Log-dists
-    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed)
+    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)'
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
@@ -149,11 +150,11 @@ function thermo_loss(
     T, S, Q, B = size(z)..., size(x, 2)
     ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)) : ex_prior
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
     )
 
-    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision)'
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed)
+    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)'
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     logllhood = reshape(logllhood, T, B, S)
@@ -229,6 +230,7 @@ function init_T_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
+    eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
@@ -300,7 +302,8 @@ function init_T_KAM(
             initial_step_size,
             posterior_fcn,
             loss_fcn,
-            loss_scaling
+            loss_scaling,
+            eps
         )
 end
 

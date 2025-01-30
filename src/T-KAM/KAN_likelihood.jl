@@ -25,11 +25,11 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models_flat = Dict(
-    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
-    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; eps=eps(half_quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + eps) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + eps)),
+    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> @tullio(out[b, s] := -(x[o, b] - x̂[s, o, b])^2),
+    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> @tullio(out[b, s] := x[o, b] * log(x̂[s, o, b] + ε) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + ε)),
 )
 
-lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}) -> @tullio(out[b, s] := -(x[h, w, c, b] - x̂[h, w, c, s, b])^2)
+lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> @tullio(out[b, s] := -(x[h, w, c, b] - x̂[h, w, c, s, b])^2)
 
 llhoods_dict = Dict(
     false => lkhood_models_flat,
@@ -134,7 +134,8 @@ function log_likelihood(
     x::AbstractArray{half_quant}, 
     z::AbstractArray{half_quant};
     full_precision::Bool=false,
-    seed::Int=1
+    seed::Int=1,
+    ε::half_quant=eps(half_quant)
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -158,9 +159,9 @@ function log_likelihood(
 
     # Add noise
     seed, rng = next_rng(seed)
-    ε = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
-    x̂ = lkhood.output_activation(x̂ .+ ε)
-    ll = lkhood.log_lkhood_model(x, x̂)
+    noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
+    x̂ = lkhood.output_activation(x̂ .+ noise)
+    ll = lkhood.log_lkhood_model(x, x̂; ε=ε)
     
     # Loss unstable if accumulated in half precision, grads are fine though
     @ignore_derivatives if full_precision

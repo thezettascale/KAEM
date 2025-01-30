@@ -20,8 +20,11 @@ dataset_mapping = Dict(
     "SVHN" => MLDatasets.SVHN2(),
 )
 
+const CNN_hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+
 mutable struct T_KAM_trainer
     model
+    cnn::Bool
     o::opt
     dataset_name::AbstractString
     img_shape::Tuple
@@ -62,6 +65,16 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
+
+    # After initialization, we can change precision
+    if cnn 
+        for i in 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> CNN_hq
+            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> CNN_hq
+        end
+        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> CNN_hq
+    end
+
     optimizer = create_opt(conf)
     grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
 
@@ -84,6 +97,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     
     return T_KAM_trainer(
         model, 
+        cnn,
         optimizer, 
         dataset_name, 
         img_shape, 
@@ -189,7 +203,7 @@ function train!(t::T_KAM_trainer)
             test_loss = 0
             for x in t.model.test_loader
                 x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x, 2); seed=t.seed)
-                test_loss += sum((x_gen' .- device(x)).^2) / size(x, 2)
+                test_loss += !cnn ? sum((x_gen' .- device(x)).^2) / size(x, 2) : sum((x_gen .- x).^2) / size(x, 2)
             end
             
             train_loss = train_loss / num_batches

@@ -16,6 +16,8 @@ using .Utils: device, next_rng, half_quant, full_quant
 using .ebm_mix_prior
 using .WeightResamplers
 
+const CNN_hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
     "sigmoid" => sigmoid_fast,
@@ -296,9 +298,9 @@ function init_KAN_lkhood(
 
         for i in eachindex(hidden_c[1:end-1])
             @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose((k_size[i], k_size[i]), hidden_c[i] => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i])
-            @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], relu)
+            @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], relu) |> Lux.f16
         end
-        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
+        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end]) 
     end
 
     return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn, generate_fcn, CNN)
@@ -317,10 +319,11 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
     st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    
     if lkhood.CNN
         @reset st[Symbol("$(lkhood.depth+1)")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
         for i in 1:lkhood.depth
-            @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+            @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> CNN_hq
         end
     end
     return st

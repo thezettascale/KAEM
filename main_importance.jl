@@ -14,7 +14,6 @@ using .trainer
 rng = Random.seed!(1)
 
 # Vanilla importance sampling
-conf = dataset == "MNIST" || dataset == "FMNIST" ? conf_nist : conf_cnn
 commit!(conf, "MALA", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 

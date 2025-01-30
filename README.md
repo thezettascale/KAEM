@@ -45,7 +45,7 @@ nano nist_config.ini
 For main experiments run:
 
 ```bash
-bash run.sh
+tmux new-session -d -s T_KAM_main "bash run.sh"
 ```
 
 For benchmarking run:

@@ -39,6 +39,7 @@ function choose_component(
     mask = Array{half_quant}(undef, q_size, p_size, num_samples) 
     Threads.@threads for q in 1:q_size
         i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
+        i = i == p_size + 1 ? p_size : i # Edge case
         mask[q, :, :] = onehotbatch(i, 1:p_size) .|> half_quant
     end
 
@@ -112,6 +113,10 @@ function sample_prior(
             # First trapezium where CDF >= rand_val
             rv = rand_vals[b, q]
             idx = searchsortedfirst(cdf[b, :, q], rv) # Index of upper trapezium bound
+
+            # Edge cases
+            replace!(idx, idx == 1 => 2) 
+            replace!(idx, idx == grid_size + 1 => grid_size) 
 
             # Trapezium bounds
             z1, z2 = grid[idx-1, q], grid[idx, q] 

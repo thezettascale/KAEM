@@ -53,6 +53,8 @@ For main experiments run:
 tmux new-session -d -s T_KAM_main "bash run.sh"
 ```
 
+This starts a tmux session, you can then leave and come back later - touch grass, kiss wife, slap a baby, i dunno.
+
 For benchmarking run:
 
 ```bash

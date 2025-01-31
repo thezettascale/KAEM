@@ -86,7 +86,7 @@ function leapfrop_proposal(
         ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
     end
 
-    logpos_ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), Lux.testmode(st), seed)
+    logpos_ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), st, seed)
 
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
@@ -120,7 +120,7 @@ function reversibility_check(
         The updated seed.
     """
 
-    logpos_∇ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), Lux.testmode(st), seed)
+    logpos_∇ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), st, seed)
 
     p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
     z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos_withgrad; seed=seed)
@@ -189,8 +189,8 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i, seed_i) -> begin
-            logpos_z, st_gen, seed_i = CUDA.@fastmath log_posterior(z_i, st_i, t[k]; full_precision=true, seed_i=seed_i)
-            ∇z = CUDA.@fastmath first(gradient(z_j -> first(log_posterior(z_j, st_i, half_quant(t[k]), full_precision=false, seed_i=seed_i)), z_i))
+            logpos_z, st_gen, seed_i = CUDA.@fastmath log_posterior(z_i, Lux.testmode(st_i), t[k]; full_precision=true, seed_i=seed_i)
+            ∇z = CUDA.@fastmath first(gradient(z_j -> first(log_posterior(z_j, Lux.trainmode(st_i), half_quant(t[k]), full_precision=false, seed_i=seed_i)), z_i))
             logpos_z = (logpos_z * m.IS_samples) / loss_scaling
             ∇z = (full_quant.(∇z) .* m.IS_samples) ./ loss_scaling
             @reset st_i.gen = st_gen
@@ -203,7 +203,7 @@ function autoMALA_sampler(
             momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
-            logpos_z, ∇z, st, seed = logpos_withgrad(half_quant.(z), Lux.testmode(st), seed)
+            logpos_z, ∇z, st, seed = logpos_withgrad(half_quant.(z), st, seed)
             proposal, log_r, st, seed = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad; seed=seed)
 
             if burn_in < N_unadjusted

@@ -94,14 +94,16 @@ function importance_loss(
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x, 2))) 
-    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x, 2)))'
-    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x, 2)))
+    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])) 
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))'
+    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
     logprior_resampled = logprior_resampled .- ex_prior
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+
+    m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
     return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
@@ -128,6 +130,7 @@ function MALA_loss(
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
+    m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood))
     return -mean(logprior .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
 end 
 
@@ -147,7 +150,7 @@ function thermo_loss(
     temperatures = device(temperatures)
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
-    T, S, Q, B = size(z)..., size(x, 2)
+    T, S, Q, B = size(z)..., size(x)[end]
     ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
     mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
@@ -164,6 +167,8 @@ function thermo_loss(
     # Expected posterior
     TI_loss = sum(weights .* logllhood)
     MLE_loss = sum(sum(weights[end, :, :] .* (logprior .- ex_prior .+ logllhood[end, :, :]); dims=2))
+    
+    m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
     return -((TI_loss + MLE_loss) / 2B)*m.loss_scaling, st, seed
 end
 

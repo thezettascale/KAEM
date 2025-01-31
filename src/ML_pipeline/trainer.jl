@@ -160,7 +160,7 @@ function train!(t::T_KAM_trainer)
         grads = CUDA.@fastmath first(gradient(pars -> first(t.model.loss_fcn(
             t.model, 
             pars, 
-            t.st, 
+            Lux.trainmode(t.st), 
             t.x; 
             full_precision=false,
             seed=t.seed

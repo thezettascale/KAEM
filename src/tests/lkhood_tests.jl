@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
+using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -98,13 +98,13 @@ function test_cnn_derivative()
     prior = init_mix_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
-    ps = (ebm=ebm_ps, gen=gen_ps) |> device
+    ps = ComponentArray(ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     x = randn(Float32, 32, 32, out_dim, b_size) |> device
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
-    ∇ = first(gradient(z_i -> sum(first(log_likelihood(lkhood, ps.gen, st.gen, x, z_i))), z))
-    @test size(∇) == size(z)
+    ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
+    @test size(∇) == size(ps.gen)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end

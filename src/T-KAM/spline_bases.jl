@@ -160,12 +160,12 @@ function curve2coef(
     grid::AbstractArray{half_quant};
     k::Int64=3,
     scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
-    ε::half_quant=half_quant(1e-6), 
+    ε::full_quant=full_quant(1f-6), 
     basis_function::Function=B_spline_basis
     )
     """
     Convert B-spline curves to B-spline coefficients using least squares.
-    This will not work for poly-KANs.
+    This will not work for poly-KANs. CuSolver works best for higher precisions.
 
     Args:
         x_eval: A matrix of size (b, i) containing the points at which the B-spline curves were evaluated.
@@ -179,11 +179,11 @@ function curve2coef(
     b_size, in_dim = size(x_eval)
     out_dim = size(y_eval, 3)
 
-    B = basis_function(x_eval, grid; degree=k, σ=scale)  
+    B = basis_function(x_eval, grid; degree=k, σ=scale) .|> full_quant
     n_grid = size(B, 3)
 
     B = permutedims(B, [2, 1, 3]) # in_dim x b_size x n_grid
-    y_eval = permutedims(y_eval, [2, 3, 1]) # in_dim x out_dim x b_size
+    y_eval = permutedims(y_eval, [2, 3, 1]) .|> full_quant # in_dim x out_dim x b_size
 
     # Least squares for each in/out dimension
     coef = Array{full_quant}(undef, in_dim, out_dim, n_grid) |> device
@@ -192,7 +192,7 @@ function curve2coef(
             coef[i, o, :] .= (
                 (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
                 \ (B[i, :, :]' * y_eval[i, o, :]) # Bty
-                ) .|> full_quant
+                ) 
         end
     end
 

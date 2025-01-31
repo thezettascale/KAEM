@@ -26,7 +26,7 @@ output_activation_mapping = Dict(
 
 lkhood_models_flat = Dict(
     "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x' .- permutedims(x̂, [3, 2, 1])).^2 ; dims=2 ); dims=2 ),  
-    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( x .* log.(permutedims(x̂, [3, 2, 1]) .+ ε) .+ (1 .- x) .* log.(1 .- permutedims(x̂, [3, 2, 1]) .+ ε) ; dims=2 ); dims=2 ),
+    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( x' .* log.(permutedims(x̂, [3, 2, 1]) .+ ε) .+ (1 .- x') .* log.(1 .- permutedims(x̂, [3, 2, 1]) .+ ε) ; dims=2 ); dims=2 ),
 )
 
 lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1,2,3,5,4])).^2 ; dims=(1,2,3) ); dims=(1,2,3) ) 

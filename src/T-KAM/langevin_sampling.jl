@@ -19,7 +19,7 @@ else
     using .KAN_likelihood: log_likelihood
 end
 
-function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1, ε::full_quant=eps(full_quant))
+function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
 
@@ -29,24 +29,21 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1, ε::full_qua
 
     Returns:
         The momentum.
-        The positive-definite mass matrix.
+        The positive-definite mass matrix, (only the diagonals are returned for efficiency).
         The updated seed.
     """
-    Σ, Q = cov(cpu_device()(z)), size(z, 2)
+    Σ, Q = diag(cov(cpu_device()(z))), size(z, 2)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
     β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
-    Σ_AM = zeros(Q, Q) 
-    for i in 1:Q
-        Σ_AM[i,i] = β * sqrt(1/Σ[i,i]) + (1 - β) + ε
-    end
+    Σ_AM = β .* sqrt.(1 ./ Σ) .+ (1 - β)
 
     # Momentum
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(size(Σ_AM, 1)), Σ_AM), size(z, 1))'
+    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), size(z, 1))
 
-    return device(p), device(Σ_AM), seed
+    return device(p'), device(Σ_AM'), seed
 end
 
 function leapfrop_proposal(
@@ -76,14 +73,16 @@ function leapfrop_proposal(
         The log-ratio.
         The updated seed.
     """
-    p = momentum + (η .* ∇z / 2) # Half-step momentum update
-    ẑ = z + (η .* p*M) # Full-step position update
+    p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
+    ẑ = z .+ (η .* p .* M) # Full-step position update
 
     # Apply reflective boundary conditions, (which has a Jacobian of 1, so no need to adjust the log-ratio)
     if uniform_prior
-        p = ifelse.(0 .< ẑ .< 1, p, -p) |> device
-        ẑ = ifelse.(ẑ .< 0, -ẑ, ẑ) |> device
-        ẑ = ifelse.(ẑ .> 1, 2 .- ẑ, ẑ) |> device
+        mask_low = ẑ .< 0
+        mask_high = ẑ .> 1
+        ẑ = ifelse.(mask_low, -ẑ, ẑ) |> device
+        ẑ = ifelse.(mask_high, 2 .- ẑ, ẑ) |> device
+        p = ifelse.(mask_low .| mask_high, -p, p) |> device
     end
 
     logpos_ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), st, seed)
@@ -122,8 +121,8 @@ function reversibility_check(
 
     logpos_∇ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), st, seed)
 
-    p_rev = M \ (((ẑ - z) ./ η) - (η .* ∇ẑ / 2))'
-    z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev', M, η, logpos_withgrad; seed=seed)
+    p_rev = (((ẑ - z) ./ η) - (η .* ∇ẑ / 2)) ./ M
+    z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev, M, η, logpos_withgrad; seed=seed)
 
     return norm(z_rev - z) < tol, st, seed
 end
@@ -200,7 +199,7 @@ function autoMALA_sampler(
         burn_in = 0
         for i in 1:N
             η = st.η_init[k]
-            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
+            momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 
             logpos_z, ∇z, st, seed = logpos_withgrad(half_quant.(z), st, seed)

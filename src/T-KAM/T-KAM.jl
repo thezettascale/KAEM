@@ -157,15 +157,11 @@ function thermo_loss(
     )
 
     logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)'
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed, ε=m.ε)
+    @ignore_derivatives @reset st.gen = st_gen
 
-    logllhood = full_precision ? zeros(full_quant, 0, B, S) |> device : zeros(half_quant, 0, B, S) |> device
-    for t in 1:T
-        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, t, :, :); full_precision=full_precision, seed=seed, ε=m.ε)
-        @ignore_derivatives @reset st.gen = st_gen
-        logllhood = vcat(logllhood, permutedims(ll[:, :, :], [3, 1, 2]))
-    end
-
-    logllhood = Δt .* copy(logllhood)
+    logllhood = reshape(logllhood, T, B, S)
+    logllhood = Δt .* logllhood
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=3) 
 
     # Expected posterior

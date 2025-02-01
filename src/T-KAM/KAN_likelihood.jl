@@ -293,8 +293,8 @@ function init_KAN_lkhood(
     sequence_length = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "sequence_length"))
 
     lkhood_model = CNN ? "l2" : retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    lkhood_model = sequence_length > 1 ? lkhood_models_seq : lkhood_model
     ll_model = llhoods_dict[CNN][lkhood_model]
+    ll_model = sequence_length > 1 ? lkhood_models_seq : lkhood_model
     generate_fcn = CNN ? CNN_gen : KAN_gen
 
     Φ_functions = NamedTuple() 

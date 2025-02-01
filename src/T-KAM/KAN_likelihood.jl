@@ -31,7 +31,7 @@ lkhood_models_flat = Dict(
 
 lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, t, o] := (x[o, t, b] - x̂[t, s, o])^2) ; dims=(3,4) ); dims=(3,4) )
+lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, t, o] := (x[o, t, b] - x̂[t, s, o, b])^2) ; dims=(3,4) ); dims=(3,4) )
 
 
 llhoods_dict = Dict(
@@ -156,7 +156,7 @@ function SEQ_gen(
     
     for t in 1:lkhood.seq_length
         x̂, st = KAN_gen(lkhood, ps, st, z)
-        x̂_seq = vcat(x̂_seq, x̂)
+        x̂_seq = vcat(x̂_seq, permutedims(x̂[:,:,:], (3, 1, 2)))
     end
 
     return x̂_seq, st

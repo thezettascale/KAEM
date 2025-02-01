@@ -57,7 +57,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     )
 
     sequence_length = seq ? size(dataset, 2) : 0
-    commit!(conf, "KAN_LIKELIHOOD", "sequence_length", sequence_length)
+    commit!(conf, "KAN_LIKELIHOOD", "sequence_length", string(sequence_length))
     
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)

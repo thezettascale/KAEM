@@ -69,7 +69,7 @@ function test_lstm_generate()
 
     z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
-    @test size(x) == (out_dim, 8, b_size)
+    @test size(x) == (lkhood.out_size, 8, b_size)
 
     commit!(conf, "LSTM", "sequence_length", "1")
 end

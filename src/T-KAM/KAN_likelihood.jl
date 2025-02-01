@@ -100,7 +100,7 @@ end
 
 # CNN and LSTM generators
 CNN_gen = (lkhood, ps, st, z::AbstractArray{half_quant}) -> Lux.apply(lkhood.Φ_fcns, reshape(z, 1, 1, size(z, 2), size(z, 1)), ps, st)
-SEQ_gen = (lkhood, ps, st, z::AbstractArray{half_quant}) -> Lux.apply(lkhood.Φ_fcns, repeat(reshape(z, size(z, 2), 1, size(z, 1)), 1, lkhood.seq_length, 1), ps, st)
+SEQ_gen = (lkhood, ps, st, z::AbstractArray{half_quant}) -> Lux.apply(lkhood.Φ_fcns, repeat(reshape(z, size(z,2), 1, size(z,1)), 1, lkhood.seq_length, 1), ps, st)
 
 function log_likelihood(
     lkhood, 
@@ -268,19 +268,16 @@ function init_KAN_lkhood(
     elseif sequence_length > 1
         act = activation_mapping[retrieve(conf, "LSTM", "activation")]
         hidden_dim = parse(Int, retrieve(conf, "LSTM", "hidden_dim"))
-        num_layers = parse(Int, retrieve(conf, "LSTM", "num_hidden_layers"))
 
         Φ_functions = Lux.Chain(
-            Lux.Dense(q_size => hidden_dim),
-            Lux.LayerNorm(hidden_dim, act),
-            (Lux.Chain(
-                Lux.Recurrence(Lux.LSTMCell(hidden_dim => hidden_dim); return_sequence=true),
-                Lux.LayerNorm(hidden_dim, act)
-            ) for _ in 1:num_layers)...,
+            Lux.Dense(q_size => hidden_dim, act),
+            Lux.Recurrence(
+                Lux.LSTMCell(hidden_dim => hidden_dim),
+                return_sequence=true
+            ),
+            x -> reduce(hcat, map(z -> permutedims(z[:,:,:], (1,3,2)), x)),
             Lux.Dense(hidden_dim => output_dim)
         )
-
- 
 
     else
         initialize_function = (in_dim, out_dim, base_scale) -> init_function(

@@ -15,7 +15,8 @@ using CUDA, KernelAbstractions, Tullio
 using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 
-const CNN_hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 mutable struct T_KAM_trainer
     model
@@ -48,28 +49,25 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
     cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
     seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
-    gen_type = seq ? "embeddings" : "images"
+    gen_type = seq ? "logits" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
+    sequence_length = parse(Int, retrieve(conf, "LSTM", "sequence_length"))
+    vocab_size = parse(Int, retrieve(conf, "LSTM", "vocab_size"))
 
     dataset, x_shape, save_dataset = (seq ? 
-        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples) :
+        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
 
-    sequence_length = seq ? size(dataset, 2) : 0
-    commit!(conf, "KAN_LIKELIHOOD", "sequence_length", string(sequence_length))
+    sequence_length = seq ? first(x_shape) : 0
     
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
 
     # After initialization, we can change precision
-    if cnn 
-        for i in 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> CNN_hq
-            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> CNN_hq
-        end
-        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> CNN_hq
+    if cnn || seq
+        @reset model.lkhood.Φ_fcns = model.lkhood.Φ_fcns |> hq
     end
 
     optimizer = create_opt(conf)
@@ -201,8 +199,15 @@ function train!(t::T_KAM_trainer)
             test_loss = 0
             for x in t.model.test_loader
                 x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x)[end]; seed=t.seed)
-                x_gen = reshape(x_gen, size(x)...)
-                test_loss += sum((x - x_gen).^2)
+               
+                # MSE loss between pixels for images, and max index for logits
+                if t.gen_type != "logits"
+                    x_gen = reshape(x_gen, size(x)...)
+                    test_loss += sum((x - x_gen).^2)
+                else
+                    idxs = dropdims(argmax(x_gen, dims=3); dims=3)
+                    test_loss += sum((x .- getindex.(idxs, 3)).^2)
+                end 
             end
             
             train_loss = train_loss / num_batches

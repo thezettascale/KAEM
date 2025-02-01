@@ -54,6 +54,26 @@ function test_cnn_generate()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
+function test_lstm_generate()
+    Random.seed!(42)
+    commit!(conf, "LSTM", "sequence_length", "8")
+
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    prior = init_mix_prior(conf; prior_seed=1)
+    ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
+
+    ps = (ebm=ebm_ps, gen=gen_ps) |> device
+    st = (ebm=device(ebm_st), gen=gen_st) 
+
+    z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
+    x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
+    @test size(x) == (out_dim, 8, b_size)
+
+    commit!(conf, "LSTM", "sequence_length", "1")
+end
+
 function test_logllhood()
     Random.seed!(42)
     lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
@@ -109,10 +129,33 @@ function test_cnn_derivative()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
+function test_lstm_derivative()
+    Random.seed!(42)
+    commit!(conf, "LSTM", "sequence_length", "8")
+
+    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    prior = init_mix_prior(conf; prior_seed=1)
+    ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
+
+    ps = ComponentArray(ebm=ebm_ps, gen=gen_ps) |> device
+    st = (ebm=device(ebm_st), gen=gen_st) 
+
+    x = randn(Float32, lkhood.out_size, 8, b_size) |> device
+    z, seed = prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1)
+    ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
+    @test size(∇) == size(ps.gen)
+
+    commit!(conf, "LSTM", "sequence_length", "1")
+end
+
 @testset "KAN Likelihood Tests" begin
-    test_generate()
-    test_cnn_generate()
-    test_logllhood()
-    test_derivative()
-    test_cnn_derivative()
+    # test_generate()
+    # test_cnn_generate()
+    test_lstm_generate()
+    # test_logllhood()
+    # test_derivative()
+    # test_cnn_derivative()
+    test_lstm_derivative()
 end

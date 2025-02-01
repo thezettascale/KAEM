@@ -6,6 +6,7 @@ using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu
 using ChainRules: @ignore_derivatives
+using Zygote: Buffer
 
 include("univariate_functions.jl")
 include("mixture_prior.jl")
@@ -16,7 +17,7 @@ using .Utils: device, next_rng, half_quant, full_quant
 using .ebm_mix_prior
 using .WeightResamplers
 
-const CNN_hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
 
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
@@ -31,8 +32,12 @@ lkhood_models_flat = Dict(
 
 lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, t, o] := (x[o, t, b] - x̂[t, s, o, b])^2) ; dims=(3,4) ); dims=(3,4) )
-
+function lkhood_model_seq(x::AbstractArray{Int}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
+    V = size(x̂, 1)
+    log_x̂ = log.(x̂ .+ ε)    
+    @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
+    return ll ./ V
+end
 
 llhoods_dict = Dict(
     false => lkhood_models_flat,
@@ -48,7 +53,7 @@ resampler_map = Dict(
 )
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
-    Φ_fcns::NamedTuple
+    Φ_fcns
     depth::Int
     out_size::Int
     σ_ε::half_quant
@@ -93,74 +98,9 @@ function KAN_gen(
     return z, st
 end
 
-function CNN_gen(
-    lkhood, 
-    ps, 
-    st, 
-    z::AbstractArray{half_quant}    
-    )
-    """
-    Generate data from the CNN likelihood model.
-
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-        x: The data.
-        z: The latent variable.
-        seed: The seed for the random number generator.
-
-    Returns:
-        The generated data.
-        The updated seed.
-    """
-    num_samples, q_size = size(z)
-    z = reshape(z, 1, 1, q_size, num_samples)
-
-    for i in 1:lkhood.depth
-        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
-        @ignore_derivatives @reset st[Symbol("$i")] = st_new    
-
-        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
-        @ignore_derivatives @reset st[Symbol("bn_$i")] = st_new
-    end
-
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")], z, ps[Symbol("$(lkhood.depth+1)")], st[Symbol("$(lkhood.depth+1)")])
-    @reset st[Symbol("$(lkhood.depth+1)")] = st_new
-
-    return z, st
-end
-
-function SEQ_gen(
-    lkhood,
-    ps,
-    st,
-    z::AbstractArray{half_quant}
-    )
-    """
-    Generate data from the sequential likelihood model (auto-regressive).
-
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-        x: The data.
-        z: The latent variable.
-        seed: The seed for the random number generator.
-
-    Returns:
-        The generated data.
-        The updated seed.
-    """
-    x̂_seq = zeros(half_quant, 0, size(z, 1), lkhood.out_size) |> device
-    
-    for t in 1:lkhood.seq_length
-        x̂, st = KAN_gen(lkhood, ps, st, z)
-        x̂_seq = vcat(x̂_seq, permutedims(x̂[:,:,:], (3, 1, 2)))
-    end
-
-    return x̂_seq, st
-end
+# CNN and LSTM generators
+CNN_gen = (lkhood, ps, st, z::AbstractArray{half_quant}) -> Lux.apply(lkhood.Φ_fcns, reshape(z, 1, 1, size(z, 2), size(z, 1)), ps, st)
+SEQ_gen = (lkhood, ps, st, z::AbstractArray{half_quant}) -> Lux.apply(lkhood.Φ_fcns, repeat(reshape(z, size(z, 2), 1, size(z, 1)), 1, lkhood.seq_length, 1), ps, st)
 
 function log_likelihood(
     lkhood, 
@@ -171,7 +111,6 @@ function log_likelihood(
     full_precision::Bool=false,
     seed::Int=1,
     ε::half_quant=eps(half_quant),
-    auto_regressive::Bool=false,
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -247,6 +186,7 @@ function init_KAN_lkhood(
     output_dim::Int;
     lkhood_seed::Int=1,
     )
+
     q_size = (
         try 
             last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
@@ -262,6 +202,11 @@ function init_KAN_lkhood(
             parse.(Int, split(retrieve(conf, "KAN_LIKELIHOOD", "widths"), ","))
         end
     )
+
+    CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
+    sequence_length = parse(Int, retrieve(conf, "LSTM", "sequence_length"))
+
+    output_dim = sequence_length > 1 ? parse(Int, retrieve(conf, "LSTM", "vocab_size")) : output_dim
 
     widths = (widths..., output_dim)
     first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
@@ -289,19 +234,55 @@ function init_KAN_lkhood(
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
-    CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
-    sequence_length = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "sequence_length"))
-
     lkhood_model = CNN ? "l2" : retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    ll_model = llhoods_dict[CNN][lkhood_model]
-    ll_model = sequence_length > 1 ? lkhood_models_seq : lkhood_model
+    ll_model = sequence_length > 1 ? lkhood_model_seq : llhoods_dict[CNN][lkhood_model]
     generate_fcn = CNN ? CNN_gen : KAN_gen
     generate_fcn = sequence_length > 1 ? SEQ_gen : generate_fcn
+    output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : output_activation_mapping[output_act]
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1
 
-    if !CNN
+    if CNN
+        channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
+        hidden_c = (q_size, channels...)
+        depth = length(hidden_c)-1
+        strides = parse.(Int, retrieve(conf, "CNN", "strides"))
+        k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
+        paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
+        act = activation_mapping[retrieve(conf, "CNN", "activation")]
+
+        length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
+        length(k_size) != length(hidden_c) && (error("Number of kernel sizes must be equal to the number of hidden layers + 1."))
+        length(paddings) != length(hidden_c) && (error("Number of paddings must be equal to the number of hidden layers + 1."))
+
+        Φ_functions = Lux.Chain(
+        Iterators.flatten(
+            ((Lux.ConvTranspose((k_size[i], k_size[i]), c => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i]),
+            Lux.BatchNorm(hidden_c[i+1], act)
+            ) for (i, c) in enumerate(hidden_c[1:end-1]))
+        )..., 
+        Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
+        )
+
+    elseif sequence_length > 1
+        act = activation_mapping[retrieve(conf, "LSTM", "activation")]
+        hidden_dim = parse(Int, retrieve(conf, "LSTM", "hidden_dim"))
+        num_layers = parse(Int, retrieve(conf, "LSTM", "num_hidden_layers"))
+
+        Φ_functions = Lux.Chain(
+            Lux.Dense(q_size => hidden_dim),
+            Lux.LayerNorm(hidden_dim, act),
+            (Lux.Chain(
+                Lux.Recurrence(Lux.LSTMCell(hidden_dim => hidden_dim); return_sequence=true),
+                Lux.LayerNorm(hidden_dim, act)
+            ) for _ in 1:num_layers)...,
+            Lux.Dense(hidden_dim => output_dim)
+        )
+
+ 
+
+    else
         initialize_function = (in_dim, out_dim, base_scale) -> init_function(
             in_dim,
             out_dim;
@@ -324,48 +305,26 @@ function init_KAN_lkhood(
             .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
             @reset Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
         end
-    else
-        channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
-        hidden_c = (q_size, channels...)
-        depth = length(hidden_c)-1
-        strides = parse.(Int, retrieve(conf, "CNN", "strides"))
-        k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
-        paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
-
-        length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
-        length(k_size) != length(hidden_c) && (error("Number of kernel sizes must be equal to the number of hidden layers + 1."))
-        length(paddings) != length(hidden_c) && (error("Number of paddings must be equal to the number of hidden layers + 1."))
-
-        for i in eachindex(hidden_c[1:end-1])
-            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose((k_size[i], k_size[i]), hidden_c[i] => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i])
-            @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], leakyrelu)
-        end
-        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end]) 
     end
 
-    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn, generate_fcn, CNN, sequence_length)
+    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation, resample_fcn, generate_fcn, CNN, sequence_length)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
-    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    if lkhood.CNN
-        @reset ps[Symbol("$(lkhood.depth+1)")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
-        for i in 1:lkhood.depth
-            @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
-        end
-    end
+    ps = (
+        lkhood.seq_length > 1 || lkhood.CNN ? 
+        Lux.initialparameters(rng, lkhood.Φ_fcns) : 
+        NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    )
     return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
-    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    
-    if lkhood.CNN
-        @reset st[Symbol("$(lkhood.depth+1)")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
-        for i in 1:lkhood.depth
-            @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> CNN_hq
-        end
-    end
+    st = (
+        lkhood.seq_length > 1 || lkhood.CNN ?
+        Lux.initialstates(rng, lkhood.Φ_fcns) |> hq :
+        NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    )
     return st
 end
 

@@ -1,6 +1,6 @@
 module univariate_functions
 
-export univariate_function, init_function, fwd, update_fcn_grid
+export univariate_function, init_function, fwd, update_fcn_grid, activation_mapping
 
 using CUDA, KernelAbstractions, Tullio, Accessors
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA

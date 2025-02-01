@@ -25,11 +25,13 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models_flat = Dict(
-    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x' .- permutedims(x̂, [3, 2, 1])).^2 ; dims=2 ); dims=2 ),  
-    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( x' .* log.(permutedims(x̂, [3, 2, 1]) .+ ε) .+ (1 .- x') .* log.(1 .- permutedims(x̂, [3, 2, 1]) .+ ε) ; dims=2 ); dims=2 ),
+    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x' .- permutedims(x̂[:,:,:], [3, 2, 1])).^2 ; dims=2 ); dims=2 ),  
+    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( x' .* log.(permutedims(x̂[:,:,:], [3, 2, 1]) .+ ε) .+ (1 .- x') .* log.(1 .- permutedims(x̂[:,:,:], [3, 2, 1]) .+ ε) ; dims=2 ); dims=2 ),
 )
 
-lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1,2,3,5,4])).^2 ; dims=(1,2,3) ); dims=(1,2,3) ) 
+lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂[:,:,:,:,:], [1,2,3,5,4])).^2 ; dims=(1,2,3) ); dims=(1,2,3) ) 
+
+lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂[:,:,:,:], [3,1,4,2])).^2 ; dims=(1,2) ); dims=(1,2) )
 
 llhoods_dict = Dict(
     false => lkhood_models_flat,
@@ -55,6 +57,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     resample_z::Function
     generate_from_z::Function
     CNN::Bool
+    seq_length::Int
 end
 
 function KAN_gen(
@@ -127,6 +130,37 @@ function CNN_gen(
     return z, st
 end
 
+function SEQ_gen(
+    lkhood,
+    ps,
+    st,
+    z::AbstractArray{half_quant}
+    )
+    """
+    Generate data from the sequential likelihood model (auto-regressive).
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The generated data.
+        The updated seed.
+    """
+    x̂_seq = zeros(half_quant, 0, size(z, 1), lkhood.out_size)
+    
+    for t in 1:lkhood.seq_length
+        x̂, st = KAN_gen(lkhood, ps, st, z)
+        x̂_seq = vcat(x̂_seq, x̂)
+    end
+
+    return x̂_seq, st
+end
+
 function log_likelihood(
     lkhood, 
     ps, 
@@ -135,7 +169,8 @@ function log_likelihood(
     z::AbstractArray{half_quant};
     full_precision::Bool=false,
     seed::Int=1,
-    ε::half_quant=eps(half_quant)
+    ε::half_quant=eps(half_quant),
+    auto_regressive::Bool=false,
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -254,8 +289,10 @@ function init_KAN_lkhood(
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
 
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
+    sequence_length = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "sequence_length"))
 
     lkhood_model = CNN ? "l2" : retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
+    lkhood_model = sequence_length > 1 ? lkhood_models_seq : lkhood_model
     ll_model = llhoods_dict[CNN][lkhood_model]
     generate_fcn = CNN ? CNN_gen : KAN_gen
 
@@ -304,7 +341,7 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end]) 
     end
 
-    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn, generate_fcn, CNN)
+    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation_mapping[output_act], resample_fcn, generate_fcn, CNN, sequence_length)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

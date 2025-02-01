@@ -22,7 +22,7 @@ mutable struct T_KAM_trainer
     cnn::Bool
     o::opt
     dataset_name::AbstractString
-    img_shape::Tuple
+    x_shape::Tuple
     ps::ComponentArray
     st::NamedTuple
     N_epochs::Int
@@ -47,18 +47,17 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
     cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
-    gen_type = dataset_name == "PTB" || dataset_name == "UD" ? "embeddings" : "images"
+    seq = dataset_name == "PTB" || dataset_name == "UD"
+    gen_type = seq ? "embeddings" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
 
-    # Option to resize dataset 
-    dataset, img_shape, save_dataset = get_vision_dataset(
-        dataset_name, 
-        N_train, 
-        N_test, 
-        num_generated_samples; 
-        img_resize=img_resize, 
-        cnn=cnn
-        )
+    dataset, x_shape, save_dataset = (seq ? 
+        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples) :
+        get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
+    )
+
+    sequence_length = seq ? size(dataset, 2) : 0
+    commit!(conf, "KAN_LIKELIHOOD", "sequence_length", sequence_length)
     
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
@@ -98,7 +97,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         cnn,
         optimizer, 
         dataset_name, 
-        img_shape, 
+        x_shape, 
         device(params), 
         device(state), 
         N_epochs, 
@@ -202,7 +201,7 @@ function train!(t::T_KAM_trainer)
             test_loss = 0
             for x in t.model.test_loader
                 x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x)[end]; seed=t.seed)
-                test_loss += !t.cnn ? sum(full_quant.(x_gen' .- device(x)).^2) / size(x)[end] : sum(full_quant.(x_gen .- device(x)).^2) / size(x)[end]
+                test_loss += t.model.log_lkhood_model(x, x_gen)
             end
             
             train_loss = train_loss / num_batches
@@ -260,10 +259,10 @@ function train!(t::T_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    gen_data = zeros(half_quant, 0, t.img_shape...) 
+    gen_data = zeros(half_quant, 0, t.x_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
-        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))
+        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.x_shape...))
         gen_data = vcat(gen_data, batch)
     end
 

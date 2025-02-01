@@ -35,6 +35,7 @@ mutable struct T_KAM_trainer
     grid_update_frequency::Int
     last_grid_update::Int
     save_model::Bool
+    gen_type::AbstractString
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
@@ -46,6 +47,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
     cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
+    gen_type = dataset_name == "PTB" || dataset_name == "UD" ? "embeddings" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
 
     # Option to resize dataset 
@@ -85,10 +87,10 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mkpath(file_loc)
 
     try
-        h5write(file_loc * "real_images.h5", "samples", Float32.(save_dataset))
+        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     catch
-        rm(file_loc * "real_images.h5")
-        h5write(file_loc * "real_images.h5", "samples", Float32.(save_dataset))
+        rm(file_loc * "real_$(gen_type).h5")
+        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     end
     
     return T_KAM_trainer(
@@ -108,7 +110,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         seed, 
         grid_update_frequency,
         1,
-        save_model
+        save_model,
+        gen_type
     )
 end
 
@@ -257,18 +260,18 @@ function train!(t::T_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    generated_images = zeros(half_quant, 0, t.img_shape...) 
+    gen_data = zeros(half_quant, 0, t.img_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
         batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.img_shape...))
-        generated_images = vcat(generated_images, batch)
+        gen_data = vcat(gen_data, batch)
     end
 
     try
-        h5write(t.file_loc * "generated_images.h5", "samples", Float32.(generated_images))
+        h5write(t.file_loc * "generated_$(gen_type).h5", "samples", Float32.(gen_data))
     catch
-        rm(t.file_loc * "generated_images.h5")
-        h5write(t.file_loc * "generated_images.h5", "samples", Float32.(generated_images))
+        rm(t.file_loc * "generated_$(gen_type).h5")
+        h5write(t.file_loc * "generated_$(gen_type).h5", "samples", Float32.(gen_data))
     end
 
     # Save params, state, model

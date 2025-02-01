@@ -42,15 +42,15 @@ function next_rng(seed)
 end
 
 function move_to_cpu(model, ps, st)
-    ps, st = ps |> cpu_device(), st |> cpu_device()
+    ps, st = ps |> cpu_device() |> Lux.f32, st |> cpu_device() |> Lux.f32
     
     for i in 1:model.prior.depth
-        @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> cpu_device()
+        @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> cpu_device() |> Lux.f32
     end
 
     if !model.lkhood.CNN
         for i in 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> cpu_device()
+            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> cpu_device() |> Lux.f32
         end
     end
 

@@ -9,7 +9,7 @@ include("data_utils.jl")
 using .T_KAM_model
 using .optimization
 using .Utils: device, half_quant, full_quant, move_to_cpu
-using .DataUtils: get_vision_dataset
+using .DataUtils: get_vision_dataset, get_text_dataset
 
 using CUDA, KernelAbstractions, Tullio
 using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser

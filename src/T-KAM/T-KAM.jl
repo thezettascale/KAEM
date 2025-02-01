@@ -239,10 +239,21 @@ function init_T_KAM(
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
+    seq = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "sequence_length")) > 0
 
     data_seed, rng = next_rng(data_seed)
-    train_data = cnn ? dataset[:,:,:,1:N_train] : dataset[:, 1:N_train]
-    test_data = cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : dataset[:, N_train+1:N_train+N_test]
+    train_data = (
+        cnn ? dataset[:,:,:,1:N_train] : 
+        (seq ? dataset[:, :, 1:N_train] : dataset[:, 1:N_train]) 
+        ) |> device
+
+    test_data = (
+        cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : 
+        (seq ? dataset[:, :, N_train+1:N_train+N_test] : dataset[:, N_train+1:N_train+N_test]) 
+        ) |> device
+
+
+
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
     loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))

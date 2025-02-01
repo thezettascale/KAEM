@@ -5,20 +5,15 @@ export T_KAM_trainer, init_trainer, train!
 include("../T-KAM/T-KAM.jl")
 include("optimizer.jl")
 include("../utils.jl")
+include("data_utils.jl")
 using .T_KAM_model
 using .optimization
 using .Utils: device, half_quant, full_quant, move_to_cpu
+using .DataUtils: get_vision_dataset
 
 using CUDA, KernelAbstractions, Tullio
-using Random, MLDatasets, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
+using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
-
-dataset_mapping = Dict(
-    "MNIST" => MLDatasets.MNIST(),
-    "FMNIST" => MLDatasets.FashionMNIST(),
-    "CIFAR10" => MLDatasets.CIFAR10(),
-    "SVHN" => MLDatasets.SVHN2(),
-)
 
 const CNN_hq = half_quant == Float16 ? Lux.f16 : Lux.f32
 
@@ -48,19 +43,20 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Load dataset
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
-    dataset = dataset_mapping[dataset_name][1:N_train+N_test].features
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
     cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
 
     # Option to resize dataset 
-    dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
-    img_shape = size(dataset)[1:end-1]
-    dataset = cnn ? dataset : reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end])
-    dataset = dataset .|> half_quant
-    save_dataset = cnn ? dataset[:,:,:,1:num_generated_samples] : reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
-    println("Resized dataset to $(img_shape)")
+    dataset, img_shape, save_dataset = get_vision_dataset(
+        dataset_name, 
+        N_train, 
+        N_test, 
+        num_generated_samples; 
+        img_resize=img_resize, 
+        cnn=cnn
+        )
     
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)

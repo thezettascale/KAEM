@@ -160,7 +160,7 @@ function curve2coef(
     grid::AbstractArray{half_quant};
     k::Int64=3,
     scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
-    ε::full_quant=full_quant(1f-6), 
+    ε::full_quant=full_quant(1f-4), 
     basis_function::Function=B_spline_basis
     )
     """

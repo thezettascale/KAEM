@@ -151,11 +151,11 @@ function test_lstm_derivative()
 end
 
 @testset "KAN Likelihood Tests" begin
-    # test_generate()
-    # test_cnn_generate()
+    test_generate()
+    test_cnn_generate()
     test_lstm_generate()
-    # test_logllhood()
-    # test_derivative()
-    # test_cnn_derivative()
+    test_logllhood()
+    test_derivative()
+    test_cnn_derivative()
     test_lstm_derivative()
 end

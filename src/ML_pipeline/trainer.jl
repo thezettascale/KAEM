@@ -201,7 +201,8 @@ function train!(t::T_KAM_trainer)
             test_loss = 0
             for x in t.model.test_loader
                 x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x)[end]; seed=t.seed)
-                test_loss += t.model.log_lkhood_model(x, x_gen)
+                x_gen = reshape(x_gen, size(x)...)
+                test_loss += sum((x - x_gen).^2)
             end
             
             train_loss = train_loss / num_batches

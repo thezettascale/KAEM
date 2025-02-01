@@ -16,7 +16,6 @@ dataset_mapping = Dict(
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
-    # "UD" => MLDatasets.UD_English(),
 )
 
 function get_vision_dataset(
@@ -92,7 +91,8 @@ function get_text_dataset(
     dataset_name::String,
     N_train::Int,
     N_test::Int,
-    num_generated_samples::Int
+    num_generated_samples::Int;
+    max_seq_length::Int=100
     )
     """
     Load a text dataset.
@@ -121,7 +121,7 @@ function get_text_dataset(
     end
 
     embed_dataset = map(sentence -> embed_sentence(sentence, max_length, vocab, embedding_matrix, embedding_dim), dataset)
-    dataset = reduce((x,y) -> cat(x, y, dims=3), map(seq -> pad_sequence(seq, max_length, embedding_dim), embed_dataset))
+    dataset = reduce((x,y) -> cat(x, y, dims=3), map(seq -> pad_sequence(seq, max_seq_length, embedding_dim), embed_dataset))
 
     save_dataset = dataset[:, :, 1:num_generated_samples]
     return dataset, size(dataset)[1:end-1], save_dataset

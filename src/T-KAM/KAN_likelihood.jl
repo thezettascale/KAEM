@@ -152,7 +152,7 @@ function SEQ_gen(
         The generated data.
         The updated seed.
     """
-    x̂_seq = zeros(half_quant, 0, size(z, 1), lkhood.out_size)
+    x̂_seq = zeros(half_quant, 0, size(z, 1), lkhood.out_size) |> device
     
     for t in 1:lkhood.seq_length
         x̂, st = KAN_gen(lkhood, ps, st, z)
@@ -296,6 +296,7 @@ function init_KAN_lkhood(
     ll_model = llhoods_dict[CNN][lkhood_model]
     ll_model = sequence_length > 1 ? lkhood_models_seq : lkhood_model
     generate_fcn = CNN ? CNN_gen : KAN_gen
+    generate_fcn = sequence_length > 1 ? SEQ_gen : generate_fcn
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1

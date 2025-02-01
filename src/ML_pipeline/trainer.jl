@@ -47,7 +47,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
     cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
-    seq = dataset_name == "PTB" || dataset_name == "UD"
+    seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
     gen_type = seq ? "embeddings" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
 

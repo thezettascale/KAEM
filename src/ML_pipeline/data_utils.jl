@@ -16,6 +16,7 @@ dataset_mapping = Dict(
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
+    "SMS_SPAM" => MLDatasets.SMSSpamCollection()
 )
 
 function get_vision_dataset(

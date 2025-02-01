@@ -25,13 +25,14 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models_flat = Dict(
-    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x' .- permutedims(x̂[:,:,:], [3, 2, 1])).^2 ; dims=2 ); dims=2 ),  
-    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( x' .* log.(permutedims(x̂[:,:,:], [3, 2, 1]) .+ ε) .+ (1 .- x') .* log.(1 .- permutedims(x̂[:,:,:], [3, 2, 1]) .+ ε) ; dims=2 ); dims=2 ),
+    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, o] := (x[o, b] - x̂[s, o, b])^2) ; dims=3 ); dims=3 ), 
+    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( @tullio(out[b, s, o] := x[o, b] * log(x̂[s, o, b] + ε) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + ε)) ; dims=3 ); dims=3 ),
 )
 
-lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂[:,:,:,:,:], [1,2,3,5,4])).^2 ; dims=(1,2,3) ); dims=(1,2,3) ) 
+lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂[:,:,:,:], [3,1,4,2])).^2 ; dims=(1,2) ); dims=(1,2) )
+lkhood_models_seq = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, t, o] := (x[o, t, b] - x̂[t, s, o])^2) ; dims=(3,4) ); dims=(3,4) )
+
 
 llhoods_dict = Dict(
     false => lkhood_models_flat,

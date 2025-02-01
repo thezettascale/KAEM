@@ -32,7 +32,7 @@ lkhood_models_flat = Dict(
 
 lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-function lkhood_model_seq(x::AbstractArray{Int}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
+function lkhood_model_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
     V = size(x̂, 1)
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask

@@ -14,6 +14,8 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg
 using .InverseSampling: sample_prior
 
+const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
+
 prior_distributions = Dict(
     "uniform" => Uniform(half_quant(0),half_quant(1)),
     "gaussian" => Normal(half_quant(0),half_quant(1)),
@@ -37,7 +39,7 @@ function log_partition_function(
     mix,
     ps,
     st;
-    ε::half_quant=eps(half_quant)
+    ε::full_quant=eps(full_quant)
     )
     """
     Approximate the partition function of the mixture ebm-prior using trapezium rule.
@@ -54,16 +56,16 @@ function log_partition_function(
     """
     grid = mix.fcns_qp[Symbol("1")].grid'
     grid_size, q_size = size(grid)
-    π_grid, Δg = mix.π_pdf(grid), grid[2:end, :] - grid[1:end-1, :] 
+    log_π_grid, Δg = log.(mix.π_pdf(grid) .+ ε), grid[2:end, :] - grid[1:end-1, :] 
     
     for i in 1:mix.depth
         grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
         grid = i == 1 ? reshape(grid, grid_size*q_size, size(grid, 3)) : dropdims(sum(grid, dims=2); dims=2)
     end
     grid = reshape(grid, grid_size, q_size, size(grid, 2))
-    grid = exp.(grid) .* π_grid
-    trapz =  Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :]) ./ 2
-    return log.(sum(trapz, dims=1) .+ ε)
+    @tullio trapz[g,q,p] := grid[g,q,p] + log_π_grid[g,q]
+    trapz = Δg .* (trapz[2:end, :, :] + trapz[1:end-1, :, :]) ./ 2
+    return sum(trapz, dims=1)
 end
 
 function log_prior(
@@ -72,8 +74,7 @@ function log_prior(
     ps, 
     st;
     normalize::Bool=false,
-    full_precision::Bool=false,
-    ε::half_quant=eps(half_quant)
+    ε::full_quant=eps(full_quant)
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -96,6 +97,7 @@ function log_prior(
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) # Might be problematic with FP16
     π_0 = mix.π_pdf(z)
+    @tullio log_απ[b,q,p] := log(alpha[q,p] * π_0[b,q] + ε)
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
@@ -103,18 +105,11 @@ function log_prior(
         z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
     end
     z = reshape(z, b_size, q_size, p_size)
-    
-    # Unnormalized or normalized log-probability
-    @tullio prob[b,q,p] := exp(z[b,q,p]) * alpha[q,p] * π_0[b,q]
-    prob = log.(prob .+ ε)
-    prob = !normalize ? prob .- log_partition_function(mix, ps, st) : prob
 
-    # Loss unstable if accumulated in half precision, grads are fine though
-    @ignore_derivatives if full_precision
-        prob = full_quant.(prob)
-    end
-
-    return dropdims(sum(prob; dims=(2,3)); dims=(2,3))
+    # Unnormalized or normalized log-probability, accumulated across samples in full precision 
+    logprob = z + log_απ
+    logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
+    return dropdims(sum(logprob |> fq; dims=(2,3)); dims=(2,3))
 end
 
 function init_mix_prior(

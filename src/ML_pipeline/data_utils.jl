@@ -4,7 +4,7 @@ module DataUtils
 export get_vision_dataset, get_text_dataset
 
 include("../utils.jl")
-using .Utils: device, half_quant
+using .Utils: device, full_quant
 
 using MLDatasets, Embeddings
 using Flux: onehotbatch
@@ -49,7 +49,7 @@ function get_vision_dataset(
     img_shape = size(dataset)[1:end-1]
     
     dataset = cnn ? dataset : reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end])
-    dataset = dataset .|> half_quant
+    dataset = dataset .|> full_quant
     save_dataset = (
         cnn ? 
         dataset[:,:,:,1:num_generated_samples] 
@@ -106,13 +106,13 @@ function get_text_dataset(
     
     embedding_dim = size(emb.embeddings, 1)
     max_length = maximum(length(sentence) for sentence in dataset)
-    embedding_matrix = zeros(half_quant, embedding_dim, length(vocab))
+    embedding_matrix = zeros(full_quant, embedding_dim, length(vocab))
 
     indexed_dataset = map(sentence -> index_sentence(sentence, sequence_length, vocab), dataset)
     dataset = reduce(hcat, indexed_dataset)  
     
     save_dataset = dataset[:, 1:num_generated_samples]
-    dataset = collect(half_quant, onehotbatch(dataset, 1:length(vocab)))
+    dataset = collect(full_quant, onehotbatch(dataset, 1:length(vocab)))
     return dataset, (size(dataset, 1), size(dataset, 2)), save_dataset
 end
 

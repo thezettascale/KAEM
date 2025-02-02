@@ -27,13 +27,13 @@ output_activation_mapping = Dict(
 )
 
 lkhood_models_flat = Dict(
-    "l2" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, o] := (x[o, b] - x̂[s, o, b])^2) ; dims=3 ); dims=3 ), 
-    "bernoulli" => (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> dropdims( sum( @tullio(out[b, s, o] := x[o, b] * log(x̂[s, o, b] + ε) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + ε)) ; dims=3 ); dims=3 ),
+    "l2" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, o] := (x[o, b] - x̂[s, o, b])^2) ; dims=3 ); dims=3 ), 
+    "bernoulli" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> dropdims( sum( @tullio(out[b, s, o] := x[o, b] * log(x̂[s, o, b] + ε) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + ε)) ; dims=3 ); dims=3 ),
 )
 
-lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
+lkhood_model_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-function lkhood_model_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
+function lkhood_model_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
     return ll ./ size(x̂, 1)
@@ -57,7 +57,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     depth::Int
     out_size::Int
     σ_ε::half_quant
-    σ_llhood::half_quant
+    σ_llhood::full_quant
     log_lkhood_model::Function
     output_activation::Function
     resample_z::Function
@@ -106,11 +106,10 @@ function log_likelihood(
     lkhood, 
     ps, 
     st, 
-    x::AbstractArray{half_quant}, 
+    x::AbstractArray{full_quant}, 
     z::AbstractArray{half_quant};
-    full_precision::Bool=false,
     seed::Int=1,
-    ε::half_quant=eps(half_quant),
+    ε::full_quant=eps(full_quant),
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -135,14 +134,8 @@ function log_likelihood(
     # Add noise
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
-    x̂ = lkhood.output_activation(x̂ .+ noise)
-    ll = lkhood.log_lkhood_model(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2)
-    
-    # Loss unstable if accumulated in half precision, grads are fine though
-    @ignore_derivatives if full_precision
-        ll = full_quant.(ll)
-    end
-    
+    x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
+    ll = lkhood.log_lkhood_model(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2)    
     return ll, st, seed
 end
 
@@ -223,7 +216,7 @@ function init_KAN_lkhood(
     τ_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     noise_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
-    gen_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
+    gen_var = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     ESS_threshold = parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
     resampler = retrieve(conf, "KAN_LIKELIHOOD", "resampler")

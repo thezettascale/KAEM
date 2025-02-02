@@ -3,7 +3,7 @@ module LangevinSampling
 export autoMALA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
-using Zygote: gradient
+using Zygote: withgradient
 
 include("../utils.jl")
 using .Utils: device, next_rng, half_quant, full_quant
@@ -131,7 +131,7 @@ function autoMALA_sampler(
     m,
     ps,
     st,
-    x::AbstractArray{half_quant};
+    x::AbstractArray{full_quant};
     t::AbstractArray{full_quant}=[full_quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
@@ -175,9 +175,9 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
-    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::Union{full_quant, half_quant}; full_precision::Bool=false, seed_i::Int=1)
-        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, full_precision=full_precision, ε=m.ε)
-        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; full_precision=full_precision, seed=seed_i, ε=m.ε)
+    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; seed_i::Int=1)
+        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
+        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed_i, ε=m.ε)
         logpos = mean(lp) + t_k * mean(ll)
         return logpos * m.loss_scaling, st_new, seed_i
     end
@@ -188,8 +188,9 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i, seed_i) -> begin
-            logpos_z, st_gen, seed_i = CUDA.@fastmath log_posterior(z_i, Lux.testmode(st_i), t[k]; full_precision=true, seed_i=seed_i)
-            ∇z = CUDA.@fastmath first(gradient(z_j -> first(log_posterior(z_j, Lux.trainmode(st_i), half_quant(t[k]), full_precision=false, seed_i=seed_i)), z_i))
+            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t_k; seed_i=seed_i), z_i)
+            logpos_z, st_gen, seed_i, ∇z = result.val..., first(result.grad)
+            
             logpos_z = (logpos_z * m.IS_samples) / loss_scaling
             ∇z = (full_quant.(∇z) .* m.IS_samples) ./ loss_scaling
             @reset st_i.gen = st_gen

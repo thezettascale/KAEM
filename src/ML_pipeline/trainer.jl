@@ -29,7 +29,7 @@ mutable struct T_KAM_trainer
     st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
-    x::AbstractArray
+    x::AbstractArray{full_quant}
     file_loc::AbstractString
     num_generated_samples::Int
     batch_size_for_gen::Int
@@ -158,7 +158,6 @@ function train!(t::T_KAM_trainer)
             pars, 
             Lux.trainmode(t.st), 
             t.x; 
-            full_precision=false,
             seed=t.seed
             )), 
             half_quant.(t.ps))) .|> full_quant
@@ -184,7 +183,6 @@ function train!(t::T_KAM_trainer)
             half_quant.(t.ps), 
             Lux.testmode(t.st), 
             t.x; 
-            full_precision=true, 
             seed=t.seed
             )
 
@@ -198,14 +196,15 @@ function train!(t::T_KAM_trainer)
             
             test_loss = 0
             for x in t.model.test_loader
-                x_gen, t.seed = generate_batch(t.model, t.ps, t.st, size(x)[end]; seed=t.seed)
+                x_gen, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), size(x)[end]; seed=t.seed)
+                x_gen = x_gen .|> full_quant
                
                 # MSE loss between pixels for images, and max index for logits
                 if t.gen_type != "logits"
-                    x_gen = reshape(x_gen, size(x)...) .|> full_quant
+                    x_gen = reshape(x_gen, size(x)...) 
                     test_loss += sum((device(x) - x_gen).^2) / size(x)[end]
                 else
-                    idxs = dropdims(argmax(full_quant.(x_gen), dims=1); dims=1)
+                    idxs = dropdims(argmax(x_gen, dims=1); dims=1)
                     test_loss += sum((device(onecold(x, 1:size(x,1))) .- getindex.(idxs, 1)).^2) / size(x)[end]
                 end 
             end
@@ -267,7 +266,7 @@ function train!(t::T_KAM_trainer)
     # Generate samples
     gen_data = zeros(half_quant, 0, t.x_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
-        batch, t.seed = generate_batch(t.model, t.ps, t.st, t.batch_size_for_gen; seed=t.seed)
+        batch, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), t.batch_size_for_gen; seed=t.seed)
         batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.x_shape...))
         gen_data = vcat(gen_data, batch)
     end

@@ -160,7 +160,6 @@ function autoMALA_sampler(
     # Initialize from prior
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     z = z .|> full_quant
-    loss_scaling = m.loss_scaling |> full_quant
 
     if isa(st.η_init, CuArray)
         @reset st.η_init = st.η_init |> cpu_device()

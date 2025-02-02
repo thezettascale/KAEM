@@ -117,7 +117,6 @@ function train!(t::T_KAM_trainer)
     # (Move off GPU)
     @reset t.st.train_idx = t.st.train_idx |> cpu_device()
     @reset t.st.η_init = t.st.η_init |> cpu_device()
-    loss_scaling = t.model.loss_scaling |> full_quant
 
     num_batches = length(t.model.train_loader)
     grid_updated = 0
@@ -161,8 +160,6 @@ function train!(t::T_KAM_trainer)
             seed=t.seed
             )), 
             half_quant.(t.ps))) .|> full_quant
-
-        grads = grads ./ loss_scaling
         
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
@@ -185,8 +182,6 @@ function train!(t::T_KAM_trainer)
             t.x; 
             seed=t.seed
             )
-
-        loss = loss / loss_scaling
         
         train_loss += loss
         t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")

@@ -9,7 +9,7 @@ include("../T-KAM/T-KAM.jl")
 include("../T-KAM/langevin_sampling.jl")
 include("../utils.jl")
 using .T_KAM_model
-using .Utils: device, half_quant
+using .Utils: device, half_quant, full_quant
 using .LangevinSampling
 
 conf = ConfParse("src/tests/test_conf.ini")

@@ -204,10 +204,10 @@ function train!(t::T_KAM_trainer)
                
                 # MSE loss between pixels for images, and max index for logits
                 if t.gen_type != "logits"
-                    x_gen = reshape(x_gen, size(x)...)
+                    x_gen = reshape(x_gen, size(x)...) .|> full_quant
                     test_loss += sum((x - x_gen).^2)
                 else
-                    idxs = dropdims(argmax(x_gen, dims=1); dims=1)
+                    idxs = dropdims(argmax(full_quant.(x_gen), dims=1); dims=1)
                     test_loss += sum((onecold(x, 1:size(x,1)) .- getindex.(idxs, 1)).^2)
                 end 
             end

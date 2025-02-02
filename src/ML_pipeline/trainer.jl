@@ -52,16 +52,14 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
     gen_type = seq ? "logits" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
-    sequence_length = parse(Int, retrieve(conf, "LSTM", "sequence_length"))
+    sequence_length = seq ? parse(Int, retrieve(conf, "LSTM", "sequence_length")) : 0
+    commit!(conf, "LSTM", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
     vocab_size = parse(Int, retrieve(conf, "LSTM", "vocab_size"))
 
     dataset, x_shape, save_dataset = (seq ? 
         get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
-
-    sequence_length = seq ? last(x_shape) : 0
-    commit!(conf, "LSTM", "sequence_length", string(sequence_length))
     
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)

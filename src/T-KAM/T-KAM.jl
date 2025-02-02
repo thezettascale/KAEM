@@ -312,6 +312,7 @@ function init_T_KAM(
             initial_step_size,
             posterior_fcn,
             loss_fcn,
+            loss_scaling,
             eps
         )
 end

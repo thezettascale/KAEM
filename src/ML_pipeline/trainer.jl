@@ -72,6 +72,18 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         @reset model.lkhood.Φ_fcns = model.lkhood.Φ_fcns |> hq
     end
 
+    if model.prior.layernorm
+        for i in 1:model.prior.depth-1
+            @reset model.prior.fcns_qp[Symbol("ln_$i")] = model.prior.fcns_qp[Symbol("ln_$i")] |> hq
+        end
+    end
+
+    if model.lkhood.layernorm && !(cnn || seq)
+        for i in 1:model.lkhood.depth-1
+            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] = model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
+        end
+    end
+
     optimizer = create_opt(conf)
     grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
 
@@ -146,7 +158,7 @@ function train!(t::T_KAM_trainer)
 
         # Grid updating for likelihood model
         if  (t.st.train_idx == 1 || (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.seed = update_model_grid(t.model, t.ps, t.st; seed=t.seed)
+            t.model, t.ps, t.st, t.seed = update_model_grid(t.model, t.ps, Lux.testmode(t.st); seed=t.seed)
             t.grid_update_frequency = t.st.train_idx > 1 ? floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^t.st.train_idx) : t.grid_update_frequency
             t.last_grid_update = t.st.train_idx
             grid_updated = 1

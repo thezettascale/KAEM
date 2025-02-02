@@ -65,9 +65,10 @@ function generate_batch(
     # Reduce precision, 
     ps = ps .|> half_quant
 
-    z, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
+    @reset st.ebm = st_ebm
     x̂, _ = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    return model.lkhood.output_activation(x̂), seed
+    return model.lkhood.output_activation(x̂), st, seed
 end
 
 function importance_loss(
@@ -79,14 +80,14 @@ function importance_loss(
     )
     """MLE loss with importance sampling."""
     
-    # Expected prior, (if contrastive divergence)
-    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)) : full_quant(0)
-    )
+    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    @ignore_derivatives @reset st.ebm = st_ebm
 
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    # Log-dists
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
     # Weights and resampling
@@ -116,18 +117,17 @@ function MALA_loss(
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-    ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)) : ex_prior
-    )
     
     # Log-dists
-    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)'
+    logprior, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed, ε=m.ε)
+    @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
-    m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood))
-    return -mean(logprior .- ex_prior .+ logllhood), st, seed
+    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood))
+    return -mean(logprior' .- ex_prior .+ logllhood), st, seed
 end 
 
 function thermo_loss(
@@ -147,12 +147,11 @@ function thermo_loss(
 
     T, S, Q, B = size(z)..., size(x)[end]
     
-    ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)) : full_quant(0)
-    )
-
-    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)'
+    # Log-dists
+    logprior, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed, ε=m.ε)
+    @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
     logllhood = reshape(logllhood, T, B, S)
@@ -161,9 +160,9 @@ function thermo_loss(
 
     # Expected posterior
     TI_loss = sum(weights .* logllhood)
-    MLE_loss = sum(sum(weights[end, :, :] .* (logprior .- ex_prior .+ logllhood[end, :, :]); dims=2))
+    MLE_loss = sum(sum(weights[end, :, :] .* (logprior' .- ex_prior .+ logllhood[end, :, :]); dims=2))
     
-    m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
+    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
     return -((TI_loss + MLE_loss) / 2B), st, seed
 end
 
@@ -189,7 +188,8 @@ function update_model_grid(
     ps = ps .|> half_quant
 
     if model.update_prior_grid
-        z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+        z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+        @reset st.ebm = st_ebm
 
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
@@ -198,12 +198,19 @@ function update_model_grid(
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             z = i == 1 ? reshape(z, :, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
+
+            if model.prior.layernorm && i < model.prior.depth
+                z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z |> permutedims, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
+                @reset st.ebm[Symbol("ln_$i")] = st_ebm
+                z = z |> permutedims
+            end
         end
     end
          
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, ps, seed
 
-    z, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    @reset st.ebm = st_ebm
 
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
@@ -212,9 +219,15 @@ function update_model_grid(
 
         z = fwd(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
         z = dropdims(sum(z, dims=2); dims=2)
+
+        if model.lkhood.layernorm && i < model.lkhood.depth
+            z, st_gen = Lux.apply(model.lkhood.Φ_fcns[Symbol("ln_$i")], z |> permutedims, ps.gen[Symbol("ln_$i")], st.gen[Symbol("ln_$i")])
+            @reset st.gen[Symbol("ln_$i")] = st_gen
+            z = z |> permutedims
+        end
     end
 
-    return model, full_quant.(ps), seed
+    return model, full_quant.(ps), st, seed
 end
 
 function init_T_KAM(
@@ -271,7 +284,7 @@ function init_T_KAM(
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
         
     # Importance sampling or MALA
-    posterior_fcn = (m, x, ps, st, seed) -> (m.prior.sample_z(m.prior, IS_samples, ps.ebm, st.ebm, seed)..., st)
+    posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = MALA_loss

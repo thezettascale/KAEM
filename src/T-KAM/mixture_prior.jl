@@ -14,6 +14,7 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg
 using .InverseSampling: sample_prior
 
+const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
 const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 prior_distributions = Dict(
@@ -28,6 +29,7 @@ prior_pdf = Dict(
 
 struct mix_prior <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple
+    layernorm::Bool
     depth::Int
     π_0::Union{Uniform, Normal, Bernoulli}
     π_pdf::Function
@@ -103,13 +105,20 @@ function log_prior(
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
+
+        if mix.layernorm && i < mix.depth
+            z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z |> permutedims, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            z = z |> permutedims
+        end
     end
     z = reshape(z, b_size, q_size, p_size)
 
-    # Unnormalized or normalized log-probability, accumulated across samples in full precision 
+    # Unnormalized or normalized log-probability
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
-    return dropdims(sum(logprob |> fq; dims=(2,3)); dims=(2,3))
+    logprob = dropdims(sum(logprob |> fq; dims=(2,3)); dims=(2,3))
+    return logprob, st
 end
 
 function init_mix_prior(
@@ -126,6 +135,7 @@ function init_mix_prior(
 
     widths = reverse(widths)
     spline_degree = parse(Int, retrieve(conf, "MIX_PRIOR", "spline_degree"))
+    layernorm = parse(Bool, retrieve(conf, "MIX_PRIOR", "layer_norm"))
     base_activation = retrieve(conf, "MIX_PRIOR", "base_activation")
     spline_function = retrieve(conf, "MIX_PRIOR", "spline_function")
     grid_size = parse(Int, retrieve(conf, "MIX_PRIOR", "grid_size"))
@@ -142,7 +152,7 @@ function init_mix_prior(
     contrastive_divergence = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, s; seed=seed, ε=eps)
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, Lux.testmode(s); seed=seed, ε=eps)
     
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
@@ -167,9 +177,14 @@ function init_mix_prior(
         )
 
         @reset functions[Symbol("$i")] = func
+
+        if (layernorm && i < length(widths)-1)
+            @reset functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+        end
+
     end
 
-    return mix_prior(functions, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence)
+    return mix_prior(functions, layernorm, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -177,12 +192,24 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
     @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, q_size, p_size)
+
+    if prior.layernorm 
+        for i in 1:prior.depth-1
+            @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, prior.fcns_qp[Symbol("ln_$i")]) 
+        end
+    end
     return ps
 end
  
 function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
     st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    return st
+
+    if prior.layernorm 
+        for i in 1:prior.depth-1
+            @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, prior.fcns_qp[Symbol("ln_$i")]) |> hq
+        end
+    end
+    return st 
 end
 
 end

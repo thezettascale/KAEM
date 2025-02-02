@@ -34,7 +34,7 @@ function test_grid_update()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     size_grid = size(model.lkhood.Φ_fcns[Symbol("1")].grid)
-    model, ps, seed = update_model_grid(model, ps, st)
+    model, ps, st, seed = update_model_grid(model, ps, Lux.testmode(st))
     @test all(size(model.lkhood.Φ_fcns[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
 end

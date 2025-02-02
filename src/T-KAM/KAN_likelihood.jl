@@ -54,6 +54,7 @@ resampler_map = Dict(
 
 struct KAN_lkhood <: Lux.AbstractLuxLayer
     Φ_fcns
+    layernorm::Bool
     depth::Int
     out_size::Int
     σ_ε::half_quant
@@ -93,6 +94,12 @@ function KAN_gen(
     for i in 1:lkhood.depth
         z = fwd(lkhood.Φ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = dropdims(sum(z, dims=2); dims=2)
+
+        if lkhood.layernorm && i < lkhood.depth
+            z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_$i")], z |> permutedims, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            z = z |> permutedims
+        end
     end
 
     return z, st
@@ -204,6 +211,7 @@ function init_KAN_lkhood(
     first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
 
     spline_degree = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "spline_degree"))
+    layernorm = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "layer_norm"))
     base_activation = retrieve(conf, "KAN_LIKELIHOOD", "base_activation")
     spline_function = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
     grid_size = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "grid_size"))
@@ -294,28 +302,40 @@ function init_KAN_lkhood(
             base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
             .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
             @reset Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
+
+            if (layernorm && i < depth)
+                @reset Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+            end
         end
     end
 
-    return KAN_lkhood(Φ_functions, depth, output_dim, noise_var, gen_var, ll_model, output_activation, resample_fcn, generate_fcn, CNN, sequence_length)
+    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, resample_fcn, generate_fcn, CNN, sequence_length)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
-    ps = (
-        lkhood.seq_length > 1 || lkhood.CNN ? 
-        Lux.initialparameters(rng, lkhood.Φ_fcns) : 
-        NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    )
-    return ps
+
+    (lkhood.seq_length > 1 || lkhood.CNN) && return Lux.initialparameters(rng, lkhood.Φ_fcns)
+
+    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    if lkhood.layernorm 
+        for i in 1:lkhood.depth-1
+            @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) 
+        end
+    end
+    return ps 
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
-    st = (
-        lkhood.seq_length > 1 || lkhood.CNN ?
-        Lux.initialstates(rng, lkhood.Φ_fcns) |> hq :
-        NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
-    )
-    return st
+
+    (lkhood.seq_length > 1 || lkhood.CNN) && return Lux.initialstates(rng, lkhood.Φ_fcns)
+
+    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    if lkhood.layernorm
+        for i in 1:lkhood.depth-1
+            @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) |> hq
+        end 
+    end
+    return st 
 end
 
 end

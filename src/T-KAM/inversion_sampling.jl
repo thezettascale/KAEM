@@ -3,7 +3,7 @@ module InverseSampling
 export sample_prior
 
 using CUDA, KernelAbstractions, Tullio
-using Random, Distributions, Lux, LuxCUDA, LinearAlgebra
+using Random, Distributions, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Flux: onehotbatch
 
 include("../utils.jl")
@@ -47,7 +47,7 @@ function choose_component(
 end
 
 function sample_prior(
-    prior,
+    mix,
     num_samples::Int, 
     ps,
     st;
@@ -68,8 +68,8 @@ function sample_prior(
         z: The samples from the mixture ebm-prior, (num_samples, q). 
         seed: The updated seed.
     """
-    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
-    q_size = prior.fcns_qp[Symbol("1")].in_dim
+    p_size = mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
+    q_size = mix.fcns_qp[Symbol("1")].in_dim
     
     # Categorical component selection (per sample, per outer sum dimension)
     component_mask, seed = choose_component(
@@ -81,17 +81,23 @@ function sample_prior(
     )
 
     # Evaluate prior on grid [0,1]
-    f_grid = prior.fcns_qp[Symbol("1")].grid'
+    f_grid = mix.fcns_qp[Symbol("1")].grid'
     grid = f_grid |> cpu_device() .|> full_quant
     Δg = f_grid[2:end, :] - f_grid[1:end-1, :] .|> full_quant
     
-    π_grid = prior.π_pdf(f_grid)
+    π_grid = mix.π_pdf(f_grid)
     grid_size = size(f_grid, 1)
 
     # Energy function of each component, q -> p
-    for i in 1:prior.depth
-        f_grid = fwd(prior.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
+    for i in 1:mix.depth
+        f_grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
         f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : dropdims(sum(f_grid, dims=2); dims=2)
+
+        if mix.layernorm && i < mix.depth
+            f_grid, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_grid |> permutedims, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            @reset st[Symbol("ln_$i")] = st_new
+            f_grid = f_grid |> permutedims
+        end
     end
     f_grid = reshape(f_grid, grid_size, q_size, p_size)
 
@@ -127,7 +133,7 @@ function sample_prior(
         end
     end
 
-    return device(half_quant.(z)), seed
+    return device(half_quant.(z)), st, seed
 end
 
 end

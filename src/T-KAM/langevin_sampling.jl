@@ -10,7 +10,7 @@ using .Utils: device, next_rng, half_quant, full_quant
 
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
-    log_prior(m, z, ps, st; normalize=false) = full_quant(0)
+    log_prior(m, z, ps, st; normalize=false) = full_quant(0), st
     log_likelihood(m, ps, st, x, z; seed=1) = -sum(full_quant(z).^2) ./ 2, st, seed
 else
     include("mixture_prior.jl")
@@ -158,7 +158,8 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    @reset st.ebm = st_ebm
     z = z .|> full_quant
 
     if isa(st.η_init, CuArray)
@@ -175,10 +176,10 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; seed_i::Int=1)
-        lp = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
-        ll, st_new, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed_i, ε=m.ε)
+        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
+        ll, st_gen, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed_i, ε=m.ε)
         logpos = mean(lp) + t_k * mean(ll)
-        return logpos * m.loss_scaling, st_new, seed_i
+        return logpos * m.loss_scaling, st_ebm, st_gen, seed_i
     end
 
     k = 1
@@ -188,10 +189,11 @@ function autoMALA_sampler(
         
         logpos_withgrad = (z_i, st_i, seed_i) -> begin
             result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.testmode(st_i), t[k]; seed_i=seed_i), z_i)
-            logpos_z, st_gen, seed_i, ∇z = result.val..., first(result.grad)
+            logpos_z, st_ebm, st_gen, seed_i, ∇z = result.val..., first(result.grad)
             
             logpos_z = (logpos_z * m.IS_samples) / m.loss_scaling
             ∇z = (full_quant.(∇z) .* m.IS_samples) ./ m.loss_scaling
+            @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
             return logpos_z, ∇z, st_i, seed_i
         end

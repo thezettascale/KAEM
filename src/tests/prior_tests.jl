@@ -31,7 +31,7 @@ function test_log_prior()
     ps, st = ps |> device, st |> device
 
     z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
-    log_p = log_prior(prior, z_test, ps, st)
+    log_p = first(log_prior(prior, z_test, ps, st))
     @test size(log_p) == (b_size,)
 end
 
@@ -42,7 +42,7 @@ function test_log_prior_derivative()
     ps, st = ps |> device, st |> device
 
     z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
-    ∇ = first(gradient(x -> sum(log_prior(prior, x, ps, st)), z_test))
+    ∇ = first(gradient(x -> sum(first(log_prior(prior, x, ps, st))), z_test))
     @test size(∇) == size(z_test)
 end
     

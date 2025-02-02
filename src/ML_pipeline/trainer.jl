@@ -275,10 +275,10 @@ function train!(t::T_KAM_trainer)
     end
 
     try
-        h5write(t.file_loc * "generated_$(gen_type).h5", "samples", Float32.(gen_data))
+        h5write(t.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
     catch
-        rm(t.file_loc * "generated_$(gen_type).h5")
-        h5write(t.file_loc * "generated_$(gen_type).h5", "samples", Float32.(gen_data))
+        rm(t.file_loc * "generated_$(t.gen_type).h5")
+        h5write(t.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
     end
 
     # Save params, state, model

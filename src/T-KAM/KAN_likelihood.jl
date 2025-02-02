@@ -35,7 +35,6 @@ lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}
 
 function lkhood_model_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
     V = size(x̂, 1)
-    println(size(x), size(x̂))
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
     return ll ./ V
@@ -207,8 +206,6 @@ function init_KAN_lkhood(
 
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "LSTM", "sequence_length"))
-
-    output_dim = sequence_length > 1 ? parse(Int, retrieve(conf, "LSTM", "vocab_size")) : output_dim
 
     widths = (widths..., output_dim)
     first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))

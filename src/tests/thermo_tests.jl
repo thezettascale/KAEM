@@ -22,7 +22,7 @@ function test_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    loss, _ = model.loss_fcn(model, half_quant.(ps), st, x_test)
+    loss = first(model.loss_fcn(model, half_quant.(ps), st, x_test))
     @test loss != 0
     @test !isnan(loss)
 end

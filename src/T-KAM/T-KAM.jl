@@ -102,7 +102,7 @@ function importance_loss(
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood), st, seed
+    return -mean(loss_prior .+ loss_llhood), seed, st
 end
 
 function MALA_loss(
@@ -127,7 +127,7 @@ function MALA_loss(
 
     # Expected posterior
     m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood))
-    return -mean(logprior .- ex_prior .+ logllhood), st, seed
+    return -mean(logprior .- ex_prior .+ logllhood), seed, st
 end 
 
 function thermo_loss(
@@ -164,7 +164,7 @@ function thermo_loss(
     MLE_loss = sum(sum(weights[end, :, :] .* (logprior .- ex_prior .+ logllhood[end, :, :]); dims=2))
     
     m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    return -((TI_loss + MLE_loss) / 2B), st, seed
+    return -((TI_loss + MLE_loss) / 2B), seed, st
 end
 
 function update_model_grid(

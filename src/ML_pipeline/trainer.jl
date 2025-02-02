@@ -163,7 +163,7 @@ function train!(t::T_KAM_trainer)
             seed=t.seed
             )), 
             half_quant.(t.ps))
-        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) .|> full_quant
+        t.loss, t.seed, t.st, grads = result.val..., first(result.grad) .|> full_quant
         
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")

@@ -245,12 +245,12 @@ function init_T_KAM(
         cnn ? dataset[:,:,:,1:N_train] : 
         (seq ? dataset[:, :, 1:N_train] :
         dataset[:, 1:N_train])
-        ) |> device
+        ) 
     test_data = (
         cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : 
         (seq ? dataset[:, :, N_train+1:N_train+N_test] :
         dataset[:, N_train+1:N_train+N_test])
-        ) |> device
+        ) .|> full_quant
 
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)

@@ -10,6 +10,7 @@ using .T_KAM_model
 using .optimization
 using .Utils: device, half_quant, full_quant, move_to_cpu
 using .DataUtils: get_vision_dataset, get_text_dataset
+using Flux: onecold
 
 using CUDA, KernelAbstractions, Tullio
 using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -205,8 +206,8 @@ function train!(t::T_KAM_trainer)
                     x_gen = reshape(x_gen, size(x)...)
                     test_loss += sum((x - x_gen).^2)
                 else
-                    idxs = dropdims(argmax(x_gen, dims=3); dims=3)
-                    test_loss += sum((x .- getindex.(idxs, 3)).^2)
+                    idxs = dropdims(argmax(x_gen, dims=1); dims=1)
+                    test_loss += sum((onecold(x, 1:size(x,1)) .- getindex.(idxs, 1)).^2)
                 end 
             end
             

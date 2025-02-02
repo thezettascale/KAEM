@@ -18,6 +18,7 @@ using .ebm_mix_prior
 using .WeightResamplers
 
 const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
@@ -34,6 +35,7 @@ lkhood_model_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}
 
 function lkhood_model_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε=eps(half_quant))
     V = size(x̂, 1)
+    println(size(x), size(x̂))
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
     return ll ./ V
@@ -275,6 +277,7 @@ function init_KAN_lkhood(
                 Lux.LSTMCell(hidden_dim => hidden_dim),
                 return_sequence=true
             ),
+            x -> hq(x), # LSTM stubbornly returns f32
             x -> reduce(hcat, map(z -> permutedims(z[:,:,:], (1,3,2)), x)),
             Lux.Dense(hidden_dim => output_dim)
         )

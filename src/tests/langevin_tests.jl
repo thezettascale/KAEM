@@ -9,7 +9,7 @@ include("../T-KAM/T-KAM.jl")
 include("../T-KAM/langevin_sampling.jl")
 include("../utils.jl")
 using .T_KAM_model
-using .Utils: device, half_quant
+using .Utils: device, half_quant, full_quant
 using .LangevinSampling
 
 conf = ConfParse("src/tests/test_conf.ini")
@@ -18,7 +18,7 @@ out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 
 function plot_final_distribution()
     Random.seed!(42)
-    dataset = randn(half_quant, 3, 50) 
+    dataset = randn(full_quant, 3, 50) 
     commit!(conf, "MALA", "use_langevin", "true")
     commit!(conf, "MALA", "iters", "150")
     commit!(conf, "TRAINING", "importance_sample_size", "100")

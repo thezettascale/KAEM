@@ -37,8 +37,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     η_init::full_quant
     posterior_sample::Function
     loss_fcn::Function
-    loss_scaling::half_quant    
-    ε::half_quant
+    ε::full_quant
 end
 
 function generate_batch(
@@ -74,21 +73,19 @@ function importance_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
-    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
+    x::AbstractArray{full_quant};
     seed::Int=1
     )
     """MLE loss with importance sampling."""
     
     # Expected prior, (if contrastive divergence)
     z, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
+    mean(log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)) : full_quant(0)
     )
 
-    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; full_precision=full_precision, seed=seed, ε=m.ε)
+    logprior = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z;  seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     # Weights and resampling
@@ -104,42 +101,39 @@ function importance_loss(
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
+    return -mean(loss_prior .+ loss_llhood), st, seed
 end
 
 function MALA_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
-    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
+    x::AbstractArray{full_quant};
     seed::Int=1
     )
     """MLE loss with MALA."""
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)) : full_quant(0)
     )
     
     # Log-dists
-    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)'
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; full_precision=full_precision, seed=seed, ε=m.ε)
+    logprior = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)'
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :];  seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
     m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood))
-    return -mean(logprior .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
+    return -mean(logprior .- ex_prior .+ logllhood), st, seed
 end 
 
 function thermo_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
-    full_precision::Bool=false, # Switches to full precision for accumulation over samples - set to false when AD is used or else LLVM will crash
+    x::AbstractArray{full_quant};
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
@@ -151,13 +145,12 @@ function thermo_loss(
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
     T, S, Q, B = size(z)..., size(x)[end]
-    ex_prior = full_precision ? full_quant(0) : half_quant(0)
     ex_prior = (m.prior.contrastive_div ? 
-    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)) : ex_prior
+    mean(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)) : full_quant(0)
     )
 
-    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, full_precision=full_precision, ε=m.ε)'
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); full_precision=full_precision, seed=seed, ε=m.ε)
+    logprior = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div,  ε=m.ε)'
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q);  seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.gen = st_gen
 
     logllhood = reshape(logllhood, T, B, S)
@@ -169,7 +162,7 @@ function thermo_loss(
     MLE_loss = sum(sum(weights[end, :, :] .* (logprior .- ex_prior .+ logllhood[end, :, :]); dims=2))
     
     m.verbose && println("Prior loss: ", -mean(logprior .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    return -((TI_loss + MLE_loss) / 2B)*m.loss_scaling, st, seed
+    return -((TI_loss + MLE_loss) / 2B), st, seed
 end
 
 function update_model_grid(
@@ -223,7 +216,7 @@ function update_model_grid(
 end
 
 function init_T_KAM(
-    dataset::AbstractArray{half_quant},
+    dataset::AbstractArray{full_quant},
     conf::ConfParse;
     prior_seed::Int=1,
     lkhood_seed::Int=1,
@@ -235,7 +228,7 @@ function init_T_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
+    eps = parse(full_quant, retrieve(conf, "TRAINING", "eps"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
@@ -250,12 +243,11 @@ function init_T_KAM(
         cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : 
         (seq ? dataset[:, :, N_train+1:N_train+N_test] :
         dataset[:, N_train+1:N_train+N_test])
-        ) .|> full_quant
+        ) 
 
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
-    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = cnn ? size(dataset, 3) : size(dataset, 1)
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
@@ -317,7 +309,6 @@ function init_T_KAM(
             initial_step_size,
             posterior_fcn,
             loss_fcn,
-            loss_scaling,
             eps
         )
 end

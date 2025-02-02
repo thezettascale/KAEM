@@ -14,6 +14,9 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg
 using .InverseSampling: sample_prior
 
+const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
+
 prior_distributions = Dict(
     "uniform" => Uniform(half_quant(0),half_quant(1)),
     "gaussian" => Normal(half_quant(0),half_quant(1)),
@@ -37,7 +40,7 @@ function log_partition_function(
     mix,
     ps,
     st;
-    ε::half_quant=eps(half_quant)
+    ε::full_quant=eps(full_quant)
     )
     """
     Approximate the partition function of the mixture ebm-prior using trapezium rule.
@@ -63,7 +66,7 @@ function log_partition_function(
     grid = reshape(grid, grid_size, q_size, size(grid, 2))
     grid = exp.(grid) .* π_grid
     trapz =  Δg .* (grid[2:end, :, :] + grid[1:end-1, :, :]) ./ 2
-    return log.(sum(trapz, dims=1) .+ ε)
+    return log.(sum(trapz, dims=1) .+ ε) |> fq
 end
 
 function log_prior(
@@ -72,8 +75,7 @@ function log_prior(
     ps, 
     st;
     normalize::Bool=false,
-    full_precision::Bool=false,
-    ε::half_quant=eps(half_quant)
+    ε::full_quant=eps(full_quant)
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -106,13 +108,8 @@ function log_prior(
     
     # Unnormalized or normalized log-probability
     @tullio prob[b,q,p] := exp(z[b,q,p]) * alpha[q,p] * π_0[b,q]
-    prob = log.(prob .+ ε)
+    prob = log.(prob .+ ε) |> fq
     prob = !normalize ? prob .- log_partition_function(mix, ps, st) : prob
-
-    # Loss unstable if accumulated in half precision, grads are fine though
-    @ignore_derivatives if full_precision
-        prob = full_quant.(prob)
-    end
 
     return dropdims(sum(prob; dims=(2,3)); dims=(2,3))
 end

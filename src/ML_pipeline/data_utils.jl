@@ -4,7 +4,7 @@ module DataUtils
 export get_vision_dataset, get_text_dataset
 
 include("../utils.jl")
-using .Utils: device, half_quant
+using .Utils: device, half_quant, full_quant
 
 using MLDatasets, Embeddings
 using Flux: onehotbatch

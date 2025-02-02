@@ -113,7 +113,7 @@ function get_text_dataset(
     
     save_dataset = dataset[:, 1:num_generated_samples]
     dataset = collect(half_quant, onehotbatch(dataset, 1:length(vocab)))
-    return dataset, (size(dataset,1), length(vocab)), save_dataset
+    return dataset, (size(dataset, 1), size(dataset, 2)), save_dataset
 end
 
 end

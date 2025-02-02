@@ -60,7 +60,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
 
-    sequence_length = seq ? first(x_shape) : 0
+    sequence_length = seq ? last(x_shape) : 0
     commit!(conf, "LSTM", "sequence_length", string(sequence_length))
     
     # Initialize model

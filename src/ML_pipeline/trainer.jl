@@ -155,16 +155,16 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        result = CUDA.@fastmath withgradient(pars -> first(t.model.loss_fcn(
+        result = CUDA.@fastmath withgradient(
+            pars -> t.model.loss_fcn(
             t.model, 
             pars, 
             Lux.trainmode(t.st), 
             t.x; 
             seed=t.seed
-            )), 
-            half_quant.(t.ps))
-        t.loss, t.seed, t.st, grads = result.val..., first(result.grad) .|> full_quant
-        
+            ), half_quant.(t.ps))
+        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) .|> full_quant
+       
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
 

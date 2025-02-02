@@ -187,11 +187,11 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i, seed_i) -> begin
-            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t_k; seed_i=seed_i), z_i)
+            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.testmode(st_i), t[k]; seed_i=seed_i), z_i)
             logpos_z, st_gen, seed_i, ∇z = result.val..., first(result.grad)
             
-            logpos_z = (logpos_z * m.IS_samples) / loss_scaling
-            ∇z = (full_quant.(∇z) .* m.IS_samples) ./ loss_scaling
+            logpos_z = (logpos_z * m.IS_samples) / m.loss_scaling
+            ∇z = (full_quant.(∇z) .* m.IS_samples) ./ m.loss_scaling
             @reset st_i.gen = st_gen
             return logpos_z, ∇z, st_i, seed_i
         end

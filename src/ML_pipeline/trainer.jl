@@ -14,7 +14,8 @@ using Flux: onecold
 
 using CUDA, KernelAbstractions, Tullio
 using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
-using Zygote, Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
+using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
+using Zygote: withgradient
 
 const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
 const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
@@ -38,6 +39,7 @@ mutable struct T_KAM_trainer
     last_grid_update::Int
     save_model::Bool
     gen_type::AbstractString
+    loss::full_quant
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
@@ -108,7 +110,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         grid_update_frequency,
         1,
         save_model,
-        gen_type
+        gen_type,
+        full_quant(0)
     )
 end
 
@@ -151,15 +154,16 @@ function train!(t::T_KAM_trainer)
             t.model.verbose && println("Iter: $(t.st.train_idx), Grid updated")
         end
 
-        # Reduced precision grads
-        grads = CUDA.@fastmath first(gradient(pars -> first(t.model.loss_fcn(
+        # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
+        result = CUDA.@fastmath withgradient(pars -> first(t.model.loss_fcn(
             t.model, 
             pars, 
             Lux.trainmode(t.st), 
             t.x; 
             seed=t.seed
             )), 
-            half_quant.(t.ps))) .|> full_quant
+            half_quant.(t.ps))
+        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) .|> full_quant
         
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
@@ -173,18 +177,9 @@ function train!(t::T_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-        
-        # Full precision loss, (switches to full precision for accumulation, not forward passes)
-        loss, t.st, t.seed = CUDA.@fastmath t.model.loss_fcn(
-            t.model, 
-            half_quant.(t.ps), 
-            Lux.testmode(t.st), 
-            t.x; 
-            seed=t.seed
-            )
-        
-        train_loss += loss
-        t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $loss")
+    
+        train_loss += t.loss
+        t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $(t.loss)")
 
         # After one epoch, calculate test loss and log to CSV
         if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1
@@ -222,7 +217,7 @@ function train!(t::T_KAM_trainer)
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state = (t.st.train_idx % num_batches == 0) ? iterate(t.model.train_loader) : iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
-        return loss
+        return t.loss
     end    
 
     start_time = time()

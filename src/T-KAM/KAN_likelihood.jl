@@ -134,7 +134,7 @@ function log_likelihood(
     # Add noise
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
-    x̂ = lkhood.output_activation(x̂ .+ noise) |> fq
+    x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
     ll = lkhood.log_lkhood_model(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
     return ll, st, seed

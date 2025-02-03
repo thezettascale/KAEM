@@ -207,7 +207,7 @@ function update_model_grid(
         end
     end
          
-    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, ps, seed
+    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, ps, st, seed
 
     z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm

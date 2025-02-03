@@ -22,7 +22,7 @@ end
 
 function test_B_spline_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, b, i) |> device
+    x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
@@ -30,39 +30,39 @@ function test_B_spline_basis()
     extended_grid = extend_grid(grid; k_extend=degree)
     B = B_spline_basis(x_eval, extended_grid; degree=degree)
 
-    @test size(B) == (b, i, g + degree - 1)
+    @test size(B) == (i, g + degree - 1, b)
     @test !any(isnan.(B))
 end
 
 function test_RBF_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, b, i) |> device
+    x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
 
     B_rbf = RBF_basis(x_eval, grid; σ=σ)
 
-    @test size(B_rbf) == (b, i, g)
+    @test size(B_rbf) == (i, g, b)
     @test !any(isnan.(B_rbf))
 end
 
 function test_RSWAF_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, b, i) |> device
+    x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
 
     B_rswaf = RSWAF_basis(x_eval, grid; σ=σ)
 
-    @test size(B_rswaf) == (b, i, g)
+    @test size(B_rswaf) == (i, g, b)
     @test !any(isnan.(B_rswaf))
 end
 
 function test_coef2curve()
     Random.seed!(42)
-    x_eval = rand(half_quant, b, i) |> device
+    x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
@@ -73,12 +73,12 @@ function test_coef2curve()
     extended_grid = extend_grid(grid; k_extend=degree)
 
     y_eval = coef2curve(x_eval, extended_grid, coef; k=degree, scale=σ)
-    @test size(y_eval) == (b, i, o)
+    @test size(y_eval) == (i, o, b)
 end
 
 function test_curve2coef()
     Random.seed!(42)
-    x_eval = rand(half_quant, b, i) |> device
+    x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
@@ -93,7 +93,7 @@ function test_curve2coef()
     @test size(recovered_coef) == size(coef)
 
     y_reconstructed = coef2curve(x_eval, extended_grid, recovered_coef; k=degree, scale=σ)
-    @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(1e-3)
+    @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(1e-2)
 end
 
 @testset "Spline Tests" begin

@@ -67,21 +67,16 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
 
-    # After initialization, we can change precision
-    if cnn || seq
-        @reset model.lkhood.Φ_fcns = model.lkhood.Φ_fcns |> hq
-    end
-
-    if model.prior.layernorm
-        for i in 1:model.prior.depth-1
-            @reset model.prior.fcns_qp[Symbol("ln_$i")] = model.prior.fcns_qp[Symbol("ln_$i")] |> hq
+    if cnn 
+        for i in 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> hq
+            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
         end
-    end
-
-    if model.lkhood.layernorm && !(cnn || seq)
+        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
+    elseif model.lkhood.layernorm
         for i in 1:model.lkhood.depth-1
             @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] = model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
-        end
+        end 
     end
 
     optimizer = create_opt(conf)
@@ -175,7 +170,7 @@ function train!(t::T_KAM_trainer)
             t.x; 
             seed=t.seed
             ), half_quant.(t.ps))
-        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) .|> full_quant
+        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) 
        
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")

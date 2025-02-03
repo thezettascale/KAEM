@@ -22,8 +22,10 @@ function test_ps_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    @test isa(∇, AbstractArray{half_quant})
 end
 
 function test_grid_update()
@@ -49,12 +51,49 @@ function test_mala_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    @test isa(∇, AbstractArray{half_quant})
+end
+
+function test_cnn_loss()
+    Random.seed!(42)
+    dataset = randn(full_quant, 32, 32, 3, 50)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    model = init_T_KAM(dataset, conf)
+    x_test = first(model.train_loader) |> device
+    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = ComponentArray(ps) |> device, st |> device
+
+    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    @test isa(ps, AbstractArray{full_quant})
+    @test norm(∇) > 0
+    @test !any(isnan, ∇)
+    @test isa(∇, AbstractArray{half_quant})
+end
+
+function test_lstm_loss()
+    Random.seed!(42)
+    dataset = randn(full_quant, 50, 10, 100)
+    commit!(conf, "LSTM", "sequence_length", "10")
+    commit!(conf, "LSTM", "vocab_size", "50")
+    model = init_T_KAM(dataset, conf)
+    x_test = first(model.train_loader) |> device
+    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = ComponentArray(ps) |> device, st |> device
+
+    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    @test isa(ps, AbstractArray{full_quant})
+    @test norm(∇) > 0
+    @test !any(isnan, ∇)
+    @test isa(∇, AbstractArray{half_quant})
 end
 
 @testset "T-KAM Tests" begin
     test_ps_derivative()
     test_grid_update()
     test_mala_loss()
+    test_cnn_loss()
+    # test_lstm_loss()
 end

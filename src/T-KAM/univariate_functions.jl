@@ -74,8 +74,8 @@ function init_function(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    ε = ((rand(rng, half_quant, l.grid_size + 1, l.in_dim, l.out_dim) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
-    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree] |> permutedims, ε, l.grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
+    ε = ((rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
+    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
     return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
@@ -107,7 +107,7 @@ function fwd(l, ps, st, x)
     base = l.base_activation(x)
     y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
-    return @tullio out[b, i, o] := (w_base[i, o] * base[b, i] + w_sp[i, o] * y[b, i, o]) * mask[i, o]
+    return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
 end
 
 function update_fcn_grid(l, ps, st, x)
@@ -124,19 +124,19 @@ function update_fcn_grid(l, ps, st, x)
         new_grid: The updated grid.
         new_coef: The updated spline coefficients.
     """
-    b_size = size(x, 1)
+    sample_size = size(x, 2)
     coef = ps.coef
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     
-    x_sort = sort(x, dims=1) 
+    x_sort = sort(x, dims=2) 
     y = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function) .|> half_quant
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(l.grid, 2) - 2*l.spline_degree - 1
-    ids = [div(b_size * i, num_interval) + 1 for i in 0:num_interval-1]
-    grid_adaptive = mapreduce(i -> view(x_sort, i:i, :), vcat, ids)
-    grid_adaptive = vcat(grid_adaptive, x_sort[end:end, :])
-    grid_adaptive = grid_adaptive |> permutedims 
+    ids = [div(sample_size * i, num_interval) + 1 for i in 0:num_interval-1]'
+    grid_adaptive = reduce(hcat, map(i -> view(x_sort, :, i:i), ids))
+    grid_adaptive = hcat(grid_adaptive, x_sort[:, end:end])
+    grid_adaptive = grid_adaptive  
 
     # Uniform grid
     h = (grid_adaptive[:, end:end] .- grid_adaptive[:, 1:1]) ./ num_interval # step size

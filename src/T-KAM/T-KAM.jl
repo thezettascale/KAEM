@@ -145,12 +145,12 @@ function thermo_loss(
     temperatures = device(temperatures)
     Δt = temperatures[2:end] - temperatures[1:end-1]
 
-    T, S, Q, B = size(z)..., size(x)[end]
+    T, Q, S, B = size(z)..., size(x)[end]
     
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, S*T, Q); seed=seed, ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, Q, S*T); seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
@@ -189,6 +189,7 @@ function update_model_grid(
 
     if model.update_prior_grid
         z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+        Q, B = size(z)
         @reset st.ebm = st_ebm
 
         for i in 1:model.prior.depth
@@ -197,12 +198,11 @@ function update_model_grid(
             @reset model.prior.fcns_qp[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, :, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
+            z = i == 1 ? reshape(z, size(z, 2), Q*B) : dropdims(sum(z, dims=1); dims=1)
 
             if model.prior.layernorm && i < model.prior.depth
-                z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z |> permutedims, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
+                z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
                 @reset st.ebm[Symbol("ln_$i")] = st_ebm
-                z = z |> permutedims
             end
         end
     end
@@ -218,12 +218,11 @@ function update_model_grid(
         @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = new_grid
 
         z = fwd(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
-        z = dropdims(sum(z, dims=2); dims=2)
+        z = dropdims(sum(z, dims=1); dims=1)
 
         if model.lkhood.layernorm && i < model.lkhood.depth
-            z, st_gen = Lux.apply(model.lkhood.Φ_fcns[Symbol("ln_$i")], z |> permutedims, ps.gen[Symbol("ln_$i")], st.gen[Symbol("ln_$i")])
+            z, st_gen = Lux.apply(model.lkhood.Φ_fcns[Symbol("ln_$i")], z, ps.gen[Symbol("ln_$i")], st.gen[Symbol("ln_$i")])
             @reset st.gen[Symbol("ln_$i")] = st_gen
-            z = z |> permutedims
         end
     end
 

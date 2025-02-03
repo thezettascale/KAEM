@@ -31,7 +31,7 @@ function test_generate()
 
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
-    @test size(x) == (b_size, out_dim)
+    @test size(x) == (out_dim, b_size)
 end
 
 function test_cnn_generate()

@@ -56,18 +56,18 @@ function log_partition_function(
     Returns:
         The log-partition function of the mixture ebm-prior.
     """
-    grid = mix.fcns_qp[Symbol("1")].grid'
-    grid_size, q_size = size(grid)
-    log_π_grid, Δg = log.(mix.π_pdf(grid) .+ ε), grid[2:end, :] - grid[1:end-1, :] 
+    grid = mix.fcns_qp[Symbol("1")].grid
+    q_size, grid_size = size(grid)
+    log_π_grid, Δg = log.(mix.π_pdf(grid) .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     
     for i in 1:mix.depth
         grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
-        grid = i == 1 ? reshape(grid, grid_size*q_size, size(grid, 3)) : dropdims(sum(grid, dims=2); dims=2)
+        grid = i == 1 ? reshape(grid, size(grid, 2), grid_size*q_size) : dropdims(sum(grid, dims=1); dims=1)
     end
-    grid = reshape(grid, grid_size, q_size, size(grid, 2))
-    @tullio trapz[g,q,p] := grid[g,q,p] + log_π_grid[g,q]
-    trapz = Δg .* (trapz[2:end, :, :] + trapz[1:end-1, :, :]) ./ 2
-    return sum(trapz, dims=1)
+    grid = reshape(grid, q_size, size(grid, 1), grid_size)
+    @tullio trapz[q,g,p] := grid[q,p,g] + log_π_grid[q,g]
+    trapz = Δg .* (trapz[:, 2:end, :] + trapz[:, 1:end-1, :]) ./ 2
+    return dropdims(sum(trapz, dims=2); dims=2)
 end
 
 function log_prior(
@@ -94,30 +94,29 @@ function log_prior(
     Returns:
         The unnormalized log-probability of the mixture ebm-prior.
     """
-    b_size, q_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
+    q_size, b_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) # Might be problematic with FP16
     π_0 = mix.π_pdf(z)
-    @tullio log_απ[b,q,p] := log(alpha[q,p] * π_0[b,q] + ε)
+    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? reshape(z, b_size*q_size, size(z, 3)) : dropdims(sum(z, dims=2); dims=2)
+        z = i == 1 ? reshape(z, size(z, 2), b_size*q_size) : dropdims(sum(z, dims=1); dims=1)
 
         if mix.layernorm && i < mix.depth
-            z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z |> permutedims, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
             @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
-            z = z |> permutedims
         end
     end
-    z = reshape(z, b_size, q_size, p_size)
+    z = reshape(z, q_size, p_size, b_size)
 
     # Unnormalized or normalized log-probability
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
-    logprob = dropdims(sum(logprob |> fq; dims=(2,3)); dims=(2,3))
+    logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
     return logprob, st
 end
 
@@ -179,7 +178,7 @@ function init_mix_prior(
         @reset functions[Symbol("$i")] = func
 
         if (layernorm && i < length(widths)-1)
-            @reset functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+            @reset functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1]) 
         end
 
     end
@@ -198,7 +197,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
             @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, prior.fcns_qp[Symbol("ln_$i")]) 
         end
     end
-    return ps
+    return ps 
 end
  
 function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)

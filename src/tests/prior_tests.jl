@@ -21,7 +21,7 @@ function test_sampling()
     ps, st = ps |> device, st |> device
 
     z_test = first(prior.sample_z(prior, b_size, ps, st,1))
-    @test all(size(z_test) .== (b_size, z_dim))
+    @test all(size(z_test) .== (z_dim, b_size))
 end
 
 function test_log_prior()

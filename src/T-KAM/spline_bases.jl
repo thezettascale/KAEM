@@ -42,43 +42,46 @@ function B_spline_basis(
     Compute the B-spline basis functions for a batch of points x and a grid of knots.
 
     Args:
-        x: A matrix of size (b, i) containing the points at which to evaluate the B-spline basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the B-spline basis functions.
         grid: A matrix of size (i, g) containing the grid of knots.
         degree: The degree of the B-spline basis functions.
 
     Returns:
-        A matrix of size (b, i, g) containing the B-spline basis functions evaluated at the points x.
+        A matrix of size (i, g, b) containing the B-spline basis functions evaluated at the points x.
     """
-    x = reshape(x, size(x)..., 1) 
-    grid = reshape(grid, 1, size(grid)...) 
+    # x = reshape(x, size(x)..., 1) 
+    # grid = reshape(grid, 1, size(grid)...) 
+
+    in_size, sample_size, G = size(x)..., size(grid, 2)
     
     # 0-th degree
     if degree == 0
-        grid_1 = grid[:, :, 1:end-1] 
-        grid_2 = grid[:, :, 2:end] 
+        grid_1 = grid[:, 1:end-1] 
+        grid_2 = grid[:, 2:end] 
     
         # B0 is piecewise constant
-        @tullio term1[b, i, g] := x[b, i, 1] >= grid_1[1, i, g]
-        @tullio term2[b, i, g] := x[b, i, 1] < grid_2[1, i, g]
+        @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
+        @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
         term1 = half_quant.(term1)
         term2 = half_quant.(term2)
 
-        @tullio B[b, i, g] := term1[b, i, g] * term2[b, i, g]
+        @tullio B[i, g, b] := term1[i, g, b] * term2[i, g, b]
 
     else
         # k-th degree
         k = degree
-        B = B_spline_basis(x[:, :, 1], grid[1, :, :]; degree=k-1)
+        B = B_spline_basis(x, grid; degree=k-1)
         
+        x = reshape(x, in_size, 1, sample_size)
 
-        numer1 = x .- grid[:, :, 1:(end - k - 1)]
-        denom1 = grid[:, :, (k + 1):end-1] .- grid[:, :, 1:(end - k - 1)]
-        numer2 = grid[:, :, (k + 2):end] .- x
-        denom2 = grid[:, :, (k + 2):end] .- grid[:, :, 2:(end - k)]
-        B_i1 = B[:, :, 1:end - 1]
-        B_i2 = B[:, :, 2:end]
+        numer1 = x .- grid[:, 1:(end - k - 1)]
+        denom1 = grid[:, (k + 1):end-1] .- grid[:, 1:(end - k - 1)]
+        numer2 = grid[:, (k + 2):end] .- x
+        denom2 = grid[:, (k + 2):end] .- grid[:, 2:(end - k)]
+        B_i1 = B[:, 1:end - 1, :]
+        B_i2 = B[:, 2:end, :]
 
-        @tullio B[b, i, g] := (numer1[b, i, g] / denom1[1, i, g]) * B_i1[b, i, g] + (numer2[b, i, g] / denom2[1, i, g]) * B_i2[b, i, g]
+        @tullio B[i, g, b] := (numer1[i, g, b] / denom1[i, g]) * B_i1[i, g, b] + (numer2[i, g, b] / denom2[i, g]) * B_i2[i, g, b]
     end
     
     return B
@@ -94,15 +97,15 @@ function RBF_basis(
     Compute the RBF basis functions for a batch of points x and a grid of knots.
 
     Args:
-        x: A matrix of size (b, i) containing the points at which to evaluate the RBF basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the RBF basis functions.
         grid: A matrix of size (i, g) containing the grid of knots.
         σ: Tuning for the bandwidth (standard deviation) of the RBF kernel.
 
     Returns:
-        A matrix of size (b, i, g) containing the RBF basis functions evaluated at the points x.
+        A matrix of size (i, g, b) containing the RBF basis functions evaluated at the points x.
     """
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
-    @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
     return exp.(-half_quant(0.5) * (diff ./ σ).^2)  
 end
 
@@ -117,15 +120,15 @@ function RSWAF_basis(
         Be careful of vanishing gradients when using this in a deep network.
 
     Args:
-        x: A matrix of size (b, i) containing the points at which to evaluate the RSWAF basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the RSWAF basis functions.
         grid: A matrix of size (i, g) containing the grid of knots.
         σ: Tuning for the bandwidth (standard deviation) of the RSWAF kernel.
 
     Returns:
-        A matrix of size (b, i, g) containing the RSWAF basis functions evaluated at the points x.
+        A matrix of size (i, g, b) containing the RSWAF basis functions evaluated at the points x.
     """
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    @tullio diff[b, i, g] := x[b, i] - grid[i, g] 
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
     diff = NNlib.tanh_fast(diff ./ σ)     
     return 1 .- diff.^2
 end
@@ -142,21 +145,21 @@ function coef2curve(
     Compute the B-spline curves from the B-spline coefficients.
 
     Args:
-        x_eval: A matrix of size (b, i) containing the points at which to evaluate the B-spline curves.
-        grid: A matrix of size (b, g) containing the grid of knots.
+        x_eval: A matrix of size (i, b) containing the points at which to evaluate the B-spline curves.
+        grid: A matrix of size (g, b) containing the grid of knots.
         coef: A matrix of size (i, o, g) containing the B-spline coefficients.
         k: The degree of the B-spline basis functions.
 
     Returns:
-        A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
+        A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
     """
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    return @tullio y_eval[b, i, o] := splines[b, i, g] * coef[i, o, g]
+    return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
 end
 
 function curve2coef(
-    x_eval::AbstractArray{half_quant},
-    y_eval::AbstractArray{half_quant},
+    x::AbstractArray{half_quant},
+    y::AbstractArray{half_quant},
     grid::AbstractArray{half_quant};
     k::Int64=3,
     scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
@@ -168,30 +171,27 @@ function curve2coef(
     This will not work for poly-KANs. CuSolver works best for higher precisions.
 
     Args:
-        x_eval: A matrix of size (b, i) containing the points at which the B-spline curves were evaluated.
-        y_eval: A matrix of size (b, i, o) containing the B-spline curves evaluated at the points x_eval.
-        grid: A matrix of size (b, g) containing the grid of knots.
+        x: A matrix of size (i, b) containing the points at which the B-spline curves were evaluated.
+        y: A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
+        grid: A matrix of size (i, g) containing the grid of knots.
         k: The degree of the B-spline basis functions.
 
     Returns:
         A matrix of size (i, o, g) containing the B-spline coefficients.
     """
-    b_size, in_dim = size(x_eval)
-    out_dim = size(y_eval, 3)
+    in_size, sample_size, out_size = size(x)..., size(y, 2)
 
-    B = basis_function(x_eval, grid; degree=k, σ=scale) .|> full_quant
-    n_grid = size(B, 3)
+    B = basis_function(x, grid; degree=k, σ=scale) .|> full_quant
+    G = size(B, 2)
 
-    B = permutedims(B, [2, 1, 3]) # in_dim x b_size x n_grid
-    y_eval = permutedims(y_eval, [2, 3, 1]) .|> full_quant # in_dim x out_dim x b_size
+    B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
-    # Least squares for each in/out dimension
-    coef = Array{full_quant}(undef, in_dim, out_dim, n_grid) |> device
-    for i in 1:in_dim
-        for o in 1:out_dim
+    coef = Array{full_quant}(undef, in_size, out_size, G) |> device
+    for i in 1:in_size
+        for o in 1:out_size
             coef[i, o, :] .= (
                 (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
-                \ (B[i, :, :]' * y_eval[i, o, :]) # Bty
+                \ (B[i, :, :]' * y[i, o, :]) # Bty
                 ) 
         end
     end

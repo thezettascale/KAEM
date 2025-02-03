@@ -32,7 +32,7 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
         The positive-definite mass matrix, (only the diagonals are returned for efficiency).
         The updated seed.
     """
-    Σ, Q = diag(cov(cpu_device()(z))), size(z, 2)
+    Σ, Q = diag(cov(cpu_device()(z'))), size(z, 1)
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
@@ -41,9 +41,9 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
 
     # Momentum
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), size(z, 1))
+    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), size(z, 2))
 
-    return device(p'), device(Σ_AM'), seed
+    return device(p), device(Σ_AM), seed
 end
 
 function leapfrop_proposal(
@@ -166,8 +166,8 @@ function autoMALA_sampler(
         @reset st.η_init = st.η_init |> cpu_device()
     end
 
-    T, B, Q = length(t), size(z)...
-    output = reshape(z, 1, B, Q)
+    T, Q, B = length(t), size(z)...
+    output = reshape(z, 1, Q, B)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -226,7 +226,7 @@ function autoMALA_sampler(
                 end
             end
         end
-        output = vcat(output, reshape(z, 1, B, Q))
+        output = vcat(output, reshape(z, 1, Q, B))
         k += 1
     end
 

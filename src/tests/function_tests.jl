@@ -12,26 +12,26 @@ using .Utils
 function test_fwd()
     Random.seed!(42)
     x = rand(half_quant, 5, 3) |> device
-    f = init_function(3, 2)
+    f = init_function(5, 2)
 
     Random.seed!(42)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ps |> device, st |> device
 
     y = fwd(f, ps, st, x)
-    @test size(y) == (5, 3, 2)
+    @test size(y) == (5, 2, 3)
 end
 
 function test_grid_update()
     Random.seed!(42)
     x = rand(half_quant, 5, 3) |> device
-    f = init_function(3, 2)
+    f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ps |> device, st |> device
 
     y = fwd(f, ps, st, x)
     grid, coef = update_fcn_grid(f, ps, st, x)
-    @test size(grid) == (3, 12)
+    @test size(grid) == (5, 12)
 end
 
 @testset "Univariate Funtion Tests" begin

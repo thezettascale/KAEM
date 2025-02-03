@@ -43,7 +43,7 @@ function choose_component(
         mask[q, :, :] = onehotbatch(i, 1:p_size) .|> half_quant
     end
 
-    return permutedims(mask, [3, 1, 2]) |> device, seed
+    return mask |> device, seed
 end
 
 function sample_prior(
@@ -81,55 +81,54 @@ function sample_prior(
     )
 
     # Evaluate prior on grid [0,1]
-    f_grid = mix.fcns_qp[Symbol("1")].grid'
+    f_grid = mix.fcns_qp[Symbol("1")].grid
     grid = f_grid |> cpu_device() .|> full_quant
-    Δg = f_grid[2:end, :] - f_grid[1:end-1, :] .|> full_quant
+    Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] .|> full_quant
     
     π_grid = mix.π_pdf(f_grid)
-    grid_size = size(f_grid, 1)
+    grid_size = size(f_grid, 2)
 
     # Energy function of each component, q -> p
     for i in 1:mix.depth
         f_grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-        f_grid = i == 1 ? reshape(f_grid, grid_size*q_size, size(f_grid, 3)) : dropdims(sum(f_grid, dims=2); dims=2)
+        f_grid = i == 1 ? reshape(f_grid, size(f_grid, 2), grid_size*q_size) : dropdims(sum(f_grid, dims=1); dims=1)
 
         if mix.layernorm && i < mix.depth
-            f_grid, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_grid |> permutedims, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            f_grid, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_grid, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
             @reset st[Symbol("ln_$i")] = st_new
-            f_grid = f_grid |> permutedims
         end
     end
-    f_grid = reshape(f_grid, grid_size, q_size, p_size)
+    f_grid = reshape(f_grid, q_size, p_size, grid_size)
 
     # Filter out components
-    @tullio exp_fg[b, g, q] := (exp(f_grid[g, q, p]) * π_grid[g, q]) * component_mask[b, q, p]
+    @tullio exp_fg[q, g, b] := (exp(f_grid[q, p, g]) * π_grid[q, g]) * component_mask[q, p, b]
     exp_fg = exp_fg .|> full_quant
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
-    trapz = (permutedims(Δg[:,:,:], [3,1,2]) .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
+    trapz = (Δg .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
     cdf = cumsum(trapz, dims=2) 
-    cdf = cat(zeros(num_samples, 1, q_size), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
+    cdf = cat(zeros(q_size, 1, num_samples), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, full_quant, num_samples, q_size) .* cdf[:, end, :] 
+    rand_vals = rand(rng, full_quant, q_size, num_samples) .* cdf[:, end, :] 
     
-    z = Array{full_quant}(undef, num_samples, q_size)
-    Threads.@threads for b in 1:num_samples
-        for q in 1:q_size
+    z = Array{full_quant}(undef, q_size, num_samples)
+    Threads.@threads for q in 1:q_size
+        for b in 1:num_samples
             # First trapezium where CDF >= rand_val
-            rv = rand_vals[b, q]
-            idx = searchsortedfirst(cdf[b, :, q], rv) # Index of upper trapezium bound
+            rv = rand_vals[q, b]
+            idx = searchsortedfirst(cdf[q, :, b], rv) # Index of upper trapezium bound
 
             # Edge cases
             idx = idx == 1 ? 2 : idx
             idx = idx == grid_size + 1 ? grid_size : idx
 
             # Trapezium bounds
-            z1, z2 = grid[idx-1, q], grid[idx, q] 
-            cd1, cd2 = cdf[b, idx-1, q], cdf[b, idx, q] 
+            z1, z2 = grid[q, idx-1], grid[q, idx] 
+            cd1, cd2 = cdf[q, idx-1, b], cdf[q, idx, b]
 
             # Linear interpolation
-            z[b, q] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
+            z[q, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
         end
     end
 

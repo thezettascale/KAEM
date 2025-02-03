@@ -88,9 +88,9 @@ function test_SEQ_loss()
 end
 
 @testset "T-KAM Tests" begin
-    # test_ps_derivative()
-    # test_grid_update()
-    # test_mala_loss()
-    # test_cnn_loss()
+    test_ps_derivative()
+    test_grid_update()
+    test_mala_loss()
+    test_cnn_loss()
     test_SEQ_loss()
 end

@@ -133,12 +133,16 @@ function scaled_dot_product_attention(
     K::AbstractArray{half_quant}, 
     V::AbstractArray{half_quant}
 )
-    mask = @ignore_derivatives tril(fill(-Inf, size(Q, 1), size(Q, 2))) .|> half_quant |> device # Causal mask
-    @tullio scores[i, j, b] := Q[i, j, b] * K[i, t, b]
+    # Dot prod along hidden dim
+    @tullio scores[j, t, b] := Q[i, j, b] * K[i, t, b]
     scores = scores ./ sqrt(size(Q, 1))
-    scores = scores .+ mask 
-    p_attn = softmax(scores, dims=1)
-    return @tullio out[i, j, b] := p_attn[i, j, b] * V[i, t, b]
+
+    # Causal mask
+    mask = @ignore_derivatives tril(fill(-Inf, size(scores, 1), size(scores, 2))) .|> half_quant |> device 
+
+    # Attention
+    attn = softmax(scores .+ mask , dims=2)
+    return @tullio out[i, j, b] := attn[j, t, b] * V[i, t, b]
 end
 
 # Seq generator
@@ -154,24 +158,23 @@ function SEQ_gen(lkhood, ps, st, z::AbstractArray{half_quant})
     K, st_k = Lux.apply(lkhood.Φ_fcns[Symbol("Key")], z, ps[Symbol("Key")], st[Symbol("Key")])
     V, st_v = Lux.apply(lkhood.Φ_fcns[Symbol("Value")], z, ps[Symbol("Value")], st[Symbol("Value")])
 
-    @reset st[Symbol("Query")] = st_q
-    @reset st[Symbol("Key")] = st_k
-    @reset st[Symbol("Value")] = st_v
-
     z = z + scaled_dot_product_attention(Q, K, V)
 
     z, st_ln1 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    @reset st[Symbol("ln_1")] = st_ln1
-
     z, st_ff = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-    @reset st[Symbol("2")] = st_ff
-
     z = z .+ st[Symbol("pos_enc")]  
     z, st_ln2 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
-    @reset st[Symbol("ln_2")] = st_ln2
-
     z, st_out = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
-    @reset st[Symbol("3")] = st_out
+
+    @ignore_derivatives begin
+        @reset st[Symbol("Query")] = st_q
+        @reset st[Symbol("Key")] = st_k
+        @reset st[Symbol("Value")] = st_v
+        @reset st[Symbol("ln_1")] = st_ln1
+        @reset st[Symbol("2")] = st_ff
+        @reset st[Symbol("ln_2")] = st_ln2
+        @reset st[Symbol("3")] = st_out
+    end
 
     return z, st
 end 
@@ -358,8 +361,8 @@ function init_KAN_lkhood(
         lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (full_quant(1) / √(full_quant(q_size)))
         .+ σ_base .* (randn(rng, full_quant, q_size, hidden_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(q_size))))
-        @reset Φ_functions[Symbol("1")] = initialize_function(q_size, hidden_dim, base_scale)
         
+        @reset Φ_functions[Symbol("1")] = initialize_function(q_size, hidden_dim, base_scale)
         @reset Φ_functions[Symbol("Query")] = Lux.Dense(hidden_dim => hidden_dim, act)
         @reset Φ_functions[Symbol("Key")] = Lux.Dense(hidden_dim => hidden_dim, act)
         @reset Φ_functions[Symbol("Value")] = Lux.Dense(hidden_dim => hidden_dim, act)        

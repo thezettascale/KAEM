@@ -16,7 +16,7 @@
 #     echo "$dataset Importance Sampling completed."
 # done
 
-datasets=("CIFAR10" "SVHN" "PTB" "SMS_SPAM")
+datasets=("CIFAR10" "SVHN" "PTB")
 
 for dataset in "${datasets[@]}"; do
     session_name="TI_$dataset"

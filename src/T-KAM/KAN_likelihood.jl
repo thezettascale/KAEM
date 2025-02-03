@@ -134,11 +134,12 @@ function scaled_dot_product_attention(
     V::AbstractArray{half_quant}
 )
     # Dot prod along hidden dim
+    d_k = @ignore_derivatives sqrt(size(Q, 1)) |> half_quant
     @tullio scores[j, t, b] := Q[i, j, b] * K[i, t, b]
-    scores = scores ./ sqrt(size(Q, 1))
+    scores = scores ./ d_k
 
     # Causal mask
-    mask = @ignore_derivatives tril(fill(-Inf, size(scores, 1), size(scores, 2))) .|> half_quant |> device 
+    mask = @ignore_derivatives tril(fill(-half_quant(10000), size(scores, 1), size(scores, 2))) |> device 
 
     # Attention
     attn = softmax(scores .+ mask , dims=2)

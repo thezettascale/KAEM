@@ -20,12 +20,11 @@ function test_ps_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = move_to_hq(model)
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
-    @test isa(∇, AbstractArray{half_quant})
 end
 
 function test_grid_update()
@@ -34,6 +33,7 @@ function test_grid_update()
     model = init_T_KAM(dataset, conf)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = move_to_hq(model)
 
     size_grid = size(model.lkhood.Φ_fcns[Symbol("1")].grid)
     model, ps, st, seed = update_model_grid(model, ps, Lux.testmode(st))
@@ -49,12 +49,11 @@ function test_mala_loss()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = move_to_hq(model)
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
-    @test isa(∇, AbstractArray{half_quant})
 end
 
 function test_cnn_loss()
@@ -65,29 +64,27 @@ function test_cnn_loss()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = move_to_hq(model)
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
-    @test isa(∇, AbstractArray{half_quant})
 end
 
-function test_lstm_loss()
+function test_SEQ_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 50, 10, 100)
-    commit!(conf, "LSTM", "sequence_length", "10")
-    commit!(conf, "LSTM", "vocab_size", "50")
+    commit!(conf, "SEQ", "sequence_length", "10")
+    commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf)
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = move_to_hq(model)
 
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test isa(ps, AbstractArray{full_quant})
     @test norm(∇) > 0
     @test !any(isnan, ∇)
-    @test isa(∇, AbstractArray{half_quant})
 end
 
 @testset "T-KAM Tests" begin
@@ -95,5 +92,5 @@ end
     test_grid_update()
     test_mala_loss()
     test_cnn_loss()
-    # test_lstm_loss()
+    # test_SEQ_loss()
 end

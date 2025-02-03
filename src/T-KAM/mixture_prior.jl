@@ -11,11 +11,8 @@ include("univariate_functions.jl")
 include("inversion_sampling.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg
+using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .InverseSampling: sample_prior
-
-const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
-const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 prior_distributions = Dict(
     "uniform" => Uniform(half_quant(0),half_quant(1)),

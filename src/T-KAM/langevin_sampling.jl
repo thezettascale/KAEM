@@ -192,7 +192,7 @@ function autoMALA_sampler(
             logpos_z, st_ebm, st_gen, seed_i, ∇z = result.val..., first(result.grad)
             
             logpos_z = (logpos_z * m.IS_samples) / m.loss_scaling
-            ∇z = (full_quant.(∇z) .* m.IS_samples) ./ m.loss_scaling
+            ∇z = (∇z .* m.IS_samples) ./ m.loss_scaling
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
             return logpos_z, ∇z, st_i, seed_i

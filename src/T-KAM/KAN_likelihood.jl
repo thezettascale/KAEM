@@ -13,12 +13,9 @@ include("mixture_prior.jl")
 include("resamplers.jl")
 include("../utils.jl")
 using .univariate_functions
-using .Utils: device, next_rng, half_quant, full_quant
+using .Utils: device, next_rng, half_quant, full_quant, hq, fq
 using .ebm_mix_prior
 using .WeightResamplers
-
-const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
-const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
@@ -31,9 +28,9 @@ ll_models_flat = Dict(
     "bernoulli" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> dropdims( sum( @tullio(out[b, s, o] := x[o, b] * log(x̂[s, o, b] + ε) + (1 - x[o, b]) * log(1 - x̂[s, o, b] + ε)) ; dims=3 ); dims=3 ),
 )
 
-lkhood_model_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
+lkhoohidden_dim_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-function lkhood_model_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
+function lkhoohidden_dim_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
     return ll ./ size(x̂, 1)
@@ -52,7 +49,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     out_size::Int
     σ_ε::half_quant
     σ_llhood::full_quant
-    log_lkhood_model::Function
+    log_lkhoohidden_dim::Function
     output_activation::Function
     resample_z::Function
     generate_from_z::Function
@@ -131,20 +128,53 @@ function CNN_gen(
     return z, st
 end
 
-# LSTM generator
+function scaled_dot_product_attention(
+    Q::AbstractArray{half_quant}, 
+    K::AbstractArray{half_quant}, 
+    V::AbstractArray{half_quant}
+)
+    mask = @ignore_derivatives triu(ones(size(Q, 1), size(Q, 2))) .|> half_quant |> device
+    @tullio scores[i, j, b] := Q[i, j, b] * K[i, t, b]
+    scores = scores ./ sqrt(size(Q, 1))
+    scores = scores .+ mask # Causal mask
+    p_attn = softmax(scores, dims=1)
+    return @tullio out[i, j, b] := p_attn[i, j, b] * V[i, t, b]
+end
+
+# Seq generator
 function SEQ_gen(lkhood, ps, st, z::AbstractArray{half_quant})
     
     z = fwd(lkhood.Φ_fcns[Symbol("1")], ps[Symbol("1")], st[Symbol("1")], z)
     z = dropdims(sum(z, dims=1); dims=1)
 
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("LSTM")], z, ps[Symbol("LSTM")], st[Symbol("LSTM")])
-    @reset st[Symbol("LSTM")] = st_new
+    z = reshape(z, size(z,1), 1, size(z,2))
+    z = z .+ st[Symbol("pos_enc")]
 
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-    @reset st[Symbol("2")] = st_new
+    Q, st_q = Lux.apply(lkhood.Φ_fcns[Symbol("Query")], z_t, ps[Symbol("Query")], st[Symbol("Query")])
+    K, st_k = Lux.apply(lkhood.Φ_fcns[Symbol("Key")], z_t, ps[Symbol("Key")], st[Symbol("Key")])
+    V, st_v = Lux.apply(lkhood.Φ_fcns[Symbol("Value")], z_t, ps[Symbol("Value")], st[Symbol("Value")])
+
+    @reset st[Symbol("Query")] = st_q
+    @reset st[Symbol("Key")] = st_k
+    @reset st[Symbol("Value")] = st_v
+
+    z = z + scaled_dot_product_attention(Q, K, V, mask)
+
+    z, st_ln1 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
+    @reset st[Symbol("ln_1")] = st_ln1
+
+    z, st_ff = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
+    @reset st[Symbol("2")] = st_ff
+
+    z = z + st[Symbol("pos_enc")]  
+    z, st_ln2 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
+    @reset st[Symbol("ln_2")] = st_ln2
+
+    z, st_out = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
+    @reset st[Symbol("3")] = st_out
 
     return z, st
-end
+end 
 
 function log_likelihood(
     lkhood, 
@@ -179,7 +209,7 @@ function log_likelihood(
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
-    ll = lkhood.log_lkhood_model(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
+    ll = lkhood.log_lkhoohidden_dim(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
     return ll, st, seed
 end
@@ -242,7 +272,7 @@ function init_KAN_lkhood(
     )
 
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
-    sequence_length = parse(Int, retrieve(conf, "LSTM", "sequence_length"))
+    sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
 
     widths = (widths..., output_dim)
     first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
@@ -270,8 +300,8 @@ function init_KAN_lkhood(
     resampler = resampler_map[resampler]
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
-    lkhood_model = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    ll_model = ll_models_flat[lkhood_model]
+    lkhoohidden_dim = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
+    ll_model = ll_models_flat[lkhoohidden_dim]
     generate_fcn = KAN_gen
 
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : output_activation_mapping[output_act]
@@ -304,7 +334,7 @@ function init_KAN_lkhood(
         paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
         act = activation_mapping[retrieve(conf, "CNN", "activation")]
         generate_fcn = CNN_gen
-        ll_model = lkhood_model_rgb
+        ll_model = lkhoohidden_dim_rgb
         layernorm = false
 
         length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
@@ -318,22 +348,27 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
 
     elseif sequence_length > 1
-        act = activation_mapping[retrieve(conf, "LSTM", "activation")]
-        hidden_dim = parse(Int, retrieve(conf, "LSTM", "hidden_dim"))
+        act = activation_mapping[retrieve(conf, "SEQ", "activation")]
+        hidden_dim = parse(Int, retrieve(conf, "SEQ", "hidden_dim"))
         generate_fcn = SEQ_gen
-        ll_model = lkhood_model_seq
-        layernorm = false
+        ll_model = lkhoohidden_dim_seq
+        layernorm = true
 
         # Projection layer
         lkhood_seed, rng = next_rng(lkhood_seed)
         base_scale = (μ_scale * (full_quant(1) / √(full_quant(q_size)))
-        .+ σ_base .* (randn(rng, full_quant, q_size, hidden_dim*sequence_length) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(q_size))))
-        @reset Φ_functions[Symbol("1")] = initialize_function(q_size, hidden_dim*sequence_length, base_scale)
+        .+ σ_base .* (randn(rng, full_quant, q_size, hidden_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(q_size))))
+        @reset Φ_functions[Symbol("1")] = initialize_function(q_size, hidden_dim, base_scale)
         
-        @reset Φ_functions[Symbol("LSTM")] = Lux.Recurrence(Lux.LSTMCell(hidden_dim => hidden_dim), return_sequence=true)
-        @reset Φ_functions[Symbol("2")] = Lux.Dense(hidden_dim => output_dim, identity)
+        @reset Φ_functions[Symbol("Query")] = Lux.Dense(hidden_dim => hidden_dim, act)
+        @reset Φ_functions[Symbol("Key")] = Lux.Dense(hidden_dim => hidden_dim, act)
+        @reset Φ_functions[Symbol("Value")] = Lux.Dense(hidden_dim => hidden_dim, act)        
+        @reset Φ_functions[Symbol("2")] = Lux.Dense(hidden_dim => hidden_dim, act)
+        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm(hidden_dim)
+        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm(hidden_dim)
+        @reset Φ_functions[Symbol("3")] = Lux.Dense(hidden_dim => output_dim, identity)
 
-        depth = 2
+        depth = 3
     else
         for i in eachindex(widths[1:end-1])
             lkhood_seed, rng = next_rng(lkhood_seed)
@@ -360,7 +395,9 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
             @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
         end
     elseif lkhood.seq_length > 1
-        @reset ps[Symbol("LSTM")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("LSTM")])
+        @reset ps[Symbol("Query")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("Query")])
+        @reset ps[Symbol("Key")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("Key")])
+        @reset ps[Symbol("Value")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("Value")])
     end
 
     if lkhood.layernorm 
@@ -370,6 +407,19 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
     end
 
     return ps 
+end
+
+function PositionEncoding(lkhood)
+    hidden_dim = lkhood.Φ_fcns[Symbol("1")].out_dim
+    max_len = lkhood.seq_length
+
+    pe_vector = zeros(Float16, hidden_dim, max_len)
+    position = range(1, max_len)
+    div_term = exp.(-log(half_quant(10000)) .* range(1, hidden_dim, step=2) ./ hidden_dim)
+    div_term = reshape(div_term, 1, floor(Int, hidden_dim/2))
+    pe_vector[1:2:end, :] = transpose(sin.(position .* div_term))
+    pe_vector[2:2:end, :] = transpose(cos.(position .* div_term))
+    return pe_vector .|> half_quant
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
@@ -382,7 +432,9 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
             @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
         end
     elseif lkhood.seq_length > 1
-        @reset st[Symbol("LSTM")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("LSTM")]) |> hq
+        @reset st[Symbol("Query")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("Query")]) |> hq
+        @reset st[Symbol("Key")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("Key")]) |> hq
+        @reset st[Symbol("Value")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("Value")]) |> hq
     end
 
     if lkhood.layernorm

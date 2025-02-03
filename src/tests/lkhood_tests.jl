@@ -54,9 +54,9 @@ function test_cnn_generate()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
-function test_lstm_generate()
+function test_SEQ_generate()
     Random.seed!(42)
-    commit!(conf, "LSTM", "sequence_length", "8")
+    commit!(conf, "SEQ", "sequence_length", "8")
 
     lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
@@ -71,7 +71,7 @@ function test_lstm_generate()
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
     @test size(x) == (lkhood.out_size, 8, b_size)
 
-    commit!(conf, "LSTM", "sequence_length", "1")
+    commit!(conf, "SEQ", "sequence_length", "1")
 end
 
 function test_logllhood()
@@ -129,9 +129,9 @@ function test_cnn_derivative()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
-function test_lstm_derivative()
+function test_SEQ_derivative()
     Random.seed!(42)
-    commit!(conf, "LSTM", "sequence_length", "8")
+    commit!(conf, "SEQ", "sequence_length", "8")
 
     lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
@@ -147,15 +147,15 @@ function test_lstm_derivative()
     ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
     @test size(∇) == size(ps.gen)
 
-    commit!(conf, "LSTM", "sequence_length", "1")
+    commit!(conf, "SEQ", "sequence_length", "1")
 end
 
 @testset "KAN Likelihood Tests" begin
     test_generate()
     test_cnn_generate()
-    test_lstm_generate()
+    test_SEQ_generate()
     test_logllhood()
     test_derivative()
     test_cnn_derivative()
-    test_lstm_derivative()
+    test_SEQ_derivative()
 end

@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, move_to_cpu, move_to_gpu
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, move_to_cpu, move_to_gpu, hq, fq
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors
 using CUDA, LuxCUDA, KernelAbstractions
@@ -19,6 +19,9 @@ const full_quant = Dict(
     "FP32" => Float32,
     "FP64" => Float64,
 )[get(ENV, "FULL_QUANT", "FP32")]
+
+const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
+const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
 
 function device(x)
     return pu(x)

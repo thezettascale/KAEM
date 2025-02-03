@@ -54,9 +54,9 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
     gen_type = seq ? "logits" : "images"
     commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
-    sequence_length = seq ? parse(Int, retrieve(conf, "LSTM", "sequence_length")) : 0
-    commit!(conf, "LSTM", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
-    vocab_size = parse(Int, retrieve(conf, "LSTM", "vocab_size"))
+    sequence_length = seq ? parse(Int, retrieve(conf, "SEQ", "sequence_length")) : 0
+    commit!(conf, "SEQ", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
+    vocab_size = parse(Int, retrieve(conf, "SEQ", "vocab_size"))
 
     dataset, x_shape, save_dataset = (seq ? 
         get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
@@ -66,18 +66,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     # Initialize model
     model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
-
-    if cnn 
-        for i in 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> hq
-            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
-        end
-        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
-    elseif model.lkhood.layernorm
-        for i in 1:model.lkhood.depth-1
-            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] = model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
-        end 
-    end
+    model = move_to_hq(model)
 
     optimizer = create_opt(conf)
     grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))

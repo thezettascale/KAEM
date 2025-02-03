@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, update_model_grid
+export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -18,7 +18,7 @@ using .ebm_mix_prior
 using .KAN_likelihood
 using .LangevinSampling: autoMALA_sampler
 using .univariate_functions: update_fcn_grid, fwd
-using .Utils: device, next_rng, half_quant, full_quant
+using .Utils: device, next_rng, half_quant, full_quant, hq
 
 struct T_KAM <: Lux.AbstractLuxLayer
     prior::mix_prior
@@ -246,7 +246,7 @@ function init_T_KAM(
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
-    seq = parse(Int, retrieve(conf, "LSTM", "sequence_length")) > 1
+    seq = parse(Int, retrieve(conf, "SEQ", "sequence_length")) > 1
 
     train_data = (
         cnn ? dataset[:,:,:,1:N_train] : 
@@ -329,6 +329,7 @@ function init_T_KAM(
         )
 end
 
+
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
     return ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
@@ -343,6 +344,36 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
         η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1) : [model.η_init],
         train_idx = 1
         )
+end
+
+function move_to_hq(model::T_KAM)
+    """Moves the model to half precision."""
+
+    if model.prior.layernorm
+        for i in 1:model.prior.depth-1
+            @reset model.prior.fcns_qp[Symbol("ln_$i")] = model.prior.fcns_qp[Symbol("ln_$i")] |> hq
+        end
+    end
+
+    if model.lkhood.layernorm
+        for i in 1:model.lkhood.depth-1
+            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] = model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
+        end
+    end
+
+    if model.lkhood.CNN
+        for i in 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> hq
+            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
+        end
+        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
+    elseif model.lkhood.seq_length > 1
+        @reset model.lkhood.Φ_fcns[Symbol("Query")] = model.lkhood.Φ_fcns[Symbol("Query")] |> hq
+        @reset model.lkhood.Φ_fcns[Symbol("Key")] = model.lkhood.Φ_fcns[Symbol("Key")] |> hq
+        @reset model.lkhood.Φ_fcns[Symbol("Value")] = model.lkhood.Φ_fcns[Symbol("Value")] |> hq
+    end
+
+    return model
 end
 
 end

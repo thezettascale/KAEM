@@ -39,6 +39,8 @@ struct T_KAM <: Lux.AbstractLuxLayer
     loss_fcn::Function
     loss_scaling::full_quant    
     ε::full_quant
+    x_shape::Tuple
+    file_loc::AbstractString
 end
 
 function generate_batch(
@@ -66,9 +68,11 @@ function generate_batch(
     ps = ps .|> half_quant
 
     z, st_ebm, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
+    x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
+    x̂ = model.lkhood.output_activation(x̂)
     @reset st.ebm = st_ebm
-    x̂, _ = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    return model.lkhood.output_activation(x̂), st, seed
+    @reset st.gen = st_gen
+    return reshape(x̂, model.x_shape..., num_samples), st, seed
 end
 
 function importance_loss(
@@ -231,7 +235,9 @@ end
 
 function init_T_KAM(
     dataset::AbstractArray{full_quant},
-    conf::ConfParse;
+    conf::ConfParse,
+    x_shape::Tuple,
+    file_loc::AbstractString;
     prior_seed::Int=1,
     lkhood_seed::Int=1,
     data_seed::Int=1,
@@ -325,7 +331,9 @@ function init_T_KAM(
             posterior_fcn,
             loss_fcn,
             loss_scaling,
-            eps
+            eps,
+            x_shape,
+            file_loc
         )
 end
 

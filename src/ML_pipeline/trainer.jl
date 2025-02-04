@@ -25,13 +25,11 @@ mutable struct T_KAM_trainer
     cnn::Bool
     o::opt
     dataset_name::AbstractString
-    x_shape::Tuple
     ps::ComponentArray
     st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
     x::AbstractArray{full_quant}
-    file_loc::AbstractString
     num_generated_samples::Int
     batch_size_for_gen::Int
     seed::Int
@@ -40,6 +38,7 @@ mutable struct T_KAM_trainer
     save_model::Bool
     gen_type::AbstractString
     loss::full_quant
+    checkpoint::Bool
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
@@ -62,9 +61,16 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
+
+    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
+    mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
+    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
     
+    file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
+    mkpath(file_loc)
+
     # Initialize model
-    model = init_T_KAM(dataset, conf; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
+    model = init_T_KAM(dataset, conf, x_shape, file_loc; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
 
@@ -73,13 +79,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     x, loader_state = iterate(model.train_loader) 
-
-    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
-    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
-
-    file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
-    mkpath(file_loc)
+    checkpoint = parse(Bool, retrieve(conf, "TRAINING", "checkpoint"))
 
     try
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
@@ -87,19 +87,21 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         rm(file_loc * "real_$(gen_type).h5")
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     end
+
+    open(file_loc * "loss.csv", "w") do file
+        write(file, "Time (s),Epoch,Train MLE Loss,Test MSE Loss,Grid Updated\n")
+    end
     
     return T_KAM_trainer(
         model, 
         cnn,
         optimizer, 
         dataset_name, 
-        x_shape, 
         device(params), 
         device(state), 
         N_epochs, 
         loader_state, 
         device(x), 
-        file_loc, 
         num_generated_samples,
         batch_size_for_gen,
         seed, 
@@ -107,7 +109,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         1,
         save_model,
         gen_type,
-        full_quant(0)
+        full_quant(0),
+        checkpoint
     )
 end
 
@@ -121,10 +124,7 @@ function train!(t::T_KAM_trainer)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
     
-    loss_file = t.file_loc * "loss.csv"
-    open(loss_file, "w") do file
-        write(file, "Time (s),Epoch,Train MLE Loss,Test MSE Loss,Grid Updated\n")
-    end
+    loss_file = t.model.file_loc * "loss.csv"
 
     function find_nan(grads)
         for k in keys(grads)
@@ -204,6 +204,11 @@ function train!(t::T_KAM_trainer)
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
             end
 
+            if t.checkpoint
+                model, ps, st = move_to_cpu(t.model, t.ps, t.st)
+                jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=ps, state=st, model=model)
+            end
+
             train_loss = 0
             grid_updated = 0
         end
@@ -250,24 +255,24 @@ function train!(t::T_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    gen_data = zeros(half_quant, 0, t.x_shape...) 
+    gen_data = zeros(half_quant, 0, t.model.x_shape...) 
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), t.batch_size_for_gen; seed=t.seed)
-        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.x_shape...))
+        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.model.x_shape...))
         gen_data = vcat(gen_data, batch)
     end
 
     try
-        h5write(t.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
     catch
-        rm(t.file_loc * "generated_$(t.gen_type).h5")
-        h5write(t.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
+        rm(t.model.file_loc * "generated_$(t.gen_type).h5")
+        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
     end
 
     # Save params, state, model
     if t.save_model
         model, ps, st = move_to_cpu(t.model, t.ps, t.st)
-        jldsave(t.file_loc * "saved_model.jld2"; params=ps, state=st, model=model)
+        jldsave(t.model.file_loc * "saved_model.jld2"; params=ps, state=st, model=model)
     end
 end
 

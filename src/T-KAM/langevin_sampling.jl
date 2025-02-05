@@ -74,7 +74,7 @@ function leapfrop_proposal(
         The updated seed.
     """
     p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
-    ẑ = z .+ (η .* p .* M) # Full-step position update
+    ẑ = z .+ (η .* p) ./ M # Full-step position update
 
     # Apply reflective boundary conditions, (which has a Jacobian of 1, so no need to adjust the log-ratio)
     if uniform_prior
@@ -121,7 +121,7 @@ function reversibility_check(
 
     logpos_∇ẑ, ∇ẑ, st, seed = logpos_withgrad(half_quant.(ẑ), st, seed)
 
-    p_rev = (((ẑ - z) ./ η) - (η .* ∇ẑ / 2)) ./ M
+    p_rev = (((ẑ - z) ./ η) - (η .* ∇ẑ / 2)) .* M
     z_rev, _, st, seed = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev, M, η, logpos_withgrad; seed=seed)
 
     return norm(z_rev - z) < tol, st, seed

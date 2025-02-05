@@ -120,7 +120,7 @@ function log_prior(
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
     logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
     
-    l1_reg = mix.λ * sum(abs.(α)) |> fq # L1 regularization to encourage sparsity
+    l1_reg = mix.λ * sum(abs.(ps[Symbol("α")])) |> fq # L1 regularization to encourage sparsity
 
     return logprob, l1_reg, st
 end

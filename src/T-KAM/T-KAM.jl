@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq, prune_prior
+export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA

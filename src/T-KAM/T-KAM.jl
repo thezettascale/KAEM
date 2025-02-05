@@ -375,10 +375,6 @@ function move_to_hq(model::T_KAM)
             @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
         end
         @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
-    elseif model.lkhood.seq_length > 1
-        @reset model.lkhood.Φ_fcns[Symbol("Query")] = model.lkhood.Φ_fcns[Symbol("Query")] |> hq
-        @reset model.lkhood.Φ_fcns[Symbol("Key")] = model.lkhood.Φ_fcns[Symbol("Key")] |> hq
-        @reset model.lkhood.Φ_fcns[Symbol("Value")] = model.lkhood.Φ_fcns[Symbol("Value")] |> hq
     end
 
     return model

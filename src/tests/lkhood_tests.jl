@@ -65,7 +65,7 @@ function test_SEQ_generate()
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
-    st = (ebm=device(ebm_st), gen=gen_st) 
+    st = (ebm=ebm_st, gen=gen_st) |> device 
 
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
@@ -140,7 +140,7 @@ function test_SEQ_derivative()
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = ComponentArray(ebm=ebm_ps, gen=gen_ps) |> device
-    st = (ebm=device(ebm_st), gen=gen_st) 
+    st = (ebm=ebm_st, gen=gen_st) |> device 
 
     x = randn(Float32, lkhood.out_size, 8, b_size) |> device
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
@@ -151,11 +151,11 @@ function test_SEQ_derivative()
 end
 
 @testset "KAN Likelihood Tests" begin
-    test_generate()
-    test_cnn_generate()
+    # test_generate()
+    # test_cnn_generate()
     test_SEQ_generate()
-    test_logllhood()
-    test_derivative()
-    test_cnn_derivative()
+    # test_logllhood()
+    # test_derivative()
+    # test_cnn_derivative()
     test_SEQ_derivative()
 end

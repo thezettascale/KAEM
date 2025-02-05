@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
+export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq, prune_prior
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -88,7 +88,7 @@ function importance_loss(
     @ignore_derivatives @reset st.ebm = st_ebm
 
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior, l1_reg, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.ebm = st_ebm
@@ -107,7 +107,7 @@ function importance_loss(
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood), st, seed
+    return -mean(loss_prior .+ loss_llhood) + l1_reg, st, seed
 end
 
 function MALA_loss(
@@ -123,7 +123,7 @@ function MALA_loss(
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior, l1_reg, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.ebm = st_ebm
@@ -131,7 +131,7 @@ function MALA_loss(
 
     # Expected posterior
     m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood))
-    return -mean(logprior' .- ex_prior .+ logllhood), st, seed
+    return -mean(logprior' .- ex_prior .+ logllhood) + l1_reg, st, seed
 end 
 
 function thermo_loss(
@@ -152,7 +152,7 @@ function thermo_loss(
     T, Q, S, B = size(z)..., size(x)[end]
     
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior, l1_reg, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, Q, S*T); seed=seed, ε=m.ε)
     @ignore_derivatives @reset st.ebm = st_ebm
@@ -167,7 +167,7 @@ function thermo_loss(
     MLE_loss = sum(sum(weights[end, :, :] .* (logprior' .- ex_prior .+ logllhood[end, :, :]); dims=2))
     
     m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    return -((TI_loss + MLE_loss) / 2B), st, seed
+    return -((TI_loss + MLE_loss) / 2B) + l1_reg, st, seed
 end
 
 function update_model_grid(
@@ -231,6 +231,28 @@ function update_model_grid(
     end
 
     return model, full_quant.(ps), st, seed
+end
+
+function prune_prior(
+    ps,
+    st;
+    threshold::half_quant=1e-3,
+    )
+    """
+    Prune the components of the mixture ebm-prior that have low probability.
+
+    Args:
+        ps: The parameters of the model.
+        st: The states of the model.
+        threshold: The threshold to prune components.
+
+    Returns:
+        The updated states of the mixture ebm-prior.
+    """
+    α = ps.ebm[Symbol("α")]
+    alpha = softmax(α + st.ebm[Symbol("α_mask")]; dims=2)
+    @reset st.ebm[Symbol("α_mask")] = half_quant.(alpha .< threshold) .* half_quant(-1e6)
+    return st
 end
 
 function init_T_KAM(

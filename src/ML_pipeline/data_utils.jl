@@ -6,7 +6,7 @@ export get_vision_dataset, get_text_dataset
 include("../utils.jl")
 using .Utils: device, full_quant
 
-using MLDatasets, Embeddings
+using MLDatasets, Embeddings, NLIDatasets
 using Flux: onehotbatch
 
 ENV["DATADEPS_ALWAYS_ACCEPT"] = true
@@ -17,7 +17,8 @@ dataset_mapping = Dict(
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
-    "SMS_SPAM" => MLDatasets.SMSSpamCollection()
+    "SMS_SPAM" => MLDatasets.SMSSpamCollection(),
+    "SNLI" => NLIDatasets.SNLI.train_tsv()
 )
 
 function get_vision_dataset(

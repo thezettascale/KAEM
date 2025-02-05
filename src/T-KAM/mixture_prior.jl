@@ -32,6 +32,7 @@ struct mix_prior <: Lux.AbstractLuxLayer
     π_pdf::Function
     sample_z::Function
     contrastive_div::Bool
+    λ::half_quant
 end
 
 function log_partition_function(
@@ -87,14 +88,19 @@ function log_prior(
         z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
         ps: The parameters of the mixture ebm-prior.
         st: The states of the mixture ebm-prior.
+        normalize: Whether to normalize the log-probability.
+        ε: The small value to avoid log(0).
 
     Returns:
         The unnormalized log-probability of the mixture ebm-prior.
+        The L1 regularization term.
+        The updated states of the mixture ebm-prior.
     """
     q_size, b_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     
     # Mixture proportions and prior
-    alpha = softmax(ps[Symbol("α")]; dims=2) # Might be problematic with FP16
+    α = ps[Symbol("α")]
+    alpha = softmax(α + st[Symbol["α_mask"]]; dims=2) # Prune components by subtracting large number
     π_0 = mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
@@ -114,7 +120,9 @@ function log_prior(
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
     logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
-    return logprob, st
+
+    l1_reg = m.λ * sum(abs.(α)) |> fq
+    return logprob, l1_reg, st
 end
 
 function init_mix_prior(
@@ -147,6 +155,7 @@ function init_mix_prior(
     prior_type = retrieve(conf, "MIX_PRIOR", "π_0")
     contrastive_divergence = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
+    λ = parse(half_quant, retrieve(conf, "MIX_PRIOR", "l1_regularization"))
     
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, Lux.testmode(s); seed=seed, ε=eps)
     
@@ -180,7 +189,7 @@ function init_mix_prior(
 
     end
 
-    return mix_prior(functions, layernorm, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence)
+    return mix_prior(functions, layernorm, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence, λ)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -205,6 +214,10 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
             @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, prior.fcns_qp[Symbol("ln_$i")]) |> hq
         end
     end
+
+    q_size = prior.fcns_qp[Symbol("1")].in_dim
+    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
+    @reset st[Symbol("α_mask")] = zeros(half_quant, q_size, p_size) # For pruning
     return st 
 end
 

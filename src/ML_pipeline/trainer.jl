@@ -39,6 +39,8 @@ mutable struct T_KAM_trainer
     gen_type::AbstractString
     loss::full_quant
     checkpoint::Bool
+    prune_epochs::Tuple{Int} 
+    prune_threshold::half_quant
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
@@ -78,6 +80,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     grid_update_frequency = parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
+    prune_epochs = Tuple(parse.(Int, retrieve(conf, "TRAINING", "prune_epoch")))
+    prune_threshold = parse(half_quant, retrieve(conf, "MIX_PRIOR", "prune_threshold"))
     x, loader_state = iterate(model.train_loader) 
     checkpoint = parse(Bool, retrieve(conf, "TRAINING", "checkpoint"))
 
@@ -110,7 +114,9 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         save_model,
         gen_type,
         full_quant(0),
-        checkpoint
+        checkpoint,
+        prune_epochs,
+        prune_threshold
     )
 end
 
@@ -125,6 +131,7 @@ function train!(t::T_KAM_trainer)
     num_param_updates = num_batches * t.N_epochs
     
     loss_file = t.model.file_loc * "loss.csv"
+    next_prune = first(t.prune_epochs)
 
     function find_nan(grads)
         for k in keys(grads)
@@ -199,6 +206,11 @@ function train!(t::T_KAM_trainer)
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
             epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
+
+            # Prune if necessary
+            if epoch == next_prune
+                t.st = prune_prior(t.ps, t.st; threshold=t.prune_threshold)
+            end
 
             open(loss_file, "a") do file
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")

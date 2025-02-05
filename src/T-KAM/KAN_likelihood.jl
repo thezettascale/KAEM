@@ -148,33 +148,55 @@ end
 
 # Seq generator
 function SEQ_gen(lkhood, ps, st, z::AbstractArray{half_quant})
+    """
+    Generate data from the Transformer decoder likelihood model.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The generated data.
+        The updated seed.
+    """
     
+    # Project to hidden dim and position encoding
     z = fwd(lkhood.Φ_fcns[Symbol("1")], ps[Symbol("1")], st[Symbol("1")], z)
     z = dropdims(sum(z, dims=1); dims=1)
 
     z = reshape(z, size(z,1), 1, size(z,2))
-    z = z .+ st[Symbol("pos_enc")]
+    z = z .+ st[Symbol("pos_enc")] 
 
+    # Attention
     Q, st_q = Lux.apply(lkhood.Φ_fcns[Symbol("Query")], z, ps[Symbol("Query")], st[Symbol("Query")])
     K, st_k = Lux.apply(lkhood.Φ_fcns[Symbol("Key")], z, ps[Symbol("Key")], st[Symbol("Key")])
     V, st_v = Lux.apply(lkhood.Φ_fcns[Symbol("Value")], z, ps[Symbol("Value")], st[Symbol("Value")])
 
-    z = z + scaled_dot_product_attention(Q, K, V)
+    attention_output = scaled_dot_product_attention(Q, K, V)
+    z = z + attention_output  # Residual connection
+    z, st_ln1 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])  
 
-    z, st_ln1 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    z, st_ff = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-    z = z .+ st[Symbol("pos_enc")]  
+    # MLP
+    ff_output, st_ff = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
+    z = z + ff_output  # Residual connection
     z, st_ln2 = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
+
+    # Project to output dim
     z, st_out = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
 
+    # Update states
     @ignore_derivatives begin
-        @reset st[Symbol("Query")] = st_q
-        @reset st[Symbol("Key")] = st_k
-        @reset st[Symbol("Value")] = st_v
-        @reset st[Symbol("ln_1")] = st_ln1
-        @reset st[Symbol("2")] = st_ff
-        @reset st[Symbol("ln_2")] = st_ln2
-        @reset st[Symbol("3")] = st_out
+        st[Symbol("Query")] = st_q
+        st[Symbol("Key")] = st_k
+        st[Symbol("Value")] = st_v
+        st[Symbol("ln_1")] = st_ln1
+        st[Symbol("2")] = st_ff
+        st[Symbol("ln_2")] = st_ln2
+        st[Symbol("3")] = st_out
     end
 
     return z, st

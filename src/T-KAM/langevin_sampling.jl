@@ -10,7 +10,7 @@ using .Utils: device, next_rng, half_quant, full_quant
 
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
-    log_prior(m, z, ps, st; normalize=false) = full_quant(0), st
+    log_prior(m, z, ps, st; normalize=false) = full_quant(0), 0, st
     log_likelihood(m, ps, st, x, z; seed=1) = -sum(full_quant(z).^2) ./ 2, st, seed
 else
     include("mixture_prior.jl")
@@ -176,7 +176,7 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; seed_i::Int=1)
-        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
+        lp, _, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
         ll, st_gen, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed_i, ε=m.ε)
         logpos = mean(lp) + t_k * mean(ll)
         return logpos * m.loss_scaling, st_ebm, st_gen, seed_i

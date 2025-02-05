@@ -206,7 +206,11 @@ function train!(t::T_KAM_trainer)
 
             if t.checkpoint
                 model, ps, st = move_to_cpu(t.model, t.ps, t.st)
-                jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=ps, state=st, model=model)
+                try 
+                    jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=ps, state=st, model=model)
+                catch
+                    rm(t.model.file_loc * "ckpt_epoch_$(epoch).jld2")
+                    jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=ps, state=st, model=model)
             end
 
             train_loss = 0

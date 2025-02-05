@@ -233,28 +233,6 @@ function update_model_grid(
     return model, full_quant.(ps), st, seed
 end
 
-function prune_prior(
-    ps,
-    st;
-    threshold::half_quant=1e-3,
-    )
-    """
-    Prune the components of the mixture ebm-prior that have low probability.
-
-    Args:
-        ps: The parameters of the model.
-        st: The states of the model.
-        threshold: The threshold to prune components.
-
-    Returns:
-        The updated states of the mixture ebm-prior.
-    """
-    α = ps.ebm[Symbol("α")]
-    alpha = softmax(α + st.ebm[Symbol("α_mask")]; dims=2)
-    @reset st.ebm[Symbol("α_mask")] = half_quant.(alpha .< threshold) .* half_quant(-1e6)
-    return st
-end
-
 function init_T_KAM(
     dataset::AbstractArray{full_quant},
     conf::ConfParse,

@@ -99,8 +99,7 @@ function log_prior(
     q_size, b_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
     
     # Mixture proportions and prior
-    α = ps[Symbol("α")]
-    alpha = softmax(α + st[Symbol("α_mask")]; dims=2) # Prune components by subtracting large number
+    alpha = softmax(ps[Symbol("α")]; dims=2) 
     π_0 = mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
@@ -120,7 +119,9 @@ function log_prior(
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
     logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
-    l1_reg = m.λ * sum(abs.(α)) |> fq
+    
+    l1_reg = mix.λ * sum(abs.(α)) |> fq # L1 regularization to encourage sparsity
+
     return logprob, l1_reg, st
 end
 
@@ -216,7 +217,7 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
 
     q_size = prior.fcns_qp[Symbol("1")].in_dim
     p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
-    @reset st[Symbol("α_mask")] = zeros(half_quant, q_size, p_size) # For pruning
+
     return st 
 end
 

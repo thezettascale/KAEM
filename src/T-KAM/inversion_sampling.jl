@@ -73,7 +73,7 @@ function sample_prior(
     
     # Categorical component selection (per sample, per outer sum dimension)
     component_mask, seed = choose_component(
-        ps[Symbol("α")] + st[Symbol("α_mask")], # Pruned α
+        ps[Symbol("α")],
         num_samples,
         q_size,
         p_size;

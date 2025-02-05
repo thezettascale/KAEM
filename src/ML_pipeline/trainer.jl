@@ -131,7 +131,6 @@ function train!(t::T_KAM_trainer)
     num_param_updates = num_batches * t.N_epochs
     
     loss_file = t.model.file_loc * "loss.csv"
-    next_prune = first(t.prune_epochs)
 
     function find_nan(grads)
         for k in keys(grads)
@@ -208,7 +207,7 @@ function train!(t::T_KAM_trainer)
             epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
 
             # Prune if necessary
-            if epoch == next_prune
+            if epoch in t.prune_epochs
                 t.st = prune_prior(t.ps, t.st; threshold=t.prune_threshold)
             end
 

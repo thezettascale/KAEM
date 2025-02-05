@@ -236,7 +236,7 @@ function autoMALA_sampler(
     for k in 1:T
         mean_η[k] = ifelse(isnan(mean_η[k]), st.η_init[k], mean_η[k])
     end
-    @reset st.η_init .= mean_η
+    @reset st.η_init .= mean_η 
 
     m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
     m.verbose && println("Mean step sizes: ", mean_η)

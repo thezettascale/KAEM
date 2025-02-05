@@ -100,7 +100,7 @@ function log_prior(
     
     # Mixture proportions and prior
     α = ps[Symbol("α")]
-    alpha = softmax(α + st[Symbol["α_mask"]]; dims=2) # Prune components by subtracting large number
+    alpha = softmax(α + st[Symbol("α_mask")]; dims=2) # Prune components by subtracting large number
     π_0 = mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
@@ -120,7 +120,6 @@ function log_prior(
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
     logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
-
     l1_reg = m.λ * sum(abs.(α)) |> fq
     return logprob, l1_reg, st
 end

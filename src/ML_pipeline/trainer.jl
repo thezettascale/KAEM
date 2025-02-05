@@ -39,7 +39,7 @@ mutable struct T_KAM_trainer
     gen_type::AbstractString
     loss::full_quant
     checkpoint::Bool
-    prune_epochs::Tuple{Int} 
+    prune_epochs::Tuple 
     prune_threshold::half_quant
 end
 

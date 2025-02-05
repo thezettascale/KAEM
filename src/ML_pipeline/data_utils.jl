@@ -47,16 +47,15 @@ function get_vision_dataset(
     """
     dataset = dataset_mapping[dataset_name][1:N_train+N_test].features # Already normalized
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
-    img_shape = size(dataset)[1:end-1]
-    
-    dataset = cnn ? dataset : reshape(dataset, prod(size(dataset)[1:end-1]), size(dataset)[end])
     dataset = dataset .|> full_quant
+    img_shape = size(dataset)[1:end-1]
+
     save_dataset = (
         cnn ? 
         dataset[:,:,:,1:num_generated_samples] 
-        : reshape(dataset[:, 1:num_generated_samples], img_shape..., num_generated_samples)
+        : dataset[:,:,1:num_generated_samples]
     )
-    
+
     println("Resized dataset to $(img_shape)")
     return dataset, img_shape, save_dataset
 end

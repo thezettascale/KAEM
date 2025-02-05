@@ -16,8 +16,8 @@ out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
     
 function test_loss()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 50) 
-    model = init_T_KAM(dataset, conf)
+    dataset = randn(full_quant, 3, 3, 50) 
+    model = init_T_KAM(dataset, conf, (3,3))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -29,8 +29,8 @@ end
 
 function test_model_derivative()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 50) 
-    model = init_T_KAM(dataset, conf)
+    dataset = randn(full_quant, 3, 3, 50) 
+    model = init_T_KAM(dataset, conf, (3,3))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device

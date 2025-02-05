@@ -70,7 +70,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mkpath(file_loc)
 
     # Initialize model
-    model = init_T_KAM(dataset, conf, x_shape, file_loc; prior_seed=seed, lkhood_seed=seed, data_seed=seed)
+    model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
 
@@ -186,12 +186,11 @@ function train!(t::T_KAM_trainer)
                 x_gen = x_gen .|> full_quant
                
                 # MSE loss between pixels for images, and max index for logits
-                if t.gen_type != "logits"
-                    x_gen = reshape(x_gen, size(x)...) 
-                    test_loss += sum((device(x) - x_gen).^2) / size(x)[end]
-                else
+                if t.gen_type == "logits"
                     idxs = dropdims(argmax(x_gen, dims=1); dims=1)
                     test_loss += sum((device(onecold(x, 1:size(x,1))) .- getindex.(idxs, 1)).^2) / size(x)[end]
+                else
+                    test_loss += sum((device(x) - x_gen).^2) / size(x)[end]
                 end 
             end
             
@@ -255,11 +254,11 @@ function train!(t::T_KAM_trainer)
     t.ps = res.minimizer
 
     # Generate samples
-    gen_data = zeros(half_quant, 0, t.model.x_shape...) 
+    gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0) 
+    idx = length(t.model.lkhood.x_shape) + 1
     for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
         batch, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), t.batch_size_for_gen; seed=t.seed)
-        batch = cpu_device()(reshape(batch, t.batch_size_for_gen, t.model.x_shape...))
-        gen_data = vcat(gen_data, batch)
+        gen_data = cat(gen_data, cpu_device()(batch), dims=idx)
     end
 
     try

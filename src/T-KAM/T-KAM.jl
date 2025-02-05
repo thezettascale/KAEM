@@ -39,7 +39,6 @@ struct T_KAM <: Lux.AbstractLuxLayer
     loss_fcn::Function
     loss_scaling::full_quant    
     ε::full_quant
-    x_shape::Tuple
     file_loc::AbstractString
 end
 
@@ -69,10 +68,9 @@ function generate_batch(
 
     z, st_ebm, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    x̂ = model.lkhood.output_activation(x̂)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
-    return reshape(x̂, model.x_shape..., num_samples), st, seed
+    return model.lkhood.output_activation(x̂), st, seed
 end
 
 function importance_loss(
@@ -236,8 +234,8 @@ end
 function init_T_KAM(
     dataset::AbstractArray{full_quant},
     conf::ConfParse,
-    x_shape::Tuple,
-    file_loc::AbstractString;
+    x_shape::Tuple;
+    file_loc::AbstractString="logs/",
     prior_seed::Int=1,
     lkhood_seed::Int=1,
     data_seed::Int=1,
@@ -254,25 +252,21 @@ function init_T_KAM(
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     seq = parse(Int, retrieve(conf, "SEQ", "sequence_length")) > 1
 
-    train_data = (
-        cnn ? dataset[:,:,:,1:N_train] : 
-        (seq ? dataset[:, :, 1:N_train] :
-        dataset[:, 1:N_train])
-        ) 
-    test_data = (
-        cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : 
-        (seq ? dataset[:, :, N_train+1:N_train+N_test] :
-        dataset[:, N_train+1:N_train+N_test])
-        ) 
+    train_data = cnn ? dataset[:,:,:,1:N_train] : dataset[:, :, 1:N_train]
+    test_data = cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : dataset[:, :, N_train+1:N_train+N_test]
 
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
     loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
-    out_dim = cnn ? size(dataset, 3) : size(dataset, 1)
+    out_dim = (
+        cnn ? size(dataset, 3) :
+        (seq ? size(dataset, 1) : 
+        size(dataset, 1) * size(dataset, 2))
+    )
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
-    lkhood_model = init_KAN_lkhood(conf, out_dim; lkhood_seed=lkhood_seed)
+    lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
 
     grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
@@ -332,7 +326,6 @@ function init_T_KAM(
             loss_fcn,
             loss_scaling,
             eps,
-            x_shape,
             file_loc
         )
 end

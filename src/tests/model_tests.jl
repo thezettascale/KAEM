@@ -15,8 +15,8 @@ out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 
 function test_ps_derivative()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 50) 
-    model = init_T_KAM(dataset, conf)
+    dataset = randn(full_quant, 3, 3, 50) 
+    model = init_T_KAM(dataset, conf, (3,3))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -29,8 +29,8 @@ end
 
 function test_grid_update()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 50) 
-    model = init_T_KAM(dataset, conf)
+    dataset = randn(full_quant, 3, 3, 50) 
+    model = init_T_KAM(dataset, conf, (3,3))
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
@@ -43,9 +43,9 @@ end
 
 function test_mala_loss()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 50) 
+    dataset = randn(full_quant, 3, 3, 50) 
     commit!(conf, "MALA", "use_langevin", "true")
-    model = init_T_KAM(dataset, conf)
+    model = init_T_KAM(dataset, conf, (3,3))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -60,7 +60,7 @@ function test_cnn_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
-    model = init_T_KAM(dataset, conf)
+    model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -69,6 +69,7 @@ function test_cnn_loss()
     ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
 function test_SEQ_loss()
@@ -76,7 +77,7 @@ function test_SEQ_loss()
     dataset = randn(full_quant, 50, 10, 100)
     commit!(conf, "SEQ", "sequence_length", "10")
     commit!(conf, "SEQ", "vocab_size", "50")
-    model = init_T_KAM(dataset, conf)
+    model = init_T_KAM(dataset, conf, (50, 10))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device

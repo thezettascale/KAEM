@@ -23,12 +23,12 @@ output_activation_mapping = Dict(
     "none" => identity
 )
 
-ll_models_flat = Dict(
-    "l2" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, o] := (x[o, b] - x̂[o, s, b])^2) ; dims=3 ); dims=3 ), 
-    "bernoulli" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> dropdims( sum( @tullio(out[b, s, o] := x[o, b] * log(x̂[o, s, b] + ε) + (1 - x[o, b]) * log(1 - x̂[o, s, b] + ε)) ; dims=3 ); dims=3 ),
+ll_models_nist = Dict(
+    "l2" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w] := (x[h, w, b] - x̂[h, w, s, b])^2) ; dims=(3,4) ); dims=(3,4) ), 
+    "bernoulli" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> dropdims( sum( @tullio(out[b, s, h, w] := x[h, w, b] * log(x̂[h, w, s, b] + ε) + (1 - x[h, w, b]) * log(1 - x̂[h, w, s, b] + ε)) ; dims=(3,4) ); dims=(3,4) ),
 )
 
-lkhoohidden_dim_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
+lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
 function lkhoohidden_dim_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
@@ -51,6 +51,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     σ_llhood::full_quant
     log_lkhoohidden_dim::Function
     output_activation::Function
+    x_shape::Tuple{Vararg{Int}}
     resample_z::Function
     generate_from_z::Function
     CNN::Bool
@@ -78,6 +79,8 @@ function KAN_gen(
         The generated data.
         The updated seed.
     """
+    num_samples = size(z)[end]
+
     # KAN functions
     for i in 1:lkhood.depth
         z = fwd(lkhood.Φ_fcns[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
@@ -89,7 +92,7 @@ function KAN_gen(
         end
     end
 
-    return z, st
+    return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
 # CNN generator
@@ -245,7 +248,7 @@ end
 
 function init_KAN_lkhood(
     conf::ConfParse,
-    output_dim::Int;
+    x_shape::Tuple{Vararg{Int}};
     lkhood_seed::Int=1,
     )
 
@@ -267,6 +270,8 @@ function init_KAN_lkhood(
 
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
+
+    output_dim = CNN ? last(x_shape) : (sequence_length > 1 ? first(x_shape) : prod(x_shape))
 
     widths = (widths..., output_dim)
     first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
@@ -295,7 +300,7 @@ function init_KAN_lkhood(
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
     lkhoohidden_dim = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    ll_model = ll_models_flat[lkhoohidden_dim]
+    ll_model = ll_models_nist[lkhoohidden_dim]
     generate_fcn = KAN_gen
 
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : output_activation_mapping[output_act]
@@ -328,7 +333,7 @@ function init_KAN_lkhood(
         paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
         act = activation_mapping[retrieve(conf, "CNN", "activation")]
         generate_fcn = CNN_gen
-        ll_model = lkhoohidden_dim_rgb
+        ll_model = lkhood_rgb
         layernorm = false
 
         length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
@@ -381,7 +386,7 @@ function init_KAN_lkhood(
         end
     end
 
-    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, resample_fcn, generate_fcn, CNN, sequence_length)
+    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

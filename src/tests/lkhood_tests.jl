@@ -20,7 +20,7 @@ z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
 
 function test_generate()
     Random.seed!(42)
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (out_dim, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -31,14 +31,14 @@ function test_generate()
 
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
-    @test size(x) == (out_dim, b_size)
+    @test size(x) == (out_dim, out_dim, b_size)
 end
 
 function test_cnn_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
 
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (32, 32, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -58,7 +58,7 @@ function test_SEQ_generate()
     Random.seed!(42)
     commit!(conf, "SEQ", "sequence_length", "8")
 
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (out_dim, 8); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -76,7 +76,7 @@ end
 
 function test_logllhood()
     Random.seed!(42)
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (out_dim, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -85,7 +85,7 @@ function test_logllhood()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    x = randn(Float32, out_dim, b_size) |> device
+    x = randn(Float32, out_dim, out_dim, b_size) |> device
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
     logllhood, _, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
     @test size(logllhood) == (b_size, b_size)
@@ -93,7 +93,7 @@ end
 
 function test_derivative()
     Random.seed!(42)
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (out_dim, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -102,7 +102,7 @@ function test_derivative()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    x = randn(Float32, out_dim, b_size) |> device
+    x = randn(Float32, out_dim, out_dim, b_size) |> device
     z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
     ∇ = first(gradient(z_i -> sum(first(log_likelihood(lkhood, ps.gen, st.gen, x, z_i))), z))
     @test size(∇) == size(z)
@@ -112,7 +112,7 @@ function test_cnn_derivative()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
 
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (32, 32, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -133,7 +133,7 @@ function test_SEQ_derivative()
     Random.seed!(42)
     commit!(conf, "SEQ", "sequence_length", "8")
 
-    lkhood = init_KAN_lkhood(conf, out_dim; lkhood_seed=1)
+    lkhood = init_KAN_lkhood(conf, (out_dim, 8); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
     prior = init_mix_prior(conf; prior_seed=1)
@@ -151,11 +151,11 @@ function test_SEQ_derivative()
 end
 
 @testset "KAN Likelihood Tests" begin
-    # test_generate()
-    # test_cnn_generate()
+    test_generate()
+    test_cnn_generate()
     test_SEQ_generate()
-    # test_logllhood()
-    # test_derivative()
-    # test_cnn_derivative()
+    test_logllhood()
+    test_derivative()
+    test_cnn_derivative()
     test_SEQ_derivative()
 end

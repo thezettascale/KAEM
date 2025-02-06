@@ -252,8 +252,8 @@ function init_T_KAM(
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     seq = parse(Int, retrieve(conf, "SEQ", "sequence_length")) > 1
 
-    train_data = cnn ? dataset[:,:,:,1:N_train] : dataset[:, :, 1:N_train]
-    test_data = cnn ? dataset[:,:,:,N_train+1:N_train+N_test] : dataset[:, :, N_train+1:N_train+N_test]
+    train_data = seq ? dataset[:, :, 1:N_train] : dataset[:, :, :, 1:N_train]
+    test_data = seq ? dataset[:, :, N_train+1:N_train+N_test] : dataset[:, :, :, N_train+1:N_train+N_test]
 
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)

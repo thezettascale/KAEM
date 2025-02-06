@@ -23,14 +23,9 @@ output_activation_mapping = Dict(
     "none" => identity
 )
 
-ll_models_nist = Dict(
-    "l2" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w] := (x[h, w, b] - x̂[h, w, s, b])^2) ; dims=(3,4) ); dims=(3,4) ), 
-    "bernoulli" => (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> dropdims( sum( @tullio(out[b, s, h, w] := x[h, w, b] * log(x̂[h, w, s, b] + ε) + (1 - x[h, w, b]) * log(1 - x̂[h, w, s, b] + ε)) ; dims=(3,4) ); dims=(3,4) ),
-)
-
 lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
 
-function lkhoohidden_dim_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
+function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
     @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
     return ll ./ size(x̂, 1)
@@ -49,7 +44,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     out_size::Int
     σ_ε::half_quant
     σ_llhood::full_quant
-    log_lkhoohidden_dim::Function
+    log_lkhood::Function
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
     resample_z::Function
@@ -206,7 +201,7 @@ function log_likelihood(
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
-    ll = lkhood.log_lkhoohidden_dim(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
+    ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
     return ll, st, seed
 end
@@ -299,8 +294,7 @@ function init_KAN_lkhood(
     resampler = resampler_map[resampler]
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
-    lkhoohidden_dim = retrieve(conf, "KAN_LIKELIHOOD", "likelihood_model")
-    ll_model = ll_models_nist[lkhoohidden_dim]
+    ll_model = lkhood_rgb
     generate_fcn = KAN_gen
 
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : output_activation_mapping[output_act]
@@ -333,7 +327,6 @@ function init_KAN_lkhood(
         paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
         act = activation_mapping[retrieve(conf, "CNN", "activation")]
         generate_fcn = CNN_gen
-        ll_model = lkhood_rgb
         layernorm = false
 
         length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
@@ -350,7 +343,7 @@ function init_KAN_lkhood(
         act = activation_mapping[retrieve(conf, "SEQ", "activation")]
         hidden_dim = parse(Int, retrieve(conf, "SEQ", "hidden_dim"))
         generate_fcn = SEQ_gen
-        ll_model = lkhoohidden_dim_seq
+        ll_model = lkhood_seq
         layernorm = true
 
         # Projection layer

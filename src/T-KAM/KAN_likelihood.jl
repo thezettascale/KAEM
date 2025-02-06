@@ -23,11 +23,11 @@ output_activation_mapping = Dict(
     "none" => identity
 )
 
-lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( @tullio(out[b, s, h, w, c] := (x[h, w, c, b] - x̂[h, w, c, s, b])^2) ; dims=(3,4,5) ); dims=(3,4,5) )
+lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 
 function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
-    @tullio ll[b,s] := log_x̂[v,t,s,b] * x[v,t,b] # One-hot mask
+    ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
 end
 
@@ -297,7 +297,7 @@ function init_KAN_lkhood(
     ll_model = lkhood_rgb
     generate_fcn = KAN_gen
 
-    output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : output_activation_mapping[output_act]
+    output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : get(output_activation_mapping, output_act, identity)
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1

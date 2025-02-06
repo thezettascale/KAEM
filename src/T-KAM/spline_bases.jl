@@ -49,8 +49,6 @@ function B_spline_basis(
     Returns:
         A matrix of size (i, g, b) containing the B-spline basis functions evaluated at the points x.
     """
-    # x = reshape(x, size(x)..., 1) 
-    # grid = reshape(grid, 1, size(grid)...) 
 
     in_size, sample_size, G = size(x)..., size(grid, 2)
     
@@ -65,7 +63,7 @@ function B_spline_basis(
         term1 = half_quant.(term1)
         term2 = half_quant.(term2)
 
-        @tullio B[i, g, b] := term1[i, g, b] * term2[i, g, b]
+        B = term1 .* term2
 
     else
         # k-th degree
@@ -81,7 +79,7 @@ function B_spline_basis(
         B_i1 = B[:, 1:end - 1, :]
         B_i2 = B[:, 2:end, :]
 
-        @tullio B[i, g, b] := (numer1[i, g, b] / denom1[i, g]) * B_i1[i, g, b] + (numer2[i, g, b] / denom2[i, g]) * B_i2[i, g, b]
+        B = (numer1 ./ denom1) .* B_i1 .+ (numer2 ./ denom2) .* B_i2
     end
     
     return B

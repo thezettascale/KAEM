@@ -122,7 +122,7 @@ function log_prior(
     
     l1_reg = mix.λ * sum(abs.(ps[Symbol("α")])) |> fq # L1 regularization to encourage sparsity
 
-    return logprob, l1_reg, st
+    return logprob .+ l1_reg, st
 end
 
 function init_mix_prior(

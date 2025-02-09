@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, move_to_cpu, move_to_gpu, hq, fq
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors
 using CUDA, LuxCUDA, KernelAbstractions
@@ -42,38 +42,6 @@ end
 function next_rng(seed)
     rng = @ignore_derivatives Random.seed!(seed)
     return seed + 1, rng
-end
-
-function move_to_cpu(model, ps, st)
-    ps, st = ps |> cpu_device() |> Lux.f32, st |> cpu_device() |> Lux.f32
-    
-    for i in 1:model.prior.depth
-        @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> cpu_device() |> Lux.f32
-    end
-
-    if !model.lkhood.CNN
-        for i in 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> cpu_device() |> Lux.f32
-        end
-    end
-
-    return model, ps, st
-end
-
-function move_to_gpu(model, ps, st)
-    ps, st = ps |> device, st |> device
-
-    for i in 1:model.prior.depth
-        @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> device
-    end
-
-    if !model.lkhood.CNN
-        for i in 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = model.lkhood.Φ_fcns[Symbol("$i")].grid |> device
-        end
-    end
-
-    return model, ps, st
 end
 
 end

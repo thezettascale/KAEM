@@ -8,7 +8,7 @@ include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
 using .optimization
-using .Utils: device, half_quant, full_quant, move_to_cpu
+using .Utils: device, half_quant, full_quant
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold
 
@@ -205,10 +205,7 @@ function train!(t::T_KAM_trainer)
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
             end
 
-            if t.checkpoint
-                model, ps, st = move_to_cpu(t.model, t.ps, t.st)
-                jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=ps, state=st, model=model, seed=t.seed)
-            end
+            t.checkpoint && jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device(), seed=t.seed)
 
             train_loss = 0
             grid_updated = 0
@@ -270,11 +267,7 @@ function train!(t::T_KAM_trainer)
         h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
     end
 
-    # Save params, state, model
-    if t.save_model
-        model, ps, st = move_to_cpu(t.model, t.ps, t.st)
-        jldsave(t.model.file_loc * "saved_model.jld2"; params=ps, state=st, model=model)
-    end
+    t.save_model && jldsave(t.model.file_loc * "saved_model.jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device())
 end
 
 end

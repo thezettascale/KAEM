@@ -13,7 +13,7 @@ using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold
 
 using CUDA, KernelAbstractions, Tullio
-using Random, Images, ImageTransformations, ComponentArrays, CSV, HDF5, JLD2, ConfParser
+using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Zygote: withgradient
 

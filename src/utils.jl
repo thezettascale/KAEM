@@ -20,8 +20,16 @@ const full_quant = Dict(
     "FP64" => Float64,
 )[get(ENV, "FULL_QUANT", "FP32")]
 
-const hq = half_quant == Float16 ? Lux.f16 : Lux.f32
-const fq = full_quant == Float16 ? Lux.f16 : (full_quant == Float64 ? Lux.f64 : Lux.f32)
+const hq = Dict(
+    "FP16" => Lux.f16,
+    "FP32" => Lux.f32
+)[get(ENV, "HALF_QUANT", "FP32")]
+
+const fq = Dict(
+    "FP16" => Lux.f16,
+    "FP32" => Lux.f32,
+    "FP64" => Lux.f64
+)[get(ENV, "FULL_QUANT", "FP32")]
 
 function device(x)
     return pu(x)

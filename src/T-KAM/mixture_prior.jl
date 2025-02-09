@@ -54,7 +54,7 @@ function log_partition_function(
     Returns:
         The log-partition function of the mixture ebm-prior.
     """
-    grid = mix.fcns_qp[Symbol("1")].grid
+    grid = st[Symbol("1")].grid
     q_size, grid_size = size(grid)
     log_π_grid, Δg = log.(mix.π_pdf(grid) .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     

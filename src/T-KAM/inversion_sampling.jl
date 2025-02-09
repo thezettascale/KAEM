@@ -81,7 +81,7 @@ function sample_prior(
     )
 
     # Evaluate prior on grid [0,1]
-    f_grid = mix.fcns_qp[Symbol("1")].grid
+    f_grid = st[Symbol("1")].grid
     grid = f_grid |> cpu_device() .|> full_quant
     Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] .|> full_quant
     

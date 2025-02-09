@@ -197,7 +197,7 @@ function update_model_grid(
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             @reset ps.ebm[Symbol("$i")].coef = new_coef
-            @reset model.prior.fcns_qp[Symbol("$i")].grid = new_grid
+            @reset st.ebm[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
             z = i == 1 ? reshape(z, size(z, 2), Q*B) : dropdims(sum(z, dims=1); dims=1)
@@ -209,7 +209,7 @@ function update_model_grid(
         end
     end
          
-    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, ps, st, seed
+    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, half_quant.(ps), st, seed
 
     z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
@@ -217,7 +217,7 @@ function update_model_grid(
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
         @reset ps.gen[Symbol("$i")].coef = new_coef
-        @reset model.lkhood.Φ_fcns[Symbol("$i")].grid = new_grid
+        @reset st.gen[Symbol("$i")].grid = new_grid
 
         z = fwd(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
         z = dropdims(sum(z, dims=1); dims=1)
@@ -228,7 +228,7 @@ function update_model_grid(
         end
     end
 
-    return model, full_quant.(ps), st, seed
+    return model, half_quant.(ps), st, seed
 end
 
 function init_T_KAM(
@@ -301,7 +301,7 @@ function init_T_KAM(
         num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
         num_param_updates = parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
         
-        x = range(0, stop=2*π*num_cycles, length=num_param_updates)
+        x = range(0, stop=2*π*num_cycles, length=num_param_updates+1)
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
     end
 
@@ -328,6 +328,20 @@ function init_T_KAM(
             eps,
             file_loc
         )
+end
+
+function init_from_file(
+    file_loc::AbstractString,
+    ckpt::Int
+    )
+    """
+    Load a model from a checkpoint file.
+    """
+    saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
+    model = saved_data["model"] |> deepcopy
+    ps = convert(ComponentArray, saved_data["params"])
+    st = convert(NamedTuple, saved_data["state"])
+    return model, ps, st
 end
 
 

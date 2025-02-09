@@ -149,21 +149,25 @@ function SEQ_gen(lkhood, ps, st, z::AbstractArray{half_quant})
     z = dropdims(sum(z, dims=1); dims=1)
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
     @ignore_derivatives @reset st[Symbol("ln_1")] = st_new
+    
+    # Initialize carry and first output
+    carry = zeros(half_quant, size(z)) |> device
+    out_z = fwd(lkhood.Φ_fcns[Symbol("3")], ps[Symbol("3")], st[Symbol("3")], z)
+    out = reshape(dropdims(sum(out_z, dims=1); dims=1), lkhood.out_size, 1, size(z)[end])
 
-    out = copy(z)[:,:,:]
     for t in 1:lkhood.seq_length-1
-        z = z + out[:,:,t]
+        z = z + carry
+        carry = z
         z = fwd(lkhood.Φ_fcns[Symbol("2")], ps[Symbol("2")], st[Symbol("2")], z)
         z = dropdims(sum(z, dims=1); dims=1)
 
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
         @ignore_derivatives @reset st[Symbol("ln_2")] = st_new
-        out = cat(out, z[:,:,:], dims=3)
-    end
-    out = permutedims(out, [1, 3, 2])
 
-    out, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], out, ps[Symbol("3")], st[Symbol("3")])
-    @reset st[Symbol("3")] = st_new
+        out_z = fwd(lkhood.Φ_fcns[Symbol("3")], ps[Symbol("3")], st[Symbol("3")], z)
+        out_z = reshape(dropdims(sum(out_z, dims=1); dims=1), lkhood.out_size, 1, size(z)[end])
+        out = cat(out, out_z, dims=2)
+    end
 
     return out, st
 end 
@@ -363,7 +367,10 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm(hidden_dim)
 
         # Output layer
-        @reset Φ_functions[Symbol("3")] = Lux.Dense(hidden_dim => output_dim, identity)
+        lkhood_seed, rng = next_rng(lkhood_seed)
+        base_scale = (μ_scale * (full_quant(1) / √(full_quant(hidden_dim)))
+        .+ σ_base .* (randn(rng, full_quant, hidden_dim, output_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(hidden_dim))))
+        @reset Φ_functions[Symbol("3")] = initialize_function(hidden_dim, output_dim, base_scale)
 
         depth = 3
     else

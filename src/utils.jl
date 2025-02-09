@@ -61,7 +61,7 @@ function move_to_cpu(model, ps, st)
 end
 
 function move_to_gpu(model, ps, st)
-    ps, st = ps |> deivce, st |> device
+    ps, st = ps |> device, st |> device
 
     for i in 1:model.prior.depth
         @reset model.prior.fcns_qp[Symbol("$i")].grid = model.prior.fcns_qp[Symbol("$i")].grid |> device

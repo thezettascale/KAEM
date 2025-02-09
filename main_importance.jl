@@ -18,6 +18,6 @@ rng = Random.seed!(1)
 commit!(conf, "MALA", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
-t = init_trainer(rng, conf, dataset)#, img_resize=(14,14))
+t = init_trainer(rng, conf, dataset)
 train!(t)
 

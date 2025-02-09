@@ -37,7 +37,7 @@ struct univariate_function <: Lux.AbstractLuxLayer
     spline_degree::Int
     base_activation::Function
     spline_function::Function
-    grid::Union{AbstractArray{half_quant}, AbstractArray{full_quant}}
+    init_grid::AbstractArray{half_quant}
     grid_size::Int
     grid_update_ratio::half_quant
     grid_range::Tuple{half_quant, half_quant}
@@ -75,7 +75,7 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     ε = ((rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
-    coef = cpu_device()(curve2coef(l.grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
+    coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
     return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
@@ -83,7 +83,7 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
     mask = ones(half_quant, l.in_dim, l.out_dim)
-    return l.τ_trainable ? (mask=mask) : (mask=mask, basis_τ=half_quant.(l.init_τ))
+    return l.τ_trainable ? (mask=mask, grid=l.init_grid) : (mask=mask, grid=l.init_grid, basis_τ=half_quant.(l.init_τ))
 end
 
 function fwd(l, ps, st, x)
@@ -101,11 +101,11 @@ function fwd(l, ps, st, x)
     """
 
     w_base, w_sp, coef = ps.w_base, ps.w_sp, ps.coef
-    mask = l.τ_trainable ? st : st.mask
+    mask = st.mask
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
     base = l.base_activation(x)
-    y = coef2curve(x, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
+    y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
     return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
 end
@@ -129,10 +129,10 @@ function update_fcn_grid(l, ps, st, x)
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     
     x_sort = sort(x, dims=2) 
-    y = coef2curve(x_sort, l.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function) .|> half_quant
+    y = coef2curve(x_sort, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function) .|> half_quant
 
     # Adaptive grid - concentrate grid points around regions of higher density
-    num_interval = size(l.grid, 2) - 2*l.spline_degree - 1
+    num_interval = size(st.grid, 2) - 2*l.spline_degree - 1
     ids = [div(sample_size * i, num_interval) + 1 for i in 0:num_interval-1]'
     grid_adaptive = reduce(hcat, map(i -> view(x_sort, :, i:i), ids))
     grid_adaptive = hcat(grid_adaptive, x_sort[:, end:end])

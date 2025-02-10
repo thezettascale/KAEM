@@ -66,7 +66,7 @@ function generate_batch(
     # Reduce precision, 
     ps = ps .|> half_quant
 
-    z, st_ebm, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = model.prior.sample_z(model.prior, num_samples, ps.ebm, Lux.testmode(st.ebm), seed)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
@@ -322,7 +322,7 @@ function init_T_KAM(
         train_loader = DataLoader(train_data, batchsize=IS_samples, shuffle=false)
         aux_loader = DataLoader(aux_data, batchsize=IS_samples, shuffle=false)
         aux_state = nothing
-        
+
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives begin
             z_post, state_new = (st.train_idx % length(aux_loader) == 0 || isnothing(aux_state)) ? iterate(aux_loader) : iterate(aux_loader, aux_state)
             z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)

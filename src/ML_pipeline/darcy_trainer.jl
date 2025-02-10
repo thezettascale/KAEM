@@ -187,7 +187,8 @@ function train!(t::T_KAM_trainer)
             for (x, y) in t.test_loader
                 x = reshape(x, 32*32, :) .|> half_quant |> device
                 x_gen, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), size(x)[end]; seed=t.seed)
-                x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
+                x_rec, st_gen = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), Lux.testmode(t.st.gen), x)
+                @reset t.st.gen = st_gen
                 x_rec, x_gen = x_rec .|> full_quant, x_gen .|> full_quant
                 test_gen_loss += sum((device(y) - x_gen).^2) / size(x)[end]
                 test_recon_loss += sum((device(y) - x_rec).^2) / size(x)[end]

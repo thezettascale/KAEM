@@ -2,10 +2,10 @@ import h5py
 import matplotlib.pyplot as plt
 
 # File path to your HDF5 file
-file_path = 'PDE_data/darcy_32/darcy_test_32.h5'
+file_path = 'logs/Darcy/informed/seed_1/generated_pressures.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
-    image_data = h5_file['y'][()] 
+    image_data = h5_file['recon_samples'][()] 
 
 # Define grid dimensions
 grid_size = (5, 5) 

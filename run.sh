@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # datasets=("MNIST" "FMNIST" "CIFAR10" "SVHN" "PTB")
-datasets=("PTB")
+# datasets=("PTB")
 
 # for dataset in "${datasets[@]}"; do
 #     session_name="IS_$dataset"
@@ -17,21 +17,21 @@ datasets=("PTB")
 #     echo "$dataset Importance Sampling completed."
 # done
 
-datasets=("CIFAR10" "SVHN")
+# datasets=("CIFAR10" "SVHN")
 
-for dataset in "${datasets[@]}"; do
-    session_name="TI_$dataset"
-    echo "Starting $dataset Thermodynamic Integration run..."
+# for dataset in "${datasets[@]}"; do
+#     session_name="TI_$dataset"
+#     echo "Starting $dataset Thermodynamic Integration run..."
     
-    # Runs sequentially
-    tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_thermodynamic.jl > Thermo_${dataset}.log 2>&1; tmux kill-session -t $session_name"
+#     # Runs sequentially
+#     tmux new-session -d -s "$session_name" "DATASET=$dataset julia --threads auto main_thermodynamic.jl > Thermo_${dataset}.log 2>&1; tmux kill-session -t $session_name"
     
-    while tmux has-session -t "$session_name" 2>/dev/null; do
-        sleep 5
-    done
+#     while tmux has-session -t "$session_name" 2>/dev/null; do
+#         sleep 5
+#     done
     
-    echo "$dataset Thermodynamic Integration completed."
-done
+#     echo "$dataset Thermodynamic Integration completed."
+# done
 
 # Darcy 
 

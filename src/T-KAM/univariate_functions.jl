@@ -75,10 +75,19 @@ function init_function(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    ε = ((rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
-    coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
+    
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base 
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
+    
+    coef = nothing
+    if l.spline_function == FFT_basis
+        grid_norm_factor = collect(1:l.grid_size+1) .^ 2
+        coef = glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./ (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:,:,:,:], [2, 3, 4, 1])) 
+    else
+        ε = ((rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
+        coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
+    end
+
     return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
 end
 

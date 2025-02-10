@@ -8,7 +8,7 @@ include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
 using .optimization
-using .Utils: device, half_quant, full_quant
+using .Utils: device, half_quant, full_quant, hq, fq
 
 using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -62,7 +62,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, informed::Bool;
     end
 
     model_type = informed ? "informed" : "uninformed"
-    file_loc = isnothing(file_loc) ? "logs/Darcy/$(model_type)/$(seed)/" : file_loc
+    file_loc = isnothing(file_loc) ? "logs/Darcy/$(model_type)/seed_$(seed)/" : file_loc
     mkpath(file_loc)
 
     f_train = h5open("PDE_data/darcy_32/darcy_train_32.h5")
@@ -72,11 +72,11 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, informed::Bool;
     dataset = reshape(dataset, 32, 32, 1, :)
     x_shape = (32, 32, 1)
 
-    aux_dataset_train = reshape(f_train["x"][:,:,1:N_train], 32, 32, 1, :)
-    aux_dataset_test = reshape(f_test["x"][:,:,1:N_test], 32, 32, 1, :)
+    aux_dataset_train = reshape(f_train["x"][:,:,1:N_train], 32*32, :) .|> half_quant
+    test_x = reshape(f_test["x"][:,:,1:N_test], 32, 32, 1, N_test) 
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-    test_loader = DataLoader((aux_dataset_test, dataset[:,:,:,N_train+1:end]), batchsize=batch_size, shuffle=true)
+    test_loader = DataLoader((test_x, dataset[:,:,:,N_train+1:end]), batchsize=batch_size, shuffle=true)
 
     # Initialize model
     model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed, aux_data=aux_dataset_train)
@@ -89,13 +89,6 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, informed::Bool;
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     x, loader_state = iterate(model.train_loader) 
     checkpoint = parse(Bool, retrieve(conf, "TRAINING", "checkpoint"))
-
-    try
-        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
-    catch
-        rm(file_loc * "real_$(gen_type).h5")
-        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
-    end
 
     open(file_loc * "loss.csv", "w") do file
         write(file, "Time (s),Epoch,Train MLE Loss,Test Gen Loss,Test Recon Loss,Grid Updated\n")
@@ -192,11 +185,12 @@ function train!(t::T_KAM_trainer)
             test_gen_loss = 0
             test_recon_loss = 0
             for (x, y) in t.test_loader
+                x = reshape(x, 32*32, :) .|> half_quant |> device
                 x_gen, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), size(x)[end]; seed=t.seed)
-                x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, t.ps.gen, t.st.gen, x)
+                x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
                 x_rec, x_gen = x_rec .|> full_quant, x_gen .|> full_quant
-                test_gen_loss += sum((device(x) - x_gen).^2) / size(x)[end]
-                test_recon_loss += sum((device(x) - x_rec).^2) / size(x)[end]
+                test_gen_loss += sum((device(y) - x_gen).^2) / size(x)[end]
+                test_recon_loss += sum((device(y) - x_rec).^2) / size(x)[end]
             end
             
             train_loss = train_loss / num_batches
@@ -268,7 +262,8 @@ function train!(t::T_KAM_trainer)
     recon_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     recon_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     for (x, y) in t.test_loader
-        x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, t.ps.gen, t.st.gen, x)
+        x = reshape(x, 32*32, :) |> device
+        x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
         x_rec, x = x_rec .|> full_quant, x .|> full_quant
         recon_data = cat(recon_data, cpu_device()(x_rec), dims=idx)
         recon_true = cat(recon_true, cpu_device()(x), dims=idx)

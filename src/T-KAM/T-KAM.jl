@@ -40,7 +40,6 @@ struct T_KAM <: Lux.AbstractLuxLayer
     loss_scaling::full_quant    
     ε::full_quant
     file_loc::AbstractString
-    aux_state::Union{Nothing, Tuple{Any, Int}}
 end
 
 function generate_batch(
@@ -240,7 +239,7 @@ function init_T_KAM(
     prior_seed::Int=1,
     lkhood_seed::Int=1,
     data_seed::Int=1,
-    aux_data::Union{AbstractArray{full_quant}, Nothing}=nothing
+    aux_data::Union{AbstractArray{half_quant}, Nothing}=nothing
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
@@ -261,12 +260,21 @@ function init_T_KAM(
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
     loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
-    aux_state = nothing
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 
         size(dataset, 1) * size(dataset, 2))
     )
+
+    if retrieve(conf, "MIX_PRIOR", "spline_function") == "FFT"
+        update_prior_grid = false
+        commit!(conf, "MIX_PRIOR", "layer_norm", "true")
+    end
+
+    if retrieve(conf, "KAN_LIKELIHOOD", "spline_function") == "FFT"
+        update_llhood_grid = false
+        commit!(conf, "KAN_LIKELIHOOD", "layer_norm", "true")
+    end
     
     prior_model = init_mix_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
@@ -284,7 +292,7 @@ function init_T_KAM(
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
     Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
-        
+
     # Importance sampling or MALA
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
@@ -313,12 +321,13 @@ function init_T_KAM(
         IS_samples = batch_size
         train_loader = DataLoader(train_data, batchsize=IS_samples, shuffle=false)
         aux_loader = DataLoader(aux_data, batchsize=IS_samples, shuffle=false)
-
+        aux_state = nothing
+        
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives begin
-            z_post, state_new = st.train_idx % length(aux_loader) == 0 ? iterate(aux_loader) : iterate(aux_loader, m.aux_state)
+            z_post, state_new = (st.train_idx % length(aux_loader) == 0 || isnothing(aux_state)) ? iterate(aux_loader) : iterate(aux_loader, aux_state)
             z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
 
-            @reset m.aux_state = state_new
+            @reset aux_state = state_new
             @reset st.ebm = st_ebm
 
             z = cat(z_prior[:,:,:], device(z_post[:,:,:]), dims=3)
@@ -349,7 +358,6 @@ function init_T_KAM(
             loss_scaling,
             eps,
             file_loc,
-            aux_state
         )
 end
 
@@ -380,7 +388,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
         η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1) : [model.η_init],
-        train_idx = 1
+        train_idx = 1,
         )
 end
 

@@ -67,7 +67,7 @@ function test_FFT_basis()
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
 
-    B_fft = FFT_basis(x_eval, grid; σ=σ)
+    B_fft, Bfft_2 = FFT_basis(x_eval, grid; σ=σ)
 
     @test size(B_fft) == (i, g, b)
     @test !any(isnan.(B_fft))

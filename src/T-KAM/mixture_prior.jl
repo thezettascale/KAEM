@@ -17,7 +17,7 @@ using .InverseSampling: sample_prior
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
-    "lognormal" => (z, ps) -> exp.(-repeat(sum(z .* (abs.(ps[Symbol("Σ")]) \ z); dims=1), size(z,1),1) ./ 2)
+    "lognormal" => (z, ps, ε) -> exp.(- (log.(z .+ ε).^2 ./ (2 .* abs.(ps[Symbol("Σ")]) .+ ε))) ./ (z .* sqrt.(2π .* abs.(ps[Symbol("Σ")])) .+ ε)
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
@@ -52,7 +52,7 @@ function log_partition_function(
     """
     grid = st[Symbol("1")].grid
     q_size, grid_size = size(grid)
-    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps) : mix.π_pdf(grid)
+    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps, ε) : mix.π_pdf(grid)
     log_π_grid, Δg = log.(π_g .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     
     for i in 1:mix.depth
@@ -97,7 +97,7 @@ function log_prior(
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
-    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps) : mix.π_pdf(z)
+    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps, ε) : mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
     # Energy functions of each component, q -> p
@@ -202,7 +202,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
     end
 
     if prior.prior_type == "lognormal"
-        @reset ps[Symbol("Σ")] = glorot_uniform(rng, full_quant, q_size, q_size)
+        @reset ps[Symbol("Σ")] = glorot_uniform(rng, full_quant, q_size)
     end
 
     return ps 

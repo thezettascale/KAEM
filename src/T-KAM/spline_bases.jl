@@ -148,7 +148,9 @@ function FFT_basis(
     Returns:
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
-    return @tullio B[i, g, b] := cos(x[i, b] * grid[i, g] / σ) + sin(x[i, b] * grid[i, g] / σ)
+    @tullio even[i, g, b] := cos(x[i, b] * grid[i, g])
+    @tullio odd[i, g, b] := sin(x[i, b] * grid[i, g])
+    return even, odd
 end
 
 function coef2curve(
@@ -171,8 +173,13 @@ function coef2curve(
     Returns:
         A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
     """
+
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
+    !isa(splines, Tuple) && return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
+
+    even, odd = splines
+    even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
+    return @tullio y_eval[i, o, b] := (even[i, g, b] * even_coef[i, o, g]) + (odd[i, g, b] * odd_coef[i, o, g])
 end
 
 function curve2coef(

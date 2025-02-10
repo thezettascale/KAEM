@@ -263,8 +263,9 @@ function train!(t::T_KAM_trainer)
     recon_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     recon_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     for (x, y) in t.test_loader
-        x = reshape(x, 32*32, :) |> device
-        x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
+        x = reshape(x, 32*32, :) .|> half_quant |> device
+        x_rec, st_gen = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
+        @reset t.st.gen = st_gen
         x_rec, x = x_rec .|> full_quant, x .|> full_quant
         recon_data = cat(recon_data, cpu_device()(x_rec), dims=idx)
         recon_true = cat(recon_true, cpu_device()(x), dims=idx)

@@ -14,21 +14,17 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .InverseSampling: sample_prior
 
-prior_distributions = Dict(
-    "uniform" => Uniform(half_quant(0),half_quant(1)),
-    "gaussian" => Normal(half_quant(0),half_quant(1)),
-)
-
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
+    "lognormal" => (z, ps) -> exp.(-repeat(sum(z .* (abs.(ps[Symbol("Σ")]) \ z); dims=1), size(z,1),1) ./ 2)
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple
     layernorm::Bool
     depth::Int
-    π_0::Union{Uniform, Normal, Bernoulli}
+    prior_type::AbstractString
     π_pdf::Function
     sample_z::Function
     contrastive_div::Bool
@@ -56,7 +52,8 @@ function log_partition_function(
     """
     grid = st[Symbol("1")].grid
     q_size, grid_size = size(grid)
-    log_π_grid, Δg = log.(mix.π_pdf(grid) .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
+    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps) : mix.π_pdf(grid)
+    log_π_grid, Δg = log.(π_g .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     
     for i in 1:mix.depth
         grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
@@ -100,7 +97,7 @@ function log_prior(
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
-    π_0 = mix.π_pdf(z)
+    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps) : mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
     # Energy functions of each component, q -> p
@@ -189,7 +186,7 @@ function init_mix_prior(
 
     end
 
-    return mix_prior(functions, layernorm, length(widths)-1, prior_distributions[prior_type], prior_pdf[prior_type], sample_function, contrastive_divergence, λ)
+    return mix_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, contrastive_divergence, λ)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
@@ -203,6 +200,11 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
             @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, prior.fcns_qp[Symbol("ln_$i")]) 
         end
     end
+
+    if prior.prior_type == "lognormal"
+        @reset ps[Symbol("Σ")] = glorot_uniform(rng, full_quant, q_size, q_size)
+    end
+
     return ps 
 end
  
@@ -214,9 +216,6 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
             @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, prior.fcns_qp[Symbol("ln_$i")]) |> hq
         end
     end
-
-    q_size = prior.fcns_qp[Symbol("1")].in_dim
-    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
 
     return st 
 end

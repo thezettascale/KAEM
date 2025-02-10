@@ -60,6 +60,19 @@ function test_RSWAF_basis()
     @test !any(isnan.(B_rswaf))
 end
 
+function test_FFT_basis()
+    Random.seed!(42)
+    x_eval = rand(half_quant, i, b) |> device
+
+    Random.seed!(42)
+    grid = rand(half_quant, i, g) |> device
+
+    B_fft = FFT_basis(x_eval, grid; σ=σ)
+
+    @test size(B_fft) == (i, g, b)
+    @test !any(isnan.(B_fft))
+end
+
 function test_coef2curve()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
@@ -101,6 +114,7 @@ end
     test_B_spline_basis()
     test_RBF_basis()
     test_RSWAF_basis()
+    test_FFT_basis()
     test_coef2curve()
     test_curve2coef()
 end

@@ -1,6 +1,6 @@
 module spline_functions
 
-export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis
+export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra
@@ -129,6 +129,26 @@ function RSWAF_basis(
     @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
     diff = NNlib.tanh_fast(diff ./ σ)     
     return 1 .- diff.^2
+end
+
+function FFT_basis(
+    x::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
+    degree::Int64=3, 
+    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
+    )
+    """
+    Compute the FFT basis functions for a batch of points x and a grid of knots.
+
+    Args:
+        x: A matrix of size (i, b) containing the points at which to evaluate the FFT basis functions.
+        grid: A matrix of size (i, g) containing the grid of knots.
+        σ: Tuning for the bandwidth (standard deviation) of the FFT kernel.
+
+    Returns:
+        A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
+    """
+    return @tullio B[i, g, b] := cos(x[i, b] * grid[i, g] / σ) + sin(x[i, b] * grid[i, g] / σ)
 end
 
 function coef2curve(

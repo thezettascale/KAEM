@@ -8,20 +8,17 @@ include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
 using .optimization
-using .Utils: device, half_quant, full_quant, hq, fq
-using .DataUtils: get_vision_dataset, get_text_dataset
-using Flux: onecold
+using .Utils: device, half_quant, full_quant
 
 using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Zygote: withgradient
+using Flux: DataLoader
 
 mutable struct T_KAM_trainer
     model
-    cnn::Bool
     o::opt
-    dataset_name::AbstractString
     ps::ComponentArray
     st::NamedTuple
     N_epochs::Int
@@ -33,41 +30,56 @@ mutable struct T_KAM_trainer
     grid_update_frequency::Int
     last_grid_update::Int
     save_model::Bool
-    gen_type::AbstractString
     loss::full_quant
     checkpoint::Bool
+    test_loader::DataLoader
 end
 
-function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
-    seed=1, img_resize=nothing, file_loc=nothing, save_model=true)
+function init_trainer(rng::AbstractRNG, conf::ConfParse, informed::Bool; 
+    seed=1, file_loc=nothing, save_model=true)
 
     # Load dataset
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
+
+    N_train > 1000 || N_test > 1000 && error("There are only 1000 examples in Darcy tain/test. Please reduce your config.")
+
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
-    cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
-    seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
-    gen_type = seq ? "logits" : "images"
-    commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
-    sequence_length = seq ? parse(Int, retrieve(conf, "SEQ", "sequence_length")) : 0
-    commit!(conf, "SEQ", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
-    vocab_size = parse(Int, retrieve(conf, "SEQ", "vocab_size"))
+    gen_type = "pressure_fields"
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
+    commit!(conf, "SEQ", "sequence_length", "-1") 
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
-    dataset, x_shape, save_dataset = (seq ? 
-        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
-        get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
-    )
+    if informed
+        commit!(conf, "MIX_PRIOR", "π_0", "lognormal")
+        commit!(conf, "MIX_PRIOR", "spline_function", "FFT")
+        commit!(conf, "KAN_LIKELIHOOD", "spline_function", "FFT")
+    else
+        commit!(conf, "MIX_PRIOR", "π_0", "uniform")
+        commit!(conf, "MIX_PRIOR", "spline_function", "RBF")
+        commit!(conf, "KAN_LIKELIHOOD", "spline_function", "RBF")
+    end
 
-    N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
-    model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
-    
-    file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
+    model_type = informed ? "informed" : "uninformed"
+    file_loc = isnothing(file_loc) ? "logs/Darcy/$(model_type)/$(seed)/" : file_loc
     mkpath(file_loc)
 
+    f_train = h5open("PDE_data/darcy_32/darcy_train_32.h5")
+    f_test = h5open("PDE_data/darcy_32/darcy_test_32.h5")
+
+    dataset = cat(f_train["y"][:,:,1:N_train], f_test["y"][:,:,1:N_test], dims=3)
+    dataset = reshape(dataset, 32, 32, 1, :)
+    x_shape = (32, 32, 1)
+
+    aux_dataset_train = reshape(f_train["x"][:,:,1:N_train], 32, 32, 1, :)
+    aux_dataset_test = reshape(f_test["x"][:,:,1:N_test], 32, 32, 1, :)
+
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    test_loader = DataLoader((aux_dataset_test, dataset[:,:,:,N_train+1:end]), batchsize=batch_size, shuffle=true)
+
     # Initialize model
-    model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed)
+    model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed, aux_data=aux_dataset_train)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
 
@@ -86,14 +98,12 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     end
 
     open(file_loc * "loss.csv", "w") do file
-        write(file, "Time (s),Epoch,Train MLE Loss,Test MSE Loss,Grid Updated\n")
+        write(file, "Time (s),Epoch,Train MLE Loss,Test Gen Loss,Test Recon Loss,Grid Updated\n")
     end
     
     return T_KAM_trainer(
         model, 
-        cnn,
         optimizer, 
-        dataset_name, 
         device(params), 
         device(state), 
         N_epochs, 
@@ -105,9 +115,9 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         grid_update_frequency,
         1,
         save_model,
-        gen_type,
         full_quant(0),
         checkpoint,
+        test_loader
     )
 end
 
@@ -179,27 +189,25 @@ function train!(t::T_KAM_trainer)
         # After one epoch, calculate test loss and log to CSV
         if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1
             
-            test_loss = 0
-            for x in t.model.test_loader
+            test_gen_loss = 0
+            test_recon_loss = 0
+            for (x, y) in t.test_loader
                 x_gen, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), size(x)[end]; seed=t.seed)
-                x_gen = x_gen .|> full_quant
-               
-                # MSE loss between pixels for images, and max index for logits
-                if t.gen_type == "logits"
-                    idxs = dropdims(argmax(x_gen, dims=1); dims=1)
-                    test_loss += sum((device(onecold(x, 1:size(x,1))) .- getindex.(idxs, 1)).^2) / size(x)[end]
-                else
-                    test_loss += sum((device(x) - x_gen).^2) / size(x)[end]
-                end 
+                x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, t.ps.gen, t.st.gen, x)
+                x_rec, x_gen = x_rec .|> full_quant, x_gen .|> full_quant
+                test_gen_loss += sum((device(x) - x_gen).^2) / size(x)[end]
+                test_recon_loss += sum((device(x) - x_rec).^2) / size(x)[end]
             end
             
             train_loss = train_loss / num_batches
-            test_loss /= length(t.model.test_loader)
+            test_gen_loss = test_gen_loss / length(t.test_loader)
+            test_recon_loss = test_recon_loss / length(t.test_loader)
+
             now_time = time() - start_time
             epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
 
             open(loss_file, "a") do file
-                write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
+                write(file, "$now_time,$(epoch),$train_loss,$test_gen_loss,$test_recon_loss,$grid_updated\n")
             end
 
             t.checkpoint && jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device(), seed=t.seed)
@@ -257,11 +265,24 @@ function train!(t::T_KAM_trainer)
         gen_data = cat(gen_data, cpu_device()(batch), dims=idx)
     end
 
+    recon_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    recon_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    for (x, y) in t.test_loader
+        x_rec, t.st = t.model.lkhood.generate_from_z(t.model.lkhood, t.ps.gen, t.st.gen, x)
+        x_rec, x = x_rec .|> full_quant, x .|> full_quant
+        recon_data = cat(recon_data, cpu_device()(x_rec), dims=idx)
+        recon_true = cat(recon_true, cpu_device()(x), dims=idx)
+    end
+
     try
-        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_samples", Float32.(recon_true))
     catch
-        rm(t.model.file_loc * "generated_$(t.gen_type).h5")
-        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", Float32.(gen_data))
+        rm(t.model.file_loc * "generated_pressures.h5")
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_samples", Float32.(recon_true))
     end
 
     t.save_model && jldsave(t.model.file_loc * "saved_model.jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device())

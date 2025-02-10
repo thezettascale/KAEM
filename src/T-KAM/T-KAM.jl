@@ -40,6 +40,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     loss_scaling::full_quant    
     ε::full_quant
     file_loc::AbstractString
+    aux_state::Union{Nothing, Tuple{Any, Int}}
 end
 
 function generate_batch(
@@ -239,6 +240,7 @@ function init_T_KAM(
     prior_seed::Int=1,
     lkhood_seed::Int=1,
     data_seed::Int=1,
+    aux_data::Union{AbstractArray{full_quant}, Nothing}=nothing
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
@@ -259,6 +261,7 @@ function init_T_KAM(
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
     loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    aux_state = nothing
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 
@@ -305,6 +308,25 @@ function init_T_KAM(
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
     end
 
+    if !isnothing(aux_data)
+        loss_fcn = MALA_loss
+        IS_samples = batch_size
+        train_loader = DataLoader(train_data, batchsize=IS_samples, shuffle=false)
+        aux_loader = DataLoader(aux_data, batchsize=IS_samples, shuffle=false)
+
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives begin
+            z_post, state_new = st.train_idx % length(aux_loader) == 0 ? iterate(aux_loader) : iterate(aux_loader, m.aux_state)
+            z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+
+            @reset m.aux_state = state_new
+            @reset st.ebm = st_ebm
+
+            z = cat(z_prior[:,:,:], device(z_post[:,:,:]), dims=3)
+            z = permutedims(z, [3, 1, 2])
+            return z, st, seed
+        end
+    end
+
     verbose && println("Using $(Threads.nthreads()) threads.")
 
     return T_KAM(
@@ -326,7 +348,8 @@ function init_T_KAM(
             loss_fcn,
             loss_scaling,
             eps,
-            file_loc
+            file_loc,
+            aux_state
         )
 end
 

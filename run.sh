@@ -32,8 +32,3 @@
     
 #     echo "$dataset Thermodynamic Integration completed."
 # done
-
-# Darcy 
-
-tmux new-session -d -s "Darcy "julia --threads auto darcy.jl > Darcy.log 2>&1; tmux kill-session -t Darcy"
-echo "Darcy completed."

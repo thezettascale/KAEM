@@ -9,7 +9,8 @@ packages = [
     "numpy",
     "pandas",
     "seaborn",
-    "h5py"
+    "h5py",
+    "torch"
 ]
 
 for package in packages:

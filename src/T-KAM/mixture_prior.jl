@@ -14,7 +14,7 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .InverseSampling: sample_prior
 
-function LogNorm_Expcov(z, ps, D, ε)
+function LogNorm_Expcov(z, ps, ε)
     """
     Log-normal prior with exponential decay covariance kernel.
     Assumes 32 x 32
@@ -27,10 +27,9 @@ function LogNorm_Expcov(z, ps, D, ε)
     Returns:
         The log-normal prior with exponential decay covariance kernel.
     """
-    σ, λ = ps.σ, ps.λ
+    Σ, μ = abs.(ps.Σ), ps.μ
     log_z = log.(z .+ ε)
-    Σ = σ.^2 .* exp.(-λ .* D)
-    return exp.(-sum(log_z .* (Σ \ log_z); dims=1) ./ 2) ./ (z .* sqrt((2π)^size(z,1) * det(fq(Σ))) .+ ε)
+    return exp.(-((log_z .- μ).^2 ./ (2 .* Σ))) ./ (z .* sqrt((2π)^size(z,1) * prod(Σ)) .+ ε)
 end
 
 prior_pdf = Dict(
@@ -71,7 +70,7 @@ function log_partition_function(
     """
     grid = st[Symbol("1")].grid
     q_size, grid_size = size(grid)
-    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps[Symbol("lognormal")], st[Symbol("lognormal")], ε) : mix.π_pdf(grid)
+    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps[Symbol("lognormal")], ε) : mix.π_pdf(grid)
     log_π_grid, Δg = log.(π_g .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     
     for i in 1:mix.depth
@@ -116,7 +115,7 @@ function log_prior(
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
-    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps[Symbol("lognormal")], st[Symbol("lognormal")], ε) : mix.π_pdf(z)
+    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps[Symbol("lognormal")], ε) : mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
     # Energy functions of each component, q -> p
@@ -222,8 +221,8 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
 
     if prior.prior_type == "lognormal"
         @reset ps[Symbol("lognormal")] = (
-            σ = glorot_uniform(rng, full_quant, 1),
-            λ = glorot_uniform(rng, full_quant, 1)
+            μ = glorot_uniform(rng, full_quant, q_size),
+            Σ = glorot_uniform(rng, full_quant, q_size)
         )
     end
 
@@ -237,13 +236,6 @@ function Lux.initialstates(rng::AbstractRNG, prior::mix_prior)
         for i in 1:prior.depth-1
             @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, prior.fcns_qp[Symbol("ln_$i")]) |> hq
         end
-    end
-
-    if prior.prior_type == "lognormal"
-        indices = [(i, j) for i in 1:32 for j in 1:32] 
-        n = length(indices)
-        D = [sqrt((x1 - x2)^2 + (y1 - y2)^2) for (x1, y1) in indices, (x2, y2) in indices] |> hq
-        @reset st[Symbol("lognormal")] = D
     end
 
     return st 

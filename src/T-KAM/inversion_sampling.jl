@@ -132,7 +132,9 @@ function sample_prior(
         end
     end
 
-    return device(half_quant.(z)), st, seed
+    z = device(half_quant.(z))
+    z = mix.prior_type == "lognormal" ? removeNeg(z; ε=ε) : z
+    return z, st, seed
 end
 
 end

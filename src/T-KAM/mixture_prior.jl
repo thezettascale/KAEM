@@ -29,7 +29,7 @@ function LogNorm_Expcov(z, ps, ε)
     """
     Σ, μ = abs.(ps.Σ), ps.μ
     log_z = log.(z .+ ε)
-    return exp.(-((log_z .- μ).^2 ./ (2 .* Σ))) ./ (z .* sqrt((2π)^size(z,1) * prod(Σ)) .+ ε)
+    return exp.(-(log_z .- μ).^2 ./ (2 .* Σ)) ./ (z .* sqrt.(2π .* Σ) .+ ε)
 end
 
 prior_pdf = Dict(

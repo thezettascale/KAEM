@@ -85,7 +85,7 @@ function sample_prior(
     grid = f_grid |> cpu_device() .|> full_quant
     Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] .|> full_quant
     
-    π_grid = mix.prior_type == "lognormal" ? mix.π_pdf(f_grid, ps, ε) : mix.π_pdf(f_grid)
+    π_grid = mix.prior_type == "lognormal" ? mix.π_pdf(f_grid, ps[Symbol("lognormal")], st[Symbol("lognormal")], ε) : mix.π_pdf(f_grid)
     grid_size = size(f_grid, 2)
 
     # Energy function of each component, q -> p

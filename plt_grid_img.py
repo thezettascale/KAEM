@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 file_path = 'logs/Darcy/informed/seed_1/generated_pressures.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
-    image_data = h5_file['recon_samples'][()] 
+    image_data = h5_file['gen_samples'][()] 
 
 # Define grid dimensions
-grid_size = (5, 5) 
+grid_size = (10, 10) 
 fig, axes = plt.subplots(grid_size[0], grid_size[1], figsize=(8, 8))
 
 for i in range(grid_size[0] * grid_size[1]):

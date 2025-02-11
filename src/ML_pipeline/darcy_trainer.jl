@@ -261,9 +261,11 @@ function train!(t::T_KAM_trainer)
     end
 
     recon_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
-    recon_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    perm_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    flow_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     for (x, y) in t.test_loader
-        recon_true = cat(recon_true, cpu_device()(x), dims=idx)
+        perm_true = cat(perm_true, cpu_device()(x), dims=idx)
+        flow_true = cat(flow_true, cpu_device()(y), dims=idx)
         x = reshape(x, 32*32, :) .|> half_quant |> device
         x_rec, st_gen = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
         @reset t.st.gen = st_gen
@@ -274,12 +276,14 @@ function train!(t::T_KAM_trainer)
     try
         h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
         h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
-        h5write(t.model.file_loc * "generated_pressures.h5", "true_samples", Float32.(recon_true))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_permeability", Float32.(perm_true))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_flow", Float32.(flow_true))
     catch
         rm(t.model.file_loc * "generated_pressures.h5")
         h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
         h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
-        h5write(t.model.file_loc * "generated_pressures.h5", "true_samples", Float32.(recon_true))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_permeability", Float32.(perm_true))
+        h5write(t.model.file_loc * "generated_pressures.h5", "true_flow", Float32.(flow_true))
     end
 
     t.save_model && jldsave(t.model.file_loc * "saved_model.jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device())

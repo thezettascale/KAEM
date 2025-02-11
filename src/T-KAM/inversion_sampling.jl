@@ -131,8 +131,10 @@ function sample_prior(
             z[q, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
         end
     end
-    
-    return device(half_quant.(z)), st, seed
+
+    z = device(half_quant.(z))
+    z = mix.prior_type == "lognormal" ? removeNeg(z; ε=ε) : z
+    return z, st, seed
 end
 
 end

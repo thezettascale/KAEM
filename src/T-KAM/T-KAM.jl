@@ -4,7 +4,7 @@ export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
-using Flux: DataLoader
+using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
@@ -108,14 +108,14 @@ function importance_loss(
     return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
-function MALA_loss(
+function POST_loss(
     m::T_KAM,
     ps,
     st,
     x::AbstractArray{full_quant};
     seed::Int=1
     )
-    """MLE loss with MALA."""
+    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
@@ -123,13 +123,16 @@ function MALA_loss(
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[2, :, :]; seed=seed, ε=m.ε)
+
+    x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
+    logllhood = mse(x̂, x; agg=mean)
+
     @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
-    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood))
-    return -mean(logprior' .- ex_prior .+ logllhood)*m.loss_scaling, st, seed
+    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -logllhood)
+    return (-mean(logprior.- ex_prior)  + logllhood)*m.loss_scaling, st, seed
 end 
 
 function thermo_loss(
@@ -297,7 +300,7 @@ function init_T_KAM(
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
-        loss_fcn = MALA_loss
+        loss_fcn = POST_loss
     end
     
     p = [full_quant(1)]
@@ -317,7 +320,7 @@ function init_T_KAM(
     end
 
     if !isnothing(aux_data)
-        loss_fcn = MALA_loss
+        loss_fcn = POST_loss
         IS_samples = batch_size
         train_loader = DataLoader(train_data, batchsize=IS_samples, shuffle=false)
         aux_loader = DataLoader(aux_data, batchsize=IS_samples, shuffle=false)

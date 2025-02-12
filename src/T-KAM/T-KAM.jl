@@ -117,25 +117,29 @@ function POST_loss(
     )
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
+    tup = isa(x, Tuple)
+
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-    x = isa(x, Tuple) ? last(x) : x
+    x = tup ? last(x) : x
     
     # Log-dists
     logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logprior, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior_pos, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
 
     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
     logllhood = mse(x̂, x; agg=mean)
+    logprior = tup ? mse(logprior_pos, logprior_prior; agg=mean) : ex_prior - mean(logprior_pos)
 
     @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
     m.verbose && println("Prior loss: ", ex_prior - mean(logprior), " LLhood loss: ", logllhood)
-    return (ex_prior - mean(logprior)  + logllhood)*m.loss_scaling, st, seed
+    return (logprior + logllhood)*m.loss_scaling, st, seed
 end 
+
 
 function thermo_loss(
     m::T_KAM,

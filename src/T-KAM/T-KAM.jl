@@ -124,9 +124,9 @@ function POST_loss(
     x = tup ? last(x) : x
     
     # Log-dists
-    logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε, agg=!tup)
     ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logprior_pos, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logprior_pos, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε, agg=!tup)
 
     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
     logllhood = mse(x̂, x; agg=mean)

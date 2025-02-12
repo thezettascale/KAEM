@@ -89,7 +89,8 @@ function log_prior(
     ps, 
     st;
     normalize::Bool=false,
-    ε::full_quant=eps(full_quant)
+    ε::full_quant=eps(full_quant),
+    agg::Bool=true
     )
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
@@ -105,6 +106,7 @@ function log_prior(
         st: The states of the mixture ebm-prior.
         normalize: Whether to normalize the log-probability.
         ε: The small value to avoid log(0).
+        agg: Whether to sum the log-probability over the samples.
 
     Returns:
         The unnormalized log-probability of the mixture ebm-prior.
@@ -133,10 +135,9 @@ function log_prior(
     # Unnormalized or normalized log-probability
     logprob = z + log_απ
     logprob = normalize ? logprob .- log_partition_function(mix, ps, st) : logprob
-    logprob = dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2))
+    logprob = agg ? dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2)) : logprob |> fq
     
     l1_reg = mix.λ * sum(abs.(ps[Symbol("α")])) |> fq # L1 regularization to encourage sparsity
-
     return logprob .+ l1_reg, st
 end
 

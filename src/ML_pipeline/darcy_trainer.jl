@@ -75,6 +75,11 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, informed::Bool;
     aux_dataset_train = reshape(f_train["x"][:,:,1:N_train], 32*32, :) .|> half_quant
     test_x = reshape(f_test["x"][:,:,1:N_test], 32, 32, 1, N_test) 
 
+    # Normalize all to [0, 1]
+    dataset = (dataset .- minimum(dataset)) ./ (maximum(dataset) - minimum(dataset))
+    test_x = (test_x .- minimum(test_x)) ./ (maximum(test_x) - minimum(test_x))
+    aux_dataset_train = (aux_dataset_train .- minimum(aux_dataset_train)) ./ (maximum(aux_dataset_train) - minimum(aux_dataset_train))
+
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     test_loader = DataLoader((test_x, dataset[:,:,:,N_train+1:end]), batchsize=batch_size, shuffle=true)
 
@@ -261,11 +266,16 @@ function train!(t::T_KAM_trainer)
     end
 
     recon_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    perm_gen = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     perm_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     flow_true = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     for (x, y) in t.test_loader
         perm_true = cat(perm_true, cpu_device()(x), dims=idx)
         flow_true = cat(flow_true, cpu_device()(y), dims=idx)
+        z, st_ebm, t.seed = t.model.prior.sample_z(t.model.prior, size(x)[end], half_quant.(t.ps.ebm), Lux.testmode(t.st.ebm), t.seed)
+        @reset t.st.ebm = st_ebm
+        perm_gen = cat(perm_gen, cpu_device()(reshape(z, 32, 32, 1, size(x)[end])), dims=idx) 
+
         x = reshape(x, 32*32, :) .|> half_quant |> device
         x_rec, st_gen = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), t.st.gen, x)
         @reset t.st.gen = st_gen
@@ -274,14 +284,16 @@ function train!(t::T_KAM_trainer)
     end
 
     try
-        h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
-        h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_perm", Float32.(perm_gen))
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_flow", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "recon_flow", Float32.(recon_data))
         h5write(t.model.file_loc * "generated_pressures.h5", "true_permeability", Float32.(perm_true))
         h5write(t.model.file_loc * "generated_pressures.h5", "true_flow", Float32.(flow_true))
     catch
         rm(t.model.file_loc * "generated_pressures.h5")
-        h5write(t.model.file_loc * "generated_pressures.h5", "gen_samples", Float32.(gen_data))
-        h5write(t.model.file_loc * "generated_pressures.h5", "recon_samples", Float32.(recon_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_perm", Float32.(perm_gen))
+        h5write(t.model.file_loc * "generated_pressures.h5", "gen_flow", Float32.(gen_data))
+        h5write(t.model.file_loc * "generated_pressures.h5", "recon_flow", Float32.(recon_data))
         h5write(t.model.file_loc * "generated_pressures.h5", "true_permeability", Float32.(perm_true))
         h5write(t.model.file_loc * "generated_pressures.h5", "true_flow", Float32.(flow_true))
     end

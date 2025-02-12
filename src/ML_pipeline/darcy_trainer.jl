@@ -14,7 +14,7 @@ using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Zygote: withgradient
-using Flux: DataLoader
+using Flux: DataLoader, mse
 
 mutable struct T_KAM_trainer
     model
@@ -195,8 +195,8 @@ function train!(t::T_KAM_trainer)
                 x_rec, st_gen = t.model.lkhood.generate_from_z(t.model.lkhood, half_quant.(t.ps.gen), Lux.testmode(t.st.gen), x)
                 @reset t.st.gen = st_gen
                 x_rec, x_gen = x_rec .|> full_quant, x_gen .|> full_quant
-                test_gen_loss += sum((device(y) - x_gen).^2) / size(x)[end]
-                test_recon_loss += sum((device(y) - x_rec).^2) / size(x)[end]
+                test_gen_loss += mse(device(y), x_gen)
+                test_recon_loss += mse(device(y), x_rec)
             end
             
             train_loss = train_loss / num_batches

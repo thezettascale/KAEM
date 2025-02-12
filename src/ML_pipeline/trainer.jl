@@ -10,7 +10,7 @@ using .T_KAM_model
 using .optimization
 using .Utils: device, half_quant, full_quant, hq, fq
 using .DataUtils: get_vision_dataset, get_text_dataset
-using Flux: onecold
+using Flux: onecold, mse
 
 using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
@@ -189,7 +189,7 @@ function train!(t::T_KAM_trainer)
                     idxs = dropdims(argmax(x_gen, dims=1); dims=1)
                     test_loss += sum((device(onecold(x, 1:size(x,1))) .- getindex.(idxs, 1)).^2) / size(x)[end]
                 else
-                    test_loss += sum((device(x) - x_gen).^2) / size(x)[end]
+                    test_loss += mse(device(x), x_gen)
                 end 
             end
             

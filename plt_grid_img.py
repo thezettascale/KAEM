@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 file_path = 'logs/Darcy/informed/seed_1/generated_pressures.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
-    image_data = h5_file['true_flow'][()] 
+    image_data = h5_file['recon_flow'][()] 
 
 # Define grid dimensions
 grid_size = (10, 10) 

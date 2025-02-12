@@ -132,7 +132,7 @@ function POST_loss(
 
     # Expected posterior
     m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", logllhood)
-    return (-mean(logprior.- ex_prior)  + logllhood)*m.loss_scaling, st, seed
+    return (ex_prior - mean(logprior)  + logllhood)*m.loss_scaling, st, seed
 end 
 
 function thermo_loss(

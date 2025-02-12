@@ -131,7 +131,7 @@ function POST_loss(
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
-    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -logllhood)
+    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", logllhood)
     return (-mean(logprior.- ex_prior)  + logllhood)*m.loss_scaling, st, seed
 end 
 

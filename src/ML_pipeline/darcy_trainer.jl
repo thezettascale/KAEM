@@ -23,7 +23,7 @@ mutable struct T_KAM_trainer
     st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
-    x::AbstractArray{full_quant}
+    x::Tuple{AbstractArray{half_quant}, AbstractArray{full_quant}}
     num_generated_samples::Int
     batch_size_for_gen::Int
     seed::Int

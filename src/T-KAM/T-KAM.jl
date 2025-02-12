@@ -112,17 +112,19 @@ function POST_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::Union{AbstractArray{full_quant}, Tuple{AbstractArray{half_quant}, AbstractArray{full_quant}}};
     seed::Int=1
     )
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
+    x = isa(x, Tuple) ? last(x) : x
     
     # Log-dists
+    logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logprior, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
 
     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
     logllhood = mse(x̂, x; agg=mean)
@@ -131,7 +133,7 @@ function POST_loss(
     @ignore_derivatives @reset st.gen = st_gen
 
     # Expected posterior
-    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", logllhood)
+    m.verbose && println("Prior loss: ", ex_prior - mean(logprior), " LLhood loss: ", logllhood)
     return (ex_prior - mean(logprior)  + logllhood)*m.loss_scaling, st, seed
 end 
 
@@ -322,18 +324,13 @@ function init_T_KAM(
     if !isnothing(aux_data)
         loss_fcn = POST_loss
         IS_samples = batch_size
-        train_loader = DataLoader(train_data, batchsize=IS_samples, shuffle=false)
-        aux_loader = DataLoader(aux_data, batchsize=IS_samples, shuffle=false)
-        aux_state = nothing
+        train_loader = DataLoader((aux_data, train_data), batchsize=IS_samples, shuffle=false)
 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives begin
-            z_post, state_new = (st.train_idx % length(aux_loader) == 0 || isnothing(aux_state)) ? iterate(aux_loader) : iterate(aux_loader, aux_state)
             z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-
-            @reset aux_state = state_new
             @reset st.ebm = st_ebm
 
-            z = cat(z_prior[:,:,:], device(z_post[:,:,:]), dims=3)
+            z = cat(z_prior[:,:,:], device(first(x)[:,:,:]), dims=3)
             z = permutedims(z, [3, 1, 2])
             return z, st, seed
         end

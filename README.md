@@ -44,7 +44,7 @@ tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 Edit the config files:
 
 ```bash
-nano nist_config.ini
+nano config/nist_config.ini
 ```
 
 For main experiments run:

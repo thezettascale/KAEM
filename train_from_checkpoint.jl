@@ -7,8 +7,8 @@ using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser
 file_loc = "logs/Thermodynamic/CIFAR10_1/"
 ckpt = 10
 
-conf = (occursin("MNIST", x)|| occursin("FMNIST", x)) ? ConfParse("nist_config.ini") : ConfParse("cnn_config.ini")
-conf = (occursin("PTB", x) || occursin("SMS_SPAM", x)) ? ConfParse("text_config.ini") : conf
+conf = (occursin("MNIST", x)|| occursin("FMNIST", x)) ? ConfParse("config/nist_config.ini") : ConfParse("config/cnn_config.ini")
+conf = (occursin("PTB", x) || occursin("SMS_SPAM", x)) ? ConfParse("config/text_config.ini") : conf
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")

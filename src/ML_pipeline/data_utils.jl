@@ -18,7 +18,9 @@ dataset_mapping = Dict(
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
     "SMS_SPAM" => MLDatasets.SMSSpamCollection(),
-    # "SNLI" => NLIDatasets.SNLI.train_tsv()
+    # "SNLI" => NLIDatasets.SNLI.train_tsv(),
+    "DARCY_PERM" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["x"],
+    "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
 
 function get_vision_dataset(

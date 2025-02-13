@@ -121,7 +121,6 @@ function POST_loss(
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-    x = tup ? last(x) : x
     
     # Log-dists
     logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε, agg=!tup)
@@ -130,7 +129,7 @@ function POST_loss(
 
     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
     logllhood = mse(x̂, x; agg=mean)
-    logprior = tup ? mse(logprior_pos, logprior_prior; agg=mean) : ex_prior - mean(logprior_pos)
+    logprior = ex_prior - mean(logprior_pos)
 
     @ignore_derivatives @reset st.ebm = st_ebm
     @ignore_derivatives @reset st.gen = st_gen
@@ -248,7 +247,6 @@ function init_T_KAM(
     prior_seed::Int=1,
     lkhood_seed::Int=1,
     data_seed::Int=1,
-    aux_data::Union{AbstractArray{half_quant}, Nothing}=nothing
 )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
@@ -323,21 +321,6 @@ function init_T_KAM(
         
         x = range(0, stop=2*π*num_cycles, length=num_param_updates+1)
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
-    end
-
-    if !isnothing(aux_data)
-        loss_fcn = POST_loss
-        IS_samples = batch_size
-        train_loader = DataLoader((aux_data, train_data), batchsize=IS_samples, shuffle=false)
-
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives begin
-            z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-            @reset st.ebm = st_ebm
-
-            z = cat(z_prior[:,:,:], device(first(x)[:,:,:]), dims=3)
-            z = permutedims(z, [3, 1, 2])
-            return z, st, seed
-        end
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")

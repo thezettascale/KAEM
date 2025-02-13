@@ -1,8 +1,19 @@
 using ConfParser, Random
 
 dataset = get(ENV, "DATASET", "MNIST")
-conf = (dataset == "MNIST" || dataset == "FMNIST") ? ConfParse("config/nist_config.ini") : ConfParse("config/cnn_config.ini")
-conf = (dataset == "PTB" || dataset == "SMS_SPAM") ? ConfParse("config/text_config.ini") : conf
+
+conf = Dict(
+    "MNIST" => ConfParse("config/nist_config.ini"),
+    "FMNIST" => ConfParse("config/nist_config.ini"),
+    "CIFAR10" => ConfParse("config/cnn_config.ini"),
+    "SVHN" => ConfParse("config/cnn_config.ini"),
+    "PTB" => ConfParse("config/text_config.ini"),
+    "SMS_SPAM" => ConfParse("config/text_config.ini"),
+    "DARCY_PERM" => ConfParse("config/darcy_perm_config.ini"),
+    "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
+)[dataset]
+
+
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 

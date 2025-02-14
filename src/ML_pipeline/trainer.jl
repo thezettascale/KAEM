@@ -71,7 +71,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mkpath(file_loc)
 
     # Initialize model
-    model = init_T_KAM(dataset, conf, x_shape; file_loc=file_π_0loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed)
+    model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
 

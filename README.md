@@ -1,7 +1,7 @@
 # T-KAM
 Official implementation of the Thermodynamic Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
 
-Go see our [litepaper!](https://exalaboratories.com/litepaper). We are more efficient and versatile than GPUs!
+Go see our [litepaper!](https://exalaboratories.com/litepaper). We are more efficient and versatile than GPUs/TPUs!
 
 ## What is T-KAM.
 

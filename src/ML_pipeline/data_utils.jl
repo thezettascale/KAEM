@@ -6,7 +6,7 @@ export get_vision_dataset, get_text_dataset
 include("../utils.jl")
 using .Utils: device, full_quant
 
-using MLDatasets, Embeddings, Images, ImageTransformations
+using MLDatasets, Embeddings, Images, ImageTransformations, HDF5
 using Flux: onehotbatch
 
 ENV["DATADEPS_ALWAYS_ACCEPT"] = true

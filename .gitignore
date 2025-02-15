@@ -1,2 +1,3 @@
 *.log
-logs/** 
+# logs/** 
+**/ckpt_*.jld2

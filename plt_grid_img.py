@@ -2,10 +2,10 @@ import h5py
 import matplotlib.pyplot as plt
 
 # File path to your HDF5 file
-file_path = 'logs/Darcy/informed/seed_1/generated_pressures.h5'
+file_path = 'logs/Vanilla/importance/FMNIST_1/generated_images.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
-    image_data = h5_file['gen_flow'][()] 
+    image_data = h5_file['samples'][()] 
 
 # Define grid dimensions
 grid_size = (10, 10) 
@@ -15,7 +15,7 @@ for i in range(grid_size[0] * grid_size[1]):
     row, col = divmod(i, grid_size[1])
     ax = axes[row, col]
     
-    img = image_data[i, :, :].reshape(32,32)
+    img = image_data[i, :, :].reshape(28,28)
     print(max(img.flatten()))
     
     ax.imshow(img)#, cmap='gray')

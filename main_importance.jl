@@ -12,7 +12,7 @@ conf = Dict(
     "DARCY_PERM" => ConfParse("config/darcy_perm_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
 )[dataset]
-
+parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")

@@ -47,7 +47,7 @@ function get_vision_dataset(
         The shape of the images.
         The dataset to save.
     """
-    dataset = dataset_mapping[dataset_name][1:N_train+N_test].features # Already normalized
+    dataset = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") ? dataset_mapping[dataset_name] : dataset_mapping[dataset_name][1:N_train+N_test].features
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     dataset = dataset .|> full_quant
     img_shape = size(dataset)[1:end-1]

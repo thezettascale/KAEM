@@ -20,7 +20,8 @@ using .WeightResamplers
 output_activation_mapping = Dict(
     "tanh" => tanh_fast,
     "sigmoid" => sigmoid_fast,
-    "none" => identity
+    "none" => identity,
+    "step" => x -> x .> 0 |> fq,
 )
 
 lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )

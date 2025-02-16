@@ -14,7 +14,7 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .InverseSampling: sample_prior
 
-function LogNorm_Expcov(z, ps, ε)
+function LogNorm(z, ps, ε)
     """
     Log-normal prior with exponential decay covariance kernel.
     Assumes 32 x 32
@@ -35,7 +35,7 @@ end
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
-    "lognormal" => LogNorm_Expcov
+    "lognormal" => LogNorm
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer

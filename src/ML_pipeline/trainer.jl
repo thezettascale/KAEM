@@ -65,7 +65,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") ? "uninformed" : model_type
     model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") && (
         (retrieve(conf, "MIX_PRIOR", "π_0") == "lognormal") || (retrieve(conf, "KAN_LIKELIHOOD", "spline_function") == "FFT")
-    ) ? "informed" : model_typenone
+    ) ? "informed" : model_type
     
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)

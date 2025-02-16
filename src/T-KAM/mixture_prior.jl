@@ -14,28 +14,10 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .InverseSampling: sample_prior
 
-function LogNorm(z, ps, ε)
-    """
-    Log-normal prior with exponential decay covariance kernel.
-    Assumes 32 x 32
-
-    Args:
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-        ps: The parameters of the mixture ebm-prior.
-        ε: The small value to avoid log(0).
-
-    Returns:
-        The log-normal prior with exponential decay covariance kernel.
-    """
-    Σ, μ = abs.(ps.Σ), ps.μ
-    log_z = log.(z .+ ε)
-    return exp.(-(log_z .- μ).^2 ./ (2 .* Σ .+ ε)) ./ (z .* sqrt.(2π .* Σ) .+ ε)
-end
-
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
-    "lognormal" => LogNorm
+    "lognormal" => (z, ps, ε) -> exp.(-(log.(z .+ ε) .- ps.μ).^2 ./ (2 .* abs.(ps.Σ) .+ ε)) ./ (z .* sqrt.(2π .* abs.(ps.Σ)) .+ ε)
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer

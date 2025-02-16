@@ -55,7 +55,7 @@ function get_vision_dataset(
 
     img_shape = cnn ? img_shape : (img_shape..., 1)
     dataset = cnn ? dataset : reshape(dataset, img_shape..., :)
-    save_dataset = dataset[:,:,:,1:num_generated_samples] 
+    save_dataset = dataset[:,:,:,1:min(num_generated_samples, size(dataset)[end])]
 
     println("Resized dataset to $(img_shape)")
     return dataset, img_shape, save_dataset

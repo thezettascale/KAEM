@@ -13,7 +13,7 @@ for file_path in file_paths:
     with h5py.File(file_path, 'r') as h5_file:
         images.append(h5_file['samples'][()])
 
-grid_size = (15, 15)  
+grid_size = (20, 20)  
 fig, axes = plt.subplots(grid_size[0], grid_size[1] * 2, figsize=(16, 8))
 
 for dataset_idx, image_set in enumerate(images):
@@ -22,7 +22,7 @@ for dataset_idx, image_set in enumerate(images):
         col += dataset_idx * grid_size[1]  
         ax = axes[row, col]
         
-        img = image_set[i, :, :, :].reshape(28, 28, 1)
+        img = np.transpose(image_set[i, :, :, :], (1, 2, 0))
         
         ax.imshow(img, cmap='gray')
         ax.axis('off')  

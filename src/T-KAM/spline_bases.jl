@@ -148,9 +148,9 @@ function FFT_basis(
     Returns:
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
-    @tullio even[i, g, b] := cos(x[i, b] * grid[i, g])
-    @tullio odd[i, g, b] := sin(x[i, b] * grid[i, g])
-    return even, odd
+    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
+    freq = half_quant(2π) .* freq .* σ
+    return cos.(freq), sin.(freq)
 end
 
 function coef2curve(

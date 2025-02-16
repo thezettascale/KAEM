@@ -21,6 +21,7 @@ output_activation_mapping = Dict(
     "tanh" => tanh_fast,
     "sigmoid" => sigmoid_fast,
     "none" => identity,
+    "step" => x -> ifelse.(sigmoid_fast(x) .> half_quant(0.5), half_quant(1), half_quant(0)) |> device,
 )
 
 lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )

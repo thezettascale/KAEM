@@ -197,7 +197,7 @@ function autoMALA_sampler(
         
         burn_in = 0
         for i in 1:N
-            η = st.η_init[k]
+            η = burn_in < N_unadjusted ? m.η_init : st.η_init[k]
             momentum, M, seed = sample_momentum(z; seed=seed)
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
 

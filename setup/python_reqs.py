@@ -10,7 +10,9 @@ packages = [
     "pandas",
     "seaborn",
     "h5py",
-    "torch"
+    "torch",
+    "torch_fidelity",
+    "scikit-learn",
 ]
 
 for package in packages:

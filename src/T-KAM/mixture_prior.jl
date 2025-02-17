@@ -59,9 +59,9 @@ function log_partition_function(
     
     for i in 1:mix.depth
         grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
-        grid = i == 1 ? reshape(grid, size(grid, 2), grid_size*mix.q_size) : dropdims(sum(grid, dims=1); dims=1)
+        grid = i == 1 ? reshape(grid, mix.p_size, grid_size*mix.q_size) : dropdims(sum(grid, dims=1); dims=1)
     end
-    grid = reshape(grid, mix.q_size, size(grid, 1), grid_size)
+    grid = reshape(grid, mix.q_size, mix.p_size, grid_size)
     @tullio trapz[q,g,p] := grid[q,p,g] + log_π_grid[q,g]
     trapz = Δg .* (trapz[:, 2:end, :] + trapz[:, 1:end-1, :]) ./ 2
     return dropdims(sum(trapz, dims=2); dims=2)
@@ -107,7 +107,7 @@ function log_prior(
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? reshape(z, size(z, 2), b_size*mix.q_size) : dropdims(sum(z, dims=1); dims=1)
+        z = i == 1 ? reshape(z, mix.p_size, b_size*mix.q_size) : dropdims(sum(z, dims=1); dims=1)
 
         if mix.layernorm && i < mix.depth
             z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])

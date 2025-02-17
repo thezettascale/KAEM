@@ -1,6 +1,6 @@
 #!/bin/bash
 
-datasets=("MNIST" "FMNIST" "CIFAR10" "SVHN")
+datasets=("MNIST" "FMNIST")
 # datasets=("CIFAR10" "SVHN")
 
 for dataset in "${datasets[@]}"; do

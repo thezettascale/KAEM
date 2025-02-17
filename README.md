@@ -5,7 +5,7 @@ Go see our [litepaper!](https://exalaboratories.com/litepaper). We are more effi
 
 ## What is T-KAM.
 
-T-KAM is a generative model that has been **entirely represented in two sums.** It can be visualized, and used without neural networks when preferred, or with neural networks using the ideas in [pykan](https://github.com/KindXiaoming/pykan). 
+T-KAM is an alt-gen AI model presented by Exa Laboratories at ...
 
 It uses:
 
@@ -54,11 +54,6 @@ tmux new-session -d -s T_KAM_main "bash run.sh"
 ```
 
 This starts a tmux session, you can then leave and come back later - touch grass, kiss wife, slap a baby, i dunno.
-
-For darcy:
-```bash
-tmux new-session -d -s Darcy "julia --threads auto darcy.jl > Darcy.log 2>&1"
-```
 
 For benchmarking run:
 

@@ -1,6 +1,6 @@
 module InverseSampling
 
-export sample_prior
+export sample_prior, prior_fwd
 
 using CUDA, KernelAbstractions, Tullio
 using Random, Distributions, Lux, LuxCUDA, LinearAlgebra, Accessors
@@ -46,6 +46,19 @@ function choose_component(
     return mask |> device, seed
 end
 
+function prior_fwd(mix, ps, st, z::AbstractArray{half_quant})
+    for i in 1:mix.depth
+        z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+        z = i == 1 ? reshape(z, size(z, 2), mix.q_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
+
+        if mix.layernorm && i < mix.depth
+            z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
+            @reset st[Symbol("ln_$i")] = st_new
+        end
+    end
+    return reshape(z, mix.q_size, mix.p_size, :), st
+end
+
 function trapezium_quadrature(mix, ps, st, component_mask::AbstractArray{half_quant})
     """Trapezoidal rule for numerical integration"""
 
@@ -58,16 +71,7 @@ function trapezium_quadrature(mix, ps, st, component_mask::AbstractArray{half_qu
     grid_size = size(f_grid, 2)
 
     # Energy function of each component, q -> p
-    for i in 1:mix.depth
-        f_grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-        f_grid = i == 1 ? reshape(f_grid, size(f_grid, 2), grid_size*mix.q_size) : dropdims(sum(f_grid, dims=1); dims=1)
-
-        if mix.layernorm && i < mix.depth
-            f_grid, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_grid, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @reset st[Symbol("ln_$i")] = st_new
-        end
-    end
-    f_grid = reshape(f_grid, mix.q_size, mix.p_size, grid_size)
+    f_grid, st = prior_fwd(mix, ps, st, f_grid)
 
     # Filter out components
     @tullio exp_fg[q, g, b] := (exp(f_grid[q, p, g]) * π_grid[q, g]) * component_mask[q, p, b]
@@ -89,24 +93,18 @@ function gausslegendre_quadrature(mix, ps, st, component_mask::AbstractArray{hal
     f_nodes = device(copy(nodes))
 
     π_nodes = mix.prior_type == "lognormal" ? mix.π_pdf(f_nodes, ps[Symbol("lognormal")], ε) : mix.π_pdf(f_nodes)
+    π_nodes = permutedims(π_nodes[:,:,:], (1, 3, 2))
+    component_mask = permutedims(component_mask[:,:,:,:], (1, 2, 4, 3))
 
-    # Energy function of each component, q -> p
-    for i in 1:mix.depth
-        f_nodes = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_nodes)
-        f_nodes = i == 1 ? reshape(f_nodes, size(f_nodes, 2), mix.q_size*mix.p_size) : dropdims(sum(f_nodes, dims=1); dims=1)
-    
-        if mix.layernorm && i < mix.depth
-            f_nodes, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_nodes, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @reset st[Symbol("ln_$i")] = st_new
-        end
-    end
-    f_nodes = reshape(f_nodes, mix.q_size, mix.p_size, mix.N_quad)
+    # Energy function of each component, q -> #
+    f_nodes, st = prior_fwd(mix, ps, st, f_nodes)
 
     # Filter out components
-    @tullio exp_fg[q, g, b] := (exp(f_nodes[q, p, g]) * π_nodes[q, g]) * component_mask[q, p, b]
-    exp_fg = exp_fg .|> full_quant
+    f_nodes = dropdims(sum(exp.(f_nodes) .* component_mask .* π_nodes, dims=2); dims=2)
+    f_nodes = f_nodes .|> full_quant    
     
-    return cumsum(exp_fg .* weights, dims=2) , nodes, st
+    # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
+    return cumsum(f_nodes .* weights, dims=2) , nodes, st
 end
 
 function sample_prior(
@@ -142,6 +140,7 @@ function sample_prior(
     )
 
     cdf, grid, st = mix.quadrature_method == "trapezium" ? trapezium_quadrature(mix, ps, st, component_mask) : gausslegendre_quadrature(mix, ps, st, component_mask)
+    grid_size = size(grid, 2)
     cdf = cat(zeros(mix.q_size, 1, num_samples), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)

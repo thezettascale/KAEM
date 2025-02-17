@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# datasets=("MNIST" "FMNIST" "CIFAR10" "SVHN" "PTB")
-datasets=("CIFAR10" "SVHN")
+datasets=("MNIST" "FMNIST" "CIFAR10" "SVHN")
+# datasets=("CIFAR10" "SVHN")
 
 for dataset in "${datasets[@]}"; do
     session_name="IS_$dataset"

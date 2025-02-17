@@ -29,6 +29,8 @@ struct mix_prior <: Lux.AbstractLuxLayer
     sample_z::Function
     contrastive_div::Bool
     λ::half_quant
+    q_size::Int
+    p_size::Int
 end
 
 function log_partition_function(
@@ -51,15 +53,15 @@ function log_partition_function(
         The log-partition function of the mixture ebm-prior.
     """
     grid = st[Symbol("1")].grid
-    q_size, grid_size = size(grid)
+    grid_size = size(grid,2)
     π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps[Symbol("lognormal")], ε) : mix.π_pdf(grid)
     log_π_grid, Δg = log.(π_g .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
     
     for i in 1:mix.depth
         grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], grid)
-        grid = i == 1 ? reshape(grid, size(grid, 2), grid_size*q_size) : dropdims(sum(grid, dims=1); dims=1)
+        grid = i == 1 ? reshape(grid, size(grid, 2), grid_size*mix.q_size) : dropdims(sum(grid, dims=1); dims=1)
     end
-    grid = reshape(grid, q_size, size(grid, 1), grid_size)
+    grid = reshape(grid, mix.q_size, size(grid, 1), grid_size)
     @tullio trapz[q,g,p] := grid[q,p,g] + log_π_grid[q,g]
     trapz = Δg .* (trapz[:, 2:end, :] + trapz[:, 1:end-1, :]) ./ 2
     return dropdims(sum(trapz, dims=2); dims=2)
@@ -95,7 +97,7 @@ function log_prior(
         The L1 regularization term.
         The updated states of the mixture ebm-prior.
     """
-    q_size, b_size, p_size = size(z)..., mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
+    b_size = size(z,2)
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
@@ -105,14 +107,14 @@ function log_prior(
     # Energy functions of each component, q -> p
     for i in 1:mix.depth
         z = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? reshape(z, size(z, 2), b_size*q_size) : dropdims(sum(z, dims=1); dims=1)
+        z = i == 1 ? reshape(z, size(z, 2), b_size*mix.q_size) : dropdims(sum(z, dims=1); dims=1)
 
         if mix.layernorm && i < mix.depth
             z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
             @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
         end
     end
-    z = reshape(z, q_size, p_size, b_size)
+    z = reshape(z, mix.q_size, mix.p_size, b_size)
 
     # Unnormalized or normalized log-probability
     logprob = z + log_απ
@@ -185,14 +187,12 @@ function init_mix_prior(
 
     end
 
-    return mix_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, contrastive_divergence, λ)
+    return mix_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, contrastive_divergence, λ, first(widths), last(widths))
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
-    q_size = prior.fcns_qp[Symbol("1")].in_dim
-    p_size = prior.fcns_qp[Symbol("$(prior.depth)")].out_dim
     ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for i in 1:prior.depth)
-    @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, q_size, p_size)
+    @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, mix.q_size, mix.p_size)
 
     if prior.layernorm 
         for i in 1:prior.depth-1
@@ -202,8 +202,8 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
 
     if prior.prior_type == "lognormal"
         @reset ps[Symbol("lognormal")] = (
-            μ = glorot_uniform(rng, full_quant, q_size),
-            Σ = glorot_uniform(rng, full_quant, q_size)
+            μ = glorot_uniform(rng, full_quant, mix.q_size),
+            Σ = glorot_uniform(rng, full_quant, mix.q_size)
         )
     end
 

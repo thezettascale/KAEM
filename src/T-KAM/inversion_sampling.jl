@@ -68,9 +68,7 @@ function sample_prior(
         z: The samples from the mixture ebm-prior, (num_samples, q). 
         seed: The updated seed.
     """
-    p_size = mix.fcns_qp[Symbol("$(mix.depth)")].out_dim
-    q_size = mix.fcns_qp[Symbol("1")].in_dim
-    
+
     # Categorical component selection (per sample, per outer sum dimension)
     component_mask, seed = choose_component(
         ps[Symbol("α")],
@@ -91,14 +89,14 @@ function sample_prior(
     # Energy function of each component, q -> p
     for i in 1:mix.depth
         f_grid = fwd(mix.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], f_grid)
-        f_grid = i == 1 ? reshape(f_grid, size(f_grid, 2), grid_size*q_size) : dropdims(sum(f_grid, dims=1); dims=1)
+        f_grid = i == 1 ? reshape(f_grid, size(f_grid, 2), grid_size*mix.q_size) : dropdims(sum(f_grid, dims=1); dims=1)
 
         if mix.layernorm && i < mix.depth
             f_grid, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], f_grid, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
             @reset st[Symbol("ln_$i")] = st_new
         end
     end
-    f_grid = reshape(f_grid, q_size, p_size, grid_size)
+    f_grid = reshape(f_grid, mix.q_size, mix.p_size, grid_size)
 
     # Filter out components
     @tullio exp_fg[q, g, b] := (exp(f_grid[q, p, g]) * π_grid[q, g]) * component_mask[q, p, b]
@@ -107,13 +105,13 @@ function sample_prior(
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     trapz = (Δg .* (exp_fg[:, 2:end, :] + exp_fg[:, 1:end-1, :])) ./ 2
     cdf = cumsum(trapz, dims=2) 
-    cdf = cat(zeros(q_size, 1, num_samples), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
+    cdf = cat(zeros(mix.q_size, 1, num_samples), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, full_quant, q_size, num_samples) .* cdf[:, end, :] 
+    rand_vals = rand(rng, full_quant, mix.q_size, num_samples) .* cdf[:, end, :] 
     
-    z = Array{full_quant}(undef, q_size, num_samples)
-    Threads.@threads for q in 1:q_size
+    z = Array{full_quant}(undef, mix.q_size, num_samples)
+    Threads.@threads for q in 1:mix.q_size
         for b in 1:num_samples
             # First trapezium where CDF >= rand_val
             rv = rand_vals[q, b]

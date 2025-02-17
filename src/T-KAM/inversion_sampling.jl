@@ -73,8 +73,8 @@ function sample_prior(
     component_mask, seed = choose_component(
         ps[Symbol("α")],
         num_samples,
-        q_size,
-        p_size;
+        mix.q_size,
+        mix.p_size;
         seed=seed
     )
 

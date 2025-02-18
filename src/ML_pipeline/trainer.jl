@@ -35,7 +35,7 @@ mutable struct T_KAM_trainer
     save_model::Bool
     gen_type::AbstractString
     loss::full_quant
-    checkpoint::Bool
+    checkpoint_every::Int
 end
 
 function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name; 
@@ -80,7 +80,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     x, loader_state = iterate(model.train_loader) 
-    checkpoint = parse(Bool, retrieve(conf, "TRAINING", "checkpoint"))
+    checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
 
     try
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
@@ -111,7 +111,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         save_model,
         gen_type,
         full_quant(0),
-        checkpoint,
+        checkpoint_every,
     )
 end
 
@@ -206,7 +206,7 @@ function train!(t::T_KAM_trainer)
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
             end
 
-            t.checkpoint && jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device(), seed=t.seed)
+            (t.checkpoint_every > 0 && epoch % t.checkpoint_every) == 0 && jldsave(t.model.file_loc * "ckpt_epoch_$(epoch).jld2"; params=t.ps |> cpu_device(), state=t.st |> cpu_device(), seed=t.seed)
 
             train_loss = 0
             grid_updated = 0

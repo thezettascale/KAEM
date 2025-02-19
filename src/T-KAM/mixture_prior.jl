@@ -148,7 +148,7 @@ function log_prior(
 
         if mix.layernorm && i < mix.depth
             z, st_new = Lux.apply(mix.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            @reset st[Symbol("ln_$i")] = st_new
         end
     end
     z = reshape(z, mix.q_size, mix.p_size, b_size)

@@ -83,14 +83,14 @@ function importance_loss(
     """MLE loss with importance sampling."""
     
     z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
-    @ignore_derivatives @reset st.ebm = st_ebm
+    @reset st.ebm = st_ebm
 
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
-    @ignore_derivatives @reset st.ebm = st_ebm
-    @ignore_derivatives @reset st.gen = st_gen
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
 
     # Weights and resampling
     weights = @ignore_derivatives softmax(logllhood, dims=2) 
@@ -131,8 +131,8 @@ function POST_loss(
     logllhood = mse(x̂, x; agg=mean)
     logprior = ex_prior - mean(logprior_pos)
 
-    @ignore_derivatives @reset st.ebm = st_ebm
-    @ignore_derivatives @reset st.gen = st_gen
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
 
     # Expected posterior
     m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
@@ -161,8 +161,8 @@ function thermo_loss(
     logprior, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, Q, S*T); seed=seed, ε=m.ε)
-    @ignore_derivatives @reset st.ebm = st_ebm
-    @ignore_derivatives @reset st.gen = st_gen
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
 
     logllhood = reshape(logllhood, T, B, S)
     logllhood = Δt .* logllhood

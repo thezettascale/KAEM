@@ -4,7 +4,7 @@ export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_l
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib: sigmoid_fast, tanh_fast, relu
+using NNlib: sigmoid_fast, tanh_fast, relu, gelu
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
@@ -51,6 +51,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     generate_from_z::Function
     CNN::Bool
     seq_length::Int
+    d_model::Int
 end
 
 function KAN_gen(
@@ -83,7 +84,7 @@ function KAN_gen(
 
         if lkhood.layernorm && i < lkhood.depth
             z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            @reset st[Symbol("ln_$i")] = st_new
         end
     end
 
@@ -114,10 +115,10 @@ function CNN_gen(
 
     for i in 1:lkhood.depth
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
-        @ignore_derivatives @reset st[Symbol("$i")] = st_new    
+        @reset st[Symbol("$i")] = st_new    
 
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
-        @ignore_derivatives @reset st[Symbol("bn_$i")] = st_new
+        @reset st[Symbol("bn_$i")] = st_new
     end
 
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")], z, ps[Symbol("$(lkhood.depth+1)")], st[Symbol("$(lkhood.depth+1)")])
@@ -126,51 +127,74 @@ function CNN_gen(
     return z, st
 end
 
-# Seq generator
-function SEQ_gen(lkhood, ps, st, z::AbstractArray{half_quant})
+function scaled_dot_product_attention(
+    Q::AbstractArray{half_quant},
+    K::AbstractArray{half_quant},
+    V::AbstractArray{half_quant},
+    mask::AbstractArray{half_quant},
+    d_model::Int
+    )
+
+    d_model = sqrt(d_model) |> half_quant
+    @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b] / d_model
+    QK = QK .+ mask
+    QK = softmax(QK, dims=2)
+    return @tullio out[d, t, b] := QK[t, i, b] * V[d, i, b]
+end
+
+function SEQ_gen(
+    lkhood, 
+    ps, 
+    st, 
+    z::AbstractArray{half_quant}
+    )
     """
-    Generate data from the Transformer decoder likelihood model.
+    Generate data from the Transformer decoder.
 
     Args:
         lkhood: The likelihood model.
         ps: The parameters of the likelihood model.
         st: The states of the likelihood model.
-        x: The data.
         z: The latent variable.
-        seed: The seed for the random number generator.
 
     Returns:
         The generated data.
         The updated seed.
     """
-    
-    # Project to hidden dim 
-    z = fwd(lkhood.Φ_fcns[Symbol("1")], ps[Symbol("1")], st[Symbol("1")], z)
-    z = dropdims(sum(z, dims=1); dims=1)
+    z = reshape(z, size(z, 1), 1, size(z, 2)) 
+
+    # Projection
+    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
+    @reset st[Symbol("1")] = st_new
+    z = z .+ st[Symbol("pe")]
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    @ignore_derivatives @reset st[Symbol("ln_1")] = st_new
-    
-    # Initialize carry and first output
-    carry = zeros(half_quant, size(z)) |> device
-    out_z = fwd(lkhood.Φ_fcns[Symbol("3")], ps[Symbol("3")], st[Symbol("3")], z)
-    out = reshape(dropdims(sum(out_z, dims=1); dims=1), lkhood.out_size, 1, size(z)[end])
+    @reset st[Symbol("ln_1")] = st_new
 
-    for t in 1:lkhood.seq_length-1
-        z = z + carry
-        carry = z
-        z = fwd(lkhood.Φ_fcns[Symbol("2")], ps[Symbol("2")], st[Symbol("2")], z)
-        z = dropdims(sum(z, dims=1); dims=1)
+    # Query, Key, Value
+    Q, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("Q")], z, ps[Symbol("Q")], st[Symbol("Q")])
+    @reset st[Symbol("Q")] = st_new
+    K, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("K")], z, ps[Symbol("K")], st[Symbol("K")])
+    @reset st[Symbol("K")] = st_new
+    V, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("V")], z, ps[Symbol("V")], st[Symbol("V")])
+    @reset st[Symbol("V")] = st_new
 
-        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
-        @ignore_derivatives @reset st[Symbol("ln_2")] = st_new
+    # Self-attention
+    attn = scaled_dot_product_attention(Q, K, V, st[Symbol("mask")], lkhood.d_model)
+    z = z .+ attn
+    cross_attn = scaled_dot_product_attention(Q, K, V, st[Symbol("mask")], lkhood.d_model)
+    z = z .+ cross_attn
 
-        out_z = fwd(lkhood.Φ_fcns[Symbol("3")], ps[Symbol("3")], st[Symbol("3")], z)
-        out_z = reshape(dropdims(sum(out_z, dims=1); dims=1), lkhood.out_size, 1, size(z)[end])
-        out = cat(out, out_z, dims=2)
-    end
+    # Feed forward
+    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
+    @reset st[Symbol("2")] = st_new
+    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z, ps[Symbol("ln_2")], st[Symbol("ln_2")])
+    @reset st[Symbol("ln_2")] = st_new
 
-    return out, st
-end 
+    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
+    @reset st[Symbol("3")] = st_new
+
+    return z, st
+end
 
 function log_likelihood(
     lkhood, 
@@ -305,6 +329,7 @@ function init_KAN_lkhood(
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1
+    d_model = 0
 
     initialize_function = (in_dim, out_dim, base_scale) -> init_function(
             in_dim,
@@ -344,34 +369,29 @@ function init_KAN_lkhood(
         @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
 
     elseif sequence_length > 1
-        act = activation_mapping[retrieve(conf, "SEQ", "activation")]
-        hidden_dim = parse(Int, retrieve(conf, "SEQ", "hidden_dim"))
+        
+        act = gelu
         generate_fcn = SEQ_gen
         ll_model = lkhood_seq
-        layernorm = true
+        # Single block Transformer decoder
+        d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
-        # Projection layer
-        lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (full_quant(1) / √(full_quant(q_size)))
-        .+ σ_base .* (randn(rng, full_quant, q_size, hidden_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(q_size))))
-        
-        @reset Φ_functions[Symbol("1")] = initialize_function(q_size, hidden_dim, base_scale)
-        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm(hidden_dim)
+        # Projection
+        @reset Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model, gelu)
+        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, sequence_length))
 
-        # Recurrent layer
-        lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (full_quant(1) / √(full_quant(hidden_dim)))
-        .+ σ_base .* (randn(rng, full_quant, hidden_dim, hidden_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(hidden_dim))))
+        # Query, Key, Value
+        @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model, gelu)
+        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model, gelu) 
+        @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model, gelu)
+        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, sequence_length))
 
-        @reset Φ_functions[Symbol("2")] = initialize_function(hidden_dim, hidden_dim, base_scale)
-        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm(hidden_dim)
+        # Feed forward
+        @reset Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model, gelu)
+        @reset Φ_functions[Symbol("ln_3")] = Lux.LayerNorm((d_model, sequence_length))
 
         # Output layer
-        lkhood_seed, rng = next_rng(lkhood_seed)
-        base_scale = (μ_scale * (full_quant(1) / √(full_quant(hidden_dim)))
-        .+ σ_base .* (randn(rng, full_quant, hidden_dim, output_dim) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(hidden_dim))))
-        @reset Φ_functions[Symbol("3")] = initialize_function(hidden_dim, output_dim, base_scale)
-
+        @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim, gelu)
         depth = 3
     else
         for i in eachindex(widths[1:end-1])
@@ -386,7 +406,7 @@ function init_KAN_lkhood(
         end
     end
 
-    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length)
+    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
@@ -406,7 +426,23 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
         end
     end
 
+    if lkhood.seq_length > 1
+        @reset ps[Symbol("Q")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("Q")])
+        @reset ps[Symbol("K")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("K")])
+        @reset ps[Symbol("V")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("V")])
+    end
+
     return ps 
+end
+
+function PositionalEncoding(d_model::Int, max_len::Int)
+    pe_vector = zeros(half_quant, d_model, max_len)
+    position = range(1, max_len)
+    div_term = exp.(-log(10000.0) .* range(1, d_model, step=2) ./ d_model) .|> half_quant
+    div_term = reshape(div_term, 1, floor(Int, d_model/2))
+    pe_vector[1:2:end, :] = transpose(sin.(position .* div_term))
+    pe_vector[2:2:end, :] = transpose(cos.(position .* div_term))
+    return pe_vector 
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
@@ -424,6 +460,14 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
         for i in 1:lkhood.depth-1
             @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) |> hq
         end 
+    end
+
+    if lkhood.seq_length > 1
+        @reset st[Symbol("pe")] = PositionalEncoding(lkhood.d_model, lkhood.seq_length)
+        @reset st[Symbol("mask")] = triu(ones(half_quant, lkhood.seq_length, lkhood.seq_length), 1) .* -half_quant(1e8)
+        @reset st[Symbol("Q")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("Q")])
+        @reset st[Symbol("K")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("K")])
+        @reset st[Symbol("V")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("V")])
     end
 
     return st 

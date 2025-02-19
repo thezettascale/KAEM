@@ -124,7 +124,7 @@ function get_text_dataset(
         return_data[:, :, start_idx:end_idx] = permutedims(collect(full_quant, onehotbatch(dataset[:, start_idx:end_idx], 1:length(vocab))), (2, 1, 3))
     end
 
-    return return_data, (size(dataset, 1), size(dataset, 2)), save_dataset
+    return return_data, (size(return_data, 1), size(return_data, 2)), save_dataset
 end
 
 end

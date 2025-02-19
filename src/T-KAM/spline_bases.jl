@@ -1,6 +1,6 @@
 module spline_functions
 
-export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis
+export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra

@@ -17,8 +17,7 @@ dataset_mapping = Dict(
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
-    "SMS_SPAM" => MLDatasets.SMSSpamCollection(),
-    # "SNLI" => NLIDatasets.SNLI.train_tsv(),
+    "UD_ENGLISH" => MLDatasets.UD_English(),
     "DARCY_PERM" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["x"],
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
@@ -82,7 +81,8 @@ function get_text_dataset(
     N_test::Int,
     num_generated_samples::Int;
     sequence_length::Int=100,
-    vocab_size::Int=1000
+    vocab_size::Int=1000,
+    batch_size::Int=100
     )
     """
     Load a text dataset.
@@ -101,20 +101,30 @@ function get_text_dataset(
     """
     dataset = dataset_mapping[dataset_name][1:N_train+N_test].features # Already tokenized
     emb = load_embeddings(GloVe) # Pre-trained embeddings
+
     vocab = Dict(word => i for (i, word) in enumerate(emb.vocab[1:vocab_size]))    
     vocab["<pad>"] = length(vocab) + 1
     vocab["<unk>"] = length(vocab) + 1
-    
     embedding_dim = size(emb.embeddings, 1)
+
     max_length = maximum(length(sentence) for sentence in dataset)
     embedding_matrix = zeros(full_quant, embedding_dim, length(vocab))
-
     indexed_dataset = map(sentence -> index_sentence(sentence, sequence_length, vocab), dataset)
+
     dataset = reduce(hcat, indexed_dataset)  
-    
     save_dataset = dataset[:, 1:num_generated_samples]
-    dataset = collect(full_quant, onehotbatch(dataset, 1:length(vocab)))
-    return dataset, (size(dataset, 1), size(dataset, 2)), save_dataset
+
+    return_data = zeros(full_quant, size(dataset, 1), length(vocab), size(dataset, 2))
+    num_iters = fld(size(dataset, 2), batch_size)
+
+    # Had some issues, so batched
+    Threads.@threads for i in 1:num_iters
+        start_idx = (i - 1) * batch_size + 1
+        end_idx = min(i * batch_size, size(dataset, 2))
+        return_data[:, :, start_idx:end_idx] = permutedims(collect(full_quant, onehotbatch(dataset[:, start_idx:end_idx], 1:length(vocab))), (2, 1, 3))
+    end
+
+    return return_data, (size(dataset, 1), size(dataset, 2)), save_dataset
 end
 
 end

@@ -54,8 +54,10 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     commit!(conf, "SEQ", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
     vocab_size = parse(Int, retrieve(conf, "SEQ", "vocab_size"))
 
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
     dataset, x_shape, save_dataset = (seq ? 
-        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size) :
+        get_text_dataset(dataset_name, N_train, N_test, num_generated_samples; sequence_length=sequence_length, vocab_size=vocab_size, batch_size=batch_size) :
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
 

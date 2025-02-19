@@ -377,21 +377,21 @@ function init_KAN_lkhood(
         d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
         # Projection
-        @reset Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model, gelu)
-        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, sequence_length))
+        @reset Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model)
+        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, sequence_length), gelu)
 
         # Query, Key, Value
-        @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model, gelu)
-        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model, gelu) 
-        @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model, gelu)
-        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, sequence_length))
+        @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model)
+        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model) 
+        @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model)
+        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, sequence_length), gelu)
 
         # Feed forward
-        @reset Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model, gelu)
-        @reset Φ_functions[Symbol("ln_3")] = Lux.LayerNorm((d_model, sequence_length))
+        @reset Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model)
+        @reset Φ_functions[Symbol("ln_3")] = Lux.LayerNorm((d_model, sequence_length), gelu)
 
         # Output layer
-        @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim, gelu)
+        @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim)
         depth = 3
     else
         for i in eachindex(widths[1:end-1])

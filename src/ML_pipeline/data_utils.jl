@@ -114,14 +114,14 @@ function get_text_dataset(
     dataset = reduce(hcat, indexed_dataset)  
     save_dataset = dataset[:, 1:num_generated_samples]
 
-    return_data = zeros(full_quant, size(dataset, 1), length(vocab), size(dataset, 2))
+    return_data = zeros(full_quant, length(vocab), size(dataset)...)
     num_iters = fld(size(dataset, 2), batch_size)
 
     # Had some issues, so batched
     for i in 1:num_iters
         start_idx = (i - 1) * batch_size + 1
         end_idx = min(i * batch_size, size(dataset, 2))
-        return_data[:, :, start_idx:end_idx] = permutedims(collect(full_quant, onehotbatch(dataset[:, start_idx:end_idx], 1:length(vocab))), (2, 1, 3))
+        return_data[:, :, start_idx:end_idx] = collect(full_quant, onehotbatch(dataset[:, start_idx:end_idx], 1:length(vocab)))
     end
 
     return return_data, (size(return_data, 1), size(return_data, 2)), save_dataset

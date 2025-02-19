@@ -14,7 +14,8 @@ SplineBasis_mapping = Dict(
     "B-spline" => B_spline_basis,
     "RBF" => RBF_basis,
     "RSWAF" => RSWAF_basis,
-    "FFT" => FFT_basis
+    "FFT" => FFT_basis,
+    "Morlet" => Morlet_basis
 )
 
 activation_mapping = Dict(

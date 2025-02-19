@@ -17,7 +17,7 @@ dataset_mapping = Dict(
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
-    "UD_ENGLISH" => MLDatasets.UD_English(),
+    # "UD_ENGLISH" => MLDatasets.UD_English(),
     "DARCY_PERM" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["x"],
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
@@ -118,7 +118,7 @@ function get_text_dataset(
     num_iters = fld(size(dataset, 2), batch_size)
 
     # Had some issues, so batched
-    Threads.@threads for i in 1:num_iters
+    for i in 1:num_iters
         start_idx = (i - 1) * batch_size + 1
         end_idx = min(i * batch_size, size(dataset, 2))
         return_data[:, :, start_idx:end_idx] = permutedims(collect(full_quant, onehotbatch(dataset[:, start_idx:end_idx], 1:length(vocab))), (2, 1, 3))

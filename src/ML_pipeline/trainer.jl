@@ -61,6 +61,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         get_vision_dataset(dataset_name, N_train, N_test, num_generated_samples; img_resize=img_resize, cnn=cnn)    
     )
 
+    println("Dataset loaded")
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
     model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
@@ -73,6 +74,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mkpath(file_loc)
 
     # Initialize model
+    println("Initializing model")
     model = init_T_KAM(dataset, conf, x_shape; file_loc=file_loc, prior_seed=seed, lkhood_seed=seed, data_seed=seed)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)

@@ -17,7 +17,7 @@ using .InverseSampling: sample_prior, prior_fwd
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
-    "lognormal" => (z, ps, ε) -> exp.(-(log.(z .+ ε) .- ps.μ).^2 ./ (2 .* abs.(ps.Σ) .+ ε)) ./ (z .* sqrt.(2π .* abs.(ps.Σ)) .+ ε)
+    "lognormal" => (z, ps, ε) -> exp.(-(log.(z .+ ε) .- ps.μ).^2 ./ (2 .* abs.(ps.Σ) .+ ε)) ./ (z .* sqrt.(2π .* abs.(ps.Σ)) .+ ε),
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
@@ -244,7 +244,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
         end
     end
 
-    if prior.prior_type == "lognormal"
+    if prior.prior_type == "lognormal" 
         @reset ps[Symbol("lognormal")] = (
             μ = glorot_uniform(rng, full_quant, prior.q_size),
             Σ = glorot_uniform(rng, full_quant, prior.q_size)

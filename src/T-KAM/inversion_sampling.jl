@@ -155,7 +155,7 @@ function sample_prior(
 
             # Edge cases
             idx = idx == 1 ? 2 : idx
-            idx = idx == grid_size + 1 ? grid_size : idx
+            idx = idx > grid_size ? grid_size : idx
 
             # Trapezium bounds
             z1, z2 = grid[q, idx-1], grid[q, idx] 

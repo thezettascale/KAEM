@@ -83,7 +83,7 @@ function trapezium_quadrature(mix, ps, st, component_mask::AbstractArray{half_qu
     return cumsum(trapz, dims=2) , grid, st
 end
 
-function gausslegendre_quadrature(mix, ps, st, component_mask::AbstractArray{half_quant})
+function gausslegendre_quadrature(mix, ps, st, component_mask::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     """Gauss-Legendre quadrature for numerical integration"""
 
     # Map domains
@@ -139,7 +139,7 @@ function sample_prior(
         seed=seed
     )
 
-    cdf, grid, st = mix.quadrature_method == "trapezium" ? trapezium_quadrature(mix, ps, st, component_mask) : gausslegendre_quadrature(mix, ps, st, component_mask)
+    cdf, grid, st = mix.quadrature_method == "trapezium" ? trapezium_quadrature(mix, ps, st, component_mask) : gausslegendre_quadrature(mix, ps, st, component_mask; ε=ε)
     grid_size = size(grid, 2)
     cdf = cat(zeros(mix.q_size, 1, num_samples), cpu_device()(cdf), dims=2) # Add 0 to start of CDF
 

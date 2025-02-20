@@ -1,6 +1,6 @@
 module spline_functions
 
-export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis
+export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis, Haar_basis
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra
@@ -173,6 +173,25 @@ function Morlet_basis(
     @tullio diff[i, g, b] := x[i, b] - grid[i, g]
     return cos.(σ .* diff) .* exp.(-half_quant(0.5) * diff.^2)
 end
+
+function Haar_basis(
+    x::AbstractArray{half_quant},
+    grid::AbstractArray{half_quant};
+    degree::Int64=3, 
+    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
+    )
+    """
+    Compute the Haar basis functions for a batch of points x and a grid of knots.
+
+    Args:
+        x: A matrix of size (i, b) containing the points at which to evaluate the Haar basis functions.
+        grid: A matrix of size (i, g) containing the grid of knots.
+        σ: Tuning for the bandwidth (standard deviation) of the Haar kernel.
+    """
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
+    return sign.(diff) 
+end
+    
 
 function coef2curve(
     x_eval::AbstractArray{half_quant},

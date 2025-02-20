@@ -16,7 +16,7 @@ SplineBasis_mapping = Dict(
     "RSWAF" => RSWAF_basis,
     "FFT" => FFT_basis,
     "Morlet" => Morlet_basis,
-    "Haar" => Haar_basis
+    "Shannon" => Shannon_basis
 )
 
 activation_mapping = Dict(
@@ -67,7 +67,7 @@ function init_function(
     τ_trainable::Bool=true
 )
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid_range = spline_function == "FFT" ? (half_quant(0), half_quant(2π)) : grid_range
+    grid_range = spline_function == "FFT" || spline_function == "Morlet" || spline_function == "Shannon" ? (half_quant(0), half_quant(2π)) : grid_range
     grid = half_quant.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
     grid = extend_grid(grid; k_extend=spline_degree) 

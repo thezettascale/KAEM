@@ -1,10 +1,10 @@
 module spline_functions
 
-export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis, Haar_basis
+export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis, Shannon_basis
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra
-using NNlib
+using NNlib, FFTW
 
 include("../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
@@ -153,6 +153,8 @@ function FFT_basis(
     return cos.(freq), sin.(freq)
 end
 
+# Wavelet are not strictly adapted from wav-kan but based on grid for consistency
+
 function Morlet_basis(
     x::AbstractArray{half_quant},
     grid::AbstractArray{half_quant};
@@ -170,28 +172,29 @@ function Morlet_basis(
     Returns:
         A matrix of size (i, g, b) containing the Morlet wavelet basis functions evaluated at the points x.
     """
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
-    return cos.(σ .* diff) .* exp.(-half_quant(0.5) * diff.^2)
+    x = rfft(x)
+    kernel = cos.(σ .* grid) .* exp.(-half_quant(0.5) * grid.^2)
+    return irfft(@tullio out[i, g, b] := x[i, b] * kernel[i, g], size(x, 2))
 end
-
-function Haar_basis(
+    
+function Shannon_basis(
     x::AbstractArray{half_quant},
     grid::AbstractArray{half_quant};
     degree::Int64=3, 
     σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
     )
     """
-    Compute the Haar basis functions for a batch of points x and a grid of knots.
+    Compute the Shannon wavelet basis functions for a batch of points x and a grid of knots using convolution.
 
     Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the Haar basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the Shannon wavelet.
         grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the Haar kernel.
+        σ: Tuning for the bandwidth (standard deviation) of the Shannon wavelet kernel.
     """
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
-    return sign.(diff) 
+    x = rfft(x)
+    kernel = sinc.(grid * 2/π) .* cos.(grid * π/3) .* 2
+    return real.(irfft(@tullio out[i, g, b] := x[i, b] * kernel[i, g], size(x, 2)))
 end
-    
 
 function coef2curve(
     x_eval::AbstractArray{half_quant},

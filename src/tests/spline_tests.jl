@@ -78,7 +78,7 @@ function test_Morlet_basis()
     x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
-    grid = rand(half_quant, fld(i,2)+1, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     B_morlet = Morlet_basis(x_eval, grid; σ=σ)
 
@@ -91,7 +91,7 @@ function test_Shannon_basis()
     x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
-    grid = rand(half_quant, fld(i,2)+1, g) |> device
+    grid = rand(half_quant, i, g) |> device
 
     B_shannon = Shannon_basis(x_eval, grid; σ=σ)
 

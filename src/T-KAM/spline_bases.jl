@@ -3,8 +3,7 @@ module spline_functions
 export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis, Shannon_basis
 
 using CUDA, KernelAbstractions
-using Tullio, LinearAlgebra
-using NNlib, FFTW
+using Tullio, LinearAlgebra, NNlib
 
 include("../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
@@ -172,10 +171,8 @@ function Morlet_basis(
     Returns:
         A matrix of size (i, g, b) containing the Morlet wavelet basis functions evaluated at the points x.
     """
-    in_size = size(x,1)
-    x = rfft(x)
-    kernel = cos.(σ .* grid) .* exp.(-half_quant(0.5) * grid.^2)
-    return real.(irfft(@tullio(out[i, g, b] := x[i, b] * kernel[i, g]), in_size))
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
+    return cos.(σ .* diff) .* exp.(-half_quant(0.5) * diff.^2)
 end
     
 function Shannon_basis(
@@ -192,10 +189,9 @@ function Shannon_basis(
         grid: A matrix of size (i, g) containing the grid of knots.
         σ: Tuning for the bandwidth (standard deviation) of the Shannon wavelet kernel.
     """
-    in_size = size(x,1)
-    x = rfft(x)
-    kernel = sinc.(grid * 2/π) .* cos.(grid * π/3) .* 2
-    return real.(irfft(@tullio(out[i, g, b] := x[i, b] * kernel[i, g]), in_size))
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
+    diff = diff ./ σ
+    return sinc.(diff * 2/π) .* cos.(diff * π/3) .* 2
 end
 
 function coef2curve(

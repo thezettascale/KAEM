@@ -273,12 +273,14 @@ function init_T_KAM(
         size(dataset, 1) * size(dataset, 2))
     )
 
-    if retrieve(conf, "MIX_PRIOR", "spline_function") == "FFT"
+    prior_fcn = retrieve(conf, "MIX_PRIOR", "spline_function")
+    if prior_fcn == "FFT" || prior_fcn == "Morlet" || prior_fcn == "Shannon"
         update_prior_grid = false
         commit!(conf, "MIX_PRIOR", "layer_norm", "true")
     end
 
-    if retrieve(conf, "KAN_LIKELIHOOD", "spline_function") == "FFT"
+    lkhood_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
+    if lkhood_fcn == "FFT" || lkhood_fcn == "Morlet" || lkhood_fcn == "Shannon"
         update_llhood_grid = false
         commit!(conf, "KAN_LIKELIHOOD", "layer_norm", "true")
     end

@@ -67,9 +67,9 @@ function init_function(
     τ_trainable::Bool=true
 )
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid_range = spline_function == "FFT" || spline_function == "Morlet" || spline_function == "Shannon" ? (half_quant(0), half_quant(2π)) : grid_range
+    grid_range = spline_function == "FFT" || spline_function == "Morlet" || spline_function == "Shannon" ? (half_quant(-π), half_quant(π)) : grid_range
     grid = half_quant.(range(grid_range[1], grid_range[2], length=grid_size + 1)) |> collect |> x -> reshape(x, 1, length(x)) |> device
-    grid = repeat(grid, in_dim, 1) 
+    grid = spline_function == "Morlet" || spline_function == "Shannon" ? repeat(grid, in_dim, 1) : repeat(grid, fld(in_dim,2)+1, 1)
     grid = extend_grid(grid; k_extend=spline_degree) 
     σ_base = any(isnan.(σ_base)) ? ones(full_quant, in_dim, out_dim) : σ_base
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
@@ -83,7 +83,7 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
     
     coef = nothing
-    if l.spline_function == FFT_basis
+    if l.spline_function == FFT_basis || l.spline_function == Morlet_basis || l.spline_function == Shannon_basis
         grid_norm_factor = collect(1:l.grid_size+1) .^ 2
         coef = glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./ (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:,:,:,:], [2, 3, 4, 1])) 
     else

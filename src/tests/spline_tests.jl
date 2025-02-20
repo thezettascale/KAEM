@@ -9,7 +9,7 @@ include("../utils.jl")
 using .spline_functions
 using .Utils
 
-b, i, g, o, degree, σ = 5, 3, 7, 2, 2, half_quant(1)
+b, i, g, o, degree, σ = 5, 8, 7, 2, 2, half_quant(1)
 
 function test_extend_grid()
     Random.seed!(42)
@@ -78,7 +78,7 @@ function test_Morlet_basis()
     x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
+    grid = rand(half_quant, fld(i,2)+1, g) |> device
 
     B_morlet = Morlet_basis(x_eval, grid; σ=σ)
 
@@ -91,7 +91,7 @@ function test_Shannon_basis()
     x_eval = rand(half_quant, i, b) |> device
 
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
+    grid = rand(half_quant, fld(i,2)+1, g) |> device
 
     B_shannon = Shannon_basis(x_eval, grid; σ=σ)
 
@@ -141,6 +141,8 @@ end
     test_RBF_basis()
     test_RSWAF_basis()
     test_FFT_basis()
+    test_Morlet_basis()
+    test_Shannon_basis()
     test_coef2curve()
     test_curve2coef()
 end

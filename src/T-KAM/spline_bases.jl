@@ -153,7 +153,7 @@ function FFT_basis(
     return cos.(freq), sin.(freq)
 end
 
-# Wavelet are not strictly adapted from wav-kan but based on grid for consistency
+# Wavelets are not strictly adapted from wav-kan but based on convolution for engineering familiarity
 
 function Morlet_basis(
     x::AbstractArray{half_quant},
@@ -172,9 +172,10 @@ function Morlet_basis(
     Returns:
         A matrix of size (i, g, b) containing the Morlet wavelet basis functions evaluated at the points x.
     """
+    in_size = size(x,1)
     x = rfft(x)
     kernel = cos.(σ .* grid) .* exp.(-half_quant(0.5) * grid.^2)
-    return irfft(@tullio out[i, g, b] := x[i, b] * kernel[i, g], size(x, 2))
+    return real.(irfft(@tullio(out[i, g, b] := x[i, b] * kernel[i, g]), in_size))
 end
     
 function Shannon_basis(
@@ -191,9 +192,10 @@ function Shannon_basis(
         grid: A matrix of size (i, g) containing the grid of knots.
         σ: Tuning for the bandwidth (standard deviation) of the Shannon wavelet kernel.
     """
+    in_size = size(x,1)
     x = rfft(x)
     kernel = sinc.(grid * 2/π) .* cos.(grid * π/3) .* 2
-    return real.(irfft(@tullio out[i, g, b] := x[i, b] * kernel[i, g], size(x, 2)))
+    return real.(irfft(@tullio(out[i, g, b] := x[i, b] * kernel[i, g]), in_size))
 end
 
 function coef2curve(

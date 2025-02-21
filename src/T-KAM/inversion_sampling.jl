@@ -67,7 +67,7 @@ function trapezium_quadrature(mix, ps, st, component_mask::AbstractArray{half_qu
     grid = f_grid |> cpu_device() .|> full_quant
     Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] .|> full_quant
     
-    π_grid = mix.prior_type == "lognormal" || mix.prior_type == "beta" ? mix.π_pdf(f_grid, ps[Symbol("lognormal")], ε) : mix.π_pdf(f_grid)
+    π_grid = mix.prior_type == "lognormal" ? mix.π_pdf(f_grid, ps[Symbol("π_0")], ε) : mix.π_pdf(f_grid)
     grid_size = size(f_grid, 2)
 
     # Energy function of each component, q -> p
@@ -92,7 +92,7 @@ function gausslegendre_quadrature(mix, ps, st, component_mask::AbstractArray{hal
     weights = (b - a) ./ 2 .* mix.weights |> device
     f_nodes = device(copy(nodes))
 
-    π_nodes = mix.prior_type == "lognormal" || mix.prior_type == "beta" ? mix.π_pdf(f_nodes, ps[Symbol("lognormal")], ε) : mix.π_pdf(f_nodes)
+    π_nodes = mix.prior_type == "lognormal" ? mix.π_pdf(f_nodes, ps[Symbol("π_0")], ε) : mix.π_pdf(f_nodes)
     π_nodes = permutedims(π_nodes[:,:,:], (1, 3, 2))
     component_mask = permutedims(component_mask[:,:,:,:], (1, 2, 4, 3))
 

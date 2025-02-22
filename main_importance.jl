@@ -21,12 +21,32 @@ ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 include("src/ML_pipeline/trainer.jl")
 using .trainer
 
-rng = Random.seed!(1)
 
 # Vanilla importance sampling
 commit!(conf, "MALA", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
-t = init_trainer(rng, conf, dataset)
-train!(t)
+priors = ["gaussian"]
+fncs = ["RBF", "FFT"]
+
+for prior in priors
+    for fnc in fncs
+        commit!(conf, "MIX_PRIOR", "π_0", prior)
+        commit!(conf, "MIX_PRIOR", "spline_function", fnc)
+        commit!(conf, "KAN_LIKELIHOOD", "spline_function", fnc)
+
+        if fnc == "RBF"
+            commit!(conf, "KAN_LIKELIHOOD", "base_activation", "silu")
+            commit!(conf, "MIX_PRIOR", "base_activation", "silu")
+        else
+            commit!(conf, "KAN_LIKELIHOOD", "base_activation", "none")
+            commit!(conf, "MIX_PRIOR", "base_activation", "none")
+        end
+        
+        rng = Random.seed!(1)
+        t = init_trainer(rng, conf, dataset)
+        train!(t)
+    end
+end
+
 

@@ -40,7 +40,7 @@ for dataset_idx, image_set in enumerate(images):
         ax = axes[row, col]
         
         # Calculate error field
-        images = image_set[i+60, :, :, :], (1, 2, 0)
+        images = np.transpose(image_set[i+60, :, :, :], (1, 2, 0))
         
         ax.imshow(images)
         ax.axis('off')  

@@ -15,10 +15,16 @@ plt.rcParams.update({
 priors = ["lognormal", "uniform", "gaussian"]
 bases = ['RBF', 'FFT']
 
-grid_size = (10, 10)  
-fig, axes = plt.subplots(grid_size[0] * 3, grid_size[1] * 2, figsize=(16, 8))
+grid_size = (5, 5)  
+fig, axes = plt.subplots(grid_size[0] * 3, grid_size[1] * 3, figsize=(24, 24))  # Changed to 3 columns
 
-for prior in priors:
+for prior_idx, prior in enumerate(priors):
+    # Load true images
+    true_images_path = f'logs/{prior}_RBF/DARCY_FLOW_1/real_images.h5'
+    with h5py.File(true_images_path, 'r') as h5_file:
+        true_images = h5_file['samples'][()]
+
+    # Load generated images
     file_paths = [
         f'logs/{prior}_RBF/DARCY_FLOW_1/generated_images.h5',
         f'logs/{prior}_FFT/DARCY_FLOW_1/generated_images.h5'
@@ -29,20 +35,41 @@ for prior in priors:
         with h5py.File(file_path, 'r') as h5_file:
             images.append(h5_file['samples'][()])
 
+    # Plot true images
+    for i in range(grid_size[0] * grid_size[1]):
+        row = i // grid_size[1] + prior_idx * grid_size[0]
+        col = i % grid_size[1]
+        ax = axes[row, col]
+        
+        img = np.transpose(true_images[i, :, :, :], (1, 2, 0))
+        ax.imshow(img)
+        ax.axis('off')
+
+    # Plot generated images
     for dataset_idx, image_set in enumerate(images):
         for i in range(grid_size[0] * grid_size[1]):
-            row, col = divmod(i, grid_size[1])
-            col += dataset_idx * grid_size[1]  
+            row = i // grid_size[1] + prior_idx * grid_size[0]
+            col = i % grid_size[1] + (dataset_idx + 1) * grid_size[1]
             ax = axes[row, col]
             
             img = np.transpose(image_set[i, :, :, :], (1, 2, 0))
             ax.imshow(img)
-            ax.axis('off')  
-        
-        # Set title for each grid
-        axes[0, dataset_idx * grid_size[1] + 4].set_title(bases[dataset_idx], fontsize=12, pad=20)
+            ax.axis('off')
+
+    # Set titles for each row
+    if prior_idx == 0:
+        axes[0, grid_size[1] // 2].set_title('True', fontsize=12, pad=20)
+        axes[0, grid_size[1] + grid_size[1] // 2].set_title('RBF', fontsize=12, pad=20)
+        axes[0, 2 * grid_size[1] + grid_size[1] // 2].set_title('FFT', fontsize=12, pad=20)
     
+    # Add prior type label
+    for i in range(grid_size[0]):
+        axes[prior_idx * grid_size[0] + i, 0].set_ylabel(prior.capitalize(), 
+                                                         fontsize=12, 
+                                                         rotation=90, 
+                                                         labelpad=20)
+
 plt.subplots_adjust(wspace=0, hspace=0)
 plt.show()
-# plt.savefig(f'figures/results/darcy_3x2.png')
+# plt.savefig(f'figures/results/darcy_3x3.png', dpi=300)
 

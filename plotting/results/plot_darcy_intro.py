@@ -16,14 +16,21 @@ file_paths = [
     'logs/uniform_FFT/DARCY_FLOW_1/generated_images.h5'
 ]
 
+real_images = 'logs/uniform_RBF/DARCY_FLOW_1/real_images.h5'
+
 titles = ['RBF', 'Fourier']
 
+# Load real images
+with h5py.File(real_images, 'r') as h5_file:
+    real_image_set = h5_file['samples'][()]
+
+# Load generated images
 images = []
 for file_path in file_paths:
     with h5py.File(file_path, 'r') as h5_file:
         images.append(h5_file['samples'][()])
 
-grid_size = (10, 10)  
+grid_size = (5, 5)  
 fig, axes = plt.subplots(grid_size[0], grid_size[1] * 2, figsize=(16, 8))
 
 for dataset_idx, image_set in enumerate(images):
@@ -32,12 +39,13 @@ for dataset_idx, image_set in enumerate(images):
         col += dataset_idx * grid_size[1]  
         ax = axes[row, col]
         
-        img = np.transpose(image_set[i, :, :, :], (1, 2, 0))
+        # Calculate error field
+        images = image_set[i+60, :, :, :], (1, 2, 0)
         
-        ax.imshow(img)
+        ax.imshow(images)
         ax.axis('off')  
     
-    axes[0, dataset_idx * grid_size[1] + 4].set_title(titles[dataset_idx], fontsize=30, pad=10)
+    axes[0, dataset_idx * grid_size[1] + 2].set_title(titles[dataset_idx], fontsize=30, pad=10)
 
 plt.subplots_adjust(wspace=0, hspace=0)
 # plt.show()

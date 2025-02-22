@@ -21,12 +21,11 @@ ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 include("src/ML_pipeline/trainer.jl")
 using .trainer
 
-rng = Random.seed!(1)
-
-# Vanilla importance sampling
 commit!(conf, "MALA", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
+rng = Random.seed!(1)
 t = init_trainer(rng, conf, dataset)
 train!(t)
+
 

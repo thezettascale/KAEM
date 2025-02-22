@@ -65,10 +65,8 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "MALA" : "importance"
     model_type = N_t > 1 ? "Thermodynamic" : "Vanilla/$mala"
-    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") ? "uninformed" : model_type
-    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") && (
-        (retrieve(conf, "MIX_PRIOR", "π_0") == "lognormal") || (retrieve(conf, "KAN_LIKELIHOOD", "spline_function") == "Morlet") || (retrieve(conf, "KAN_LIKELIHOOD", "spline_function") == "Shannon")
-    ) ? "informed" : model_type
+    spline_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
+    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW" || dataset_name == "MNIST" || dataset_name == "FMNIST") ? retrieve(conf, "MIX_PRIOR", "π_0") * "_" * spline_fcn : model_type
     
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)

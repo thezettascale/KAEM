@@ -148,50 +148,8 @@ function FFT_basis(
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
-    freq = half_quant(2π) .* freq .* σ
-    return cos.(freq), sin.(freq)
-end
-
-# Wavelets are not strictly adapted from wav-kan but based on convolution for engineering familiarity
-
-function Morlet_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
-    """
-    Compute the Morlet wavelet basis functions for a batch of points x and a grid of knots.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the Morlet wavelet basis functions.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the Morlet wavelet kernel.
-
-    Returns:
-        A matrix of size (i, g, b) containing the Morlet wavelet basis functions evaluated at the points x.
-    """
-    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
-    return cos.(σ .* freq) .* exp.(-half_quant(0.5) * freq.^2)
-end
-    
-function Shannon_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
-    """
-    Compute the Shannon wavelet basis functions for a batch of points x and a grid of knots using convolution.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the Shannon wavelet.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the Shannon wavelet kernel.
-    """
-    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
     freq = freq .* σ
-    return sinc.(freq * 2/π) .* cos.(freq * π/3) .* 2
+    return cos.(freq), sin.(freq)
 end
 
 function coef2curve(

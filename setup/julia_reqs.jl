@@ -33,3 +33,9 @@ Pkg.add("BenchmarkTools")
 Pkg.add("Plots")
 Pkg.add("Embeddings")
 Pkg.add("FastGaussQuadrature")
+<<<<<<< HEAD
+=======
+Pkg.add("LaTeXStrings")
+Pkg.add("Makie")
+Pkg.add("GLMakie")
+>>>>>>> refs/remotes/origin/main

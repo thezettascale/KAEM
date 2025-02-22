@@ -12,8 +12,13 @@ plt.rcParams.update({
 
 # File paths to HDF5 files
 file_paths = [
+<<<<<<< HEAD
     'logs/uniform_RBF/DARCY_FLOW_1/generated_images.h5',
     'logs/uniform_FFT/DARCY_FLOW_1/generated_images.h5'
+=======
+    'logs/gaussian_RBF/DARCY_FLOW_1/generated_images.h5',
+    'logs/gaussian_FFT/DARCY_FLOW_1/generated_images.h5'
+>>>>>>> refs/remotes/origin/main
 ]
 
 real_images = 'logs/uniform_RBF/DARCY_FLOW_1/real_images.h5'

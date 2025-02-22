@@ -17,7 +17,7 @@ using .InverseSampling: sample_prior, prior_fwd
 prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
-    "lognormal" => (z, ps, ε) -> exp.(-(log.(z .+ ε) .- ps.μ).^2 ./ (2 .* abs.(ps.Σ) .+ ε)) ./ (z .* sqrt.(2π .* abs.(ps.Σ)) .+ ε),
+    "lognormal" => (z, ε) -> exp.(-(log.(z .+ ε)).^2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer
@@ -59,7 +59,7 @@ function trapezium_quadrature(
     """
     grid = st[Symbol("1")].grid
     grid_size = size(grid,2)
-    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ps[Symbol("π_0")], ε) : mix.π_pdf(grid)
+    π_g = mix.prior_type == "lognormal" ? mix.π_pdf(grid, ε) : mix.π_pdf(grid)
     log_π_grid, Δg = log.(π_g .+ ε), grid[:, 2:end] - grid[:, 1:end-1] 
 
     # Energy function of each component, q -> p
@@ -93,7 +93,7 @@ function gauss_quadrature(
     a, b = mix.fcns_qp[Symbol("1")].grid_range
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* mix.nodes |> device
     weights = (b - a) ./ 2 .* mix.weights |> device
-    π_nodes = mix.prior_type == "lognormal" ? mix.π_pdf(nodes, ps[Symbol("π_0")], ε) : mix.π_pdf(nodes)
+    π_nodes = mix.prior_type == "lognormal" ? mix.π_pdf(nodes, ε) : mix.π_pdf(nodes)
     log_π_nodes = log.(π_nodes .+ ε)
 
     # Energy function of each component, q -> p
@@ -138,7 +138,7 @@ function log_prior(
     
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
-    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ps[Symbol("π_0")], ε) : mix.π_pdf(z)
+    π_0 = mix.prior_type == "lognormal" ? mix.π_pdf(z, ε) : mix.π_pdf(z)
     @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
 
     # Energy functions of each component, q -> p
@@ -242,13 +242,6 @@ function Lux.initialparameters(rng::AbstractRNG, prior::mix_prior)
         for i in 1:prior.depth-1
             @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, prior.fcns_qp[Symbol("ln_$i")]) 
         end
-    end
-
-    if prior.prior_type == "lognormal" 
-        @reset ps[Symbol("π_0")] = (
-            μ = glorot_uniform(rng, full_quant, prior.q_size),
-            Σ = glorot_uniform(rng, full_quant, prior.q_size)
-        )
     end
 
     return ps 

@@ -13,10 +13,11 @@ plt.rcParams.update({
 # File paths to HDF5 files
 # prior = 'lognormal'
 priors = ["lognormal", "uniform", "gaussian"]
+formulas = [r"$\text{Lognormal}(\bm{z}; \; \bm{0}, \bm{1})$", r"$\mathcal{U}(\bm{z}; \; \bm{0}, \bm{1})$", r"$\mathcal{N}(\bm{z}; \; \bm{0}, \bm{1})$"]
 bases = ['RBF', 'FFT']
 
-grid_size = (5, 5)  
-fig, axes = plt.subplots(grid_size[0] * 3, grid_size[1] * 3, figsize=(24, 24))  # Changed to 3 columns
+grid_size = (3, 3)  
+fig, axes = plt.subplots(grid_size[0] * 3, grid_size[1] * 3, figsize=(20, 20))  # Changed to 3 columns
 
 for prior_idx, prior in enumerate(priors):
     # Load true images
@@ -58,18 +59,19 @@ for prior_idx, prior in enumerate(priors):
 
     # Set titles for each row
     if prior_idx == 0:
-        axes[0, grid_size[1] // 2].set_title('True', fontsize=12, pad=20)
-        axes[0, grid_size[1] + grid_size[1] // 2].set_title('RBF', fontsize=12, pad=20)
-        axes[0, 2 * grid_size[1] + grid_size[1] // 2].set_title('FFT', fontsize=12, pad=20)
+        axes[0, grid_size[1] // 2].set_title('Ground Truth', fontsize=30, pad=20)
+        axes[0, grid_size[1] + grid_size[1] // 2].set_title('RBF', fontsize=30, pad=20)
+        axes[0, 2 * grid_size[1] + grid_size[1] // 2].set_title('Fourier', fontsize=30, pad=20)
     
     # Add prior type label
-    for i in range(grid_size[0]):
-        axes[prior_idx * grid_size[0] + i, 0].set_ylabel(prior.capitalize(), 
-                                                         fontsize=12, 
-                                                         rotation=90, 
-                                                         labelpad=20)
+    axes[prior_idx * grid_size[0] + grid_size[0]//2, 0].text(
+        1.2, 0.5, formulas[prior_idx],
+        fontsize=30,
+        rotation=45,
+        transform=axes[prior_idx * grid_size[0] + grid_size[0]//2, -1].transAxes,
+        verticalalignment='center'
+    )
 
 plt.subplots_adjust(wspace=0, hspace=0)
-plt.show()
-# plt.savefig(f'figures/results/darcy_3x3.png', dpi=300)
+plt.savefig(f'figures/results/darcy_3x3.png', dpi=300)
 

@@ -38,7 +38,9 @@ z = repeat(z', prior.q_size, 1)
 π_0 = prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) : prior.π_pdf(z)
 
 f, st = prior_fwd(prior, ps, st, z)
-alpha = ps[Symbol("α")] |> cpu_device()
+alpha = softmax(ps[Symbol("α")]; dims=2) |> cpu_device()
+f = f .+ log.(permutedims(π_0[:,:,:], (1, 3, 2))) .- first(log_partition_function(prior, ps, st))
+f = exp.(f) 
 z, f = z |> cpu_device(), f |> cpu_device()
 
 mkpath("figures/results/priors")
@@ -55,10 +57,10 @@ for (q, p) in plot_components
                     show_colorbar = false,
                 )
         hue = alpha[q, p]
-    ax = Makie.Axis(fig[1, 1], title=L"Energy function, $f_{%$q,%$p}$; $\alpha_{%$q,%$p} = %$hue$")
+    ax = Makie.Axis(fig[1, 1], title=L"Mixture component, $\frac{\exp(f_{%$q,%$p}) \cdot \pi_0(z)}{\textbf{Z}_{%$q,%$p}}$ \\ Mixture proportions $\alpha_{%$q,%$p} = %$hue$")
 
     lines!(ax, z[q, :], f[q, p, :], color=(:red))
-    hidedecorations!(ax)
+    # hidedecorations!(ax)
     # hidespines!(ax)
     save("figures/results/priors/$(dataset_name)_$(q)_$(p).png", fig)
 end

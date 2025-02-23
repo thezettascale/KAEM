@@ -90,7 +90,7 @@ function gauss_quadrature(
         The updated state
     """
     # Map domains
-    a, b = mix.fcns_qp[Symbol("1")].grid_range
+    a, b = minimum(st[Symbol("1")].grid), maximum(st[Symbol("1")].grid)
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* mix.nodes |> device
     weights = (b - a) ./ 2 .* mix.weights |> device
     π_nodes = mix.prior_type == "lognormal" ? mix.π_pdf(nodes, ε) : mix.π_pdf(nodes)

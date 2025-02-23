@@ -91,7 +91,7 @@ function gauss_quadrature(
     """
     # Map domains
     a, b = minimum(st[Symbol("1")].grid), maximum(st[Symbol("1")].grid)
-    if b == half_quant(2π)
+    if b ≈ half_quant(2π)
         a, b = mix.fcns_qp[Symbol("1")].grid_range
     end
     

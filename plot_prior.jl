@@ -13,9 +13,9 @@ using .InverseSampling: prior_fwd
 using .Utils: device, half_quant, hq
 using .ebm_mix_prior: log_partition_function
 
-file = "logs/uniform_RBF/MNIST_1/saved_model.jld2"
-dataset_name = "MNIST"
-conf = ConfParse("config/nist_config.ini")
+file = "logs/gaussian_FFT/DARCY_FLOW_1/saved_model.jld2"
+dataset_name = "DARCY_FLOW"
+conf = ConfParse("config/darcy_flow_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)
@@ -35,7 +35,7 @@ ps = ps.ebm
 st = st.ebm
 t = nothing
 
-a, b = prior.fcns_qp[Symbol("1")].grid_range
+a, b = minimum(prior.fcns_qp[Symbol("1")].grid_range), maximum(prior.fcns_qp[Symbol("1")].grid_range)
 z = prior.quadrature_method == "trapezium" ? Float32.(range(a,b; length=1000)) |> device : (a + b) ./ 2 .+ (b - a) ./ 2 .* prior.nodes |> device
 z =  prior.quadrature_method == "trapezium" ? repeat(z', prior.q_size, 1) : z
 π_0 = prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) : prior.π_pdf(z)

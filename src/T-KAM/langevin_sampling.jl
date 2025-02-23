@@ -177,7 +177,7 @@ function autoMALA_sampler(
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant; seed_i::Int=1)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
         ll, st_gen, seed_i = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed_i, ε=m.ε)
-        logpos = sum(lp) + t_k * sum(maximum(ll; dims=1))
+        logpos = sum(lp) + t_k * sum(ll)
         return logpos * m.loss_scaling, st_ebm, st_gen, seed_i
     end
 

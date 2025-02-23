@@ -164,15 +164,15 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
-    logllhood = reshape(logllhood, T, B, S)
-    logllhood = Δt .* logllhood
+    logllhood_untempered = reshape(logllhood, T, B, S)
+    logllhood = Δt .* logllhood_untempered
     weights = @ignore_derivatives softmax(logllhood, dims=3) 
 
     # Expected posterior
     TI_loss = sum(weights .* logllhood)
-    MLE_loss = sum(sum(weights[end, :, :] .* (logprior' .- ex_prior .+ logllhood[end, :, :]); dims=2))
+    MLE_loss = sum(sum(weights[end, :, :] .* (logprior' .- ex_prior .+ logllhood_untempered[end, :, :]); dims=2))
     
-    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
+    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood_untempered[end, :, :]))
     return -((TI_loss + MLE_loss) / 2B)*m.loss_scaling, st, seed
 end
 

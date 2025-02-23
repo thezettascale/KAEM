@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # datasets=("MNIST" "FMNIST")
-# datasets=("CIFAR10" "SVHN")
-datasets=("DARCY_FLOW")
+datasets=("SVHN")
+# datasets=("DARCY_FLOW")
 
 for dataset in "${datasets[@]}"; do
     session_name="IS_$dataset"
@@ -18,7 +18,7 @@ for dataset in "${datasets[@]}"; do
     echo "$dataset Importance Sampling completed."
 done
 
-# datasets=("CIFAR10" "SVHN")
+# datasets=("SVHN")
 
 # for dataset in "${datasets[@]}"; do
 #     session_name="TI_$dataset"

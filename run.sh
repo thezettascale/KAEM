@@ -2,7 +2,7 @@
 
 # datasets=("MNIST" "FMNIST")
 # datasets=("SVHN" "CIFAR10")
-# # datasets=("DARCY_FLOW")
+# # # datasets=("DARCY_FLOW")
 
 # for dataset in "${datasets[@]}"; do
 #     session_name="IS_$dataset"

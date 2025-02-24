@@ -16,7 +16,7 @@ priors = ["lognormal", "uniform", "gaussian"]
 formulas = [r"$\text{Lognormal}(\bm{z}; \; \bm{0}, \bm{1})$", r"$\mathcal{U}(\bm{z}; \; \bm{0}, \bm{1})$", r"$\mathcal{N}(\bm{z}; \; \bm{0}, \bm{1})$"]
 bases = ['RBF', 'FFT']
 
-grid_size = (5, 5)  
+grid_size = (3, 3)  
 fig, axes = plt.subplots(grid_size[0] * 3, grid_size[1] * 3, figsize=(30, 30))  # Changed to 3 columns
 
 for prior_idx, prior in enumerate(priors):

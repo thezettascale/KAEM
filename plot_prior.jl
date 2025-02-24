@@ -19,7 +19,7 @@ conf = ConfParse("config/darcy_flow_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)
-plot_components = [(1,1), (1,2), (1,3), (1,4), (1,5)]
+plot_components = [(1,1), (6,2), (9,3), (3,4), (20,5)]
 colours = [:red, :blue, :green, :purple, :orange]
 
 saved_data = load(file)

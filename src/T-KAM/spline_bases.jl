@@ -148,7 +148,7 @@ function FFT_basis(
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
-    freq = freq .* σ
+    freq = half_quant(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
 end
 

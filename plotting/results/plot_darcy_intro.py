@@ -12,13 +12,13 @@ plt.rcParams.update({
 
 # File paths to HDF5 files
 file_paths = [
-    'logs/uniform_RBF/DARCY_FLOW_1/generated_images.h5',
-    'logs/uniform_FFT/DARCY_FLOW_1/generated_images.h5'
+    'logs/lognormal_RBF/DARCY_FLOW_1/generated_images.h5',
+    'logs/gaussian_RBF/DARCY_FLOW_1/generated_images.h5'
 ]
 
 real_images = 'logs/uniform_RBF/DARCY_FLOW_1/real_images.h5'
 
-titles = ['RBF', 'Fourier']
+titles = ['Lognormal', 'Gaussian']
 
 # Load real images
 with h5py.File(real_images, 'r') as h5_file:
@@ -49,5 +49,5 @@ for dataset_idx, image_set in enumerate(images):
 
 plt.subplots_adjust(wspace=0, hspace=0)
 # plt.show()
-plt.savefig('figures/results/RBFvsFFT.png')
+plt.savefig('figures/results/darcy_priors.png')
 

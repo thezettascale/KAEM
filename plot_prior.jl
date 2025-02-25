@@ -13,13 +13,13 @@ using .InverseSampling: prior_fwd
 using .Utils: device, half_quant, hq
 using .ebm_mix_prior: log_partition_function
 
-file = "logs/gaussian_FFT/DARCY_FLOW_1/saved_model.jld2"
-dataset_name = "DARCY_FLOW"
-conf = ConfParse("config/darcy_flow_config.ini")
+file = "logs/lognormal_RBF/MNIST_1/saved_model.jld2"
+dataset_name = "MNIST"
+conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)
-plot_components = [(1,1), (1,2), (1,3), (1,4), (1,5)]
+plot_components = [(1,1), (6,2), (9,3), (3,4), (20,5)]
 colours = [:red, :blue, :green, :purple, :orange]
 
 saved_data = load(file)
@@ -35,7 +35,10 @@ ps = ps.ebm
 st = st.ebm
 t = nothing
 
-a, b = minimum(prior.fcns_qp[Symbol("1")].grid_range), maximum(prior.fcns_qp[Symbol("1")].grid_range)
+a, b = minimum(st[Symbol("1")].grid), maximum(st[Symbol("1")].grid)
+if b == prior.fcns_qp[Symbol("1")].grid_size
+    a, b = prior.fcns_qp[Symbol("1")].grid_range
+end
 z = prior.quadrature_method == "trapezium" ? Float32.(range(a,b; length=1000)) |> device : (a + b) ./ 2 .+ (b - a) ./ 2 .* prior.nodes |> device
 z =  prior.quadrature_method == "trapezium" ? repeat(z', prior.q_size, 1) : z
 π_0 = prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) : prior.π_pdf(z)

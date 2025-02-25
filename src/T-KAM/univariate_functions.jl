@@ -65,7 +65,7 @@ function init_function(
     τ_trainable::Bool=true
 )
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid= spline_function == "FFT" ? range(0, 2π, length=grid_size + 1) : range(grid_range[1], grid_range[2], length=grid_size + 1)
+    grid = spline_function == "FFT" ? collect(half_quant, 0:grid_size) : range(grid_range[1], grid_range[2], length=grid_size + 1)
     grid = half_quant.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
     grid = extend_grid(grid; k_extend=spline_degree) 

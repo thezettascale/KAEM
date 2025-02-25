@@ -13,13 +13,13 @@ plt.rcParams.update({
 # File paths to HDF5 files
 file_paths = [
     'logs/gaussian_RBF/MNIST_1/generated_images.h5',
-    'logs/uniform_RBF/MNIST_1/generated_images.h5',
     'logs/lognormal_RBF/MNIST_1/generated_images.h5',
+    'logs/uniform_RBF/MNIST_1/generated_images.h5',
 ]
 
 real_images = 'logs/uniform_RBF/MNIST_1/real_images.h5'
 
-titles = ['Gaussian', 'Uniform', 'Lognormal']
+titles = ['Gaussian', 'Lognormal', 'Uniform']
 
 # Load real images
 with h5py.File(real_images, 'r') as h5_file:
@@ -43,7 +43,12 @@ for dataset_idx, image_set in enumerate(images):
         # Calculate error field
         images = np.transpose(image_set[i+60, :, :, :], (1, 2, 0))
         
-        ax.imshow(images, cmap='gray')
+        # Use inverted colormap for middle dataset
+        if dataset_idx == 1:
+            ax.imshow(images, cmap='gray_r')  # gray_r is inverted gray
+        else:
+            ax.imshow(images, cmap='gray')
+            
         ax.axis('off')  
     
     axes[0, dataset_idx * grid_size[1] + 4].set_title(titles[dataset_idx], fontsize=40, pad=10)

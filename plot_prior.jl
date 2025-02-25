@@ -13,9 +13,9 @@ using .InverseSampling: prior_fwd
 using .Utils: device, half_quant, hq
 using .ebm_mix_prior: log_partition_function
 
-file = "logs/gaussian_RBF/DARCY_FLOW_1/saved_model.jld2"
-dataset_name = "DARCY_FLOW"
-conf = ConfParse("config/darcy_flow_config.ini")
+file = "logs/lognormal_RBF/MNIST_1/saved_model.jld2"
+dataset_name = "MNIST"
+conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)

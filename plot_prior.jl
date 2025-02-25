@@ -46,7 +46,7 @@ z =  prior.quadrature_method == "trapezium" ? repeat(z', prior.q_size, 1) : z
 f, st = prior_fwd(prior, ps, st, z)
 alpha = softmax(ps[Symbol("α")]; dims=2) |> cpu_device()
 f = exp.(f) .* permutedims(π_0[:,:,:], (1, 3, 2)) ./ exp.(first(log_partition_function(prior, ps, st)))
-z, f = z |> cpu_device(), f |> cpu_device()
+z, f, π_0 = z |> cpu_device(), f |> cpu_device(), π_0 |> cpu_device()
 
 mkpath("figures/results/priors")
 
@@ -64,8 +64,10 @@ for (i, (q, p)) in enumerate(plot_components)
     hue = round(alpha[q, p], digits=3)
     ax = Makie.Axis(fig[1, 1], title=L"Mixture component, ${\exp(f_{%$q,%$p}) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$ \\ Mixture proportion $\alpha_{%$q,%$p} = %$hue$")
 
-    band!(ax, z[q, :], 0 .* f[q, p, :], f[q, p, :], color=colours[i])
+    band!(ax, z[q, :], 0 .* f[q, p, :], f[q, p, :], color=(colours[i], 0.3))
     lines!(ax, z[q, :], f[q, p, :], color=colours[i])
+    band!(ax, z[q, :], 0 .* f[q, p, :], π_0[q,:], color=(:gray, 0.2))
+    lines!(ax, z[q, :], π_0[q,:], color=(:gray, 0.8))
     # hidedecorations!(ax)
     # hidespines!(ax)
     save("figures/results/priors/$(dataset_name)_$(q)_$(p).png", fig)

@@ -96,7 +96,7 @@ end
 function reversibility_check(
     z::AbstractArray{full_quant},
     st,
-    ẑ::AbstractArray{full_quant},
+    ẑ::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
     η::full_quant,
     logpos_withgrad::Function;
@@ -107,7 +107,7 @@ function reversibility_check(
 
     Args:
         z: The current position.
-        ẑ: The proposed position.
+        ẑ: The proposed position.
         η: The step size.
         tol: The tolerance.
 
@@ -115,11 +115,15 @@ function reversibility_check(
         A boolean indicating if the proposal is reversible.
         The updated state.
     """
+    # Get gradient at proposed position
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(half_quant.(ẑ), st)
 
-    logpos_∇ẑ, ∇ẑ, st = logpos_withgrad(half_quant.(ẑ), st)
+    # Reconstruct momentum at proposed position
+    p = (((ẑ - z) ./ η) .* M) # First reconstruct velocity
+    p = p - (η .* ∇ẑ / 2) # Then adjust for half gradient step
 
-    p_rev = (((ẑ - z) ./ η) - (η .* ∇ẑ / 2)) .* M
-    z_rev, _, st = leapfrop_proposal(ẑ, st, logpos_∇ẑ, ∇ẑ, -p_rev, M, η, logpos_withgrad)
+    # Run leapfrog in reverse with negative momentum
+    z_rev, _, st = leapfrop_proposal(ẑ, st, logpos_ẑ, ∇ẑ, -p, M, η, logpos_withgrad)
 
     return norm(z_rev - z) < tol, st
 end

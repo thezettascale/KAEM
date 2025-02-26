@@ -149,30 +149,28 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
-    # Schedule temperatures, and Parallel Tempering
-    temperatures = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, temperatures[2:end-1], ps, st, seed) 
-    temperatures = device(temperatures)
-    Δt = temperatures[2:end] - temperatures[1:end-1]
+    # Schedule temperatures, and S-MALA
+    t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) # Skip final temp for AIS
+    z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
+    t = device(t)
 
     T, Q, S, B = size(z)..., size(x)[end]
     
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z[end, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, reshape(z, Q, S*T); seed=seed, ε=m.ε)
+    z = reshape(z, Q, S*T)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0) # Expected prior, (if contrastive divergence)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
+    logprior = reshape(logprior, T, B, S)
     logllhood = reshape(logllhood, T, B, S)
-    weights = @ignore_derivatives softmax(Δt .* logllhood, dims=3) 
+    weights = @ignore_derivatives softmax((t[2:end] .- t[1:end-1]) .* logllhood, dims=3) 
 
-    # Expected posterior
-    TI_loss = sum(Δt .* sum(weights .* logllhood; dims=3))
-    MLE_loss = sum(sum(weights[end, :, :] .* (logprior' .- ex_prior .+ logllhood[end, :, :]); dims=2))
-    
-    m.verbose && println("Prior loss: ", -mean(logprior' .- ex_prior), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    return -((TI_loss + MLE_loss) / 2B)*m.loss_scaling, st, seed
+    IS_estimator = sum(weights .* (t[2:end] .* logllhood .+ (logprior .- ex_prior)); dims=3)
+    MC_estimator = mean(t[1:end-1] .* logllhood .+ (logprior .- ex_prior); dims=3)
+    return -(sum(IS_estimator - MC_estimator)/B)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

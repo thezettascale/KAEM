@@ -18,7 +18,7 @@ prior_pdf = Dict(
     "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
     "lognormal" => (z, ε) -> exp.(-(log.(z .+ ε)).^2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "none" => z -> ones(half_quant, size(z)) |> device,
+    "ebm" => z -> ones(half_quant, size(z)) |> device,
 )
 
 struct mix_prior <: Lux.AbstractLuxLayer

@@ -54,7 +54,10 @@ for prior_idx, prior in enumerate(priors):
             ax = axes[row, col]
             
             img = np.transpose(image_set[i, :, :, :], (1, 2, 0))
-            ax.imshow(img)
+            if dataset_idx == 0:
+                ax.imshow(img, cmap='magma')
+            else:
+                ax.imshow(img)
             ax.axis('off')
 
     # Set titles for each row

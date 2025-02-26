@@ -19,8 +19,8 @@ conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)
-plot_components = [(1,1), (6,2), (9,3), (3,4), (20,5)]
-colours = [:red, :blue, :green, :purple, :orange]
+plot_components = [(1,1), (6,2), (9,3), (3,4), (20,5), (2,6), (4,7), (5,8), (7,9), (8,10)]
+colours = [:red, :blue, :green, :purple, :orange, :brown, :pink, :gray, :olive, :cyan]
 
 saved_data = load(file)
 
@@ -35,7 +35,7 @@ ps = ps.ebm
 st = st.ebm
 t = nothing
 
-a, b = minimum(st[Symbol("1")].grid), maximum(st[Symbol("1")].grid)
+a, b = 0,3
 if b == prior.fcns_qp[Symbol("1")].grid_size
     a, b = prior.fcns_qp[Symbol("1")].grid_range
 end
@@ -45,15 +45,15 @@ z =  prior.quadrature_method == "trapezium" ? repeat(z', prior.q_size, 1) : z
 
 f, st = prior_fwd(prior, ps, st, z)
 alpha = softmax(ps[Symbol("α")]; dims=2) |> cpu_device()
-f = exp.(f) .* permutedims(π_0[:,:,:], (1, 3, 2)) ./ exp.(first(log_partition_function(prior, ps, st)))
-z, f, π_0 = z |> cpu_device(), f |> cpu_device(), π_0 |> cpu_device()
+f = exp.(f) .* permutedims(π_0[:,:,:], (1, 3, 2)) 
+z, f, π_0 = z |> cpu_device(), softmax(f;dims=3) |> cpu_device(), softmax(π_0;dims=2) |> cpu_device()
 
 mkpath("figures/results/priors")
 
 for (i, (q, p)) in enumerate(plot_components)
     fig = Makie.Figure(size=(1000, 1000),
                     ffont="Computer Modern", 
-                    fontsize = 40,
+                    fontsize = 50,
                     backgroundcolor = :white,
                     show_axis = false,
                     show_grid = false,
@@ -62,14 +62,17 @@ for (i, (q, p)) in enumerate(plot_components)
                     show_colorbar = false,
                 )
     hue = round(alpha[q, p], digits=3)
-    ax = Makie.Axis(fig[1, 1], title=L"Mixture component, ${\exp(f_{%$q,%$p}) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$ \\ Mixture proportion $\alpha_{%$q,%$p} = %$hue$")
+    ax = Makie.Axis(fig[1, 1], title=L"Mixture component, ${\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$ \\ Mixture proportion $\alpha_{%$q,%$p} = %$hue$")
 
-    band!(ax, z[q, :], 0 .* f[q, p, :], f[q, p, :], color=(colours[i], 0.3))
+    band!(ax, z[q, :], 0 .* f[q, p, :], f[q, p, :], color=(colours[i], 0.3), label=L"{\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)}")
     lines!(ax, z[q, :], f[q, p, :], color=colours[i])
-    band!(ax, z[q, :], 0 .* f[q, p, :], π_0[q,:], color=(:gray, 0.2))
+    band!(ax, z[q, :], 0 .* f[q, p, :], π_0[q,:], color=(:gray, 0.2), label=L"\pi_0(z)")
     lines!(ax, z[q, :], π_0[q,:], color=(:gray, 0.8))
-    # hidedecorations!(ax)
-    # hidespines!(ax)
+    y_min = minimum([minimum(f[q, p, :]), minimum(π_0[q,:])])
+    ylims!(ax, y_min, nothing)
+    axislegend(ax)
+    hidedecorations!(ax)
+    hidespines!(ax)
     save("figures/results/priors/$(dataset_name)_$(q)_$(p).png", fig)
 end
 

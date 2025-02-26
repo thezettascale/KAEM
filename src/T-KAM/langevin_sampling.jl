@@ -179,8 +179,8 @@ function autoMALA_sampler(
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂; agg=sum)
-        logpos = sum(lp) + t_k * mse(x̂, x)
+        x̂ = m.lkhood.output_activation(x̂)
+        logpos = sum(lp) + t_k * mse(x̂, x; agg=sum)
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
 

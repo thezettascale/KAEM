@@ -163,7 +163,7 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
-    logprior = reshape(logprior, T, B, S)
+    logprior = reshape(logprior, T, 1, S)
     logllhood = reshape(logllhood, T, B, S)
 
     ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0) # Expected prior, (if contrastive divergence)

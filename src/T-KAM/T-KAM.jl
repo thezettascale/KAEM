@@ -166,11 +166,10 @@ function thermo_loss(
     logprior = reshape(logprior, T, 1, S)
     logllhood = reshape(logllhood, T, B, S)
 
-    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0) # Expected prior, (if contrastive divergence)
     weights = @ignore_derivatives softmax((t[2:end] .- t[1:end-1]) .* logllhood, dims=3) 
 
-    IS_estimator = sum(weights .* (t[2:end] .* logllhood .+ (logprior .- ex_prior)); dims=3)
-    MC_estimator = mean(t[1:end-1] .* logllhood .+ (logprior .- ex_prior); dims=3)
+    IS_estimator = sum(weights .* (t[2:end] .* logllhood .+ logprior); dims=3)
+    MC_estimator = mean(t[1:end-1] .* logllhood .+ logprior; dims=3)
     return -(sum(IS_estimator - MC_estimator)/B)*m.loss_scaling, st, seed
 end
 

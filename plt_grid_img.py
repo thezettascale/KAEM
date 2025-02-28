@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # File path to your HDF5 file
-file_path = 'logs/Vanilla/importance/SVHN_1/generated_images.h5'
+file_path = 'logs/Thermodynamic/SVHN_1/generated_images.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
     image_data = h5_file['samples'][()] 

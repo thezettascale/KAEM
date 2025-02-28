@@ -55,24 +55,25 @@ for prior_idx, prior in enumerate(priors):
             
             img = np.transpose(image_set[i, :, :, :], (1, 2, 0))
             if dataset_idx == 0:
-                ax.imshow(img, cmap='magma')
+                ax.imshow(img, cmap='cividis')
             else:
                 ax.imshow(img)
             ax.axis('off')
 
     # Set titles for each row
     if prior_idx == 0:
-        axes[0, grid_size[1] // 2].set_title('Ground Truth', fontsize=30, pad=20)
-        axes[0, grid_size[1] + grid_size[1] // 2].set_title('RBF', fontsize=30, pad=20)
-        axes[0, 2 * grid_size[1] + grid_size[1] // 2].set_title('Fourier', fontsize=30, pad=20)
+        axes[0, grid_size[1] // 2].set_title('Ground Truth', fontsize=44, pad=20)
+        axes[0, grid_size[1] + grid_size[1] // 2].set_title('RBF', fontsize=44, pad=20)
+        axes[0, 2 * grid_size[1] + grid_size[1] // 2].set_title('Fourier', fontsize=44, pad=20)
     
     # Add prior type label
     axes[prior_idx * grid_size[0] + grid_size[0]//2, 0].text(
-        1.2, 0.5, formulas[prior_idx],
-        fontsize=30,
+        -0, 0.5, formulas[prior_idx], 
+        fontsize=44,
         rotation=45,
-        transform=axes[prior_idx * grid_size[0] + grid_size[0]//2, -1].transAxes,
-        verticalalignment='center'
+        transform=axes[prior_idx * grid_size[0] + grid_size[0]//2, 0].transAxes,
+        verticalalignment='center',
+        horizontalalignment='right'
     )
 
 plt.subplots_adjust(wspace=0, hspace=0)

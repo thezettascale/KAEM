@@ -54,8 +54,7 @@ function leapfrop_proposal(
     momentum::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
     η::full_quant,
-    logpos_withgrad::Function;
-    uniform_prior::Bool=false,
+    logpos_withgrad::Function
     )
     """
     Generate a proposal.
@@ -74,17 +73,7 @@ function leapfrop_proposal(
     p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
     ẑ = z .+ (η .* p) ./ M # Full-step position update
 
-    # Apply reflective boundary conditions, (which has a Jacobian of 1, so no need to adjust the log-ratio)
-    if uniform_prior
-        mask_low = ẑ .< 0
-        mask_high = ẑ .> 1
-        ẑ = ifelse.(mask_low, -ẑ, ẑ) |> device
-        ẑ = ifelse.(mask_high, 2 .- ẑ, ẑ) |> device
-        p = ifelse.(mask_low .| mask_high, -p, p) |> device
-    end
-
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(half_quant.(ẑ), st)
-
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
     # MH acceptance ratio

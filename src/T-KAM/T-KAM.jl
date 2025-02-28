@@ -150,7 +150,7 @@ function thermo_loss(
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
     # Schedule temperatures, and S-MALA
-    t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) # Skip final temp for AIS
+    t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
     t = device(t)
 

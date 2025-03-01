@@ -170,7 +170,9 @@ function thermo_loss(
 
     IS_estimator = sum(weights .* (t[2:end] .* logllhood .+ logprior); dims=3)
     MC_estimator = mean(t[1:end-1] .* logllhood .+ logprior; dims=3)
-    return -(sum(IS_estimator - MC_estimator)/B)*m.loss_scaling, st, seed
+
+    m.verbose && println("Prior loss: ", -mean(logprior[end, :, :]), " LLhood loss: ", -mean(logllhood[end, :, :]))
+    return -mean(sum(IS_estimator - MC_estimator; dims=1))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

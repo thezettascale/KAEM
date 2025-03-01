@@ -13,13 +13,13 @@ using .InverseSampling: prior_fwd
 using .Utils: device, half_quant, hq
 using .ebm_mix_prior: log_partition_function
 
-file = "logs/lognormal_RBF/MNIST_1/saved_model.jld2"
-dataset_name = "MNIST"
-conf = ConfParse("config/nist_config.ini")
+file = "logs/uniform_RBF/DARCY_FLOW_1/saved_model.jld2"
+dataset_name = "DARCY_FLOW"
+conf = ConfParse("config/darcy_flow_config.ini")
 parse_conf!(conf)
 
 # Components to plot (q, p)
-plot_components = [(1,1), (6,2), (9,3), (3,4), (20,5), (2,6), (4,7), (5,8), (7,9), (8,10)]
+plot_components = [(1,1), (1,2), (1,3), (1,4), (1,5), (1,6), (1,7), (1,8), (1,9), (1,10)]
 colours = [:red, :blue, :green, :purple, :orange, :brown, :pink, :gray, :olive, :cyan]
 
 saved_data = load(file)
@@ -35,7 +35,7 @@ ps = ps.ebm
 st = st.ebm
 t = nothing
 
-a, b = 0,3
+a, b = 0, 3
 if b == prior.fcns_qp[Symbol("1")].grid_size
     a, b = prior.fcns_qp[Symbol("1")].grid_range
 end

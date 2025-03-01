@@ -23,9 +23,9 @@ output_activation_mapping = Dict(
     "none" => identity,
 )
 
-lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 
-function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε=eps(full_quant))
+function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)

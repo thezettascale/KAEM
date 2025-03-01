@@ -19,6 +19,12 @@ else
     using .KAN_likelihood: log_likelihood
 end
 
+function cross_entropy_sum(x::AbstractArray{full_quant}, y::AbstractArray{full_quant}; ε::full_quant=eps(full_quant))
+    log_x = log.(x .+ ε)
+    ll = sum(log_x .* y)
+    return ll ./ size(x, 1)
+end
+
 function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     """
     Sample momentum for the autoMALA sampler, (with pre-conditioner).
@@ -165,11 +171,14 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
+    # Lkhood model based on type
+    ll_fn = m.lkhood.seq_length > 1 ? (x,y) -> cross_entropy_sum(x, y; ε=m.ε) : (x,y) -> mse(x, y; agg=sum)
+
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂)
-        logpos = sum(lp) + t_k * mse(x̂, x; agg=sum)
+        logpos = sum(lp) + t_k * ll_fn(x̂, x)
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
 

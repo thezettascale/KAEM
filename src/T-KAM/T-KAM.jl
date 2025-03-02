@@ -157,22 +157,20 @@ function thermo_loss(
     T, Q, S, B = size(z)..., size(x)[end]
     
     # Log-dists
-    z = reshape(z, Q, S*T)
+    z = @views reshape(z, Q, S*T)
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
-    logprior = reshape(logprior, T, 1, S)
-    logllhood = reshape(logllhood, T, B, S)
-    
-    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
-    logprior = logprior .- ex_prior
+    logprior = @views reshape(logprior, T, 1, S)
+    logllhood = @views reshape(logllhood, T, B, S)
 
+    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
     weights = @ignore_derivatives softmax((t[2:end] - t[1:end-1]) .* logllhood, dims=3) 
 
-    IS_estimator = sum(weights .* (t[2:end] .* logllhood .+ logprior); dims=3)
-    MC_estimator = mean(t[1:end-1] .* logllhood .+ logprior; dims=3)
+    IS_estimator = sum(weights .* ((t[2:end] .* logllhood).+ (logprior .- ex_prior)); dims=3)
+    MC_estimator = mean((t[1:end-1] .* logllhood) .+ (logprior .- ex_prior); dims=3)
 
     m.verbose && println("Prior loss: ", -mean(logprior[end, :, :]), " LLhood loss: ", -mean(logllhood[end, :, :]))
     return -(sum(IS_estimator - MC_estimator)/B)*m.loss_scaling, st, seed

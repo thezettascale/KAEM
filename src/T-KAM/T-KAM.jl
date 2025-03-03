@@ -177,8 +177,7 @@ function thermo_loss(
     MC_estimator = mean((t[1:end-1] .* logllhood) .+ logprior; dims=3)
 
     m.verbose && println("Prior loss: ", -mean(logprior[end, :, :]), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    loss = sum(IS_estimator - MC_estimator; dims=1) # Sum over temperatures, replace ex_prior that was cancelled out (t=0)
-    return -mean(loss)*m.loss_scaling, st, seed
+    return -mean(sum(IS_estimator - MC_estimator; dims=1))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

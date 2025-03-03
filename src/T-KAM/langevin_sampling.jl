@@ -63,7 +63,7 @@ function leapfrop_proposal(
     logpos_withgrad::Function
     )
     """
-    Generate a proposal.
+    Generate a proposal for a particular step-size.
 
     Args:
         z: The current position.
@@ -84,43 +84,97 @@ function leapfrop_proposal(
 
     # MH acceptance ratio
     log_r = logpos_ẑ - logpos_z - ((sum(p.^2) - sum(momentum.^2)) / 2)
-
-    return ẑ, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, log_r, st
 end
 
-function reversibility_check(
+function select_step_size(
+    log_a::full_quant,
+    log_b::full_quant,
     z::AbstractArray{full_quant},
     st,
-    ẑ::AbstractArray{full_quant},
+    logpos_z::full_quant,
+    ∇z::AbstractArray{full_quant},
+    momentum::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
-    η::full_quant,
-    logpos_withgrad::Function;
-    tol::full_quant=full_quant(1e-4),
+    η_init::full_quant,
+    Δη::full_quant,
+    logpos_withgrad::Function
     )
     """
-    Check if the leapfrog proposal is reversible.
+    Select a step size for the autoMALA sampler.
 
     Args:
+        a: The lower bound.
+        b: The upper bound.
         z: The current position.
-        ẑ: The proposed position.
-        η: The step size.
-        tol: The tolerance.
+        st: The state of the model.
+        logpos_z: The log-posterior at the current position.
+        momentum: The current momentum.
+        M: The mass matrix.
+        η_init: The initial step size.
+        Δη: The step size increment.
+        logpos_withgrad: The log-posterior function.
 
     Returns:
-        A boolean indicating if the proposal is reversible.
+        The step size.
+        The log-ratio.
         The updated state.
     """
-    # Get gradient at proposed position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(half_quant.(ẑ), st)
+    MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
+    
+    ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+    if log_r <= log_a
+        while log_r <= log_a
+            η_init /= Δη
+            ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+        end
+    elseif log_r >= log_b
+        while log_r >= log_b
+            η_init *= Δη
+            ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+        end
+        η_init /= Δη
+        ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+    end
+    return ẑ, logpos_ẑ, ∇ẑ, η_init, log_r, st
+end
 
-    # Reconstruct momentum at proposed position
-    p = (((ẑ - z) ./ η) .* M) # First reconstruct velocity
-    p = p - (η .* ∇ẑ / 2) # Then adjust for half gradient step
+function autoMALA_step(
+    log_a::full_quant,
+    log_b::full_quant,
+    z::AbstractArray{full_quant},
+    st,
+    logpos_z::full_quant,
+    ∇z::AbstractArray{full_quant},
+    momentum::AbstractArray{full_quant},
+    M::AbstractArray{full_quant},
+    η_init::full_quant,
+    Δη::full_quant,
+    logpos_withgrad::Function;
+    )
+    """
+    Check the reversibility of the autoMALA step size selection.
 
-    # Run leapfrog in reverse with negative momentum
-    z_rev, _, st = leapfrop_proposal(ẑ, st, logpos_ẑ, ∇ẑ, -p, M, η, logpos_withgrad)
+    Args:
+        a: The lower bound.
+        b: The upper bound.
+        z: The current position.
+        st: The state of the model.
+        logpos_z: The log-posterior at the current position.
+        momentum: The current momentum.
+        M: The mass matrix.
+        η_init: The initial step size.
+        Δη: The step size increment.
+        logpos_withgrad: The log-posterior function.
 
-    return norm(z_rev - z) < tol, st
+    Returns:
+        The step size.
+        The log-ratio.
+        The updated state.
+    """
+    ẑ, logpos_ẑ, ∇ẑ, η, log_r, st = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, momentum, M, η, Δη, logpos_withgrad)
+    return ẑ, η, η ≈ η_prime, log_r, st
 end
 
 function autoMALA_sampler(
@@ -188,7 +242,7 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i) -> begin
-            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.testmode(st_i), t[k]), z_i)
+            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t[k]), z_i)
             logpos_z, st_ebm, st_gen, ∇z = result.val..., first(result.grad)
             
             @reset st_i.ebm = st_ebm
@@ -197,28 +251,19 @@ function autoMALA_sampler(
         end
         
         burn_in = 0
+        η = st.η_init[k]
         for i in 1:N
-            η = burn_in < N_unadjusted ? m.η_init : st.η_init[k]
-            momentum, M, seed = sample_momentum(z; seed=seed)
-            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
-
-            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st)
-            proposal, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-
+            momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
+            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
+            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
+            
             if burn_in < N_unadjusted
-                z .= proposal
+                z, logpos_ẑ, ∇ẑ, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                geq_bool = log_r >= log_b
-                while !(log_a < log_r < log_b) && (η_min <= η <= η_max)
-                    η = geq_bool ? η * Δη : η / Δη
-                    proposal, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-                end
-                η = geq_bool ? η / Δη : η
-
-                reversibility, st = reversibility_check(z, st, proposal, M, η, logpos_withgrad)
+                ẑ, η, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
                 if reversibility && (log_u[i, k] < log_r)
-                    z .= proposal
+                    z .= ẑ
                     num_acceptances[k] += 1
                     mean_η[k] += η
                 end

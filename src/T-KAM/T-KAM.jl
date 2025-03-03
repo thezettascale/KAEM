@@ -170,7 +170,7 @@ function thermo_loss(
 
     ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
     IS_estimator = t[2:end] .* sum(weights .* logllhood, dims=3) + sum(weights .* logprior, dims=3)
-    MC_estimator = t[1:end-1] .* mean(logllhood, dims=3) + mean(logprior, dims=3)
+    MC_estimator = t[1:end-1] .* mean(logllhood, dims=3) .+ mean(logprior, dims=3)
 
     @ignore_derivatives m.verbose && println("Prior loss: ", -mean(logprior), " LLhood loss: ", -mean(logllhood))
     return -mean(sum(IS_estimator - MC_estimator; dims=1) .- ex_prior)*m.loss_scaling, st, seed

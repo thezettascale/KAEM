@@ -84,7 +84,7 @@ function leapfrop_proposal(
 
     # MH acceptance ratio
     log_r = logpos_ẑ - logpos_z - ((sum(p.^2) - sum(momentum.^2)) / 2)
-    return ẑ, logpos_ẑ, ∇ẑ, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st
 end
 
 function select_step_size(
@@ -122,21 +122,21 @@ function select_step_size(
     """
     MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
     
-    ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
     if log_r <= log_a
         while log_r <= log_a
             η_init /= Δη
-            ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+            ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
         end
     elseif log_r >= log_b
         while log_r >= log_b
             η_init *= Δη
-            ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+            ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
         end
         η_init /= Δη
-        ẑ, logpos_ẑ, ∇ẑ, log_r, st = MH_criterion(η_init)
+        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
     end
-    return ẑ, logpos_ẑ, ∇ẑ, η_init, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end
 
 function autoMALA_step(
@@ -172,8 +172,8 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, η, log_r, st = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, momentum, M, η, Δη, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η, Δη, logpos_withgrad)
     return ẑ, η, η ≈ η_prime, log_r, st
 end
 
@@ -258,7 +258,7 @@ function autoMALA_sampler(
             logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
             
             if burn_in < N_unadjusted
-                z, logpos_ẑ, ∇ẑ, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
+                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
                 ẑ, η, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)

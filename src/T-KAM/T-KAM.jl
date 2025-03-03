@@ -163,18 +163,21 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
+    # Tempered weights
     logprior = reshape(logprior, T, 1, S)
     logllhood = reshape(logllhood, T, B, S)
-
-    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
     weights = @ignore_derivatives softmax((t[2:end] - t[1:end-1]) .* logllhood, dims=3) 
 
-    logprior = logprior .- ex_prior
-    IS_estimator = sum(weights .* ((t[2:end] .* logllhood).+ logprior); dims=3)
+    # Only subtract expected prior from power posteriors, not prior at t=0
+    mask = @ignore_derivatives vcat(zeros(full_quant, 1), ones(full_quant, T-1)) |> device
+    ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
+    logprior = logprior .- (ex_prior .* mask)
+
+    IS_estimator = sum(weights .* ((t[2:end] .* logllhood) .+ logprior); dims=3)
     MC_estimator = mean((t[1:end-1] .* logllhood) .+ logprior; dims=3)
 
     m.verbose && println("Prior loss: ", -mean(logprior[end, :, :]), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    loss = sum(IS_estimator - MC_estimator; dims=1) .- ex_prior # Sum over temperatures, replace ex_prior that was cancelled out (t=0)
+    loss = sum(IS_estimator - MC_estimator; dims=1) # Sum over temperatures, replace ex_prior that was cancelled out (t=0)
     return -mean(loss)*m.loss_scaling, st, seed
 end
 

@@ -168,16 +168,12 @@ function thermo_loss(
     logllhood = reshape(logllhood, T, B, S)
     weights = @ignore_derivatives softmax((t[2:end] - t[1:end-1]) .* logllhood, dims=3) 
 
-    # Only subtract expected prior from power posteriors, not prior at t=0
-    mask = @ignore_derivatives vcat(zeros(full_quant, 1), ones(full_quant, T-1)) |> device
     ex_prior = m.prior.contrastive_div ? mean(logprior[1, :, :]) : full_quant(0)
-    logprior = logprior .- (ex_prior .* mask)
+    IS_estimator = t[2:end] .* sum(weights .* logllhood, dims=3) + sum(weights .* logprior, dims=3)
+    MC_estimator = t[1:end-1] .* mean(logllhood, dims=3) + mean(logprior, dims=3)
 
-    IS_estimator = sum(weights .* ((t[2:end] .* logllhood) .+ logprior); dims=3)
-    MC_estimator = mean((t[1:end-1] .* logllhood) .+ logprior; dims=3)
-
-    m.verbose && println("Prior loss: ", -mean(logprior[end, :, :]), " LLhood loss: ", -mean(logllhood[end, :, :]))
-    return -mean(sum(IS_estimator - MC_estimator; dims=1))*m.loss_scaling, st, seed
+    @ignore_derivatives m.verbose && println("Prior loss: ", -mean(logprior), " LLhood loss: ", -mean(logllhood))
+    return -mean(sum(IS_estimator - MC_estimator; dims=1) .- ex_prior)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

@@ -164,7 +164,6 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
-
         # Resampling tempered weights
         weights = @ignore_derivatives softmax((t[k+1] - t[k]) .* logllhood, dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
@@ -174,7 +173,7 @@ function thermo_loss(
 
         # IS_estimator - MC_estimator
         lp_loss = sum(weights_resampled .* logprior_resampled; dims=2) .- mean(logprior_resampled; dims=2)
-        ll_loss = (t[k+1] .* sum(weights_resampled .* logllhood_resampled; dims=2)) .- (t[k] .* mean(logllhood_resampled; dims=2))
+        ll_loss = sum(weights_resampled .* (t[k+1] .* logllhood_resampled); dims=2) .- mean(t[k] .* logllhood_resampled; dims=2)
         loss += ll_loss + lp_loss
         m.verbose && println("Temp: ", t[k], " Prior loss: ", -mean(lp_loss), " LLhood loss: ", -mean(ll_loss))
     end

@@ -29,7 +29,7 @@ function plot_final_distribution()
 
     output = first(model.posterior_sample(model, x_test, ps, st, 1)) |> cpu_device()
     
-    final_samples = vec(output[2, :, :])
+    final_samples = vec(output[:, :, 1])
     
     # Plot the histogram of samples
     p = histogram(final_samples, bins=50, normalize=true, alpha=0.6, label="Samples")
@@ -43,7 +43,7 @@ function plot_final_distribution()
 
     z_prior = first(model.prior.sample_z(model.prior, model.IS_samples, ps.ebm, st.ebm, 1)) |> cpu_device()
 
-    @test size(z_prior) == size(output[1, :, :])
+    @test size(z_prior) == size(output[:, :, 1])
 end
 
 @testset "Langevin Tests" begin

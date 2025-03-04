@@ -153,31 +153,27 @@ function thermo_loss(
     t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
 
-    T, Q, S, B = size(z)..., size(x)[end]
+    Q, S, T, B = size(z)..., size(x)[end]
+    t = reshape(device(t), 1, 1, T+1)
 
-    loss = zeros(full_quant, B) |> device
-    ex_prior = m.prior.contrastive_div ? mean(first(log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε))) : full_quant(0)
-    @inbounds for k in 1:T
-        # Log-dists
-        logprior, st_ebm = log_prior(m.prior, z[k, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[k, :, :]; seed=seed, ε=m.ε)
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
+    # Log-dists
+    z = reshape(z, Q, T*S)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
+    
+    logprior = reshape(logprior, 1, S, T)
+    logllhood = reshape(logllhood, B, S, T)
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:, :, 1]) : full_quant(0)
 
-        # Resampling tempered weights
-        weights = @ignore_derivatives softmax((t[k+1] - t[k]) .* logllhood, dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)) 
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))' .- ex_prior
-        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-
-        # IS_estimator - MC_estimator
-        lp_loss = sum(weights_resampled .* logprior_resampled; dims=2) .- mean(logprior_resampled; dims=2)
-        ll_loss = sum(weights_resampled .* (t[k+1] .* logllhood_resampled); dims=2) .- mean(t[k] .* logllhood_resampled; dims=2)
-        loss += ll_loss + lp_loss
-        m.verbose && println("Temp: ", t[k], " Prior loss: ", -mean(lp_loss), " LLhood loss: ", -mean(ll_loss))
-    end
-
+    weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
+    lp_loss = sum(weights .* logprior, dims=2) .- mean(logprior, dims=2)
+    ll_loss = (t[:,:,2:end] .* sum(weights .* logllhood, dims=2)) .- (t[:,:,1:end-1] .* mean(logllhood, dims=2))
+    
+    m.verbose && println("Log-prior: ", -mean(lp_loss), " Log-llhood: ", -mean(ll_loss))
+    
+    loss = sum(lp_loss .+ ll_loss; dims=3) .- ex_prior
     return -mean(loss)*m.loss_scaling, st, seed
 
 end

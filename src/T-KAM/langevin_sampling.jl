@@ -217,7 +217,7 @@ function autoMALA_sampler(
     end
 
     T, Q, B = length(t), size(z)...
-    output = reshape(z, 1, Q, B)
+    output = reshape(z, Q, B, 1)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -269,7 +269,7 @@ function autoMALA_sampler(
                 end
             end
         end
-        output = vcat(output, reshape(z, 1, Q, B))
+        output = cat(output, reshape(z, Q, B, 1); dims=3)
         k += 1
     end
 

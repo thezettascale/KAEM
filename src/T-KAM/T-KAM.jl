@@ -100,12 +100,11 @@ function importance_loss(
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
-    logprior_resampled = logprior_resampled .- ex_prior
     @tullio loss_prior[b] := weights_resampled[b, s] * (logprior_resampled[b, s])
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
+    return -mean(loss_prior .- ex_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
 function POST_loss(

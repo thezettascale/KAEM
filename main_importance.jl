@@ -15,8 +15,8 @@ conf = Dict(
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
-ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
-ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
+ENV["FULL_QUANT"] = retrieve(conf, "MIX_PRECISION", "full_precision")
+ENV["HALF_QUANT"] = retrieve(conf, "MIX_PRECISION", "reduced_precision")
 
 include("src/ML_pipeline/trainer.jl")
 using .trainer
@@ -24,8 +24,49 @@ using .trainer
 commit!(conf, "MALA", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
-rng = Random.seed!(1)
-t = init_trainer(rng, conf, dataset)
-train!(t)
+prior_type = Dict(
+    1 => "lognormal",
+    2 => "gaussian",
+    3 => "uniform",
+)
+
+prior_domain = Dict(
+    1 => "0,10",
+    2 => "-1.5,1.5",
+    3 => "0,1",
+)
+
+bases = Dict(
+    4 => "RBF",
+    5 => "FFT",
+)
+
+acts = Dict(
+    4 => "silu",
+    5 => "none",
+)
+
+if dataset == "CIFA10" || dataset == "SVHN" 
+    rng = Random.seed!(1)
+    t = init_trainer(rng, conf, dataset)
+    train!(t)
+else
+    for prior_idx in [1, 2, 3]
+        commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
+        commit!(conf, "EBM_PRIOR", "grid_range", prior_domain[prior_idx])
+        for base_idx in [4, 5]
+            commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])
+            commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
+            commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])
+            commit!(conf, "EBM_PRIOR", "base_activation", acts[base_idx])
+            rng = Random.seed!(1)
+            t = init_trainer(rng, conf, dataset)
+            train!(t)
+        end
+    end     
+end
+
+
+
 
 

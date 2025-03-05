@@ -4,10 +4,10 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/mixture_prior.jl")
+include("../T-KAM/ebm_prior.jl")
 include("../T-KAM/KAN_likelihood.jl")
 include("../utils.jl")
-using .ebm_mix_prior
+using .ebm_ebm_prior
 using .KAN_likelihood
 using .Utils
 
@@ -16,14 +16,14 @@ parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 MC_sample_size = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))
-z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
+z_dim = last(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
 
 function test_generate()
     Random.seed!(42)
     lkhood = init_KAN_lkhood(conf, (out_dim, out_dim, 1); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
@@ -41,7 +41,7 @@ function test_cnn_generate()
     lkhood = init_KAN_lkhood(conf, (32, 32, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
@@ -61,7 +61,7 @@ function test_SEQ_generate()
     lkhood = init_KAN_lkhood(conf, (out_dim, 8); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
@@ -79,7 +79,7 @@ function test_logllhood()
     lkhood = init_KAN_lkhood(conf, (out_dim, out_dim, 1); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
@@ -96,7 +96,7 @@ function test_derivative()
     lkhood = init_KAN_lkhood(conf, (out_dim, out_dim, 1); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
@@ -115,7 +115,7 @@ function test_cnn_derivative()
     lkhood = init_KAN_lkhood(conf, (32, 32, out_dim); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = ComponentArray(ebm=ebm_ps, gen=gen_ps) |> device
@@ -136,7 +136,7 @@ function test_SEQ_derivative()
     lkhood = init_KAN_lkhood(conf, (out_dim, 8); lkhood_seed=1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    prior = init_mix_prior(conf; prior_seed=1)
+    prior = init_ebm_prior(conf; prior_seed=1)
     ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, prior)
 
     ps = ComponentArray(ebm=ebm_ps, gen=gen_ps) |> device

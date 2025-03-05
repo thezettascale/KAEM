@@ -15,8 +15,8 @@ conf = Dict(
 parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
-ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
-ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
+ENV["FULL_QUANT"] = retrieve(conf, "EBMED_PRECISION", "full_precision")
+ENV["HALF_QUANT"] = retrieve(conf, "EBMED_PRECISION", "reduced_precision")
 
 include("src/ML_pipeline/trainer.jl")
 using .trainer

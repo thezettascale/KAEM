@@ -4,29 +4,34 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/mixture_prior.jl")
+include("../T-KAM/ebm_prior.jl")
 include("../utils.jl")
-using .ebm_mix_prior
+using .ebm_ebm_prior
 using .Utils
 
 conf = ConfParse("src/tests/test_conf.ini")
 parse_conf!(conf)
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-z_dim = last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
+p_size = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
+q_size = last(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
 
 function test_sampling()
     Random.seed!(42)
-    prior = init_mix_prior(conf; prior_seed=1) 
+    prior = init_ebm_prior(conf; prior_seed=1) 
+
+    @test prior.p_size == p_size
+    @test prior.q_size == q_size
+
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
     z_test = first(prior.sample_z(prior, b_size, ps, st,1))
-    @test all(size(z_test) .== (z_dim, b_size))
+    @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
 function test_log_prior()
     Random.seed!(42)
-    prior = init_mix_prior(conf; prior_seed=1) 
+    prior = init_ebm_prior(conf; prior_seed=1) 
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
@@ -37,7 +42,7 @@ end
 
 function test_log_prior_derivative()
     Random.seed!(42)
-    prior = init_mix_prior(conf; prior_seed=1) 
+    prior = init_ebm_prior(conf; prior_seed=1) 
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 

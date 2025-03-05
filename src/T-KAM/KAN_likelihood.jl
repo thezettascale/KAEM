@@ -9,12 +9,12 @@ using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
 include("univariate_functions.jl")
-include("mixture_prior.jl")
+include("ebm_prior.jl")
 include("resamplers.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, hq, fq
-using .ebm_mix_prior
+using .ebm_ebm_prior
 using .WeightResamplers
 
 output_activation_mapping = Dict(
@@ -76,6 +76,7 @@ function KAN_gen(
         The updated seed.
     """
     num_samples = size(z)[end]
+    z = dropdims(sum(z, dims=2); dims=2) # Sum over p
 
     # KAN functions
     for i in 1:lkhood.depth
@@ -111,7 +112,7 @@ function CNN_gen(
         The generated data.
         The updated seed.
     """
-    z = reshape(z, 1, 1, size(z)...)
+    z = reshape(sum(z, dims=2), 1, 1, first(size(z)), last(size(z)))
 
     for i in 1:lkhood.depth
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
@@ -159,8 +160,7 @@ function SEQ_gen(
         The generated data.
         The updated seed.
     """
-    z = reshape(z, size(z, 1), 1, size(z, 2)) 
-
+    z = sum(z, dims=2)
     
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
@@ -224,7 +224,7 @@ function log_likelihood(
         The unnormalized log-likelihood.
         The updated seed.
     """
-    Q, S, B = size(z)..., size(x)[end]
+    Q, P, S, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
 
@@ -280,9 +280,9 @@ function init_KAN_lkhood(
 
     q_size = (
         try 
-            last(parse.(Int, retrieve(conf, "MIX_PRIOR", "layer_widths")))
+            last(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
         catch
-            last(parse.(Int, split(retrieve(conf, "MIX_PRIOR", "layer_widths"), ",")))
+            last(parse.(Int, split(retrieve(conf, "EBM_PRIOR", "layer_widths"), ",")))
         end
     )
 

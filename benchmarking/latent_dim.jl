@@ -11,7 +11,7 @@ conf = ConfParse("img_config.ini")
 parse_conf!(conf)
 
 function benchmark_dim(n_z)
-    commit!(conf, "MIX_PRIOR", "layer_widths", "$(n_z), $(2*n_z+1)")
+    commit!(conf, "EBM_PRIOR", "layer_widths", "$(n_z), $(2*n_z+1)")
     commit!(conf, "KAN_LIKELIHOOD", "layer_widths", "$(2*n_z+1)")
 
     Random.seed!(42)

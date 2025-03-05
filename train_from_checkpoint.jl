@@ -11,8 +11,8 @@ conf = (occursin("MNIST", x)|| occursin("FMNIST", x)) ? ConfParse("config/nist_c
 conf = (occursin("PTB", x) || occursin("SMS_SPAM", x)) ? ConfParse("config/text_config.ini") : conf
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
-ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
-ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
+ENV["FULL_QUANT"] = retrieve(conf, "EBMED_PRECISION", "full_precision")
+ENV["HALF_QUANT"] = retrieve(conf, "EBMED_PRECISION", "reduced_precision")
 
 # EDIT:
 commit!(conf, "MALA", "use_langevin", "false")

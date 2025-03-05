@@ -9,19 +9,19 @@ using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
-include("mixture_prior.jl")
+include("ebm_prior.jl")
 include("KAN_likelihood.jl")
 include("langevin_sampling.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
-using .ebm_mix_prior
+using .ebm_ebm_prior
 using .KAN_likelihood
 using .LangevinSampling: autoMALA_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 struct T_KAM <: Lux.AbstractLuxLayer
-    prior::mix_prior
+    prior::ebm_prior
     lkhood::KAN_lkhood 
     train_loader::DataLoader
     test_loader::DataLoader
@@ -86,8 +86,8 @@ function importance_loss(
     @reset st.ebm = st_ebm
 
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0) # Expected prior, (if contrastive divergence)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
+    ex_prior = mean(logprior)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
@@ -117,17 +117,16 @@ function POST_loss(
     )
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
-    tup = isa(x, Tuple)
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
     
     # Log-dists
-    logprior_prior, st_ebm = log_prior(m.prior, z[1, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε, agg=!tup)
-    ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : full_quant(0) # Expected prior, (if contrastive divergence)
-    logprior_pos, st_ebm = log_prior(m.prior, z[2, :, :], ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε, agg=!tup)
+    logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+    ex_prior = mean(logprior_prior)
+    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
 
-    x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[2, :, :])
+    x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[:, :, :, 2])
     logllhood = mse(x̂, x; agg=mean)
     logprior = ex_prior - mean(logprior_pos)
 
@@ -153,27 +152,25 @@ function thermo_loss(
     t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
 
-    Q, S, T, B = size(z)..., size(x)[end]
+    Q, P, S, T, B = size(z)..., size(x)[end]
     t = reshape(device(t), 1, 1, T+1)
 
     # Log-dists
-    z = reshape(z, Q, T*S)
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; normalize=m.prior.contrastive_div, ε=m.ε)
+    z = reshape(z, Q, P, T*S)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
     logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
-    ex_prior = m.prior.contrastive_div ? mean(logprior[:, :, 1]) : full_quant(0)
 
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
-    lp_loss = sum(weights .* logprior, dims=2) .- mean(logprior, dims=2)
-    ll_loss = (t[:,:,2:end] .* sum(weights .* logllhood, dims=2)) .- (t[:,:,1:end-1] .* mean(logllhood, dims=2))
+    IS_estimator = sum(weights .* logprior; dims=2) + t[:,:,2:end] .* sum(weights .* logllhood; dims=2)
+    MC_estimator = mean(logprior; dims=2) .+ t[:,:,1:end-1] .* mean(logllhood; dims=2)
+    loss = sum(IS_estimator .- MC_estimator; dims=3)
     
-    m.verbose && println("Log-prior: ", -mean(lp_loss), " Log-llhood: ", -mean(ll_loss))
-    
-    loss = sum(lp_loss .+ ll_loss; dims=3) .- ex_prior
+    m.verbose && println("Log-prior: ", -mean(logprior), " Log-llhood: ", -mean(logllhood))
     return -mean(loss)*m.loss_scaling, st, seed
 
 end
@@ -201,7 +198,8 @@ function update_model_grid(
 
     if model.update_prior_grid
         z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-        Q, B = size(z)
+        Q, P, B = size(z)
+        z = reshape(z, P, Q*B)
         @reset st.ebm = st_ebm
 
         for i in 1:model.prior.depth
@@ -210,7 +208,7 @@ function update_model_grid(
             @reset st.ebm[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, size(z, 2), Q*B) : dropdims(sum(z, dims=1); dims=1)
+            z = i == 1 ? reshape(z, size(z, 2), P*Q*B) : dropdims(sum(z, dims=1); dims=1)
 
             if model.prior.layernorm && i < model.prior.depth
                 z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
@@ -222,6 +220,7 @@ function update_model_grid(
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, half_quant.(ps), st, seed
 
     z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+    z = dropdims(sum(z, dims=2); dims=2)
     @reset st.ebm = st_ebm
 
     for i in 1:model.lkhood.depth
@@ -268,26 +267,26 @@ function init_T_KAM(
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
-    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(full_quant, retrieve(conf, "EBMED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 
         size(dataset, 1) * size(dataset, 2))
     )
 
-    prior_fcn = retrieve(conf, "MIX_PRIOR", "spline_function")
-    if prior_fcn == "FFT" || prior_fcn == "Morlet" || prior_fcn == "Shannon"
+    prior_fcn = retrieve(conf, "EBM_PRIOR", "spline_function")
+    if prior_fcn == "FFT" 
         update_prior_grid = false
-        commit!(conf, "MIX_PRIOR", "layer_norm", "true")
+        commit!(conf, "EBM_PRIOR", "layer_norm", "true")
     end
 
     lkhood_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
-    if lkhood_fcn == "FFT" || lkhood_fcn == "Morlet" || lkhood_fcn == "Shannon"
+    if lkhood_fcn == "FFT" 
         update_llhood_grid = false
         commit!(conf, "KAN_LIKELIHOOD", "layer_norm", "true")
     end
     
-    prior_model = init_mix_prior(conf; prior_seed=prior_seed)
+    prior_model = init_ebm_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
 
     grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))

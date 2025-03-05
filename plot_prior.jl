@@ -5,13 +5,13 @@ ENV["GPU"] = "true"
 include("src/T-KAM/T-KAM.jl")
 include("src/ML_pipeline/trainer.jl")
 include("src/T-KAM/inversion_sampling.jl")
-include("src/T-KAM/mixture_prior.jl")
+include("src/T-KAM/ebm_prior.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .trainer
 using .InverseSampling: prior_fwd
 using .Utils: device, half_quant, hq
-using .ebm_mix_prior: log_partition_function
+using .ebm_ebm_prior: log_partition_function
 
 prior_type = "lognormal"
 fcn_type = "RBF"
@@ -31,14 +31,14 @@ for dataset_name in datasets
 
     conf = ConfParse(conf_loc)
     parse_conf!(conf)
-    commit!(conf, "MIX_PRIOR", "π_0", prior_type)
+    commit!(conf, "EBM_PRIOR", "π_0", prior_type)
 
     if fcn_type == "RBF"
-        commit!(conf, "MIX_PRIOR", "spline_function", "RBF")
-        commit!(conf, "MIX_PRIOR", "base_activation", "silu")
+        commit!(conf, "EBM_PRIOR", "spline_function", "RBF")
+        commit!(conf, "EBM_PRIOR", "base_activation", "silu")
     else
-        commit!(conf, "MIX_PRIOR", "spline_function", "FFT")
-        commit!(conf, "MIX_PRIOR", "base_activation", "none")
+        commit!(conf, "EBM_PRIOR", "spline_function", "FFT")
+        commit!(conf, "EBM_PRIOR", "base_activation", "none")
     end
 
     saved_data = load(file)

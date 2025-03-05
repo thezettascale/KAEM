@@ -7,15 +7,15 @@ using Zygote: withgradient
 using Flux: mse
 
 include("../utils.jl")
-using .Utils: device, next_rng, half_quant, full_quant
+using .Utils: device, next_rng, half_quant, full_quant, fq
 
 # Gaussian for testing purposes
 if occursin("langevin_tests.jl", string(@__FILE__))
     log_prior(m, z, ps, st; normalize=false) = full_quant(0), 0, st
 else
-    include("mixture_prior.jl")
+    include("ebm_prior.jl")
     include("KAN_likelihood.jl")
-    using .ebm_mix_prior: log_prior
+    using .ebm_ebm_prior: log_prior
     using .KAN_likelihood: log_likelihood
 end
 
@@ -38,7 +38,8 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
         The positive-definite mass matrix, (only the diagonals are returned for efficiency).
         The updated seed.
     """
-    Σ, Q = diag(cov(cpu_device()(z'))), size(z, 1)
+    Q, P, B = size(z)
+    Σ = diag(cov(cpu_device()(reshape(z, Q*P, B)')))
     
     # Pre-conditioner
     seed, rng = next_rng(seed)
@@ -47,8 +48,10 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
 
     # Momentum
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), size(z, 2))
+    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), B)
 
+    p = reshape(p, Q, P, B)
+    Σ_AM = reshape(Σ_AM, Q, P)
     return device(p), device(Σ_AM), seed
 end
 
@@ -216,8 +219,8 @@ function autoMALA_sampler(
         @reset st.η_init = st.η_init |> cpu_device()
     end
 
-    T, Q, B = length(t), size(z)...
-    output = reshape(z, Q, B, 1)
+    T, Q, P, B = length(t), size(z)...
+    output = reshape(z, Q, P, B, 1)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -229,9 +232,9 @@ function autoMALA_sampler(
     ll_fn = m.lkhood.seq_length > 1 ? (x,y) -> cross_entropy_sum(x, y; ε=m.ε) : (x,y) -> mse(x, y; agg=sum)
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant)
-        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; normalize=false, ε=m.ε)
+        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
+        x̂ = m.lkhood.output_activation(x̂) |> fq
         logpos = sum(lp) + t_k * ll_fn(x̂, x)
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
@@ -269,7 +272,7 @@ function autoMALA_sampler(
                 end
             end
         end
-        output = cat(output, reshape(z, Q, B, 1); dims=3)
+        output = cat(output, reshape(z, Q, P, B, 1); dims=4)
         k += 1
     end
 

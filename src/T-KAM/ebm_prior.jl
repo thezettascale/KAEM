@@ -214,10 +214,10 @@ function init_ebm_prior(
     prior_type = retrieve(conf, "EBM_PRIOR", "π_0")
 
     grid_range = Dict(
-        "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
-        "lognormal" => (0,10) .|> half_quant,
-        "gaussian" => (-1.5,1.5) .|> half_quant,
-        "uniform" => (0,1) .|> half_quant,
+        "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range")),
+        "lognormal" => [0,10] .|> half_quant,
+        "gaussian" => [-1.5,1.5] .|> half_quant,
+        "uniform" => [0,1] .|> half_quant,
     )[prior_type]
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))

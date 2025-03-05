@@ -73,7 +73,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     """Gauss-Legendre quadrature for numerical integration"""
 
     # Map domains
-    a, b = minimum(st[Symbol("1")].grid), maximum(st[Symbol("1")].grid)
+    a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
     if b == ebm.fcns_qp[Symbol("1")].grid_size
         a, b = ebm.fcns_qp[Symbol("1")].grid_range
     end
@@ -88,7 +88,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     nodes, st = prior_fwd(ebm, ps, st, nodes)
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
-    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[g]
+    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
     return cumsum(trapz .|> full_quant, dims=3), nodes_cpu, st
 end
 
@@ -260,7 +260,7 @@ function init_ebm_prior(
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
-    weights = full_quant.(weights)
+    weights = full_quant.(weights)'
 
     return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights)
 end

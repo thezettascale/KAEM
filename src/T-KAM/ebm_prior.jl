@@ -122,7 +122,7 @@ function sample_prior(
     cdf = cat(zeros(ebm.q_size, ebm.p_size, 1), cpu_device()(cdf), dims=3) # Add 0 to start of CDF
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, full_quant, ebm.q_size, ebm.p_size, num_samples) .* cdf[:, :, end] 
+    rand_vals = rand(rng, full_quant, 1, ebm.p_size, num_samples) .* cdf[:, :, end] 
     
     z = Array{full_quant}(undef, ebm.q_size, ebm.p_size, num_samples)
     Threads.@threads for q in 1:ebm.q_size

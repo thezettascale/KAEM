@@ -204,7 +204,6 @@ function init_ebm_prior(
     spline_function = retrieve(conf, "EBM_PRIOR", "spline_function")
     grid_size = parse(Int, retrieve(conf, "EBM_PRIOR", "grid_size"))
     grid_update_ratio = parse(half_quant, retrieve(conf, "EBM_PRIOR", "grid_update_ratio"))
-    grid_range = parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
     ε_scale = parse(half_quant, retrieve(conf, "EBM_PRIOR", "ε_scale"))
     μ_scale = parse(full_quant, retrieve(conf, "EBM_PRIOR", "μ_scale"))
     σ_base = parse(full_quant, retrieve(conf, "EBM_PRIOR", "σ_base"))
@@ -213,6 +212,14 @@ function init_ebm_prior(
     τ_trainable = parse(Bool, retrieve(conf, "EBM_PRIOR", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     prior_type = retrieve(conf, "EBM_PRIOR", "π_0")
+
+    grid_range = Dict(
+        "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
+        "lognormal" => (0,10) .|> half_quant,
+        "gaussian" => (-1.5,1.5) .|> half_quant,
+        "uniform" => (0,1) .|> half_quant,
+    )[prior_type]
+
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, Lux.testmode(s); seed=seed, ε=eps)

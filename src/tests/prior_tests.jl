@@ -4,7 +4,7 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/ebm_prior.jl")
+include("../T-KAM/EBM_prior.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .Utils

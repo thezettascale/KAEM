@@ -9,7 +9,7 @@ using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
 include("univariate_functions.jl")
-include("ebm_prior.jl")
+include("EBM_prior.jl")
 include("resamplers.jl")
 include("../utils.jl")
 using .univariate_functions

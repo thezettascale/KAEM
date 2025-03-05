@@ -13,7 +13,7 @@ using .Utils: device, next_rng, half_quant, full_quant, fq
 if occursin("langevin_tests.jl", string(@__FILE__))
     log_prior(m, z, ps, st; normalize=false) = full_quant(0), 0, st
 else
-    include("ebm_prior.jl")
+    include("EBM_prior.jl")
     include("KAN_likelihood.jl")
     using .ebm_ebm_prior: log_prior
     using .KAN_likelihood: log_likelihood

@@ -5,7 +5,7 @@ ENV["GPU"] = "true"
 include("src/T-KAM/T-KAM.jl")
 include("src/ML_pipeline/trainer.jl")
 include("src/T-KAM/inversion_sampling.jl")
-include("src/T-KAM/ebm_prior.jl")
+include("src/T-KAM/EBM_prior.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .trainer

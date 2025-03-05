@@ -9,7 +9,7 @@ using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
-include("ebm_prior.jl")
+include("EBM_prior.jl")
 include("KAN_likelihood.jl")
 include("langevin_sampling.jl")
 include("univariate_functions.jl")

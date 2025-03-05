@@ -215,7 +215,7 @@ function init_ebm_prior(
 
     grid_range = Dict(
         "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range")),
-        "lognormal" => [0,10] .|> half_quant,
+        "lognormal" => [0,5] .|> half_quant,
         "gaussian" => [-1.5,1.5] .|> half_quant,
         "uniform" => [0,1] .|> half_quant,
     )[prior_type]

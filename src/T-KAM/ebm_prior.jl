@@ -80,18 +80,18 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
         a, b = ebm.fcns_qp[Symbol("1")].grid_range
     end
     
-    nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* ebm.nodes 
-    weights = (b - a) ./ 2 .* ebm.weights |> device
-    f_nodes = device(nodes)
+    nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
+    weights = (b - a) ./ 2 .* device(ebm.weights)
+    nodes_cpu = cpu_device()(nodes)
 
-    π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(f_nodes, ε) : ebm.π_pdf(f_nodes)
+    π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(nodes, ε) : ebm.π_pdf(nodes)
 
     # Energy function of each component, q -> #
-    f_nodes, st = prior_fwd(ebm, ps, st, f_nodes)
+    nodes, st = prior_fwd(ebm, ps, st, nodes)
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
-    @tullio trapz[q, p, g] := (exp(f_nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-    return cumsum(trapz .|> full_quant, dims=3), nodes, st
+    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
+    return cumsum(trapz .|> full_quant, dims=3), nodes_cpu, st
 end
 
 function sample_prior(

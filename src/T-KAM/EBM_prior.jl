@@ -59,10 +59,8 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     π_grid = ebm.prior_type == "lognormal" ? ebm.π_pdf(f_grid, ε) : ebm.π_pdf(f_grid)
     grid_size = size(f_grid, 2)
 
-    # Energy function of each component, q -> p
+    # Energy function of each component
     f_grid, st = prior_fwd(ebm, ps, st, f_grid)
-
-    # Filter out components
     @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
@@ -86,11 +84,11 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(nodes, ε) : ebm.π_pdf(nodes)
 
-    # Energy function of each component, q -> #
+    # Energy function of each component
     nodes, st = prior_fwd(ebm, ps, st, nodes)
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
-    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
+    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[g]
     return cumsum(trapz .|> full_quant, dims=3), nodes_cpu, st
 end
 
@@ -262,7 +260,7 @@ function init_ebm_prior(
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
-    weights = full_quant.(weights)'
+    weights = full_quant.(weights)
 
     return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights)
 end

@@ -267,7 +267,7 @@ function init_T_KAM(
     data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
-    loss_scaling = parse(full_quant, retrieve(conf, "EBMED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 

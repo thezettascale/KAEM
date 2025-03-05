@@ -1,6 +1,6 @@
 #!/bin/bash
 
-datasets=("MNIST" "FMNIST" "DARCY_FLOW")
+datasets=("MNIST" "FMNIST" "SVHN" "CIFAR10")
 
 for dataset in "${datasets[@]}"; do
     session_name="IS_$dataset"

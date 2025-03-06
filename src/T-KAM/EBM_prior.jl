@@ -178,7 +178,7 @@ function log_prior(
 
     for q in 1:ebm.q_size
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        log_p += dropdims(sum(f[q, :, :] .|> fq; dims=1); dims=1)
+        log_p += dropdims(sum(f[q, :, :] |> fq; dims=1); dims=1) # Accumulate in full-precision
     end
 
     return log_p, st

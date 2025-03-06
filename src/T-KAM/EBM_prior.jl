@@ -75,7 +75,8 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     # Map domains
     a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
     if any(b .== ebm.fcns_qp[Symbol("1")].grid_size)
-        a, b = ebm.fcns_qp[Symbol("1")].grid_range
+        a = fill(half_quant, first(ebm.fcns_qp[Symbol("1")].grid_range))
+        b = fill(half_quant, last(ebm.fcns_qp[Symbol("1")].grid_range))
     end
     
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)

@@ -152,7 +152,7 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
 
     Q, P, S, T, B = size(z)..., size(x)[end]
-    t = reshape(device(t), 1, 1, T+1)
+    t = @ignore_derivatives reshape(device(t), 1, 1, T+1)
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
@@ -161,15 +161,17 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
-    logprior = reshape(logprior, S, T)
+    logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
 
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
-    ll_plus = t[:,:,2:end] .* logllhood
-    ll_minus = t[:,:,1:end-1] .* logllhood
-    @tullio IS_estimator[b, t] := weights[b, s, t] * (logprior[s, t] + ll_plus[b, s, t])
-    @tullio MC_estimator[b, t] := logprior[s, t] + ll_minus[b, s, t]
-    loss = sum(IS_estimator .- (MC_estimator ./ m.IS_samples); dims=2)
+    # ll_plus = t[:,:,2:end] .* logllhood
+    # ll_minus = t[:,:,1:end-1] .* logllhood
+    # @tullio IS_estimator[b, t] := weights[b, s, t] * (logprior[s, t] + ll_plus[b, s, t])
+    # @tullio MC_estimator[b, t] := logprior[s, t] + ll_minus[b, s, t]
+    IS_estimator = sum(weights .* (logprior .+ (t[:,:,2:end] .* logllhood)), dims=2)
+    MC_estimator = mean(logprior .+ (t[:,:,1:end-1] .* logllhood), dims=2)
+    loss = sum(IS_estimator .- MC_estimator; dims=3)
     
     m.verbose && println("Log-prior: ", -mean(logprior), " Log-llhood: ", -mean(logllhood))
     return -mean(loss)*m.loss_scaling, st, seed

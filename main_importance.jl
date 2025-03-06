@@ -45,7 +45,7 @@ if dataset == "CIFA10" || dataset == "SVHN"
     t = init_trainer(rng, conf, dataset)
     train!(t)
 else
-    for prior_idx in [1, 2, 3]
+    for prior_idx in [3,2,1]
         commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
         for base_idx in [4, 5]
             commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])

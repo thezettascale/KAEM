@@ -210,10 +210,12 @@ function init_ebm_prior(
     init_τ = parse(full_quant, retrieve(conf, "EBM_PRIOR", "init_τ"))
     τ_trainable = parse(Bool, retrieve(conf, "EBM_PRIOR", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
+
+    grid_range = parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
     prior_type = retrieve(conf, "EBM_PRIOR", "π_0")
 
     grid_range_first = Dict(
-        "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range")),
+        "ebm" => grid_range,
         "lognormal" => [0,4] .|> half_quant,
         "gaussian" => [-1,1] .|> half_quant,
         "uniform" => [0,1] .|> half_quant,

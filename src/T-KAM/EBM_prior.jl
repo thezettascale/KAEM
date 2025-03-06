@@ -65,7 +65,7 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
-    exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] .|> fq
+    exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] |> fq
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
     return cumsum(trapz, dims=3), grid, st
 end
@@ -97,7 +97,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
     @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-    return cumsum(trapz .|> fq, dims=3), nodes_cpu, st
+    return cumsum(trapz |> fq, dims=3), nodes_cpu, st
 end
 
 function sample_prior(

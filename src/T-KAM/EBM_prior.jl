@@ -117,7 +117,7 @@ function sample_prior(
         seed: The updated seed.
     """
 
-    cdf, grid, st = ebm.quad(ebm, ps, st; ε=ε)
+    cdf, grid, st = ebm.quad(ebm, ps, st)
     grid_size = size(grid, 2)
     cdf = cat(zeros(ebm.q_size, ebm.p_size, 1), cpu_device()(cdf), dims=3) # Add 0 to start of CDF
 
@@ -179,7 +179,7 @@ function log_prior(
 
     log_p = zeros(full_quant, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
-    log_Z, _, st = normalize ? ebm.quad(ebm, ps, st; ε=ε) : full_quant(0), full_quant(0), st
+    log_Z, _, st = normalize ? ebm.quad(ebm, ps, st) : full_quant(0), full_quant(0), st
     log_Z = log.(log_Z[:, :, end])
 
     for q in 1:ebm.q_size
@@ -266,9 +266,10 @@ function init_ebm_prior(
     contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
 
     quadrature_method = Dict(
-        "gausslegendre" => gausslegendre_quadrature,
-        "trapezium" => trapezium_quadrature
+        "gausslegendre" => (m, p, s) -> gausslegendre_quadrature(m, p, s; ε=eps),
+        "trapezium" => (m, p, s) -> trapezium_quadrature(m, p, s; ε=eps)
     )[retrieve(conf, "EBM_PRIOR", "quadrature_method")]
+
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant

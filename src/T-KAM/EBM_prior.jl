@@ -212,7 +212,7 @@ function init_ebm_prior(
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     prior_type = retrieve(conf, "EBM_PRIOR", "π_0")
 
-    grid_range = Dict(
+    grid_range_first = Dict(
         "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range")),
         "lognormal" => [0,4] .|> half_quant,
         "gaussian" => [-1,1] .|> half_quant,
@@ -229,6 +229,8 @@ function init_ebm_prior(
         base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
         .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
 
+        grid_range_i = i == 1 ? grid_range_first : grid_range
+
         func = init_function(
         widths[i],
         widths[i+1];
@@ -237,7 +239,7 @@ function init_ebm_prior(
         spline_function=spline_function,
         grid_size=grid_size,
         grid_update_ratio=grid_update_ratio,
-        grid_range=Tuple(grid_range),
+        grid_range=Tuple(grid_range_i),
         ε_scale=ε_scale,
         σ_base=base_scale,
         σ_spline=σ_spline,

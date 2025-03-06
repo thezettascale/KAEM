@@ -89,7 +89,7 @@ end
 function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     """Gauss-Legendre quadrature for numerical integration"""
 
-    nodes, weights, _ = @ignore_derivatives get_gausslegendre(ebm, ps, st)
+    nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
     π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(nodes, ε) : ebm.π_pdf(nodes)
 
     # Energy function of each component

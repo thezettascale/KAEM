@@ -185,13 +185,17 @@ function log_prior(
 
     log_p = zeros(full_quant, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
-    log_Z, _, st = normalize ? ebm.quad(ebm, ps, st) : device(zeros(full_quant, ebm.q_size, ebm.p_size, 1)), full_quant(0), st
-    log_Z = log.(log_Z[:, :, end])
+    log_Z = full_quant(0)
+    if normalize
+        Z, _, st = ebm.quad(ebm, ps, st)
+        log_Z = log.(Z[:, :, end])
+    end
 
     for q in 1:ebm.q_size
+        log_Zq = normalize ? log_Z[q, :] : log_Z
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :] |> fq
-        log_p += dropdims(sum(lp .- log_Z[q, :, :]; dims=1); dims=1)
+        log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
     end
 
     return log_p, st

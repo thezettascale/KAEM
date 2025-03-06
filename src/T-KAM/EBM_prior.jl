@@ -31,7 +31,7 @@ struct ebm_prior <: Lux.AbstractLuxLayer
     quad::Function
     N_quad::Int
     nodes::AbstractArray{half_quant}
-    weights::AbstractArray{full_quant}
+    weights::AbstractArray{half_quant}
 end
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
@@ -174,11 +174,11 @@ function log_prior(
         The updated states of the ebm-prior.
     """
 
-    log_p = zeros(size(z)[end]) |> device
+    log_p = zeros(full_quant, size(z)[end]) |> device
 
     for q in 1:ebm.q_size
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        log_p += dropdims(sum(f[q, :, :]; dims=1); dims=1)
+        log_p += dropdims(sum(f[q, :, :] .|> fq; dims=1); dims=1)
     end
 
     return log_p, st
@@ -213,7 +213,7 @@ function init_ebm_prior(
 
     grid_range = Dict(
         "ebm" => parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range")),
-        "lognormal" => [0,10] .|> half_quant,
+        "lognormal" => [0,4] .|> half_quant,
         "gaussian" => [-1,1] .|> half_quant,
         "uniform" => [0,1] .|> half_quant,
     )[prior_type]
@@ -260,7 +260,7 @@ function init_ebm_prior(
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
-    weights = full_quant.(weights)'
+    weights = half_quant.(weights)'
 
     return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights)
 end

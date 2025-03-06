@@ -183,19 +183,19 @@ function log_prior(
         The updated states of the ebm-prior.
     """
 
-    log_p = zeros(full_quant, size(z)[end]) |> device
+    log_p = zeros(full_quant, 0, size(z)[2:end]...) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
     log_Z = full_quant(0)
     if normalize
-        Z, _, st = ebm.quad(ebm, ps, st)
-        log_Z = log.(Z[:, :, end])
+        norm, _, st = ebm.quad(ebm, ps, st)
+        log_Z = log.(norm[:, :, end] .+ ε)
     end
 
     for q in 1:ebm.q_size
-        log_Zq = normalize ? log_Z[q, :] : log_Z
+        log_Zq = normalize ? log_Z[q:q, :] : log_Z
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q, :, :] .+ log_π0[q, :, :] |> fq
-        log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
+        lp = f[q:q, :, :] .+ log_π0[q:q, :, :] |> fq
+        log_p = vcat(log_p, lp .- log_Zq)
     end
 
     return log_p, st

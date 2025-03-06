@@ -74,7 +74,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     # Map domains
     a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
-    if b == ebm.fcns_qp[Symbol("1")].grid_size
+    if any(b .== ebm.fcns_qp[Symbol("1")].grid_size)
         a, b = ebm.fcns_qp[Symbol("1")].grid_range
     end
     

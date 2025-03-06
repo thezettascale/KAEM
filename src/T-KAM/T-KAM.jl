@@ -161,13 +161,15 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
-    logprior = reshape(logprior, 1, S, T)
+    logprior = reshape(logprior, S, T)
     logllhood = reshape(logllhood, B, S, T)
 
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
-    IS_estimator = sum(weights .* logprior; dims=2) + t[:,:,2:end] .* sum(weights .* logllhood; dims=2)
-    MC_estimator = mean(logprior; dims=2) .+ t[:,:,1:end-1] .* mean(logllhood; dims=2)
-    loss = sum(IS_estimator .- MC_estimator; dims=3)
+    ll_plus = t[:,:,2:end] .* logllhood
+    ll_minus = t[:,:,1:end-1] .* logllhood
+    @tullio IS_estimator[b, t] := weights[b, s, t] * (logprior[s, t] + ll_plus[b, s, t])
+    @tullio MC_estimator[b, t] := logprior[s, t] + ll_minus[b, s, t]
+    loss = sum(IS_estimator .- (MC_estimator ./ m.IS_samples); dims=2)
     
     m.verbose && println("Log-prior: ", -mean(logprior), " Log-llhood: ", -mean(logllhood))
     return -mean(loss)*m.loss_scaling, st, seed

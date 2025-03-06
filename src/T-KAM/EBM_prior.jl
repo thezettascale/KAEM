@@ -32,6 +32,7 @@ struct ebm_prior <: Lux.AbstractLuxLayer
     N_quad::Int
     nodes::AbstractArray{half_quant}
     weights::AbstractArray{half_quant}
+    contrastive_div::Bool
 end
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
@@ -154,6 +155,7 @@ function log_prior(
     ps, 
     st;
     ε::full_quant=eps(full_quant),
+    normalize::Bool=false
     )
     """
     Evaluate the unnormalized log-probability of the ebm-prior.
@@ -176,10 +178,14 @@ function log_prior(
     """
 
     log_p = zeros(full_quant, size(z)[end]) |> device
+    log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
+    log_Z, _, st = normalize ? ebm.quad(ebm, ps, st; ε=ε) : full_quant(0), full_quant(0), st
+    log_Z = log.(log_Z[:, :, end])
 
     for q in 1:ebm.q_size
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        log_p += dropdims(sum(f[q, :, :] |> fq; dims=1); dims=1) # Accumulate in full-precision
+        lp = f[q, :, :] .+ log_π0[q, :, :] |> fq
+        log_p += dropdims(sum(lp .- log_Z[q, :, :]; dims=1); dims=1)
     end
 
     return log_p, st
@@ -257,6 +263,7 @@ function init_ebm_prior(
 
     end
 
+    contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
 
     quadrature_method = Dict(
         "gausslegendre" => gausslegendre_quadrature,
@@ -267,7 +274,7 @@ function init_ebm_prior(
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
 
-    return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights)
+    return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights, contrastive_div)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::ebm_prior)

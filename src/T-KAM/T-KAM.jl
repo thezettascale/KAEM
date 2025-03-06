@@ -86,8 +86,8 @@ function importance_loss(
     @reset st.ebm = st_ebm
 
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
-    ex_prior = mean(logprior)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : full_quant(0)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
@@ -156,18 +156,19 @@ function thermo_loss(
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
     logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : full_quant(0)
 
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
     IS_estimator = sum(weights .* (logprior .+ (t[:,:,2:end] .* logllhood)), dims=2)
     MC_estimator = mean(logprior .+ (t[:,:,1:end-1] .* logllhood), dims=2)
-    loss = sum(IS_estimator .- MC_estimator; dims=3)
+    loss = sum(IS_estimator .- ex_prior .+ MC_estimator; dims=3)
     
     m.verbose && println("Log-prior: ", -mean(logprior), " Log-llhood: ", -mean(logllhood))
     return -mean(loss)*m.loss_scaling, st, seed

@@ -70,10 +70,9 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     return cumsum(trapz, dims=3), grid, st
 end
 
-function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
-    """Gauss-Legendre quadrature for numerical integration"""
-
-    # Map domains
+function get_gausslegendre(ebm, ps, st)
+    """Get Gauss-Legendre nodes and weights for prior's domain"""
+    
     a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
     if any(b .== ebm.fcns_qp[Symbol("1")].grid_size)
         a = fill(half_quant, first(ebm.fcns_qp[Symbol("1")].grid_range), size(a))
@@ -83,7 +82,14 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
     weights = (b - a) ./ 2 .* device(ebm.weights)
     nodes_cpu = cpu_device()(nodes)
+    
+    return nodes, weights, nodes_cpu
+end
 
+function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
+    """Gauss-Legendre quadrature for numerical integration"""
+
+    nodes, weights, _ = @ignore_derivatives get_gausslegendre(ebm, ps, st)
     π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(nodes, ε) : ebm.π_pdf(nodes)
 
     # Energy function of each component

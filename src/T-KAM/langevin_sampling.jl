@@ -19,7 +19,7 @@ else
     using .KAN_likelihood: log_likelihood
 end
 
-function cross_entropy_sum(x::AbstractArray{full_quant}, y::AbstractArray{full_quant}; ε::full_quant=eps(full_quant))
+function cross_entropy_sum(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     log_x = log.(x .+ ε)
     ll = sum(log_x .* y)
     return ll ./ size(x, 1)
@@ -184,7 +184,7 @@ function autoMALA_sampler(
     m,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     t::AbstractArray{full_quant}=[full_quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
@@ -214,6 +214,8 @@ function autoMALA_sampler(
     z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
     z = z .|> full_quant
+    loss_scaling = m.loss_scaling |> full_quant
+    t = half_quant.(t)
 
     if isa(st.η_init, CuArray)
         @reset st.η_init = st.η_init |> cpu_device()
@@ -231,10 +233,10 @@ function autoMALA_sampler(
     # Lkhood model based on type
     ll_fn = m.lkhood.seq_length > 1 ? (x,y) -> cross_entropy_sum(x, y; ε=m.ε) : (x,y) -> mse(x, y; agg=sum)
 
-    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::full_quant)
+    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂) |> fq
+        x̂ = m.lkhood.output_activation(x̂) 
         logpos = sum(lp) + t_k * ll_fn(x̂, x)
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
@@ -250,7 +252,7 @@ function autoMALA_sampler(
             
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
-            return logpos_z / m.loss_scaling, ∇z / m.loss_scaling, st_i
+            return full_quant(logpos_z) / loss_scaling, full_quant.(∇z) ./ loss_scaling, st_i
         end
         
         burn_in = 0

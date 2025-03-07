@@ -37,8 +37,8 @@ struct T_KAM <: Lux.AbstractLuxLayer
     η_init::full_quant
     posterior_sample::Function
     loss_fcn::Function
-    loss_scaling::full_quant    
-    ε::full_quant
+    loss_scaling::half_quant    
+    ε::half_quant
     file_loc::AbstractString
 end
 
@@ -77,7 +77,7 @@ function importance_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss with importance sampling."""
@@ -112,7 +112,7 @@ function POST_loss(
     m::T_KAM,
     ps,
     st,
-    x::Union{AbstractArray{full_quant}, Tuple{AbstractArray{half_quant}, AbstractArray{full_quant}}};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
@@ -142,7 +142,7 @@ function thermo_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
@@ -253,7 +253,7 @@ function init_T_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    eps = parse(full_quant, retrieve(conf, "TRAINING", "eps"))
+    eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
@@ -263,9 +263,9 @@ function init_T_KAM(
     test_data = seq ? dataset[:, :, N_train+1:N_train+N_test] : dataset[:, :, :, N_train+1:N_train+N_test]
 
     data_seed, rng = next_rng(data_seed)
-    train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
+    train_loader = DataLoader(half_quant.(train_data), batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
-    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 

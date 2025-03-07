@@ -96,12 +96,12 @@ function importance_loss(
     weights = @ignore_derivatives softmax(logllhood, dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])) 
-    logprior_resampled = reduce((x,y) -> cat(x, y, dims=4), map(b -> logprior[:, :, resampled_idxs[b, :], :], 1:size(x)[end]))
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
     logprior_resampled = logprior_resampled .- ex_prior
-    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[q, p, s, b]
+    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " LLhood loss: ", -mean(loss_llhood))
@@ -123,19 +123,18 @@ function POST_loss(
     
     # Log-dists
     logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
-    ex_prior = mean(logprior_prior; dims=3)
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
 
     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[:, :, :, 2])
     logllhood = mse(x̂, x; agg=mean)
-    logprior = dropdims(sum(ex_prior - mean(logprior_pos); dims=(1,2)); dims=(1,2))
+    logprior = mean(logprior_prior) - mean(logprior_pos)
 
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
     # Expected posterior
     m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
-    return (logprior + logllhood)*m.loss_scaling, st, seed
+    return mean(logprior .+ logllhood)*m.loss_scaling, st, seed
 end 
 
 
@@ -157,24 +156,20 @@ function thermo_loss(
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
-    logprior = reshape(logprior, Q, P, S, T)
+    logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
-    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,:,1]; dims=3) : zeros(full_quant, size(logprior)[1:2]..., 1) |> device
-
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
-    ll_plus = t[:,:,2:end] .* logllhood
-    ll_minus = t[:,:,1:end-1] .* logllhood
-    logprior = logprior .- ex_prior
-    @tullio IS_estimator[b,t] := weights[b,s] * (logprior[q,p,s,t] + ll_plus[b,s,t])
-    @tullio MC_estimator[b,t] := logprior[q,p,s,t] + ll_minus[b,s,t]
-    loss = sum(IS_estimator - (MC_estimator ./ m.IS_samples); dims=2)
-    m.verbose && println("Log-prior: ", -mean(logprior), " Log-llhood: ", -mean(logllhood))
-    return -mean(loss)*m.loss_scaling, st, seed
+
+    loss_prior = sum(weights .* logprior; dims=2) .- mean(logprior; dims=2)
+    loss_logllhood = t[:,:,2:end] .* sum(weights .* logllhood) .- t[:,:,1:end-1] .* mean(logllhood; dims=2)
+    
+    @ignore_derivatives m.verbose && println("Log-prior: ", -mean(loss_prior), " Log-llhood: ", -mean(loss_logllhood))
+    return -mean(sum(loss_prior + loss_logllhood; dims=2) )*m.loss_scaling, st, seed
 
 end
 

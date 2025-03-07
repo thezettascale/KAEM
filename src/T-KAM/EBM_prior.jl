@@ -75,8 +75,8 @@ function get_gausslegendre(ebm, ps, st)
     
     a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
     if any(b .== ebm.fcns_qp[Symbol("1")].grid_size)
-        a = fill(half_quant, first(ebm.fcns_qp[Symbol("1")].grid_range), size(a))
-        b = fill(half_quant, last(ebm.fcns_qp[Symbol("1")].grid_range), size(b))
+        a = fill(half_quant(first(ebm.fcns_qp[Symbol("1")].grid_range)), size(a))
+        b = fill(half_quant(last(ebm.fcns_qp[Symbol("1")].grid_range)), size(b))
     end
     
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
@@ -183,19 +183,20 @@ function log_prior(
         The updated states of the ebm-prior.
     """
 
-    log_p = zeros(full_quant, 0, size(z)[2:end]...) |> device
+    log_p = zeros(full_quant, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
     log_Z = full_quant(0)
+
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
         log_Z = log.(norm[:, :, end] .+ ε)
     end
 
     for q in 1:ebm.q_size
-        log_Zq = normalize ? log_Z[q:q, :] : log_Z
+        log_Zq = normalize ? log_Z[q, :] : log_Z
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q:q, :, :] .+ log_π0[q:q, :, :] |> fq
-        log_p = vcat(log_p, lp .- log_Zq)
+        lp = f[q, :, :] .+ log_π0[q, :, :] |> fq
+        log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
     end
 
     return log_p, st

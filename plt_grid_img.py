@@ -19,7 +19,7 @@ for i in range(grid_size[0] * grid_size[1]):
     img = np.transpose(image_data[i, :, :, :], (1, 2, 0))
     print(max(img.flatten()))
     
-    ax.imshow(img)#, cmap='gray')
+    ax.imshow(img, cmap='gray')
     ax.axis('off')  
 
 plt.subplots_adjust(wspace=0, hspace=0)

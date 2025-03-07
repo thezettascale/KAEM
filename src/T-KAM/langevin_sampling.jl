@@ -82,7 +82,7 @@ function leapfrop_proposal(
     p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
     ẑ = z .+ (η .* p) ./ M # Full-step position update
 
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(half_quant.(ẑ), st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)
     p = p + (η .* ∇ẑ / 2) # Half-step momentum update
 
     # MH acceptance ratio
@@ -245,7 +245,7 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i) -> begin
-            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t[k]), z_i)
+            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t[k]), half_quant.(z_i))
             logpos_z, st_ebm, st_gen, ∇z = result.val..., first(result.grad)
             
             @reset st_i.ebm = st_ebm

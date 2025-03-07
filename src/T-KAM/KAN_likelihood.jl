@@ -23,9 +23,9 @@ output_activation_mapping = Dict(
     "none" => identity,
 )
 
-lkhood_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 
-function lkhood_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant))
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
@@ -208,10 +208,10 @@ function log_likelihood(
     lkhood, 
     ps, 
     st, 
-    x::AbstractArray{half_quant}, 
+    x::AbstractArray{full_quant}, 
     z::AbstractArray{half_quant};
     seed::Int=1,
-    ε::half_quant=eps(half_quant),
+    ε::full_quant=eps(full_quant),
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -236,7 +236,7 @@ function log_likelihood(
     # Add noise
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
-    x̂ = lkhood.output_activation(x̂ .+ noise) 
+    x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
     ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
     return ll, st, seed

@@ -160,7 +160,7 @@ function log_prior(
     z::AbstractArray{half_quant},
     ps, 
     st;
-    ε::half_quant=eps(half_quant),
+    ε::full_quant=eps(full_quant),
     normalize::Bool=false
     )
     """
@@ -195,7 +195,7 @@ function log_prior(
     for q in 1:ebm.q_size
         log_Zq = normalize ? log_Z[q, :] : log_Z
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q, :, :] .+ log_π0[q, :, :] 
+        lp = f[q, :, :] .+ log_π0[q, :, :] |> fq
         log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
     end
 

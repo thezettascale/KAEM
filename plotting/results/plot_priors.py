@@ -12,18 +12,12 @@ plt.rcParams.update({
 
 # File paths to HDF5 files
 file_paths = [
-    'logs/uniform_FFT/FMNIST_1/generated_images.h5',
-    'logs/lognormal_FFT/FMNIST_1/generated_images.h5',
-    'logs/gaussian_FFT/FMNIST_1/generated_images.h5',
+    'logs/gaussian_FFT/DARCY_FLOW_1/real_images.h5',
+    'logs/gaussian_RBF/DARCY_FLOW_1/generated_images.h5',
+    'logs/gaussian_FFT/DARCY_FLOW_1/generated_images.h5',
 ]
 
-real_images = 'logs/uniform_FFT/MNIST_1/real_images.h5'
-
-titles = ['Uniform', 'Lognormal', 'Gaussian']
-
-# Load real images
-with h5py.File(real_images, 'r') as h5_file:
-    real_image_set = h5_file['samples'][()]
+titles = ['True Samples', 'RBF', 'FFT']
 
 # Load generated images
 images = []
@@ -45,9 +39,9 @@ for dataset_idx, image_set in enumerate(images):
         
         # Use inverted colormap for middle dataset
         if dataset_idx == 1:
-            ax.imshow(images, cmap='gray_r')  # gray_r is inverted gray
+            ax.imshow(images, cmap='cividis')  # gray_r is inverted gray
         else:
-            ax.imshow(images, cmap='gray')
+            ax.imshow(images, cmap='viridis')
             
         ax.axis('off')  
     
@@ -55,5 +49,5 @@ for dataset_idx, image_set in enumerate(images):
 
 plt.subplots_adjust(wspace=0, hspace=0)
 # plt.show()
-plt.savefig('figures/results/fmnist_priors_fft_13x13.png')
+plt.savefig('figures/results/RBFvsFFT_gaussian_13x13.png')
 

@@ -11,8 +11,8 @@ using .trainer
 using .Utils: device, half_quant, hq
 using .ebm_ebm_prior: prior_fwd
 
-for prior_type in ["gaussian", "lognormal", "uniform"]
-    for fcn_type in ["RBF", "FFT"]
+for fcn_type in ["RBF", "FFT"]
+    for prior_type in ["gaussian", "lognormal", "uniform"]
         for dataset_name in ["MNIST" "FMNIST"]
             file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"
 

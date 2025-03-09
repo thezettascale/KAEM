@@ -11,9 +11,9 @@ using .trainer
 using .Utils: device, half_quant, hq
 using .ebm_ebm_prior: prior_fwd
 
-for fcn_type in ["RBF", "FFT"]
+for fcn_type in ["FFT"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
-        for dataset_name in ["MNIST" "FMNIST"]
+        for dataset_name in ["DARCY_FLOW"]
             file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"
 
             conf_loc = Dict(
@@ -54,7 +54,7 @@ for fcn_type in ["RBF", "FFT"]
             )[prior_type]
 
             a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
-            if any(b .== prior.fcns_qp[Symbol("1")].grid_size)
+            if fcn_type == "FFT"
                 a = fill(half_quant(first(grid_range)), size(a)) |> device
                 b = fill(half_quant(last(grid_range)), size(b)) |> device
             end

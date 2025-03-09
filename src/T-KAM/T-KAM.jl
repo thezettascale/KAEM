@@ -156,15 +156,17 @@ function thermo_loss(
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
     
     logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : full_quant(0)
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
 
+    logprior = logprior .- ex_prior
     loss_prior = sum(weights .* logprior; dims=2) .- mean(logprior; dims=2)
     loss_logllhood = t[:,:,2:end] .* sum(weights .* logllhood) .- t[:,:,1:end-1] .* mean(logllhood; dims=2)
     

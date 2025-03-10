@@ -11,9 +11,9 @@ using .trainer
 using .Utils: device, half_quant, hq
 using .ebm_ebm_prior: prior_fwd
 
-for fcn_type in ["FFT"]
+for fcn_type in ["RBF"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
-        for dataset_name in ["DARCY_FLOW"]
+        for dataset_name in ["MNIST", "FMNIST"]
             file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"
 
             conf_loc = Dict(
@@ -83,7 +83,7 @@ for fcn_type in ["FFT"]
                                 show_legend = false,
                                 show_colorbar = false,
                             )
-                ax = Makie.Axis(fig[1, 1], title=L"Mixture component, ${\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$")
+                ax = Makie.Axis(fig[1, 1], title=L"Prior component, ${\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$")
 
                 band!(ax, z[p, :], 0 .* f[q, p, :], f[q, p, :], color=(colours[i], 0.3), label=L"{\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)}")
                 lines!(ax, z[p, :], f[q, p, :], color=colours[i])

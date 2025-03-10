@@ -40,7 +40,7 @@ acts = Dict(
     5 => "none",
 )
 
-if dataset == "CIFA10" || dataset == "SVHN" 
+if dataset == "CIFAR10" || dataset == "SVHN" 
     rng = Random.seed!(1)
     t = init_trainer(rng, conf, dataset)
     train!(t)

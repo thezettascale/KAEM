@@ -11,7 +11,7 @@ using .trainer
 using .Utils: device, half_quant, hq
 using .ebm_ebm_prior: prior_fwd
 
-for fcn_type in ["FFT"]
+for fcn_type in ["RBF"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
         for dataset_name in ["DARCY_FLOW"]
             file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"

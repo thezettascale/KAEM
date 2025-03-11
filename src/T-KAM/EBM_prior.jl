@@ -36,7 +36,21 @@ struct ebm_prior <: Lux.AbstractLuxLayer
 end
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
-    """Forward pass through the ebm-prior, returning the energy function"""
+    """
+    Forward pass through the ebm-prior, returning the energy function.
+
+    Cheap replacement to true deepening, as outlined in the paper. You don't want to use a deep prior.
+    
+    Args:
+        ebm: The ebm-prior.
+        ps: The parameters of the ebm-prior.
+        st: The states of the ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+
+    Returns:
+        f: The energy function, (num_samples, q)
+        st: The updated states of the ebm-prior.
+    """
     for i in 1:ebm.depth
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = i == 1 ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)

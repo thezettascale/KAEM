@@ -169,7 +169,7 @@ function thermo_loss(
     loss_prior = sum(weights .* logprior; dims=2) .- mean(logprior; dims=2)
     loss_logllhood = t[:,:,2:end] .* sum(weights .* logllhood) .- t[:,:,1:end-1] .* mean(logllhood; dims=2)
     @ignore_derivatives m.verbose && println("Temps: ", t[1,1,2:end], " Log-prior: ", -mean(loss_prior; dims=1)[1,1,:], " Log-llhood: ", -mean(loss_logllhood; dims=1)[1,1,:])
-    return -mean(sum(loss_prior + loss_logllhood; dims=2) )*m.loss_scaling, st, seed
+    return -sum(loss_prior + loss_logllhood/B)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

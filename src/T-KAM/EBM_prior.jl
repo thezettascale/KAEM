@@ -81,7 +81,7 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] |> fq
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
-    return cumsum(trapz, dims=3), grid, st
+    return trapz, grid, st
 end
 
 function get_gausslegendre(ebm, ps, st)
@@ -111,7 +111,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
     @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-    return cumsum(trapz |> fq, dims=3), nodes_cpu, st
+    return trapz |> fq, nodes_cpu, st
 end
 
 function sample_prior(
@@ -139,7 +139,10 @@ function sample_prior(
 
     cdf, grid, st = ebm.quad(ebm, ps, st)
     grid_size = size(grid, 2)
-    cdf = cat(zeros(ebm.q_size, ebm.p_size, 1), cpu_device()(cdf), dims=3) # Add 0 to start of CDF
+    cdf = cat(
+        zeros(ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
+        cpu_device()(cumsum(cdf; dims=3)), # Cumulative trapezium = CDF
+        dims=3) 
 
     seed, rng = next_rng(seed)
     rand_vals = rand(rng, full_quant, 1, ebm.p_size, num_samples) .* cdf[:, :, end] 
@@ -203,7 +206,7 @@ function log_prior(
 
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
-        log_Z = log.(norm[:, :, end] .+ ε)
+        log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
     end
 
     for q in 1:ebm.q_size

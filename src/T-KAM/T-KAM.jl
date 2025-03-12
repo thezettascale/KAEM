@@ -166,10 +166,10 @@ function thermo_loss(
     ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : full_quant(0)
     weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
 
-    loss_prior = sum(weights .* logprior; dims=2) .- mean(logprior; dims=2)
-    loss_logllhood = t[:,:,2:end] .* sum(weights .* logllhood) .- t[:,:,1:end-1] .* mean(logllhood; dims=2)
-    @ignore_derivatives m.verbose && println("Temps: ", t[1,1,2:end], " Log-prior: ", -mean(loss_prior; dims=1)[1,1,:], " Log-llhood: ", -mean(loss_logllhood; dims=1)[1,1,:])
-    return -(sum(loss_prior + loss_logllhood)/B)*m.loss_scaling, st, seed
+    IS_estimator = sum(weights .* (logprior .+ t[:,:,2:end] .* logllhood); dims=2)
+    MC_estimator = mean(logprior .+ t[:,:,1:end-1] .* logllhood; dims=2)
+    @ignore_derivatives m.verbose && println("Temps: ", t[1,1,:], " log-prior: ", -mean(logprior; dims=2), " log-llhood: ", -mean(logllhood; dims=(1,2)))
+    return -mean(sum(IS_estimator - MC_estimator; dims=3))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

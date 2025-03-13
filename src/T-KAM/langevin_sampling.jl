@@ -48,7 +48,7 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
 
     # Momentum
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(length(Σ_AM)), Diagonal(Σ_AM)), B)
+    p = rand(rng, MvNormal(zeros(full_quant, length(Σ_AM)), Diagonal(Σ_AM)), B)
 
     p = reshape(p, Q, P, B)
     Σ_AM = reshape(Σ_AM, Q, P)
@@ -79,6 +79,7 @@ function leapfrop_proposal(
         The proposal.
         The log-ratio.
     """
+
     p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
     ẑ = z .+ (η .* p) ./ M # Full-step position update
 

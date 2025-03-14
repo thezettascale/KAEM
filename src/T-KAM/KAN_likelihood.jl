@@ -4,7 +4,7 @@ export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_l
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
-using NNlib: sigmoid_fast, tanh_fast, relu, gelu
+using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
 
@@ -18,7 +18,7 @@ using .ebm_ebm_prior
 using .WeightResamplers
 
 output_activation_mapping = Dict(
-    "tanh" => tanh_fast,
+    "tanh" => tanh_fast, 
     "sigmoid" => sigmoid_fast,
     "none" => identity,
 )
@@ -76,9 +76,7 @@ function KAN_gen(
         The updated seed.
     """
     num_samples = size(z)[end]
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_z")], sum(z, dims=2), ps[Symbol("ln_z")], st[Symbol("ln_z")])
-    @reset st[Symbol("ln_z")] = st_new
-    z = dropdims(z, dims=2)
+    z = dropdims(sum(z, dims=2), dims=2)
 
     # KAN functions
     for i in 1:lkhood.depth
@@ -114,9 +112,7 @@ function CNN_gen(
         The generated data.
         The updated seed.
     """
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_z")], sum(z, dims=2), ps[Symbol("ln_z")], st[Symbol("ln_z")])
-    @reset st[Symbol("ln_z")] = st_new
-    z = reshape(z, 1, 1, first(size(z)), last(size(z)))
+    z = reshape(sum(z, dims=2), 1, 1, first(size(z)), last(size(z)))
 
     for i in 1:lkhood.depth
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
@@ -164,8 +160,7 @@ function SEQ_gen(
         The generated data.
         The updated seed.
     """
-    z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_z")], sum(z, dims=2), ps[Symbol("ln_z")], st[Symbol("ln_z")])
-    @reset st[Symbol("ln_z")] = st_new
+    z = sum(z, dims=2)
     
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
@@ -413,8 +408,6 @@ function init_KAN_lkhood(
         end
     end
 
-    @reset Φ_functions[Symbol("ln_z")] = Lux.LayerNorm((q_size, 1))
-
     return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
 end
 
@@ -441,8 +434,6 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
         @reset ps[Symbol("V")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("V")])
     end
 
-    @reset ps[Symbol("ln_z")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("ln_z")])
-
     return ps 
 end
 
@@ -468,8 +459,6 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
         @reset st[Symbol("K")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("K")])
         @reset st[Symbol("V")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("V")])
     end
-
-    @reset st[Symbol("ln_z")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_z")])
 
     return st 
 end

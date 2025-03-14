@@ -68,8 +68,8 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     # Evaluate prior on grid [0,1]
     f_grid = st[Symbol("1")].grid
-    grid = f_grid |> cpu_device() |> fq
-    Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] |>fq
+    grid = f_grid |> cpu_device() 
+    Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] 
     
     π_grid = ebm.prior_type == "lognormal" ? ebm.π_pdf(f_grid, ε) : ebm.π_pdf(f_grid)
     grid_size = size(f_grid, 2)
@@ -79,7 +79,7 @@ function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
     @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
-    exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] |> fq
+    exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] 
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
     return trapz, grid, st
 end
@@ -111,7 +111,7 @@ function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
     @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-    return trapz |> fq, nodes_cpu |>fq, st
+    return trapz, nodes_cpu, st
 end
 
 function sample_prior(
@@ -139,9 +139,11 @@ function sample_prior(
 
     cdf, grid, st = ebm.quad(ebm, ps, st)
     grid_size = size(grid, 2)
+
+    grid = grid .|> full_quant
     cdf = cat(
-        zeros(full_quant,ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
-        cpu_device()(cumsum(cdf; dims=3)), # Cumulative trapezium = CDF
+        zeros(full_quant, ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
+        cpu_device()(cumsum(cdf .|> full_quant; dims=3)), # Cumulative trapezium = CDF
         dims=3) 
 
     seed, rng = next_rng(seed)
@@ -206,7 +208,7 @@ function log_prior(
 
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
-        log_Z = log.(dropdims(sum(norm; dims=3); dims=3) |> hq .+ ε)
+        log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
     end
 
     for q in 1:ebm.q_size

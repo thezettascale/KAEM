@@ -236,7 +236,7 @@ function autoMALA_sampler(
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) |> fq
-        logpos = sum(lp) + t_k * (ll_fn(x̂, x) / (2*m.lkhood.σ_llhood^2) 
+        logpos = sum(lp) + t_k * (ll_fn(x̂, x) / (2*m.lkhood.σ_llhood^2))
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
 

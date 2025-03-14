@@ -16,7 +16,7 @@ for dataset in "${datasets[@]}"; do
     echo "$dataset Thermodynamic Integration completed."
 done
 
-datasets=("SVHN" "CIFAR10")
+datasets=("MNIST" "FMNIST" "DARCY_FLOW" "CIFAR10" "SVHN")
 
 for dataset in "${datasets[@]}"; do
     session_name="IS_$dataset"

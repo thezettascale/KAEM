@@ -26,7 +26,7 @@ mutable struct T_KAM_trainer
     st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
-    x::AbstractArray{full_quant}
+    x::AbstractArray{half_quant}
     num_generated_samples::Int
     batch_size_for_gen::Int
     seed::Int
@@ -123,6 +123,7 @@ function train!(t::T_KAM_trainer)
     # (Move off GPU)
     @reset t.st.train_idx = t.st.train_idx |> cpu_device()
     @reset t.st.η_init = t.st.η_init |> cpu_device()
+    loss_scaling = t.model.loss_scaling |> full_quant
 
     num_batches = length(t.model.train_loader)
     grid_updated = 0
@@ -163,9 +164,9 @@ function train!(t::T_KAM_trainer)
             t.x; 
             seed=t.seed
             ), half_quant.(t.ps))
-        t.loss, t.st, t.seed, grads = result.val..., first(result.grad) 
-        t.loss = t.loss / t.model.loss_scaling
-        grads = grads ./ t.model.loss_scaling
+        loss, t.st, t.seed, grads = result.val..., first(result.grad) 
+        t.loss = full_quant(loss) / loss_scaling # This may be inf for mixed precision training, but gradient matters more
+        grads = full_quant.(grads) ./ loss_scaling
        
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")

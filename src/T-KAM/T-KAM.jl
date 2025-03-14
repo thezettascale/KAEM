@@ -37,8 +37,8 @@ struct T_KAM <: Lux.AbstractLuxLayer
     η_init::full_quant
     posterior_sample::Function
     loss_fcn::Function
-    loss_scaling::full_quant    
-    ε::full_quant
+    loss_scaling::half_quant    
+    ε::half_quant
     file_loc::AbstractString
 end
 
@@ -77,7 +77,7 @@ function importance_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss with importance sampling."""
@@ -87,15 +87,15 @@ function importance_loss(
 
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    ex_prior = m.prior.contrastive_div ? mean(logprior; dims=3) : zeros(full_quant, size(logprior)[1:2]..., 1) |> device
+    ex_prior = m.prior.contrastive_div ? mean(logprior; dims=3) : zeros(half_quant, size(logprior)[1:2]..., 1) |> device
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
     # Weights and resampling
-    weights = @ignore_derivatives softmax(logllhood, dims=2) 
+    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])) 
+    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])) .|> half_quant
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
@@ -112,7 +112,7 @@ function POST_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
@@ -142,13 +142,13 @@ function thermo_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{full_quant};
+    x::AbstractArray{half_quant};
     seed::Int=1
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
     # Schedule temperatures, and S-MALA
-    t = @ignore_derivatives collect(full_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    t = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
     t = @ignore_derivatives reshape(device(t), 1, 1, T+1)
@@ -163,8 +163,8 @@ function thermo_loss(
 
     logprior = reshape(logprior, 1, S, T)
     logllhood = reshape(logllhood, B, S, T)
-    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : full_quant(0)
-    weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : half_quant(0)
+    weights = @ignore_derivatives softmax(full_quant.(t[:,:,2:end] .- t[:,:,1:end-1]) .* full_quant.(logllhood), dims=2) .|> half_quant
 
     IS_estimator = sum(weights .* (logprior .+ t[:,:,2:end] .* logllhood); dims=2)
     MC_estimator = mean(logprior .+ t[:,:,1:end-1] .* logllhood; dims=2)
@@ -252,7 +252,7 @@ function init_T_KAM(
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    eps = parse(full_quant, retrieve(conf, "TRAINING", "eps"))
+    eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
@@ -262,9 +262,9 @@ function init_T_KAM(
     test_data = seq ? dataset[:, :, N_train+1:N_train+N_test] : dataset[:, :, :, N_train+1:N_train+N_test]
 
     data_seed, rng = next_rng(data_seed)
-    train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true, rng=rng)
+    train_loader = DataLoader(train_data .|> half_quant, batchsize=batch_size, shuffle=true, rng=rng)
     test_loader = DataLoader(test_data, batchsize=batch_size, shuffle=false)
-    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : 

@@ -23,9 +23,9 @@ output_activation_mapping = Dict(
     "none" => identity,
 )
 
-lkhood_rgb = (x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+lkhood_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 
-function lkhood_seq(x::AbstractArray{full_quant}, x̂::AbstractArray{full_quant}; ε::full_quant=eps(full_quant))
+function lkhood_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
@@ -43,7 +43,7 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     depth::Int
     out_size::Int
     σ_ε::half_quant
-    σ_llhood::full_quant
+    σ_llhood::half_quant
     log_lkhood::Function
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
@@ -208,10 +208,10 @@ function log_likelihood(
     lkhood, 
     ps, 
     st, 
-    x::AbstractArray{full_quant}, 
+    x::AbstractArray{half_quant}, 
     z::AbstractArray{half_quant};
     seed::Int=1,
-    ε::full_quant=eps(full_quant),
+    ε::half_quant=eps(half_quant),
     )
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
@@ -236,7 +236,7 @@ function log_likelihood(
     # Add noise
     seed, rng = next_rng(seed)
     noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
-    x̂ = lkhood.output_activation(x̂ .+ noise) |> fq # Accumulate across samples in full precision
+    x̂ = lkhood.output_activation(x̂ .+ noise) 
     ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
     return ll, st, seed
@@ -322,7 +322,7 @@ function init_KAN_lkhood(
     τ_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     noise_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
-    gen_var = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
+    gen_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     ESS_threshold = parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
     resampler = retrieve(conf, "KAN_LIKELIHOOD", "resampler")

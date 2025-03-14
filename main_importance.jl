@@ -40,6 +40,11 @@ acts = Dict(
     5 => "none",
 )
 
+grid_sizes = Dict(
+    4 => "20",
+    5 => "50",
+)
+
 if dataset == "CIFAR10" || dataset == "SVHN" 
     rng = Random.seed!(1)
     t = init_trainer(rng, conf, dataset)
@@ -52,6 +57,8 @@ else
             commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])
             commit!(conf, "EBM_PRIOR", "base_activation", acts[base_idx])
+            commit!(conf, "KAN_LIKELIHOOD", "grid_size", grid_sizes[base_idx])
+            commit!(conf, "EBM_PRIOR", "grid_size", grid_sizes[base_idx])
             rng = Random.seed!(1)
             t = init_trainer(rng, conf, dataset)
             train!(t)

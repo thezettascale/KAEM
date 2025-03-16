@@ -300,7 +300,7 @@ function init_KAN_lkhood(
     output_dim = CNN ? last(x_shape) : (sequence_length > 1 ? first(x_shape) : prod(x_shape))
 
     widths = (widths..., output_dim)
-    first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior."))
+    first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.", widths, " != ", q_size))
 
     spline_degree = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "spline_degree"))
     layernorm = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "layer_norm"))

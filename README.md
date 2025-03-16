@@ -58,7 +58,7 @@ This starts a tmux session, you can then leave and come back later - touch grass
 For benchmarking run:
 
 ```bash
-bash benchmarking/run_benchmarks.sh
+tmux new-session -d -s T_KAM_benchmark "bash benchmarking/run_benchmarks.sh"
 ```
 
 

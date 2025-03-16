@@ -37,6 +37,7 @@ function benchmark_dim(n_z)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
 end
 
-display(@benchmark CUDA.@sync benchmark_dim(25))
-display(@benchmark CUDA.@sync benchmark_dim(50))
-display(@benchmark CUDA.@sync benchmark_dim(100))
+display(@benchmark CUDA.@sync benchmark_dim(10))
+display(@benchmark CUDA.@sync benchmark_dim(20))
+display(@benchmark CUDA.@sync benchmark_dim(40))
+display(@benchmark CUDA.@sync benchmark_dim(80))

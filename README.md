@@ -61,8 +61,4 @@ For benchmarking run:
 bash benchmarking/run_benchmarks.sh
 ```
 
-Note: I really wanted to do CelebA, but got shooed off by the "Please note that we do not own the copyrights to these images. Their use is RESTRICTED to non-commercial research and educational purposes." 
-
-Unlike some of the other guys in this field, we are not assholes.
-
 

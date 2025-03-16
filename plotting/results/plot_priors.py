@@ -12,12 +12,12 @@ plt.rcParams.update({
 
 # File paths to HDF5 files
 file_paths = [
-    'logs/gaussian_FFT/DARCY_FLOW_1/real_images.h5',
-    'logs/gaussian_RBF/DARCY_FLOW_1/generated_images.h5',
-    'logs/gaussian_FFT/DARCY_FLOW_1/generated_images.h5',
+    'logs/uniform_RBF/FMNIST_1/generated_images.h5',
+    'logs/uniform_RBF/FMNIST_1/generated_images.h5',
+    'logs/uniform_RBF/FMNIST_1/generated_images.h5',
 ]
 
-titles = ['True Samples', 'RBF', 'FFT']
+titles = ['Gaussian', 'Lognormal', 'Uniform']
 
 # Load generated images
 images = []
@@ -39,15 +39,14 @@ for dataset_idx, image_set in enumerate(images):
         
         # Use inverted colormap for middle dataset
         if dataset_idx == 1:
-            ax.imshow(images, cmap='cividis')  # gray_r is inverted gray
+            ax.imshow(images, cmap='gray_r')  # gray_r is inverted gray
         else:
-            ax.imshow(images, cmap='viridis')
+            ax.imshow(images, cmap='gray')
             
         ax.axis('off')  
     
     axes[0, dataset_idx * grid_size[1] + 6].set_title(titles[dataset_idx], fontsize=40, pad=10)
 
 plt.subplots_adjust(wspace=0, hspace=0)
-# plt.show()
-plt.savefig('figures/results/RBFvsFFT_gaussian_13x13.png')
+plt.savefig('figures/results/fmnist_priors_rbf_13x13.png')
 

@@ -52,7 +52,7 @@ if dataset == "CIFAR10" || dataset == "SVHN"
 else
     for prior_idx in [3,2,1]
         commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
-        for base_idx in [4, 5]
+        for base_idx in [4,5]
             commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])

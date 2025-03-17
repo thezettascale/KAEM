@@ -18,8 +18,16 @@ latent_dim = pd.DataFrame({
     "Allocations" : [19761865, 39969224, 84700446, 191387478],
 })
 
-keys = ["$n_z$"]
-colours = ["viridis"]
+mala_steps = pd.DataFrame({
+    "$N_{\text{langevin}}$" : [5, 10, 15, 20],
+    "Time (s)" : [115.341, 219.694, 328.726, 434.245],
+    "Memory Estimate (GiB)" : [5.07, 8.54, 12.09, 15.59],
+    "Garbage Collection (%)" : [6.60, 9.56, 11.10, 11.58],
+    "Allocations" : [135688338, 225947183, 318703993, 409591568],
+})
+
+keys = ["$n_z$", "$N_{\text{langevin}}$"]
+colours = ["viridis", "cividis"]
 
 def add_text_annotations(ax, round=False, red=0):
     for bar in ax.patches:
@@ -35,12 +43,12 @@ def add_text_annotations(ax, round=False, red=0):
 
         ax.text(
             bar.get_x() + bar.get_width() / 2, 
-            0.24 *ax.get_ylim()[1], 
+            0.1 *ax.get_ylim()[1], 
             text, ha='center', va='bottom', color=color, 
             rotation=45
         )
 
-for (idx, df) in enumerate([latent_dim]):
+for (idx, df) in enumerate([latent_dim, mala_steps]):
     fig, axs = plt.subplots(2, 2, figsize=(7, 7))
     selected_colors = sns.color_palette(colours[idx], len("Time (s)") + 1)
     colors = [selected_colors[0], selected_colors[2], selected_colors[3], selected_colors[4]]

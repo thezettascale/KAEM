@@ -11,7 +11,7 @@ plt.rcParams.update({
 })
 
 latent_dim = pd.DataFrame({
-    "$n_z$" : [10, 20, 40, 80],
+    r"$n_z$" : [10, 20, 40, 80],
     "Time (s)" : [12.538, 27.069, 52.124, 116.419],
     "Memory Estimate (GiB)" : [0.765, 1.37, 2.75, 6.11],
     "Garbage Collection (%)" : [1.23, 1.29, 1.50, 1.50],
@@ -19,14 +19,14 @@ latent_dim = pd.DataFrame({
 })
 
 mala_steps = pd.DataFrame({
-    "$N_{\text{langevin}}$" : [5, 10, 15, 20],
+    r"$N_{\text{langevin}}$" : [5, 10, 15, 20],
     "Time (s)" : [115.341, 219.694, 328.726, 434.245],
     "Memory Estimate (GiB)" : [5.07, 8.54, 12.09, 15.59],
     "Garbage Collection (%)" : [6.60, 9.56, 11.10, 11.58],
     "Allocations" : [135688338, 225947183, 318703993, 409591568],
 })
 
-keys = ["$n_z$", "$N_{\text{langevin}}$"]
+keys = [r"$n_z$", r"$N_{\text{langevin}}$"]
 colours = ["viridis", "cividis"]
 
 def add_text_annotations(ax, round=False, red=0):
@@ -43,7 +43,7 @@ def add_text_annotations(ax, round=False, red=0):
 
         ax.text(
             bar.get_x() + bar.get_width() / 2, 
-            0.1 *ax.get_ylim()[1], 
+            0.45 *ax.get_ylim()[1], 
             text, ha='center', va='bottom', color=color, 
             rotation=45
         )

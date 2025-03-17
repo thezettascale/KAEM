@@ -1,13 +1,15 @@
-using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA
+using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/ML_pipeline/data_utils.jl")
+include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
+using .Utils: device
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
@@ -22,8 +24,6 @@ dataset, img_size = get_vision_dataset(
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
-    img_resize=(28, 28),
-    cnn=false
 )[1:2]
 
 function benchmark_dim(n_z)
@@ -32,7 +32,8 @@ function benchmark_dim(n_z)
 
     model = init_T_KAM(dataset, conf, img_size)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    x_test = first(model.train_loader) 
+    x_test = device(first(model.train_loader))
+    ps, st = ComponentArray(ps) |> device, st |> device
 
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
 end

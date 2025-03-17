@@ -19,32 +19,28 @@ latent_dim = pd.DataFrame({
 })
 
 mala_steps = pd.DataFrame({
-    r"$N_{\text{langevin}}$" : [5, 10, 15, 20],
+    r"$N_{\text{local}}$" : [5, 10, 15, 20],
     "Time (s)" : [115.341, 219.694, 328.726, 434.245],
     "Memory Estimate (GiB)" : [5.07, 8.54, 12.09, 15.59],
     "Garbage Collection (%)" : [6.60, 9.56, 11.10, 11.58],
     "Allocations" : [135688338, 225947183, 318703993, 409591568],
 })
 
-keys = [r"$n_z$", r"$N_{\text{langevin}}$"]
+keys = [r"$n_z$", r"$N_{\text{local}}$"]
 colours = ["viridis", "cividis"]
+elevations = [0.45, 0.1]
 
-def add_text_annotations(ax, round=False, red=0):
+def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:
         if round:
             text = f'{bar.get_height():.0f}'
         else:
             text = f'{bar.get_height():.2f}'
-        
-        if red == 0:
-            color = 'red' 
-        else:
-            color = 'magenta'
 
         ax.text(
             bar.get_x() + bar.get_width() / 2, 
-            0.45 *ax.get_ylim()[1], 
-            text, ha='center', va='bottom', color=color, 
+            elevation * ax.get_ylim()[1], 
+            text, ha='center', va='bottom', color='red', 
             rotation=45
         )
 
@@ -60,7 +56,7 @@ for (idx, df) in enumerate([latent_dim, mala_steps]):
         ax = axs[0, 0],
         palette = colors
     )
-    add_text_annotations(axs[0, 0], round=False, red=idx)
+    add_text_annotations(axs[0, 0], round=False, elevation=elevations[idx])
 
     axs[0, 0].set_xlabel(keys[idx])
     axs[0, 0].set_ylabel("Time (s)")
@@ -72,7 +68,7 @@ for (idx, df) in enumerate([latent_dim, mala_steps]):
         ax = axs[0, 1],
         palette = colors
     )
-    add_text_annotations(axs[0, 1], round=False, red=idx)
+    add_text_annotations(axs[0, 1], round=False, elevation=elevations[idx])
 
     axs[0, 1].set_xlabel(keys[idx])
     axs[0, 1].set_ylabel("Memory Estimate (GiB)")
@@ -84,7 +80,7 @@ for (idx, df) in enumerate([latent_dim, mala_steps]):
         ax = axs[1, 0],
         palette = colors
     )
-    add_text_annotations(axs[1, 0], round=False, red=idx)
+    add_text_annotations(axs[1, 0], round=False, elevation=elevations[idx])
 
     axs[1, 0].set_xlabel(keys[idx])
     axs[1, 0].set_ylabel("Garbage Collection (\%)")
@@ -96,7 +92,7 @@ for (idx, df) in enumerate([latent_dim, mala_steps]):
         ax = axs[1, 1],
         palette = colors
     )
-    add_text_annotations(axs[1, 1], round=True, red=idx)
+    add_text_annotations(axs[1, 1], round=True, elevation=elevations[idx])
 
     axs[1, 1].set_xlabel(keys[idx])
     axs[1, 1].set_ylabel("Allocations")

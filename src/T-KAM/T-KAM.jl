@@ -148,11 +148,16 @@ function thermo_loss(
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
     # Schedule temperatures, and S-MALA
-    t = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, t[2:end-1], ps, st, seed) # Only sample from intermediate temps
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    t = @ignore_derivatives reshape(device(t), 1, 1, T+1)
-    
+
+    function prep_weights(ll)
+        t1, t2 = device(temps[1:end-1]), device(temps[2:end])
+        Δt, fq_ll = full_quant.(t2 .- t1), full_quant.(ll)
+        @tullio weights[b, s, t] := Δt[t] * fq_ll[b, s, t]
+        return softmax(weights, dims=2), t1, t2
+    end
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
@@ -161,15 +166,15 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
-    logprior = reshape(logprior, 1, S, T)
+    logprior = reshape(logprior, S, T)
     logllhood = reshape(logllhood, B, S, T)
-    ex_prior = m.prior.contrastive_div ? mean(logprior[:,:,1]) : half_quant(0)
-    weights = @ignore_derivatives softmax(full_quant.(t[:,:,2:end] .- t[:,:,1:end-1]) .* full_quant.(logllhood), dims=2) .|> half_quant
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:,1]) : half_quant(0)
+    weights, t1, t2 = @ignore_derivatives prep_weights(logllhood)
 
-    IS_estimator = sum(weights .* (logprior .+ t[:,:,2:end] .* logllhood); dims=2)
-    MC_estimator = mean(logprior .+ t[:,:,1:end-1] .* logllhood; dims=2)
-    @ignore_derivatives m.verbose && println("Temps: ", t[1,1,:], " log-prior: ", -mean(logprior; dims=2), " log-llhood: ", -mean(logllhood; dims=(1,2)))
-    return -mean(sum(IS_estimator - MC_estimator; dims=3))*m.loss_scaling, st, seed
+    @tullio IS_estimator[b, t, s] := weights[b, s, t] * (logprior[s, t] + (t2[t] * logllhood[b, s, t]))
+    @tullio MC_estimator[b, t, s] := logprior[s, t] + (t1[t] * logllhood[b, s, t])
+    @ignore_derivatives m.verbose && println("Temps: ", temps[:], " log-prior: ", -mean(logprior; dims=1), " log-llhood: ", -mean(logllhood; dims=(1,2)))
+    return -mean(sum(sum(IS_estimator; dims=3) - mean(MC_estimator; dims=3); dims=2))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

@@ -168,7 +168,6 @@ function thermo_loss(
 
     logprior = reshape(logprior, S, T)
     logllhood = reshape(logllhood, B, S, T)
-    ex_prior = m.prior.contrastive_div ? mean(logprior[:,1]) : half_quant(0)
     weights, t1, t2 = @ignore_derivatives prep_weights(logllhood)
 
     @tullio IS_estimator[b, t, s] := weights[b, s, t] * (logprior[s, t] + (t2[t] * logllhood[b, s, t]))

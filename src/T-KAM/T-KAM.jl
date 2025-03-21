@@ -174,7 +174,7 @@ function thermo_loss(
     @tullio IS_estimator[b, t, s] := weights[b, s, t] * (logprior[s, t] + (t2[t] * logllhood[b, s, t]))
     @tullio MC_estimator[b, t, s] := logprior[s, t] + (t1[t] * logllhood[b, s, t])
 
-    @ignore_derivatives m.verbose && println("Temps: ", temps, " log-prior: ", -mean(logprior; dims=1), " log-llhood: ", -mean(logllhood; dims=(1,2)))
+    @ignore_derivatives m.verbose && println("Temps: ", temps, " log-prior: ", mean(logprior; dims=1), " log-llhood: ", mean(logllhood; dims=(1,2)))
     return -mean(sum(sum(IS_estimator; dims=3) - mean(MC_estimator; dims=3); dims=2) .- ex_prior)*m.loss_scaling, st, seed
 end
 

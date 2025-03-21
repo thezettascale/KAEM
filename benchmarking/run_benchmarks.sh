@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="benchmarking"
-JL_FILES=$(ls "$DIR"/*.jl)
+JL_FILES=("benchmarking/latent_dim.jl" "benchmarking/MALA_steps.jl")
 
 for benchmark in $JL_FILES; 
 do

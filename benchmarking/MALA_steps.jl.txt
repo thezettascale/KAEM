@@ -1,13 +1,13 @@
 Resized dataset to (28, 28, 1)
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 120.527 s (6.90% GC) to evaluate,
- with a memory estimate of 5.23 GiB, over 140661124 allocations.
+ Single result which took 118.016 s (6.93% GC) to evaluate,
+ with a memory estimate of 5.23 GiB, over 140662639 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 200.315 s (9.26% GC) to evaluate,
- with a memory estimate of 8.07 GiB, over 211019974 allocations.
+ Single result which took 195.506 s (9.30% GC) to evaluate,
+ with a memory estimate of 8.07 GiB, over 211004590 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 303.539 s (10.39% GC) to evaluate,
- with a memory estimate of 11.58 GiB, over 302514661 allocations.
+ Single result which took 296.853 s (10.69% GC) to evaluate,
+ with a memory estimate of 11.56 GiB, over 301893502 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 371.277 s (11.08% GC) to evaluate,
- with a memory estimate of 14.03 GiB, over 360404100 allocations.
+ Single result which took 358.171 s (11.19% GC) to evaluate,
+ with a memory estimate of 13.99 GiB, over 359160341 allocations.

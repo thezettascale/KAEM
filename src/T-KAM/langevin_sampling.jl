@@ -7,17 +7,11 @@ using Zygote: withgradient
 using Flux: mse
 
 include("../utils.jl")
+include("EBM_prior.jl")
+include("KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-
-# Gaussian for testing purposes
-if occursin("langevin_tests.jl", string(@__FILE__))
-    log_prior(m, z, ps, st; normalize=false) = full_quant(0), 0, st
-else
-    include("EBM_prior.jl")
-    include("KAN_likelihood.jl")
-    using .ebm_ebm_prior: log_prior
-    using .KAN_likelihood: log_likelihood
-end
+using .ebm_ebm_prior: log_prior
+using .KAN_likelihood: log_likelihood
 
 function cross_entropy_sum(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     log_x = log.(x .+ ε)
@@ -235,9 +229,8 @@ function autoMALA_sampler(
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂) 
-        logpos = sum(lp) + t_k * (ll_fn(x̂, x) / (2*m.lkhood.σ_llhood^2))
+        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed, ε=m.ε)
+        logpos = sum(lp) + t_k * sum(ll)
         return logpos * m.loss_scaling, st_ebm, st_gen
     end
 

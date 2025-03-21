@@ -177,7 +177,7 @@ function thermo_loss(
 
     # MC-expected lower-temp posteriors
     loss_prior = loss_prior .- mean(logprior; dims=1)'
-    loss_llhood = loss_llhood - permutedims(mean(t1 .* logllhood; dims=2), (3, 1, 2))
+    loss_llhood = loss_llhood - mean(t1 .* permutedims(logllhood, (3, 1, 2)); dims=3)
 
     @ignore_derivatives m.verbose && println("Temps: ", temps, " loss-prior: ", -mean(loss_prior; dims=2), " loss-llhood: ", -mean(loss_llhood; dims=2))
     return -mean(sum(loss_prior .+ loss_llhood; dims=1))*m.loss_scaling, st, seed

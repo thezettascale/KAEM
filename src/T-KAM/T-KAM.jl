@@ -170,16 +170,10 @@ function thermo_loss(
     logllhood = reshape(logllhood, B, S, T)
     weights, t1, t2 = @ignore_derivatives prep_weights(logllhood)
 
-    # IS-expected higher-temp posteriors
-    @tullio loss_prior[t, b] := weights[b, s, t] * logprior[s, t]
-    @tullio loss_llhood[t, b] := weights[b, s, t] * logllhood[b, s, t]
-
-    # MC-expected lower-temp posteriors
-    loss_prior = loss_prior .- mean(logprior; dims=1)'
-    loss_llhood = t2 .* loss_llhood - t1 .* permutedims(mean(logllhood; dims=2), (3, 1, 2))
-
-    @ignore_derivatives m.verbose && println("Temps: ", temps, " loss-prior: ", -mean(loss_prior; dims=2), " loss-llhood: ", -mean(loss_llhood; dims=2))
-    return -mean(sum(loss_prior .+ loss_llhood; dims=1))*m.loss_scaling, st, seed
+    @tullio IS_estimator[b, t, s] := weights[b, s, t] * (logprior[s, t] + (t2[t] * logllhood[b, s, t]))
+    @tullio MC_estimator[b, t, s] := logprior[s, t] + (t1[t] * logllhood[b, s, t])
+    @ignore_derivatives m.verbose && println("Temps: ", temps, " log-prior: ", -mean(logprior; dims=1), " log-llhood: ", -mean(logllhood; dims=(1,2)))
+    return -mean(sum(sum(IS_estimator; dims=3) - mean(MC_estimator; dims=3); dims=2))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

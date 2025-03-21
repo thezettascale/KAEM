@@ -9,7 +9,7 @@ include("../src/ML_pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: device
+using .Utils: device, half_quant
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
@@ -30,10 +30,11 @@ function benchmark_MALA(N_l)
 
     model = init_T_KAM(dataset, conf, img_size)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    model = move_to_hq(model)
     x_test = device(first(model.train_loader))
-    ps, st = ComponentArray(ps) |> device, st |> device
+    ps, st = ComponentArray(ps) |> device, st |> device 
 
-    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), ps))
+    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
 display(@benchmark CUDA.@sync benchmark_MALA(5))

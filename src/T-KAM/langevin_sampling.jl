@@ -206,7 +206,7 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant

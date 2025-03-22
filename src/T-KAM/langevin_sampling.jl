@@ -149,6 +149,7 @@ function autoMALA_step(
     η_init::full_quant,
     Δη::full_quant,
     logpos_withgrad::Function;
+    eps::half_quant=eps(half_quant)
     )
     """
     Check the reversibility of the autoMALA step size selection.
@@ -172,7 +173,7 @@ function autoMALA_step(
     """
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
     _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η, Δη, logpos_withgrad)
-    return ẑ, η, η ≈ η_prime, log_r, st
+    return ẑ, η, abs(η - η_prime) < eps, log_r, st
 end
 
 function autoMALA_sampler(
@@ -259,7 +260,7 @@ function autoMALA_sampler(
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
+                ẑ, η, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
                 if reversibility && (log_u[i, k] < log_r)
                     z .= ẑ
                     num_acceptances[k] += 1

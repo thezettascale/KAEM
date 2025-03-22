@@ -1,11 +1,10 @@
 #!/bin/bash
 
-JL_FILES=("benchmarking/latent_dim.jl" "benchmarking/MALA_steps.jl")
+JL_FILES=("benchmarking/MALA_steps.jl")
 
-for benchmark in $JL_FILES; 
+for benchmark in "${JL_FILES[@]}"; do
 do
     echo "Running $benchmark"
-    # julia --threads auto "$benchmark" > "$benchmark.txt"
 
     tmux new-session -d -s "$benchmark" "julia --threads auto $benchmark > $benchmark.txt"
 

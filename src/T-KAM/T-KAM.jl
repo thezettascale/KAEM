@@ -156,7 +156,7 @@ function thermo_loss(
         t1, t2 = device(temps[1:end-1]), device(temps[2:end])
         Δt, fq_ll = full_quant.(t2 .- t1), full_quant.(ll)
         @tullio weights[b, s, t] := Δt[t] * fq_ll[b, s, t]
-        return softmax(weights, dims=2), t1, t2
+        return half_quant.(softmax(weights, dims=2)), t1, t2
     end
 
     # Log-dists

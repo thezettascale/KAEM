@@ -173,7 +173,7 @@ function thermo_loss(
 
     # IS-expected higher-temp posteriors
     @tullio loss_prior[t, b] := weights[b, s, t] * logprior[s, t]
-    @tullio loss_llhood[t, b] := weights[b, s, t] * t2[t] * logllhood[b, s, t]
+    @tullio loss_llhood[t, b] := weights[b, s, t] * (t2[t] * logllhood[b, s, t])
 
     # MC-expected lower-temp posteriors
     loss_prior = loss_prior .- mean(logprior; dims=1)'

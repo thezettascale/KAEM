@@ -175,11 +175,11 @@ function thermo_loss(
         @tullio loss_llhood[b] := weights_resampled[b, s] * t2 * logllhood_resampled[b, s]
 
         # MC-expected lower-temp posteriors
-        loss_prior = loss_prior .- mean(logprior; dims=1)'
+        loss_prior = loss_prior .- mean(logprior)
         loss_llhood = loss_llhood - mean(t1 .* logllhood; dims=2)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
-        loss += loss_prior + loss_llhood
+        loss += loss_prior .+ loss_llhood
     end
 
     return -mean(loss)*m.loss_scaling, st, seed

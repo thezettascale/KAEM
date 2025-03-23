@@ -12,18 +12,18 @@ plt.rcParams.update({
 
 latent_dim = pd.DataFrame({
     r"$n_z$" : [10, 20, 40, 80],
-    "Time (s)" : [12.530, 23.890, 52.157, 112.079],
-    "Memory Estimate (GiB)" : [0.745, 1.41, 2.88, 6.46],  
-    "Garbage Collection (%)" : [1.23, 1.39, 1.54, 1.59],
-    "Allocations" : [21531195, 43529828, 92155697, 207879587],
+    "Time (s)" : [11.090, 22.334, 47.870, 106.534],
+    "Memory Estimate (GiB)" : [0.765, 1.37, 2.75, 6.11],  
+    "Garbage Collection (%)" : [1.19, 1.23, 1.54, 1.51],
+    "Allocations" : [19762026, 39969383, 84700606, 191387658],
 })
 
 mala_steps = pd.DataFrame({
     r"$N_{\text{local}}$" : [5, 10, 15, 20],
-    "Time (s)" : [127.873, 244.480, 352.254, 465.345],
-    "Memory Estimate (GiB)" : [5.89, 10.39, 14.62, 18.96],
-    "Garbage Collection (%)" : [1.54, 1.67, 1.77, 1.88],
-    "Allocations" : [159267350, 275585967, 383194986, 494536630],
+    "Time (s)" : [130.940, 229.143, 341.524, 462.707],
+    "Memory Estimate (GiB)" : [6.12, 9.76, 14.11, 18.57],
+    "Garbage Collection (%)" : [7.72, 10.26, 11.01, 11.27],
+    "Allocations" : [161514203, 250531992, 361963678, 477131343],
 })
 
 keys = [r"$n_z$", r"$N_{\text{local}}$"]

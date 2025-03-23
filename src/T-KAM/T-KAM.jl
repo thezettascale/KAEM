@@ -169,7 +169,7 @@ function thermo_loss(
     logprior = reshape(logprior, S, T)
     logllhood = reshape(logllhood, B, S, T)
     weights, t1, t2 = @ignore_derivatives prep_weights(logllhood)
-    logprior = m.prior.contrastive_div ? logprior .- mean(logprior[:, 1]) : logprior
+    ex_prior = m.prior.contrastive_div ? mean(logprior[:,1]) : half_quant(0)
 
     # IS-expected higher-temp posteriors
     @tullio loss_prior[t, b] := weights[b, s, t] * logprior[s, t]
@@ -180,7 +180,7 @@ function thermo_loss(
     loss_llhood = loss_llhood - mean(t1 .* permutedims(logllhood, (3, 1, 2)); dims=3)
 
     @ignore_derivatives m.verbose && println("Temps: ", temps, " loss-prior: ", -mean(loss_prior; dims=2), " loss-llhood: ", -mean(loss_llhood; dims=2))
-    return -mean(sum(loss_prior .+ loss_llhood; dims=1))*m.loss_scaling, st, seed
+    return -mean(sum(loss_prior .+ loss_llhood; dims=1) .- ex_prior)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

@@ -149,37 +149,40 @@ function thermo_loss(
 
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
 
-    function prep_weights(ll)
-        t1, t2 = device(temps[1:end-1]), device(temps[2:end])
-        Δt, fq_ll = full_quant.(t2 .- t1), full_quant.(ll)
-        @tullio weights[b, s, t] := Δt[t] * fq_ll[b, s, t]
-        return half_quant.(softmax(weights, dims=2)), t1, t2
+    loss = zeros(half_quant, B, 1) |> device
+    for k in 1:T
+        z_t = view(z, :, :, :, k)
+        t1, t2 = temps[k], temps[k+1]
+        
+        # Log-dists
+        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+
+        weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
+        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)) .|> half_quant
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
+        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
+
+        # IS-expected higher-temp posteriors
+        @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
+        @tullio loss_llhood[b] := weights_resampled[b, s] * t2 * logllhood_resampled[b, s]
+
+        # MC-expected lower-temp posteriors
+        loss_prior = loss_prior .- mean(logprior; dims=1)'
+        loss_llhood = loss_llhood - mean(t1 .* logllhood; dims=2)
+
+        @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
+        loss += loss_prior + loss_llhood
     end
 
-    # Log-dists
-    z = reshape(z, Q, P, T*S)
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
-
-    logprior = reshape(logprior, S, T)
-    logllhood = reshape(logllhood, B, S, T)
-    weights, t1, t2 = @ignore_derivatives prep_weights(logllhood)
-
-    # IS-expected higher-temp posteriors
-    @tullio loss_prior[t, b] := weights[b, s, t] * logprior[s, t]
-    @tullio loss_llhood[t, b] := weights[b, s, t] * (t2[t] * logllhood[b, s, t])
-
-    # MC-expected lower-temp posteriors
-    loss_prior = loss_prior .- mean(logprior; dims=1)'
-    loss_llhood = loss_llhood - mean(t1 .* permutedims(logllhood, (3, 1, 2)); dims=3)
-
-    @ignore_derivatives m.verbose && println("Temps: ", temps, " loss-prior: ", -mean(loss_prior; dims=2), " loss-llhood: ", -mean(loss_llhood; dims=2))
-    return -mean(sum(loss_prior .+ loss_llhood; dims=1))*m.loss_scaling, st, seed
+    return -mean(loss)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

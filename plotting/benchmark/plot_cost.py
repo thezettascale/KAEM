@@ -20,10 +20,10 @@ latent_dim = pd.DataFrame({
 
 mala_steps = pd.DataFrame({
     r"$N_{\text{local}}$" : [5, 10, 15, 20],
-    "Time (s)" : [77.949, 106.510, 151.397, 162.914],
-    "Memory Estimate (GiB)" : [4.88, 7.04, 9.20, 11.36],
-    "Garbage Collection (%)" : [1.49, 1.44, 1.70, 1.57],
-    "Allocations" : [116381878, 144419303, 172428259, 200451545],
+    "Time (s)" : [127.873, 244.480, 352.254, 465.345],
+    "Memory Estimate (GiB)" : [5.89, 10.39, 14.62, 18.96],
+    "Garbage Collection (%)" : [1.54, 1.67, 1.77, 1.88],
+    "Allocations" : [159267350, 275585967, 383194986, 494536630],
 })
 
 keys = [r"$n_z$", r"$N_{\text{local}}$"]

@@ -157,17 +157,16 @@ function thermo_loss(
     ex_prior = half_quant(0)
 
     if m.prior.contrastive_div
-        lp, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        lp, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         ex_prior = mean(lp)
     end
 
     for k in 1:T
-        z_t = view(z, :, :, :, k)
         t1, t2 = temps[k], temps[k+1]
         
         # Log-dists
-        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+        logprior, st_ebm = log_prior(m.prior, z[:, :, :, k], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, k]; seed=seed, ε=m.ε)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 

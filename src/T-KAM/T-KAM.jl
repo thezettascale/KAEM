@@ -154,27 +154,26 @@ function thermo_loss(
     Q, P, S, T, B = size(z)..., size(x)[end]
 
     loss = zeros(half_quant, B, 1) |> device
-    ex_prior = half_quant(0)
-
-    if m.prior.contrastive_div
-        lp, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        ex_prior = mean(lp)
-    end
+    
+    ex_prior = (m.prior.contrastive_div ? 
+    mean(first(log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div))) : 
+    half_quant(0)
+    )
 
     for k in 1:T
+        z_t = view(z, :, :, :, k)
         t1, t2 = temps[k], temps[k+1]
         
         # Log-dists
-        logprior, st_ebm = log_prior(m.prior, z[:, :, :, k], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, k]; seed=seed, ε=m.ε)
+        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
-        logprior = logprior .- ex_prior
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
         # IS-expected higher-temp posteriors
@@ -182,7 +181,7 @@ function thermo_loss(
         @tullio loss_llhood[b] := weights_resampled[b, s] * t2 * logllhood_resampled[b, s]
 
         # MC-expected lower-temp posteriors
-        loss_prior = loss_prior .- mean(logprior)
+        loss_prior = loss_prior .- mean(logprior .- ex_prior)
         loss_llhood = loss_llhood - mean(t1 .* logllhood; dims=2)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))

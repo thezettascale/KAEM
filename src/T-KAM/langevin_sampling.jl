@@ -8,8 +8,10 @@ using Flux: mse
 
 include("../utils.jl")
 include("EBM_prior.jl")
+include("KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
+using .KAN_likelihood: log_likelihood
 
 function cross_entropy_sum(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     log_x = log.(x .+ ε)

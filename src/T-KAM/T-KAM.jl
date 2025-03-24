@@ -154,6 +154,7 @@ function thermo_loss(
     Q, P, S, T, B = size(z)..., size(x)[end]
 
     loss = zeros(half_quant, B, 1) |> device
+    ex_prior = half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -165,6 +166,11 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
+        if k == 1 && m.prior.contrastive_div
+            ex_prior = mean(logprior)
+        end
+
+        logprior = logprior .- ex_prior
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)) .|> half_quant

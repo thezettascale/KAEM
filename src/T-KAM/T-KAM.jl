@@ -156,6 +156,11 @@ function thermo_loss(
     loss = zeros(half_quant, B, 1) |> device
     ex_prior = half_quant(0)
 
+    if m.prior.contrastive_div
+        lp, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        ex_prior = mean(lp)
+    end
+
     for k in 1:T
         z_t = view(z, :, :, :, k)
         t1, t2 = temps[k], temps[k+1]
@@ -165,10 +170,6 @@ function thermo_loss(
         logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
-
-        if k == 1 && m.prior.contrastive_div
-            ex_prior = mean(logprior)
-        end
 
         logprior = logprior .- ex_prior
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)

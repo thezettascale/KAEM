@@ -36,15 +36,12 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     # Pre-conditioner
     seed, rng = next_rng(seed)
     β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
-    Σ_AM = β .* sqrt.(1 ./ Σ) .+ (1 - β)
+    Σ_AM = (β .* sqrt.(1 ./ Σ) .+ (1 - β)) .^ 2
 
     # Momentum
     seed, rng = next_rng(seed)
     p = rand(rng, MvNormal(zeros(full_quant, length(Σ_AM)), Diagonal(Σ_AM)), B)
-
-    p = reshape(p, Q, P, B)
-    Σ_AM = reshape(Σ_AM, Q, P)
-    return device(p), device(Σ_AM), seed
+    return device(reshape(p, Q, P, B)), device(reshape(Σ_AM, Q, P)), seed
 end
 
 function leapfrop_proposal(
@@ -117,22 +114,22 @@ function select_step_size(
         The updated state.
     """
     MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-    
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
-    if log_r <= log_a 
-        while log_r <= log_a
-            η_init /= Δη
-            ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
-        end
-    elseif log_r >= log_b
-        while log_r >= log_b
-            η_init *= Δη
-            ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
-        end
-        η_init /= Δη
+
+    δ = (log_r >= log_b) - (log_r <= log_a)
+    δ == 0 && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+
+    while true
+        η_init *= Δη^δ
+        
         ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
+        
+        if δ == 1 && log_r < log_b
+            return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init / Δη, log_r, st
+        elseif δ == -1 && log_r > log_a
+            return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+        end
     end
-    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end
 
 function autoMALA_step(
@@ -147,7 +144,7 @@ function autoMALA_step(
     η_init::full_quant,
     Δη::full_quant,
     logpos_withgrad::Function;
-    eps::half_quant=eps(half_quant)
+    eps::half_quant=eps(half_quant),
     )
     """
     Check the reversibility of the autoMALA step size selection.
@@ -169,9 +166,10 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η, Δη, logpos_withgrad)
-    return ẑ, η, abs(η - η_prime) < eps, log_r, st
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
+    println("η:", η, "η_prime:", η_prime)
+    return ẑ, η, η_prime, isapprox(η, η_prime; atol=eps), log_r, st
 end
 
 function autoMALA_sampler(
@@ -259,12 +257,13 @@ function autoMALA_sampler(
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
+                ẑ, η, η_prime, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
                 if reversibility && (log_u[i, k] < log_r)
                     z .= ẑ
                     num_acceptances[k] += 1
                     mean_η[k] += η
                 end
+                η = (η + η_prime) / 2
             end
         end
         output = cat(output, reshape(z, Q, P, B, 1); dims=4)

@@ -95,7 +95,7 @@ function importance_loss(
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])) .|> half_quant
+    weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])), dims=2) .|> half_quant
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
@@ -172,7 +172,7 @@ function thermo_loss(
 
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = @ignore_derivatives reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)) .|> half_quant
+        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 

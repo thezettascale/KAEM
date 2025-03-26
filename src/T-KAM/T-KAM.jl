@@ -87,7 +87,7 @@ function importance_loss(
 
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    ex_prior = m.prior.contrastive_div ? mean(logprior; dims=3) : zeros(half_quant, size(logprior)[1:2]..., 1) |> device
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : half_quant(0)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen

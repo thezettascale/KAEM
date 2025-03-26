@@ -100,12 +100,11 @@ function importance_loss(
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
-    logprior_resampled = logprior_resampled .- ex_prior
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior .- ex_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
+    return -mean(loss_prior .+ loss_llhood .- ex_prior)*m.loss_scaling, st, seed
 end
 
 function POST_loss(
@@ -171,13 +170,12 @@ function thermo_loss(
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        # Remove MC-expected lower-temp posteriors
-        logprior_resampled = logprior_resampled .- mean(logprior)
-        logllhood_resampled = logllhood_resampled .- mean(t1 .* logllhood; dims=2)
-
         # IS-expected higher-temp posteriors
         @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
         @tullio loss_llhood[b] := weights_resampled[b, s] * (t2 * logllhood_resampled[b, s])
+
+        loss_prior = loss_prior .- mean(logprior)
+        loss_llhood = loss_llhood .- mean(t1 .* logllhood; dims=2)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
         loss += loss_prior .+ loss_llhood

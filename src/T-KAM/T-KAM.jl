@@ -154,11 +154,6 @@ function thermo_loss(
     Q, P, S, T, B = size(z)..., size(x)[end]
 
     loss = zeros(half_quant, B, 1) |> device
-    
-    ex_prior = (m.prior.contrastive_div ? 
-    mean(first(log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div))) : 
-    half_quant(0)
-    )
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -173,16 +168,16 @@ function thermo_loss(
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
         # IS-expected higher-temp posteriors
         @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
-        @tullio loss_llhood[b] := weights_resampled[b, s] * t2 * logllhood_resampled[b, s]
+        @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
         # MC-expected lower-temp posteriors
-        loss_prior = loss_prior .- mean(logprior .- ex_prior)
-        loss_llhood = loss_llhood - mean(t1 .* logllhood; dims=2)
+        loss_prior = loss_prior .- mean(logprior)
+        loss_llhood = t2 .* loss_llhood - t1 .* mean(logllhood; dims=2)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
         loss += loss_prior .+ loss_llhood

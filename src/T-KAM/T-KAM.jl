@@ -103,8 +103,8 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior .- ex_prior), " LLhood loss: ", -mean(loss_llhood))
-    return -mean(loss_prior .+ loss_llhood .- ex_prior)*m.loss_scaling, st, seed
+    m.verbose && println("Prior loss: ", -mean(loss_prior) + ex_prior, " LLhood loss: ", -mean(loss_llhood))
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 
 function POST_loss(
@@ -133,7 +133,7 @@ function POST_loss(
 
     # Expected posterior
     m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
-    return mean(logprior .+ logllhood)*m.loss_scaling, st, seed
+    return (logprior .+ logllhood)*m.loss_scaling, st, seed
 end 
 
 
@@ -152,7 +152,7 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
 
-    loss = zeros(half_quant, B, 1) |> device
+    loss = half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -174,14 +174,14 @@ function thermo_loss(
         @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
         @tullio loss_llhood[b] := weights_resampled[b, s] * (t2 * logllhood_resampled[b, s])
 
-        loss_prior = loss_prior .- mean(logprior)
-        loss_llhood = loss_llhood .- mean(t1 .* logllhood; dims=2)
+        loss_prior = mean(loss_prior) .- mean(logprior)
+        loss_llhood = mean(loss_llhood) .- mean(t1 .* logllhood)
 
-        @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
+        @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -loss_prior, " loss-llhood: ", -loss_llhood)
         loss += loss_prior .+ loss_llhood
     end
 
-    return -mean(loss)*m.loss_scaling, st, seed
+    return -loss*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

@@ -168,6 +168,8 @@ function autoMALA_step(
     """
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
     _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
+    
+    isnan(log_r) && error("NaN in acceptance ratio")
     return ẑ, η, η_prime, isapprox(η, η_prime; atol=eps), log_r, st
 end
 

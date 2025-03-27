@@ -100,11 +100,12 @@ function importance_loss(
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
+    logprior_resampled = logprior_resampled .- ex_prior
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior) + ex_prior, " LLhood loss: ", -mean(loss_llhood))
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
+    return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
 function POST_loss(
@@ -152,7 +153,7 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
 
-    loss = half_quant(0)
+    loss, ex_prior = half_quant(0), half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -164,21 +165,23 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
+        if m.prior.contrastive_div && k == 1
+            ex_prior = mean(logprior)
+        end
+
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        # IS-expected higher-temp posteriors
-        @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
-        @tullio loss_llhood[b] := weights_resampled[b, s] * (t2 * logllhood_resampled[b, s])
-
-        loss_prior = mean(loss_prior) .- mean(logprior)
-        loss_llhood = mean(loss_llhood) .- mean(t1 .* logllhood)
+        logprior_resampled = logprior_resampled .- ex_prior
+        logprior = logprior .- ex_prior
+        @tullio loss_prior[b] := (weights_resampled[b, s] * logprior_resampled[s, b]) - (logprior[s] / S)
+        @tullio loss_llhood[b] := ((weights_resampled[b, s] * (t2 * logllhood_resampled[b, s]))) - ((t1 * logllhood_resampled[b, s]) / S)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -loss_prior, " loss-llhood: ", -loss_llhood)
-        loss += loss_prior .+ loss_llhood
+        loss += mean(loss_prior + loss_llhood)
     end
 
     return -loss*m.loss_scaling, st, seed

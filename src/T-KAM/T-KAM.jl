@@ -179,7 +179,7 @@ function thermo_loss(
         @tullio loss_llhood[b] := ((weights_resampled[b, s] * (t2 * logllhood_resampled[b, s])))
 
         loss_prior = loss_prior .- mean(logprior .- ex_prior)
-        loss_llhood = dropdims(mean(t1 * logllhood; dims=2); dims=2)
+        loss_llhood = loss_llhood - dropdims(mean(t1 * logllhood; dims=2); dims=2)
 
         @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
         loss += mean(loss_prior + loss_llhood)

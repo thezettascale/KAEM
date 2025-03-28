@@ -152,8 +152,7 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-
-    loss, ex_prior = half_quant(0), half_quant(0)
+    loss = half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -165,23 +164,17 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
-        if m.prior.contrastive_div && k == 1
-            ex_prior = mean(logprior)
-        end
-
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-        logprior .-= ex_prior
 
         @tullio IS_estimator[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        @tullio MC_estimator[b] := logprior[s] + t1 * logllhood[b, s]
-        MC_estimator ./= S
+        @tullio MC_estimator[b] := (logprior[s] + t1 * logllhood[b, s]) / S
         loss -= mean(IS_estimator - MC_estimator)
 
-        m.verbose && println(
+        @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
             " logprior: ", mean(logprior), 

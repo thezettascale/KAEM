@@ -174,18 +174,25 @@ function thermo_loss(
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
+        logprior .-= ex_prior
 
-        @tullio loss_prior[b] := (weights_resampled[b, s] * logprior_resampled[s, b]) 
-        @tullio loss_llhood[b] := ((weights_resampled[b, s] * (t2 * logllhood_resampled[b, s])))
+        @tullio IS_estimator[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
+        @tullio MC_estimator[b] := logprior[s] + t1 * logllhood[b, s]
+        MC_estimator ./= S
+        loss -= mean(IS_estimator - MC_estimator)
 
-        loss_prior = loss_prior .- mean(logprior .- ex_prior)
-        loss_llhood = loss_llhood - dropdims(mean(t1 * logllhood; dims=2); dims=2)
-
-        @ignore_derivatives m.verbose && println("Temps: ", t1, " : ", t2, " loss-prior: ", -mean(loss_prior), " loss-llhood: ", -mean(loss_llhood))
-        loss += mean(loss_prior + loss_llhood)
+        m.verbose && println(
+            "t1: ", t1, 
+            " t2: ", t2, 
+            " logprior: ", mean(logprior), 
+            " logllhood: ", mean(logllhood), 
+            " IS_estimator: ", mean(IS_estimator), 
+            " MC_estimator: ", mean(MC_estimator),
+            " Cumulative loss: ", loss
+            )
     end
 
-    return -loss*m.loss_scaling, st, seed
+    return loss*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

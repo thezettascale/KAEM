@@ -76,9 +76,10 @@ function leapfrop_proposal(
     """
 
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
-    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p] # Full-step position update
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)
+    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p] # Full-step position update    
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)    
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
+
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
@@ -94,9 +95,7 @@ function select_step_size(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
-    logpos_withgrad::Function;
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
+    logpos_withgrad::Function    
     )
     """
     Select a step size for the autoMALA sampler.
@@ -123,21 +122,18 @@ function select_step_size(
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    geq_bool = log_r .>= log_b
 
     while !all(δ .== 0)
         η_init = η_init .* Δη.^δ
         ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
         any(isnan.(log_r)) && error("NaN in acceptance ratio")
 
-        δ = (log_r .>= log_b) - (log_r .<= log_a)
-        all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
-
-        η_init = ifelse.(δ .== 1 .&& log_r .< log_b, η_init ./ Δη, η_init)
         δ = ifelse.(δ .== 1 .&& log_r .< log_b, 0, δ)
         δ = ifelse.(δ .== -1 .&& log_r .> log_a, 0, δ)
-        δ = ifelse.(η_min .< η_init .< η_max, 0, δ)
     end
 
+    η_init = ifelse.(geq_bool, η_init ./ Δη, η_init)
     return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end
 
@@ -152,10 +148,7 @@ function autoMALA_step(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
-    logpos_withgrad::Function;
-    eps::half_quant=eps(half_quant),
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
+    logpos_withgrad::Function    
     )
     """
     Check the reversibility of the autoMALA step size selection.
@@ -177,8 +170,8 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad; η_min=η_min, η_max=η_max)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad; η_min=η_min, η_max=η_max)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
     return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
 end
 
@@ -266,7 +259,7 @@ function autoMALA_sampler(
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε, η_min=η_min, η_max=η_max)
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
                 accept = log_u[i,k,:] .< log_r
                 η_cpu = cpu_device()(η)
                 for s in 1:S

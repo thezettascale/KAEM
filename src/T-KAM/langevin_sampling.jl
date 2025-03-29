@@ -31,27 +31,40 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
         The updated seed.
     """
     Q, P, B = size(z)
-    Σ = diag(cov(cpu_device()(reshape(z, Q*P, B)')))
     
-    # Pre-conditioner
+    # Calculate covariance per chain
+    Σ = zeros(full_quant, Q*P, B)
+    for b in 1:B
+        z_b = cpu_device()(reshape(z[:,:,b], Q*P))
+        Σ[:,b] = z_b .* z_b # Diagonal covariance only
+    end
+    
+    # Pre-conditioner per chain
     seed, rng = next_rng(seed)
-    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
-    Σ_AM = (β .* sqrt.(1 ./ Σ) .+ (1 - β)) .^ 2
+    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3), B) .|> full_quant
+    Σ_AM = zeros(full_quant, Q*P, B)
+    for b in 1:B
+        Σ_AM[:,b] = (β[b] .* sqrt.(1 ./ Σ[:,b]) .+ (1 - β[b])) .^ 2
+    end
 
-    # Momentum
+    # Momentum per chain
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(full_quant, length(Σ_AM)), Diagonal(Σ_AM)), B)
-    return device(reshape(p, Q, P, B)), device(reshape(Σ_AM, Q, P)), seed
+    p = zeros(full_quant, Q*P, B)
+    for b in 1:B
+        p[:,b] = rand(rng, MvNormal(zeros(full_quant, Q*P), Diagonal(Σ_AM[:,b])))
+    end
+    
+    return device(reshape(p, Q, P, B)), device(reshape(Σ_AM, Q, P, B)), seed
 end
 
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
     st,
-    logpos_z::full_quant,
+    logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
     momentum::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
-    η::full_quant,
+    η::AbstractVector{full_quant},
     logpos_withgrad::Function
     )
     """
@@ -60,7 +73,7 @@ function leapfrop_proposal(
     Args:
         z: The current position.
         momentum: The current momentum.
-        η: The step size.
+        η: The step size per chain.
         logpos: The log-posterior function.
         seed: The seed for the random number generator.
 
@@ -68,16 +81,31 @@ function leapfrop_proposal(
         The proposal.
         The log-ratio.
     """
-
-    p = momentum .+ (η .* ∇z / 2) # Half-step momentum update
-    ẑ = z .+ (η .* p) ./ M # Full-step position update
-
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)
-    p = p + (η .* ∇ẑ / 2) # Half-step momentum update
-
-    # MH acceptance ratio
-    log_r = logpos_ẑ - logpos_z - ((sum(p.^2) - sum(momentum.^2)) / 2)
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st
+    Q, P, B = size(z)
+    ẑ = similar(z)
+    logpos_ẑ = zeros(full_quant, B)
+    ∇ẑ = similar(z)
+    p = similar(momentum)
+    log_r = zeros(full_quant, B)
+    
+    # Process each chain independently
+    for b in 1:B
+        p_b = momentum[:,:,b] .+ (η[b] .* ∇z[:,:,b] / 2) # Half-step momentum update
+        ẑ[:,:,b] = z[:,:,b] .+ (η[b] .* p_b) ./ M[:,:,b] # Full-step position update
+        
+        # Get gradients for this chain
+        logpos_ẑ_b, ∇ẑ_b, st = logpos_withgrad(ẑ[:,:,b:b], st)
+        ∇ẑ[:,:,b] = ∇ẑ_b[:,:,1]
+        logpos_ẑ[b] = logpos_ẑ_b
+        
+        p_b = p_b + (η[b] .* ∇ẑ[:,:,b] / 2) # Half-step momentum update
+        p[:,:,b] = -p_b
+        
+        # MH acceptance ratio per chain
+        log_r[b] = logpos_ẑ[b] - logpos_z[b] - ((sum(p_b.^2) - sum(momentum[:,:,b].^2)) / 2)
+    end
+    
+    return ẑ, logpos_ẑ, ∇ẑ, p, log_r, st
 end
 
 function select_step_size(
@@ -85,11 +113,11 @@ function select_step_size(
     log_b::full_quant,
     z::AbstractArray{full_quant},
     st,
-    logpos_z::full_quant,
+    logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
     momentum::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
-    η_init::full_quant,
+    η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function
     )
@@ -104,7 +132,7 @@ function select_step_size(
         logpos_z: The log-posterior at the current position.
         momentum: The current momentum.
         M: The mass matrix.
-        η_init: The initial step size.
+        η_init: The initial step size per chain.
         Δη: The step size increment.
         logpos_withgrad: The log-posterior function.
 
@@ -114,21 +142,36 @@ function select_step_size(
         The updated state.
     """
     MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
 
-    δ = (log_r >= log_b) - (log_r <= log_a)
-    δ == 0 && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    # Check acceptance per chain
+    δ = zeros(Int, size(z,3))
+    for b in 1:size(z,3)
+        δ[b] = (log_r[b] >= log_b) - (log_r[b] <= log_a)
+    end
+    
+    all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 
+    η = copy(η_init)
     while true
-        η_init *= Δη^δ
+        for b in 1:size(z,3)
+            η[b] *= Δη^δ[b] # Adjust step size per chain
+        end
         
-        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
-        isnan(log_r) && error("NaN in acceptance ratio")
+        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η)
+        any(isnan.(log_r)) && error("NaN in acceptance ratio")
         
-        if δ == 1 && log_r < log_b
-            return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init / Δη, log_r, st
-        elseif δ == -1 && log_r > log_a
-            return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+        finished = true
+        for b in 1:size(z,3)
+            if δ[b] == 1 && log_r[b] >= log_b
+                finished = false
+            elseif δ[b] == -1 && log_r[b] <= log_a
+                finished = false
+            end
+        end
+        
+        if finished
+            return ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st
         end
     end
 end
@@ -138,11 +181,11 @@ function autoMALA_step(
     log_b::full_quant,
     z::AbstractArray{full_quant},
     st,
-    logpos_z::full_quant,
+    logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
     momentum::AbstractArray{full_quant},
     M::AbstractArray{full_quant},
-    η_init::full_quant,
+    η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function;
     eps::half_quant=eps(half_quant),
@@ -158,7 +201,7 @@ function autoMALA_step(
         logpos_z: The log-posterior at the current position.
         momentum: The current momentum.
         M: The mass matrix.
-        η_init: The initial step size.
+        η_init: The initial step size per chain.
         Δη: The step size increment.
         logpos_withgrad: The log-posterior function.
 
@@ -167,9 +210,15 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
-    return ẑ, η, η_prime, isapprox(η, η_prime; atol=eps), log_r, st
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
+    
+    reversible = zeros(Bool, size(z,3))
+    for b in 1:size(z,3)
+        reversible[b] = isapprox(η[b], η_prime[b]; atol=eps)
+    end
+    
+    return ẑ, η, η_prime, reversible, log_r, st
 end
 
 function autoMALA_sampler(
@@ -217,7 +266,7 @@ function autoMALA_sampler(
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, full_quant, N, T))  
+    log_u = log.(rand(rng, full_quant, N, T, B))  
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
@@ -233,8 +282,8 @@ function autoMALA_sampler(
     end
 
     k = 1
-    num_acceptances = zeros(Int, T) 
-    mean_η = zeros(full_quant, T) 
+    num_acceptances = zeros(Int, T, B) 
+    mean_η = zeros(full_quant, T, B) 
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i) -> begin
@@ -247,21 +296,23 @@ function autoMALA_sampler(
         end
         
         burn_in = 0
-        η = st.η_init[k]
+        η = repeat(st.η_init[k:k], B) # Per-chain step sizes
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
             logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
             
             if burn_in < N_unadjusted
-                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
+                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversibility, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
-                if reversibility && (log_u[i, k] < log_r)
-                    z .= ẑ
-                    num_acceptances[k] += 1
-                    mean_η[k] += η
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
+                for b in 1:B
+                    if reversible[b] && log_u[i,k,b] < log_r[b]
+                        z[:,:,b] .= ẑ[:,:,b]
+                        num_acceptances[k,b] += 1
+                        mean_η[k,b] += η[b]
+                    end
                 end
                 η = (η + η_prime) / 2
             end
@@ -271,15 +322,17 @@ function autoMALA_sampler(
     end
 
             
-    # Update step size for next training iteration
-    mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
-    for k in 1:T
-        mean_η[k] = ifelse(isnan(mean_η[k]), st.η_init[k], mean_η[k])
+    # Update step size for next training iteration - now per chain
+    for b in 1:B
+        mean_η[:,b] = clamp.(mean_η[:,b] ./ num_acceptances[:,b], η_min, η_max)
+        for k in 1:T
+            mean_η[k,b] = ifelse(isnan(mean_η[k,b]), st.η_init[k], mean_η[k,b])
+        end
     end
-    @reset st.η_init .= mean_η 
+    @reset st.η_init .= mean(mean_η, dims=2)[:,1] # Average across chains
 
-    m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
-    m.verbose && println("Mean step sizes: ", mean_η)
+    m.verbose && println("Mean acceptance rates: ", mean(num_acceptances ./ (N - N_unadjusted), dims=2)[:,1])
+    m.verbose && println("Mean step sizes: ", mean(mean_η, dims=2)[:,1])
 
     return half_quant.(output), st, seed
 end

@@ -3,7 +3,7 @@ module LangevinSampling
 export autoMALA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
-using Zygote: withgradient
+using Zygote: gradient
 
 include("../utils.jl")
 include("EBM_prior.jl")
@@ -77,31 +77,14 @@ function leapfrop_proposal(
         The proposal.
         The log-ratio.
     """
-    Q, P, S = size(z)
-    ẑ = similar(z)
-    logpos_ẑ = zeros(full_quant, S)
-    ∇ẑ = similar(z)
-    p = similar(momentum)
-    log_r = zeros(full_quant, S)
 
-    # Process each chain independently
-    for s in 1:S
-        p_s = momentum[:,:,s] .+ (η[s] .* ∇z[:,:,s] / 2) # Half-step momentum update
-        ẑ[:,:,s] = z[:,:,s] .+ (η[s] .* p_s) ./ M[:,:,s] # Full-step position update
-        
-        # Get gradients for this chain
-        logpos_ẑ_s, ∇ẑ_s, st = logpos_withgrad(ẑ[:,:,s:s], st)
-        ∇ẑ[:,:,s] = ∇ẑ_s[:,:,1]
-        logpos_ẑ[s] = logpos_ẑ_s
-        
-        p_s = p_s + (η[s] .* ∇ẑ[:,:,s] / 2) # Half-step momentum update
-        p[:,:,s] = -p_s
-        
-        # MH acceptance ratio per chain
-        log_r[s] = logpos_ẑ[s] - logpos_z[s] - ((sum(p_s.^2) - sum(momentum[:,:,s].^2)) / 2)
-    end
-    
-    return ẑ, logpos_ẑ, ∇ẑ, p, log_r, st
+    @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
+    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p,s] # Full-step position update
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)
+    @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
+    log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
+
+    return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
 
 function select_step_size(
@@ -115,7 +98,9 @@ function select_step_size(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
-    logpos_withgrad::Function
+    logpos_withgrad::Function;
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1),
     )
     """
     Select a step size for the autoMALA sampler.
@@ -140,41 +125,24 @@ function select_step_size(
     MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
 
-    # Check acceptance per chain
-    δ = zeros(Int, size(z,3))
-    for s in 1:size(z,3)
-        δ[s] = (log_r[s] >= log_b) - (log_r[s] <= log_a)
-    end
-    
+    δ = (log_r .>= log_b) - (log_r .<= log_a)
     all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 
-    η = copy(η_init)
-    while true
-        for s in 1:size(z,3)
-            η[s] *= Δη^δ[s] # Adjust step size per chain
-        end
-        
-        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η)
+    while !all(δ .== 0)
+        η_init = η_init .* Δη.^δ
+        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
         any(isnan.(log_r)) && error("NaN in acceptance ratio")
-        
-        finished = true
-        for s in 1:size(z,3)
-            if δ[s] == 1 && log_r[s] >= log_b
-                finished = false
-            elseif δ[s] == -1 && log_r[s] <= log_a
-                finished = false
-            end
-        end
-        
-        if finished
-            for s in 1:size(z,3)
-                if δ[s] == 1
-                    η[s] /= Δη
-                end
-            end
-            return ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st
-        end
+
+        δ = (log_r .>= log_b) - (log_r .<= log_a)
+        all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+
+        η_init = ifelse.(δ .== 1 .&& log_r .< log_b, η_init ./ Δη, η_init)
+        δ = ifelse.(δ .== 1 .&& log_r .< log_b, 0, δ)
+        δ = ifelse.(δ .== -1 .&& log_r .> log_a, 0, δ)
+        δ = ifelse.(η_min .< η_init .< η_max, 0, δ)
     end
+
+    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end
 
 function autoMALA_step(
@@ -190,6 +158,8 @@ function autoMALA_step(
     Δη::full_quant,
     logpos_withgrad::Function;
     eps::half_quant=eps(half_quant),
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1),
     )
     """
     Check the reversibility of the autoMALA step size selection.
@@ -211,15 +181,9 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
-    
-    reversible = zeros(Bool, size(z,3))
-    for s in 1:size(z,3)
-        reversible[s] = isapprox(η[s], η_prime[s]; atol=eps)
-    end
-    
-    return ẑ, η, η_prime, reversible, log_r, st
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad; η_min=η_min, η_max=η_max)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad; η_min=η_min, η_max=η_max)
+    return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
 end
 
 function autoMALA_sampler(
@@ -274,8 +238,8 @@ function autoMALA_sampler(
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed, ε=m.ε)
-        logpos = sum(lp) + t_k * sum(ll)
-        return logpos * m.loss_scaling, st_ebm, st_gen
+        logpos = lp + t_k * dropdims(maximum(ll; dims=1); dims=1)
+        return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
     k = 1
@@ -284,39 +248,36 @@ function autoMALA_sampler(
     while k < T + 1
         
         logpos_withgrad = (z_i, st_i) -> begin
-            result = CUDA.@fastmath withgradient(z_j -> log_posterior(z_j, Lux.trainmode(st_i), t[k]), half_quant.(z_i))
-            logpos_z, st_ebm, st_gen, ∇z = result.val..., first(result.grad)
+            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), Lux.testmode(st_i), t[k])
+            ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, Lux.testmode(st_i), t[k]))), half_quant.(z_i)))
             
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
-            return full_quant(logpos_z) / loss_scaling, full_quant.(∇z) / loss_scaling, st_i
+            return full_quant.(logpos_z) ./ loss_scaling, full_quant.(∇z) ./ loss_scaling, st_i
         end
         
         burn_in = 0
-        η = st.η_init[k, :] # Per-chain per-temp step sizes
+        η = device(st.η_init[k, :]) # Per-chain per-temp step sizes
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
-            _, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
-
-            logpos_z = zeros(full_quant, S)
-            for s in 1:S
-                logpos_z[s] = first(logpos_withgrad(half_quant.(z[:,:,s:s]), st))
-            end
+            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
 
             if burn_in < N_unadjusted
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε)
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; eps=m.ε, η_min=η_min, η_max=η_max)
+                accept = log_u[i,k,:] .< log_r
+                η_cpu = cpu_device()(η)
                 for s in 1:S
-                    if reversible[s] && log_u[i,k,s] < log_r[s]
+                    if reversible[s] && accept[s]
                         z[:,:,s] .= ẑ[:,:,s]
                         num_acceptances[k,s] += 1
-                        mean_η[k,s] += η[s]
+                        mean_η[k,s] += η_cpu[s]
                     end
                 end
-                η = (η + η_prime) / 2
+                η = (η + η_prime) ./ 2
             end
         end
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
@@ -327,7 +288,7 @@ function autoMALA_sampler(
     for s in 1:S
         mean_η[:,s] = clamp.(mean_η[:,s] ./ num_acceptances[:,s], η_min, η_max)
         for k in 1:T
-            mean_η[k,s] = ifelse(isnan(mean_η[k,s]), st.η_init[k], mean_η[k,s])
+            mean_η[k,s] = ifelse(isnan(mean_η[k,s]), st.η_init[k,s], mean_η[k,s])
         end
     end
     @reset st.η_init .= mean_η

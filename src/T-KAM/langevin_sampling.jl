@@ -17,7 +17,7 @@ function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return dropdims(sum((x .- y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+    return dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
 end
 
 function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
@@ -36,29 +36,18 @@ function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     Q, P, S = size(z)
     z = cpu_device()(z)
     
-    # Calculate covariance per chain
-    Σ = zeros(full_quant, Q*P, S)
-    for s in 1:S
-        z_s = reshape(z[:,:,s], Q*P)
-        Σ[:,s] = z_s .* z_s # Diagonal covariance only
-    end
-    
-    # Pre-conditioner per chain
-    seed, rng = next_rng(seed)
-    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3), S) .|> full_quant
-    Σ_AM = zeros(full_quant, Q*P, S)
-    for s in 1:S
-        Σ_AM[:,s] = (β[s] .* sqrt.(1 ./ Σ[:,s]) .+ (1 - β[s])) .^ 2
-    end
+    # Covariance across chains
+    Σ = diag(cov(cpu_device()(reshape(z, Q*P, S))'))
 
-    # Momentum per chain
+    # Pre-conditioner
     seed, rng = next_rng(seed)
-    p = zeros(full_quant, Q*P, S)
-    for s in 1:S
-        p[:,s] = rand(rng, MvNormal(zeros(full_quant, Q*P), Diagonal(Σ_AM[:,s])))
-    end
-    
-    return device(reshape(p, Q, P, S)), device(reshape(Σ_AM, Q, P, S)), seed
+    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
+    Σ_AM = (β .* sqrt.(1 ./ Σ) .+ (1 - β)) .^ 2
+
+    # Momentum
+    seed, rng = next_rng(seed)
+    p = rand(rng, MvNormal(zeros(full_quant, length(Σ_AM)), Diagonal(Σ_AM)), S)
+    return device(reshape(p, Q, P, S)), device(reshape(Σ_AM, Q, P)), seed
 end
 
 function leapfrop_proposal(
@@ -87,11 +76,10 @@ function leapfrop_proposal(
     """
 
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
-    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p,s] # Full-step position update
+    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p] # Full-step position update
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
-
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
 
@@ -305,7 +293,7 @@ function autoMALA_sampler(
     @reset st.η_init .= mean_η
 
     m.verbose && println("Mean acceptance rates: ", mean(num_acceptances ./ (N - N_unadjusted), dims=2)[:,1])
-    m.verbose && println("Mean step sizes: ", mean_η)
+    m.verbose && println("Mean step sizes: ", mean(mean_η, dims=2))
 
     return half_quant.(output), st, seed
 end

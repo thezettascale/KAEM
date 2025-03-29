@@ -152,40 +152,25 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = half_quant(0)
+    t = reshape(device(t), 1, 1, T+1)
 
-    for k in 1:T
-        z_t = view(z, :, :, :, k)
-        t1, t2 = temps[k], temps[k+1]
-        
-        # Log-dists
-        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
+    # Log-dists
+    z = reshape(z, Q, P, T*S)
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
 
-        weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
-        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
+    logprior = reshape(logprior, 1, S, T)
+    logllhood = reshape(logllhood, B, S, T)
 
-        @tullio IS_estimator[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        @tullio MC_estimator[b] := (logprior[s] + t1 * logllhood[b, s]) / S
-        loss -= mean(IS_estimator - MC_estimator)
+    weights = @ignore_derivatives softmax((t[:,:,2:end] .- t[:,:,1:end-1]) .* logllhood, dims=2)
+    IS_estimator = sum(weights .* logprior; dims=2) + t[:,:,2:end] .* sum(weights .* logllhood; dims=2)
+    MC_estimator = mean(logprior; dims=2) .+ t[:,:,1:end-1] .* mean(logllhood; dims=2)
+    loss = sum(IS_estimator .- MC_estimator; dims=3)
 
-        @ignore_derivatives m.verbose && println(
-            "t1: ", t1, 
-            " t2: ", t2, 
-            " logprior: ", mean(logprior), 
-            " logllhood: ", mean(logllhood), 
-            " IS_estimator: ", mean(IS_estimator), 
-            " MC_estimator: ", mean(MC_estimator),
-            " Cumulative loss: ", loss
-            )
-    end
-
-    return loss*m.loss_scaling, st, seed
+    m.verbose && println("t: ", t, " Prior loss: ", -mean(logprior; dims=2), " LLhood loss: ", -mean(logllhood; dims=(1,2)))
+    return -mean(loss)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

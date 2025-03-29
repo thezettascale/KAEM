@@ -37,7 +37,7 @@ bases = Dict(
 
 acts = Dict(
     4 => "silu",
-    5 => "none",
+    5 => "silu",
 )
 
 grid_sizes = Dict(

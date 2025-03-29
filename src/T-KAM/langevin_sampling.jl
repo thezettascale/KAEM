@@ -7,10 +7,18 @@ using Zygote: gradient
 
 include("../utils.jl")
 include("EBM_prior.jl")
-include("KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
-using .KAN_likelihood: log_likelihood
+
+function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+    log_x = log.(x .+ ε)
+    ll = dropdims(sum(log_x .* y; dims=1); dims=1)
+    return ll ./ size(x, 1)
+end
+
+function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+    return dropdims(sum((x .- y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+end
 
 function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
     """
@@ -217,7 +225,7 @@ function autoMALA_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
@@ -235,10 +243,13 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
+    ll_fn = m.lkhood.seq_length > 1 ? (x,y) -> cross_entropy(x, y; ε=m.ε) : (x,y) -> l2(x, y; ε=m.ε)
+
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
-        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_i; seed=seed, ε=m.ε)
-        logpos = lp + t_k * dropdims(maximum(ll; dims=1); dims=1)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
+        x̂ = m.lkhood.output_activation(x̂) 
+        logpos = lp + t_k * ll_fn(x, x̂) / (2*m.lkhood.σ_llhood^2)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
@@ -257,7 +268,7 @@ function autoMALA_sampler(
         end
         
         burn_in = 0
-        η = device(st.η_init[k, :]) # Per-chain per-temp step sizes
+        η = device(st.η_init[k, 1:S]) # Per-chain per-temp step sizes
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds

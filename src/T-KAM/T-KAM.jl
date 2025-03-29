@@ -40,6 +40,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     loss_scaling::half_quant    
     ε::half_quant
     file_loc::AbstractString
+    max_samples::Int
 end
 
 function generate_batch(
@@ -346,6 +347,7 @@ function init_T_KAM(
             loss_scaling,
             eps,
             file_loc,
+            max(IS_samples, batch_size)
         )
 end
 
@@ -375,7 +377,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1, model.IS_samples) : fill(model.η_init, 1, model.IS_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
         )
 end

@@ -152,7 +152,7 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    t = reshape(device(t), 1, 1, T+1)
+    t = reshape(device(temps), 1, 1, T+1)
 
     # Log-dists
     z = reshape(z, Q, P, T*S)
@@ -375,7 +375,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1) : [model.η_init],
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1, model.IS_samples) : fill(model.η_init, 1, model.IS_samples),
         train_idx = 1,
         )
 end

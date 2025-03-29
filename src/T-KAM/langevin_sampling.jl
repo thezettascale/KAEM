@@ -300,8 +300,13 @@ function autoMALA_sampler(
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
-            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
-            
+            _, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
+
+            logpos_z = zeros(full_quant, B)
+            for b in 1:B
+                logpos_z[b] = first(logpos_withgrad(half_quant.(z[:,:,b]), st))
+            end
+
             if burn_in < N_unadjusted
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1

@@ -95,7 +95,9 @@ function select_step_size(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
-    logpos_withgrad::Function    
+    logpos_withgrad::Function;
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1),
     )
     """
     Select a step size for the autoMALA sampler.
@@ -131,6 +133,7 @@ function select_step_size(
 
         δ = ifelse.(δ .== 1 .&& log_r .< log_b, 0, δ)
         δ = ifelse.(δ .== -1 .&& log_r .> log_a, 0, δ)
+        δ = ifelse.(η_min .< η_init .< η_max, δ, 0)
     end
 
     η_init = ifelse.(geq_bool, η_init ./ Δη, η_init)

@@ -26,7 +26,7 @@ dataset, img_size = get_vision_dataset(
 )[1:2]
 
 function benchmark_MALA(N_l)
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp", "$(N_l)")
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_l)")
 
     model = init_T_KAM(dataset, conf, img_size)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)

@@ -171,17 +171,17 @@ function thermo_loss(
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        @tullio IS_estimator[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        @tullio MC_estimator[b] := (logprior[s] + t1 * logllhood[b, s]) 
-        loss -= mean(IS_estimator - (MC_estimator ./ S))
+        loss_prior = dropdims(sum(weights_resampled .* logprior_resampled'; dims=2) .- mean(logprior); dims=2)
+        loss_llhood = dropdims(sum(weights_resampled .* t2 .* logllhood_resampled; dims=2) .- mean(t1 .* logllhood; dims=2); dims=2)
+        loss -= mean(loss_prior .+ loss_llhood)
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
-            " logprior: ", mean(logprior_resampled), 
-            " tempered logllhood: ", t2 * mean(logllhood_resampled), 
-            " IS_estimator: ", mean(IS_estimator), 
-            " MC_estimator: ", mean(MC_estimator),
+            " loss_prior: ", mean(loss_prior), 
+            " loss_llhood: ", mean(loss_llhood),
+            " logprior: ", mean(logprior),
+            " logllhood: ", mean(logllhood),
             " Cumulative loss: ", loss
             )
     end

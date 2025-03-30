@@ -105,7 +105,7 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), " (Tempered) llhood loss: ", - t1 * mean(loss_llhood))
+    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", - mean(loss_llhood))
     return -mean(loss_prior .+ loss_llhood)*m.loss_scaling, st, seed
 end
 
@@ -179,7 +179,7 @@ function thermo_loss(
             "t1: ", t1, 
             " t2: ", t2, 
             " logprior: ", mean(logprior), 
-            " logllhood: ", mean(logllhood), 
+            " tempered logllhood: ", t1 * mean(logllhood), 
             " IS_estimator: ", mean(IS_estimator), 
             " MC_estimator: ", mean(MC_estimator),
             " Cumulative loss: ", loss

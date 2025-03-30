@@ -172,14 +172,14 @@ function thermo_loss(
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
         @tullio IS_estimator[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        @tullio MC_estimator[b] := (logprior[s] + t1 * logllhood[b, s]) / S
-        loss -= mean(IS_estimator - MC_estimator)
+        @tullio MC_estimator[b] := (logprior[s] + t1 * logllhood[b, s]) 
+        loss -= mean(IS_estimator - (MC_estimator ./ S))
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
-            " logprior: ", mean(logprior), 
-            " tempered logllhood: ", t1 * mean(logllhood), 
+            " logprior: ", mean(logprior_resampled), 
+            " tempered logllhood: ", t2 * mean(logllhood_resampled), 
             " IS_estimator: ", mean(IS_estimator), 
             " MC_estimator: ", mean(MC_estimator),
             " Cumulative loss: ", loss

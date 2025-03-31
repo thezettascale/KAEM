@@ -13,11 +13,11 @@ using .ebm_ebm_prior: log_prior
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     log_x = log.(x .+ ε)
     ll = dropdims(sum(log_x .* y; dims=1); dims=1)
-    return ll ./ size(x, 1)
+    return -ll ./ size(x, 1)
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
 end
 
 function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)

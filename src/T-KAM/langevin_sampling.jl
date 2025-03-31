@@ -11,9 +11,7 @@ using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    log_x = log.(x .+ ε)
-    ll = dropdims(sum(log_x .* y; dims=1); dims=1)
-    return -ll ./ size(x, 1)
+    return dropdims(sum(log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))

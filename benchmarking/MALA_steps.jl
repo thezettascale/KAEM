@@ -37,7 +37,7 @@ function benchmark_MALA(N_l)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
+display(@benchmark CUDA.@sync benchmark_MALA(2))
 display(@benchmark CUDA.@sync benchmark_MALA(5))
+display(@benchmark CUDA.@sync benchmark_MALA(7))
 display(@benchmark CUDA.@sync benchmark_MALA(10))
-display(@benchmark CUDA.@sync benchmark_MALA(15))
-display(@benchmark CUDA.@sync benchmark_MALA(20))

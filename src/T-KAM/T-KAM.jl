@@ -181,7 +181,7 @@ function thermo_loss(
             " loss_prior: ", mean(loss_prior), 
             " loss_llhood: ", mean(loss_llhood),
             " logprior: ", mean(logprior),
-            " logllhood: ", mean(logllhood),
+            " tempered logllhood: ", t2 * mean(logllhood),
             " Cumulative loss: ", loss
             )
     end

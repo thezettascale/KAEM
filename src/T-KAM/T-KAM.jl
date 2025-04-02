@@ -171,9 +171,15 @@ function thermo_loss(
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
+        # Importance sampling estimator
         @tullio IS_estimate[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        @tullio MC_estimate[b] := logprior[s] + t1 * logllhood[b, s]
-        loss -= mean(IS_estimate .- (MC_estimate / S))
+        
+        # Monte Carlo estimator
+        ll_mc = reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B))
+        MC_estimate = mean(logprior + ll_mc)
+        
+        loss -= mean(IS_estimate .- MC_estimate)
+        
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 

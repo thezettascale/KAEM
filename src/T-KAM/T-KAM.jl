@@ -153,7 +153,9 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = half_quant(0)
+    
+    loss = zeros(half_quant, B) |> device # Loss for each batch
+    prev_Z = half_quant(0) # Previous IS estimate
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -165,27 +167,30 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
+        if k == 1
+            prev_Z = mean(logprior)
+        end
+
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        loss_prior = dropdims(sum(weights_resampled .* logprior_resampled'; dims=2) .- mean(logprior); dims=2)
-        loss_llhood = dropdims(sum(weights_resampled .* t2 .* logllhood_resampled; dims=2) .- mean(t1 .* logllhood; dims=2); dims=2)
-        loss -= mean(loss_prior .+ loss_llhood)
+        @tullio IS_estimate[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
+        loss += IS_estimate .- prev_Z
+        prev_Z = IS_estimate
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
-            " loss_prior: ", mean(loss_prior), 
-            " loss_llhood: ", mean(loss_llhood),
+            " IS_estimate: ", mean(IS_estimate),
             " logprior: ", mean(logprior),
             " tempered logllhood: ", t2 * mean(logllhood),
-            " Cumulative loss: ", loss
+            " Cumulative loss: ", -mean(loss)
             )
     end
-    return loss*m.loss_scaling, st, seed
+    return -mean(loss)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

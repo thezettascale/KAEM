@@ -175,10 +175,9 @@ function thermo_loss(
         @tullio IS_estimate[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
         
         # Monte Carlo estimator
-        ll_mc = reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B))
-        MC_estimate = mean(logprior + ll_mc)
+        MC_estimate = mean(logprior + reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B)))
         
-        loss -= mean(IS_estimate .- MC_estimate)
+        loss -= mean(IS_estimate) - MC_estimate
         
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 

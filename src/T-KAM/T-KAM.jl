@@ -339,7 +339,7 @@ function init_T_KAM(
         num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
         num_param_updates = parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
         
-        x = range(0, stop=2*π*num_cycles, length=num_param_updates+1)
+        x = range(0, stop=2*π*(num_cycles+0.5), length=num_param_updates+1)
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
     end
 

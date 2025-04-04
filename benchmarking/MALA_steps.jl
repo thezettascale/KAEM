@@ -2,7 +2,7 @@ using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/ML_pipeline/data_utils.jl")

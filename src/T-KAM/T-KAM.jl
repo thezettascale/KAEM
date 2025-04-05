@@ -153,7 +153,7 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = half_quant(0)
+    loss = zeros(half_quant, B) |> device
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -171,13 +171,13 @@ function thermo_loss(
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        # Importance sampling estimator
-        @tullio IS_estimate[b] := weights_resampled[b, s] * (logprior_resampled[s, b] + t2 * logllhood_resampled[b, s])
-        
         # Monte Carlo estimator
-        MC_estimate = logprior + reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B))
+        MC_estimate = mean(logprior + reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B)))
+
+        # Importance sampling estimator
+        @tullio IS_estimate[b, s] := logprior_resampled[s, b] + t2 * logllhood_resampled[b, s]
         
-        loss -= IS_estimate - MC_estimate
+        loss -= dropdims(sum(weights_resampled .* (IS_estimate .- MC_estimate); dims=2); dims=2)
         
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
@@ -186,7 +186,7 @@ function thermo_loss(
             " MC_estimate: ", mean(MC_estimate),
             " logprior: ", mean(logprior),
             " tempered logllhood: ", t2 * mean(logllhood),
-            " Cumulative loss: ", loss
+            " Cumulative loss: ", mean(loss)
             )
     end
     return mean(loss)*m.loss_scaling, st, seed

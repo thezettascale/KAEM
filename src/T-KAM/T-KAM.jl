@@ -177,7 +177,7 @@ function thermo_loss(
         # Monte Carlo estimator
         MC_estimate = logprior + reduce(vcat, map(b -> t1 * logllhood[b:b, b], 1:B))
         
-        loss -= mean(IS_estimate) - mean(MC_estimate)
+        loss -= mean(IS_estimate - MC_estimate)
         
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
@@ -189,7 +189,7 @@ function thermo_loss(
             " Cumulative loss: ", loss
             )
     end
-    
+
     return loss*m.loss_scaling, st, seed
 end
 

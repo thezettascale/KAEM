@@ -28,7 +28,7 @@ mala_steps = pd.DataFrame({
 
 keys = [r"$n_z$", r"$N_{\text{local}}$"]
 colours = ["viridis", "cividis"]
-elevations = [0.45, 0.1]
+elevations = [0.45, 0.08]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:

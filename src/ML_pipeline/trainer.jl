@@ -214,6 +214,22 @@ function train!(t::T_KAM_trainer)
 
             train_loss = 0
             grid_updated = 0
+
+            # Save images
+            gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0) 
+            idx = length(t.model.lkhood.x_shape) + 1
+            for i in 1:(t.num_generated_samples // t.batch_size_for_gen)
+                batch, t.st, t.seed = CUDA.@fastmath generate_batch(t.model, t.ps, Lux.testmode(t.st), t.batch_size_for_gen; seed=t.seed)
+                gen_data = cat(gen_data, cpu_device()(batch), dims=idx)
+            end
+
+            try
+                h5write(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5", "samples", Float32.(gen_data))
+            catch
+                rm(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5")
+                h5write(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5", "samples", Float32.(gen_data))
+            end
+
         end
 
         @reset t.st.train_idx += 1

@@ -4,14 +4,14 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/EBM_prior.jl")
-include("../T-KAM/KAN_likelihood.jl")
-include("../utils.jl")
+include("../src/T-KAM/EBM_prior.jl")
+include("../src/T-KAM/KAN_likelihood.jl")
+include("../src/utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
 using .Utils
 
-conf = ConfParse("src/tests/test_conf.ini")
+conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))

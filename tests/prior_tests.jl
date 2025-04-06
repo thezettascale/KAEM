@@ -4,12 +4,12 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/EBM_prior.jl")
-include("../utils.jl")
+include("../src/T-KAM/EBM_prior.jl")
+include("../src/utils.jl")
 using .ebm_ebm_prior
 using .Utils
 
-conf = ConfParse("src/tests/test_conf.ini")
+conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 p_size = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))

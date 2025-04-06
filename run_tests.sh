@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TEST_DIR="src/tests"
+TEST_DIR="tests"
 test_files=$(ls "$TEST_DIR"/*.jl)
 LOG_FILE="test.log"
 SESSION_NAME="test_session"

@@ -4,8 +4,8 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/spline_bases.jl")
-include("../utils.jl")
+include("../src/T-KAM/spline_bases.jl")
+include("../src/utils.jl")
 using .spline_functions
 using .Utils
 

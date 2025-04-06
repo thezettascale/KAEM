@@ -4,12 +4,12 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP16"
 
-include("../T-KAM/T-KAM.jl")
-include("../utils.jl")
+include("../src/T-KAM/T-KAM.jl")
+include("../src/utils.jl")
 using .T_KAM_model
 using .Utils
 
-conf = ConfParse("src/tests/test_conf.ini")
+conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
 

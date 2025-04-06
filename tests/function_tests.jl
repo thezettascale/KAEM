@@ -4,8 +4,8 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../T-KAM/univariate_functions.jl")
-include("../utils.jl")
+include("../src/T-KAM/univariate_functions.jl")
+include("../src/utils.jl")
 using .univariate_functions
 using .Utils
 

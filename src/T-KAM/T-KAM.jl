@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("langevin_sampling.jl")
+include("autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior

@@ -59,9 +59,7 @@ function langevin_sampler(
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 
-    if isa(st.η_init, CuArray)
-        @reset st.η_init = cpu_device()(st.η_init)[1, 1] 
-    end
+    η = mean(st.η_init)
 
     T, Q, P, S = length(t), size(z)...
     output = reshape(z, Q, P, S, 1)
@@ -93,7 +91,7 @@ function langevin_sampler(
 
         for i in 1:N
             ξ = device(noise[:,:,:,i,k])            
-            z = z + st.η_init .* logpos_grad(z) .+ sqrt(2 * st.η_init) .* ξ
+            z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
         end
 
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)

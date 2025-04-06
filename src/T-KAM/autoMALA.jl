@@ -1,6 +1,6 @@
 module LangevinSampling
 
-export autoMALA_sampler
+export langevin_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
@@ -175,7 +175,7 @@ function autoMALA_step(
     return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
 end
 
-function autoMALA_sampler(
+function langevin_sampler(
     m,
     ps,
     st,

@@ -11,12 +11,12 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("autoMALA.jl")
+include("ULA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: autoMALA_sampler
+using .LangevinSampling: langevin_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -324,14 +324,14 @@ function init_T_KAM(
     # Importance sampling or MALA
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = POST_loss
     end
     
     p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = thermo_loss
 
         # Cyclic p schedule

@@ -154,6 +154,7 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
     loss = zeros(half_quant, B, 1) |> device
+    ex_prior = half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -165,18 +166,22 @@ function thermo_loss(
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
+        if k == 1
+            ex_prior = mean(logprior)
+        end
+
         # Resampling
         weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) .- ex_prior
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
         # Importance sampling estimator across samples, S /= B here
         IS_estimate = sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2)
 
         # Monte Carlo estimator across samples, S == B here
-        MC_estimate = logprior  + reduce(vcat, map(b -> t1 .* logllhood[b:b, b], 1:B))
+        MC_estimate = logprior .- ex_prior  + reduce(vcat, map(b -> t1 .* logllhood[b:b, b], 1:B))
         
         loss += (IS_estimate .- mean(MC_estimate))
         

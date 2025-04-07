@@ -179,7 +179,7 @@ function thermo_loss(
             )
     end
 
-    return -mean(partition)*m.loss_scaling, st, seed
+    return (1-mean(partition))*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

@@ -187,6 +187,13 @@ function thermo_loss(
 
     MLE = mean(logllhood .+ logprior' .- ex_prior; dims=2)
 
+    @ignore_derivatives m.verbose && println(
+        "MLE loss_prior: ", mean(logprior .- ex_prior),
+        " loss_llhood: ", mean(logllhood),
+        " AIS: ", mean(AIS),
+        " MLE: ", mean(MLE)
+        )
+        
     return -mean((AIS + MLE)./2)*m.loss_scaling, st, seed
 end
 

@@ -152,51 +152,48 @@ function thermo_loss(
 
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
+    z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
+    loss = zeros(half_quant, B, 1) |> device
 
-    ex_prior = half_quant(0)
-    AIS = zeros(half_quant, B) |> device
-
-    for k in 1:T-1
+    for k in 1:T
         z_t = view(z, :, :, :, k)
+        t1, t2 = temps[k], temps[k+1]
+
+        # Log-dists
+        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+        @reset st.ebm = st_ebm
         @reset st.gen = st_gen
 
-        if k == 1 && m.prior.contrastive_div
-            lp, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
-            @reset st.ebm = st_ebm
-            ex_prior = mean(lp)
-        end
+        # Resampling
+        weights = @ignore_derivatives softmax(full_quant(t2 - t1) .* full_quant.(logllhood), dims=2)
+        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
+        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        weights = softmax((temps[k+1] - temps[k]) .* logllhood, dims=2)
-        resampled_idxs, seed = @ignore_derivatives m.lkhood.resample_z(full_quant.(weights), seed)
-        weights_resampled = softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) 
+        # Importance sampling estimator
+        IS_estimate = weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled)
 
-        AIS = AIS .+ log.(dropdims(mean(weights_resampled, dims=2), dims=2))
+        # Monte Carlo estimator
+        MC_estimate = (logprior_resampled' + t1 .* logllhood_resampled) ./ S
+        
+        # Expectation across samples
+        loss += sum(IS_estimate - MC_estimate; dims=2)
 
         @ignore_derivatives m.verbose && println(
-            "t: ", temps[k+1], 
-            " AIS: ", mean(AIS)
+            "t1: ", t1, 
+            " t2: ", t2, 
+            " IS_estimate: ", mean(IS_estimate),
+            " MC_estimate: ", mean(MC_estimate),
+            " logprior: ", mean(logprior),
+            " tempered logllhood: ", t2 * mean(logllhood),
+            " Cumulative marginal lkhood: ", mean(loss)
             )
     end
 
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, T); seed=seed, ε=m.ε)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
-
-    MLE = mean(logllhood .+ logprior' .- ex_prior; dims=2)
-
-    @ignore_derivatives m.verbose && println(
-        "MLE loss_prior: ", mean(logprior .- ex_prior),
-        " loss_llhood: ", mean(logllhood),
-        " AIS: ", mean(AIS),
-        " MLE: ", mean(MLE)
-        )
-
-    return -mean((AIS + MLE)./2)*m.loss_scaling, st, seed
+    return -mean(loss)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

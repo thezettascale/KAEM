@@ -151,35 +151,43 @@ function thermo_loss(
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     
-    z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
 
-    partition = zeros(half_quant, B) |> device
+    ex_prior = half_quant(0)
+    AIS = zeros(half_quant, B) |> device
 
-    for k in 1:T
+    for k in 1:T-1
         z_t = view(z, :, :, :, k)
         logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         @reset st.gen = st_gen
 
-        if k == 1
-            partition, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=true)
+        if k == 1 && m.prior.contrastive_div
+            lp, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
             @reset st.ebm = st_ebm
-            partition = partition .+ mean(exp.(partition)) 
+            ex_prior = mean(lp)
         end
 
         weights = softmax((temps[k+1] - temps[k]) .* logllhood, dims=2)
         resampled_idxs, seed = @ignore_derivatives m.lkhood.resample_z(full_quant.(weights), seed)
         weights_resampled = softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) 
 
-        partition = dropdims(mean(weights_resampled, dims=2), dims=2) .* partition
+        AIS = AIS .+ log.(dropdims(mean(weights_resampled, dims=2), dims=2))
 
         @ignore_derivatives m.verbose && println(
             "t: ", temps[k+1], 
-            " partition: ", mean(partition)
+            " AIS: ", mean(AIS)
             )
     end
 
-    return (1-mean(partition))*m.loss_scaling, st, seed
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, T); seed=seed, ε=m.ε)
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
+
+    MLE = mean(logllhood .+ logprior' .- ex_prior; dims=2)
+
+    return -mean((AIS + MLE)./2)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

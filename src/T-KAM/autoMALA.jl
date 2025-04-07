@@ -7,10 +7,8 @@ using Zygote: gradient
 
 include("../utils.jl")
 include("EBM_prior.jl")
-include("KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
-using .KAN_likelihood: log_likelihood
 
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     return dropdims(sum(log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
@@ -208,7 +206,7 @@ function langevin_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
@@ -230,8 +228,9 @@ function langevin_sampler(
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
-        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; seed=seed, ε=m.ε)
-        logpos = dropdims(sum(lp' .+ t_k .* ll; dims=1); dims=1)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
+        x̂ = m.lkhood.output_activation(x̂) 
+        logpos = lp + t_k * ll_fn(x, x̂) / (2*m.lkhood.σ_llhood^2)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 

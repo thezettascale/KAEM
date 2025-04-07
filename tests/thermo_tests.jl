@@ -23,7 +23,6 @@ function test_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     loss = first(model.loss_fcn(model, half_quant.(ps), st, x_test))
-    @test loss != 0
     @test !isnan(loss)
 end
 

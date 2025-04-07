@@ -204,7 +204,7 @@ function log_prior(
 
     log_p = zeros(half_quant, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
-    log_Z = half_quant(0)
+    log_Z = zeros(half_quant, size(z, 2)) |> device
 
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)

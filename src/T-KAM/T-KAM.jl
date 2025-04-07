@@ -153,7 +153,7 @@ function thermo_loss(
     
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = zeros(half_quant, B, 1)
+    loss = zeros(half_quant, B, 1) |> device
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -176,7 +176,7 @@ function thermo_loss(
         IS_estimate = sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2)
 
         # Monte Carlo estimator across samples, S == B here
-        MC_estimate = mean(logprior'  + t1 .* logllhood; dims=2)
+        MC_estimate = mean(logprior' .+ t1 .* logllhood; dims=2)
         
         loss += IS_estimate - MC_estimate
         

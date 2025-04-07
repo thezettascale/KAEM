@@ -175,7 +175,6 @@ function thermo_loss(
 
         @ignore_derivatives m.verbose && println(
             "t: ", temps[k+1], 
-            " logllhood: ", mean(logllhood),
             " partition: ", mean(partition)
             )
     end

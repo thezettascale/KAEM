@@ -212,7 +212,7 @@ function log_prior(
     end
 
     for q in 1:ebm.q_size
-        log_Zq = normalize ? log_Z[q, :] : log_Z
+        log_Zq = view(log_Z, q, :)
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :]
         log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)

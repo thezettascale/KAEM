@@ -148,6 +148,8 @@ function thermo_loss(
     )
     """Thermodynamic Integration loss with Steppingstone sampling."""
 
+    @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
+
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     
@@ -193,7 +195,7 @@ function thermo_loss(
         " AIS: ", mean(AIS),
         " MLE: ", mean(MLE)
         )
-        
+
     return -mean((AIS + MLE)./2)*m.loss_scaling, st, seed
 end
 

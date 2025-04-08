@@ -173,15 +173,15 @@ function thermo_loss(
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
         # Importance sampling and Monte Carlo estimators across samples
-        IS_estimate = sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2)
-        MC_estimate = logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B))
-        loss += mean(IS_estimate) - mean(MC_estimate)
+        IS_estimate = mean(sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2))
+        MC_estimate = mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
+        loss += IS_estimate - MC_estimate
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
-            " IS_estimate: ", mean(IS_estimate),
-            " MC_estimate: ", mean(MC_estimate),
+            " IS_estimate: ", IS_estimate,
+            " MC_estimate: ", MC_estimate,
             " logprior: ", mean(logprior),
             " tempered logllhood: ", t2 * mean(logllhood),
             " Cumulative marginal lkhood: ", loss

@@ -11,11 +11,11 @@ using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return dropdims(sum(log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
+    return log.(x .+ ε) .* y ./ size(x, 1)
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+    return -(x - y).^2
 end
 
 function langevin_sampler(
@@ -74,8 +74,8 @@ function langevin_sampler(
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) 
-        logpos = lp + t_k .* ll_fn(x, x̂) ./ (2*m.lkhood.σ_llhood^2)
-        return sum(logpos) .* m.loss_scaling, st_ebm, st_gen
+        logpos = sum(lp) + sum(t_k .* ll_fn(x, x̂) ./ (2*m.lkhood.σ_llhood^2))
+        return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
     k = 1

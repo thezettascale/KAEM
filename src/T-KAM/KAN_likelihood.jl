@@ -42,7 +42,6 @@ struct KAN_lkhood <: Lux.AbstractLuxLayer
     layernorm::Bool
     depth::Int
     out_size::Int
-    σ_ε::half_quant
     σ_llhood::half_quant
     log_lkhood::Function
     output_activation::Function
@@ -230,7 +229,7 @@ function log_likelihood(
 
     # Add noise
     seed, rng = next_rng(seed)
-    noise = lkhood.σ_ε * randn(rng, half_quant, size(x̂)..., B) |> device
+    noise = lkhood.σ_llhood * randn(rng, half_quant, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise) 
     ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
@@ -316,7 +315,6 @@ function init_KAN_lkhood(
     init_τ = parse(full_quant, retrieve(conf, "KAN_LIKELIHOOD", "init_τ"))
     τ_trainable = parse(Bool, retrieve(conf, "KAN_LIKELIHOOD", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
-    noise_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_noise_var"))
     gen_var = parse(half_quant, retrieve(conf, "KAN_LIKELIHOOD", "generator_variance"))
     ESS_threshold = parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "KAN_LIKELIHOOD", "output_activation")
@@ -408,7 +406,7 @@ function init_KAN_lkhood(
         end
     end
 
-    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, noise_var, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
+    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

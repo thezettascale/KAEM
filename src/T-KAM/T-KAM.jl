@@ -101,7 +101,7 @@ function importance_loss(
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
-    logprior_resampled = logprior_resampled .- ex_prior
+    logprior_resampled = logprior_resampled .- ex_prior # Contrastive div constant can be subtracted during or after posterior expectation.
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 

@@ -130,7 +130,7 @@ function select_step_size(
 
         δ = ifelse.(δ .== 1 .&& log_r .< log_b, 0, δ)
         δ = ifelse.(δ .== -1 .&& log_r .> log_a, 0, δ)
-        δ = ifelse.(η_min .< η_init .< η_max, δ, 0)
+        δ = ifelse.(η_min .< η_init .< η_max, δ, 0) # I capped it
     end
 
     η_init = ifelse.(geq_bool, η_init ./ Δη, η_init)

@@ -153,9 +153,7 @@ function thermo_loss(
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = zeros(half_quant, B, 1) |> device
-
-    resampled_idx_old = repeat(collect(1:S)', B, 1)
+    loss = half_quant(0)
 
     for k in 1:T
         z_t = view(z, :, :, :, k)
@@ -174,16 +172,10 @@ function thermo_loss(
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        # Most representative samples for previous power posterior
-        logprior_resampled_old = reduce(hcat, map(b -> logprior[resampled_idx_old[b, :], :], 1:B)) 
-        logllhood_resampled_old = reduce(vcat, map(b -> logllhood[b:b, resampled_idx_old[b, :]], 1:B))
-
         # Importance sampling and Monte Carlo estimators across samples
         IS_estimate = sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2)
-        MC_estimate = mean(logprior_resampled_old' + t1 .* logllhood_resampled_old; dims=2)         
-        loss += IS_estimate - MC_estimate
-
-        resampled_idx_old = resampled_idxs
+        MC_estimate = logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B))
+        loss += mean(IS_estimate) - mean(MC_estimate)
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
@@ -192,11 +184,11 @@ function thermo_loss(
             " MC_estimate: ", mean(MC_estimate),
             " logprior: ", mean(logprior),
             " tempered logllhood: ", t2 * mean(logllhood),
-            " Cumulative marginal lkhood: ", mean(loss)
+            " Cumulative marginal lkhood: ", loss
             )
     end
 
-    return -mean(loss)*m.loss_scaling, st, seed
+    return -loss*m.loss_scaling, st, seed
 end
 
 function update_model_grid(

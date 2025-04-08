@@ -105,7 +105,7 @@ function importance_loss(
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", - mean(loss_llhood))
-    return -(mean(loss_prior .+ loss_llhood) .- ex_prior)*m.loss_scaling, st, seed
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 
 function POST_loss(

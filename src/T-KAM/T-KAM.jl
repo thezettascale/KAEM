@@ -151,44 +151,63 @@ function thermo_loss(
 
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) # Only sample from intermediate temps
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
     Q, P, S, T, B = size(z)..., size(x)[end]
-    loss = zeros(half_quant, B, 1) |> device
+    
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, T); seed=seed, ε=m.ε)
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
 
-    for k in 1:T
+    # Final partition function estimate
+    loss = mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
+
+    # Initial log-dists for importance sampling
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, 1); seed=seed, ε=m.ε)
+    @reset st.ebm = st_ebm
+    @reset st.gen = st_gen
+
+    # Steppingstone estimates
+    for k in 2:T-1
+
+        t1, t2 = temps[k-1], temps[k]
+
+        # Importance sampling from previous power posterior
+        logllhood_new, st_gen, seed = @ignore_derivatives log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)
+        @reset st.gen = st_gen
+    
+        weights = @ignore_derivatives softmax(full_quant.(t2 .* logllhood_new - t1 .* logllhood), dims=2)
+        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
+        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
+
+        # Expected posterior
+        @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
+        @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+
         z_t = view(z, :, :, :, k)
-        t1, t2 = temps[k], temps[k+1]
 
-        # Log-dists
         logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
-
-        # Importance sampling for current power posterior
-        weights = softmax((t2 - t1) .* logllhood, dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2)
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
-        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-
-        # Importance sampling and Monte Carlo estimators across samples
-        IS_estimate = sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled); dims=2)
-        MC_estimate = mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
-        loss += IS_estimate .- MC_estimate
+        
+        # Add expected change
+        loss += mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B))) # True MC estimate of current power posterior
+        loss -= mean(loss_prior .+ loss_llhood) # Minus IS estimate of previous power posterior
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
             " t2: ", t2, 
-            " IS_estimate: ", mean(IS_estimate),
-            " MC_estimate: ", MC_estimate,
+            " loss: ", loss,
             " logprior: ", mean(logprior),
-            " tempered logllhood: ", t2 * mean(logllhood),
-            " Cumulative marginal lkhood: ", loss
+            " logllhood: ", mean(logllhood),
             )
     end
 
-    return -mean(loss)*m.loss_scaling, st, seed
+    return -loss*m.loss_scaling, st, seed
 end
 
 function update_model_grid(
@@ -394,7 +413,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1, model.max_samples) : fill(model.η_init, 1, model.max_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
         )
 end

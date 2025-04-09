@@ -237,7 +237,7 @@ function log_likelihood(
 end
 
 function importance_resampler(
-    weights::Union{AbstractArray{full_quant}, AbstractArray{half_quant}};
+    weights::AbstractArray{full_quant};
     seed::Int=1,
     ESS_threshold::full_quant=full_quant(0.5),
     resampler::Function=systematic_sampler,

@@ -160,7 +160,7 @@ function thermo_loss(
     @reset st.gen = st_gen
 
     # Final partition function estimate
-    loss = mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
+    loss = mean(logprior .+ reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
 
     # Initial log-dists for importance sampling
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε)
@@ -173,30 +173,33 @@ function thermo_loss(
 
         t1, t2 = temps[k-1], temps[k]
 
-        # Importance sampling from previous power posterior
+        ### IS estimate of previous power posterior ###
+
+        # Importance weights and resampling based on expected change
         logllhood_new, st_gen, seed = @ignore_derivatives log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)
-        @reset st.gen = st_gen
-    
         weights = @ignore_derivatives softmax(full_quant.(t2 .* logllhood_new - t1 .* logllhood), dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        @reset st.gen = st_gen
+        
         weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
         logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
 
-        # Expected posterior
-        @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
-        @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+        # Importance sampling estimate of previous power posterior with respect to current power posterior
+        IS_estimate = mean(sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled), dims=2))
 
+        ### True MC estimate of current power posterior ###
         z_t = view(z, :, :, :, k)
-
         logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
         
-        # Add expected change
-        loss += mean(logprior + reduce(vcat, map(b -> logllhood[b:b, b], 1:B))) # True MC estimate of current power posterior
-        loss -= mean(loss_prior .+ loss_llhood) # Minus IS estimate of previous power posterior
+        # True MC estimate of current power posterior with samples from current power posterior
+        MC_estimate = mean(logprior .+ t2 .* reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
+
+        # Steppingstone estimate
+        loss += MC_estimate - IS_estimate
 
         @ignore_derivatives m.verbose && println(
             "t1: ", t1, 
@@ -204,6 +207,8 @@ function thermo_loss(
             " loss: ", loss,
             " logprior: ", mean(logprior),
             " logllhood: ", mean(logllhood),
+            " MC_estimate: ", MC_estimate,
+            " IS_estimate: ", IS_estimate
             )
     end
 

@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("ULA.jl")
+include("autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -175,7 +175,10 @@ function thermo_loss(
         ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
 
         loss += mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) # IS estimate of current power posterior with previous power post samples
-        loss -= mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) # MC estimate of current power posterior with current power posterior samples
+
+        if k != 2
+            loss -= mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) # MC estimate of current power posterior with current power posterior samples
+        end
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],

@@ -9,7 +9,7 @@ include("../utils.jl")
 using .Utils: next_rng, full_quant
 
 function residual_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::Union{AbstractArray{full_quant}, AbstractArray{half_quant}}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 
@@ -66,7 +66,7 @@ function residual_resampler(
 end
 
 function systematic_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::Union{AbstractArray{full_quant}, AbstractArray{half_quant}}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int;
@@ -100,7 +100,7 @@ function systematic_resampler(
 end
 
 function stratified_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::Union{AbstractArray{full_quant}, AbstractArray{half_quant}}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 

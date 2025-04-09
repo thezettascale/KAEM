@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("autoMALA.jl")
+include("ULA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -151,65 +151,41 @@ function thermo_loss(
 
     # Schedule temperatures, and S-MALA
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
-    Q, P, S, T, B = size(z)..., size(x)[end]
-    
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, T); seed=seed, ε=m.ε)
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
+    T, B = size(z)[end], size(x)[end]
+
+    lp_old, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε)
+    ll_old, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, T]; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
-    # Final partition function estimate
-    loss = mean(logprior .+ reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
+    loss = mean(lp_old' .+ reduce(vcat, map(b -> ll_old[b:b, b], 1:B)))
 
-    # Initial log-dists for importance sampling
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, 1); seed=seed, ε=m.ε)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
-
-    # Steppingstone estimates
-    for k in 2:T-1
-
-        t1, t2 = temps[k-1], temps[k]
-
-        ### IS estimate of previous power posterior ###
-
-        # Importance weights and resampling based on expected change
-        logllhood_new, st_gen, seed = @ignore_derivatives log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)
-        weights = @ignore_derivatives softmax(full_quant.(t2 .* logllhood_new - t1 .* logllhood), dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        @reset st.gen = st_gen
-        
-        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 
-        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-
-        # Importance sampling estimate of previous power posterior with respect to current power posterior
-        IS_estimate = mean(sum(weights_resampled .* (logprior_resampled' + t2 .* logllhood_resampled), dims=2))
-
-        ### True MC estimate of current power posterior ###
-        z_t = view(z, :, :, :, k)
-        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+    for k in reverse(2:T)
+        z_t = view(z, :, :, :, k-1)
+        ll_new, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+        lp_new, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
         @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
-        
-        # True MC estimate of current power posterior with samples from current power posterior
-        MC_estimate = mean(logprior .+ t2 .* reduce(vcat, map(b -> logllhood[b:b, b], 1:B)))
 
-        # Steppingstone estimate
-        loss += MC_estimate - IS_estimate
+        # Importance sampling, looking ahead
+        weights = @ignore_derivatives softmax(full_quant.(temps[k] .* ll_old - temps[k-1] .* ll_new), dims=2)
+        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+        lp_resampled = reduce(hcat, map(b -> lp_new[resampled_idxs[b, :], :], 1:B))
+        ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
+
+        loss += mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) # IS estimate of current power posterior with previous power post samples
+        loss -= mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) # MC estimate of current power posterior with current power posterior samples
 
         @ignore_derivatives m.verbose && println(
-            "t1: ", t1, 
-            " t2: ", t2, 
+            "t_prev: ", temps[k],
+            " t_curr: ", temps[k-1],
             " loss: ", loss,
-            " logprior: ", mean(logprior),
-            " logllhood: ", mean(logllhood),
-            " MC_estimate: ", MC_estimate,
-            " IS_estimate: ", IS_estimate
+            " logprior: ", mean(lp_new),
+            " logllhood: ", mean(ll_new),
             )
+
+        ll_old = ll_new
     end
 
     return -loss*m.loss_scaling, st, seed

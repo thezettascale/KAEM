@@ -166,7 +166,7 @@ function thermo_loss(
         @reset st.gen = st_gen
 
         # Importance sampling for current power posterior
-        weights = softmax(t2 .* logllhood - t1 .* logllhood_old, dims=2)
+        weights = softmax((t2 - t1) .* logllhood, dims=2)
         resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
         weights_resampled = softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2)
         logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B)) 

@@ -174,11 +174,16 @@ function thermo_loss(
         lp_resampled = reduce(hcat, map(b -> lp_new[resampled_idxs[b, :], :], 1:B))
         ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
 
-        loss += mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) # IS estimate of current power posterior with previous power post samples
+        # IS estimate of current power posterior with previous power post samples
+        IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
 
+        # MC estimate of current power posterior with current power posterior samples
+        MC_estimate = half_quant(0)
         if k != 2
-            loss -= mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) # MC estimate of current power posterior with current power posterior samples
+            MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) 
         end
+
+        loss += IS_estimate - MC_estimate
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],
@@ -186,6 +191,8 @@ function thermo_loss(
             " loss: ", loss,
             " logprior: ", mean(lp_new),
             " logllhood: ", mean(ll_new),
+            " IS_estimate: ", IS_estimate,
+            " MC_estimate: ", MC_estimate,
             )
 
         ll_old = ll_new

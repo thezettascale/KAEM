@@ -6,7 +6,7 @@ using Random, Distributions, LinearAlgebra
 using NNlib: softmax
 
 include("../utils.jl")
-using .Utils: next_rng, full_quant
+using .Utils: next_rng, full_quant, half_quant
 
 function residual_resampler(
     weights::Union{AbstractArray{full_quant}, AbstractArray{half_quant}}, 

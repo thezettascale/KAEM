@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("autoMALA.jl")
+include("ULA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -159,6 +159,7 @@ function thermo_loss(
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
+    # MLE for Z_T: final partition
     loss = mean(lp_old' .+ reduce(vcat, map(b -> ll_old[b:b, b], 1:B)))
 
     for k in reverse(2:T)
@@ -167,23 +168,28 @@ function thermo_loss(
         lp_new, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
         @reset st.ebm = st_ebm
 
-        # Importance sampling, looking ahead
-        weights = @ignore_derivatives softmax(full_quant.(temps[k] .* ll_old - temps[k-1] .* ll_new), dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-        lp_resampled = reduce(hcat, map(b -> lp_new[resampled_idxs[b, :], :], 1:B))
-        ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
+        IS_estimate = half_quant(0)
 
-        # IS estimate of current power posterior with previous power post samples
-        IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
+        # Look ahead importance sampling, skip for Z_T
+        if k != T #
+            weights = @ignore_derivatives softmax(full_quant.(temps[k] .* ll_old - temps[k-1] .* ll_new), dims=2)
+            resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+            weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+            lp_resampled = reduce(hcat, map(b -> lp_new[resampled_idxs[b, :], :], 1:B))
+            ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
 
-        # MC estimate of current power posterior with current power posterior samples
-        MC_estimate = half_quant(0)
-        if k != 2
-            MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B))) 
+            # IS estimate of current power posterior with previous power post samples
+            IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
         end
 
-        loss += IS_estimate - MC_estimate
+        # MC estimate of current power posterior with true current power posterior samples
+        MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
+        
+        if k == 1
+            MC_estimate = MC_estimate * -1 # Minus ex_prior for MLE against Z_T
+        end
+
+        loss += MC_estimate - IS_estimate
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],

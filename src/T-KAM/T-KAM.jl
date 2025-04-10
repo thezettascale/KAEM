@@ -162,6 +162,8 @@ function thermo_loss(
     # MLE for Z_T: final partition
     loss = mean(lp_old' .+ reduce(vcat, map(b -> ll_old[b:b, b], 1:B)))
 
+    @ignore_derivatives m.verbose && println("MLE: ", loss)
+
     for k in reverse(2:T)
         z_t = view(z, :, :, :, k-1)
         ll_new, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
@@ -194,7 +196,7 @@ function thermo_loss(
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],
             " t_curr: ", temps[k-1],
-            " loss: ", loss,
+            " cumulative marginal llhood: ", loss,
             " logprior: ", mean(lp_new),
             " logllhood: ", mean(ll_new),
             " IS_estimate: ", IS_estimate,

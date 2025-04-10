@@ -161,16 +161,14 @@ function thermo_loss(
 
     # MLE for Z_T: final partition
     loss = mean(lp_old' .+ reduce(vcat, map(b -> ll_old[b:b, b], 1:B)))
-
     @ignore_derivatives m.verbose && println("MLE: ", loss)
+    MC_estimate, IS_estimate = half_quant(0), half_quant(0)
 
     for k in reverse(2:T)
         z_t = view(z, :, :, :, k-1)
         ll_new, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
         lp_new, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
         @reset st.ebm = st_ebm
-
-        IS_estimate = half_quant(0)
 
         # Look ahead importance sampling, skip for Z_T
         if k != T #
@@ -184,14 +182,10 @@ function thermo_loss(
             IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
         end
 
+        loss += abs(IS_estimate - MC_estimate)
+
         # MC estimate of current power posterior with true current power posterior samples
         MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
-
-        if k != 2
-            loss -= IS_estimate - MC_estimate
-        else
-            loss -= IS_estimate + MC_estimate
-        end
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],
@@ -206,6 +200,8 @@ function thermo_loss(
         ll_old = ll_new
     end
 
+    # Final ex_prior subtracted from original MLE partition
+    loss -= MC_estimate
     return -loss*m.loss_scaling, st, seed
 end
 

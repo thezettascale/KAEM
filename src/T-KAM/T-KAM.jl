@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("ULA.jl")
+include("autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -191,7 +191,7 @@ function thermo_loss(
             MC_estimate = MC_estimate * -1 # Minus ex_prior for MLE against Z_T
         end
 
-        loss += MC_estimate - IS_estimate
+        loss -= abs(MC_estimate - IS_estimate) # ABS provides symmetry 
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],

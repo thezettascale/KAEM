@@ -186,12 +186,12 @@ function thermo_loss(
 
         # MC estimate of current power posterior with true current power posterior samples
         MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
-        
-        if k == 1
-            MC_estimate = MC_estimate * -1 # Minus ex_prior for MLE against Z_T
-        end
 
-        loss -= abs(MC_estimate - IS_estimate) # ABS provides symmetry 
+        if k != 2
+            loss -= IS_estimate - MC_estimate
+        else
+            loss -= IS_estimate + MC_estimate
+        end
 
         @ignore_derivatives m.verbose && println(
             "t_prev: ", temps[k],

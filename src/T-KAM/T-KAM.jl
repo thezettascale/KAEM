@@ -188,13 +188,11 @@ function thermo_loss(
         MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
 
         @ignore_derivatives m.verbose && println(
-            "t_prev: ", temps[k],
-            " t_curr: ", temps[k-1],
             " cumulative marginal llhood: ", loss,
             " logprior: ", mean(lp_new),
             " logllhood: ", mean(ll_new),
-            " IS_estimate: ", IS_estimate,
-            " MC_estimate: ", MC_estimate,
+            " IS_estimate for $(temps[k]): ", IS_estimate,
+            " MC_estimate for $(temps[k-1]): ", MC_estimate,
             )
 
         ll_old = ll_new

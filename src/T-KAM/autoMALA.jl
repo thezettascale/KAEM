@@ -250,6 +250,7 @@ function langevin_sampler(
         
         burn_in = 0
         η = device(st.η_init[k, 1:S]) # Per-chain per-temp step sizes
+        m.verbose && println("t=$(t[k]) posterior before update: ", log_posterior(half_quant.(z), Lux.testmode(st), t[k]))
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
@@ -272,6 +273,7 @@ function langevin_sampler(
                 η = (η + η_prime) ./ 2
             end
         end
+        m.verbose && println("t=$(t[k]) posterior after update: ", log_posterior(half_quant.(z), Lux.testmode(st), t[k]))
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1
     end

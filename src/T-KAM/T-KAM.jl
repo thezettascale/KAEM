@@ -182,15 +182,15 @@ function thermo_loss(
             IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
         end
 
-        loss += abs(IS_estimate - MC_estimate)
+        loss -= abs(IS_estimate - MC_estimate)
 
         # MC estimate of current power posterior with true current power posterior samples
         MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
 
         @ignore_derivatives m.verbose && println(
             " cumulative marginal llhood: ", loss,
-            " logprior: ", mean(lp_new),
-            " logllhood: ", mean(ll_new),
+            " logprior at $(temps[k-1]): ", mean(lp_new),
+            " logllhood at $(temps[k-1]): ", mean(ll_new),
             " IS_estimate for $(temps[k]): ", IS_estimate,
             " MC_estimate for $(temps[k-1]): ", MC_estimate,
             )

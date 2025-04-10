@@ -89,12 +89,12 @@ function langevin_sampler(
             return full_quant.(∇z) ./ loss_scaling
         end
 
-        m.verbose && println("t=$(t[k]) posterior before update: ", first(log_posterior(half_quant.(z), Lux.testmode(st), t[k])))
+        m.verbose && println("t=$(t[k]) posterior before update: ", full_quant(first(log_posterior(half_quant.(z), Lux.testmode(st), t[k]))) ./ loss_scaling)
         for i in 1:N
             ξ = device(noise[:,:,:,i,k])            
             z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
         end
-        m.verbose && println("t=$(t[k]) posterior after update: ", first(log_posterior(half_quant.(z), Lux.testmode(st), t[k])))
+        m.verbose && println("t=$(t[k]) posterior after update: ", full_quant(first(log_posterior(half_quant.(z), Lux.testmode(st), t[k]))) ./ loss_scaling)
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1
     end

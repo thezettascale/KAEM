@@ -189,10 +189,10 @@ function thermo_loss(
 
         @ignore_derivatives m.verbose && println(
             " cumulative marginal llhood: ", loss,
-            " logprior at $(temps[k-1]): ", mean(lp_new),
-            " logllhood at $(temps[k-1]): ", mean(ll_new),
-            " IS_estimate for $(temps[k]): ", IS_estimate,
-            " MC_estimate for $(temps[k-1]): ", MC_estimate,
+            " logprior at t=$(temps[k-1]): ", mean(lp_new),
+            " logllhood at t=$(temps[k-1]): ", mean(ll_new),
+            " IS_estimate for t=$(temps[k]): ", IS_estimate,
+            " MC_estimate for t=$(temps[k-1]): ", MC_estimate,
             )
 
         ll_old = ll_new

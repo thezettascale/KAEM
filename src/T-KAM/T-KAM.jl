@@ -170,7 +170,7 @@ function thermo_loss(
         if k == 2 && m.prior.contrastive_div
             ex_prior = mean(lp_prev)
         elseif k == T
-            ex_llhood = mean(ll_curr)
+            MLE = mean(lp_curr' + reduce(vcat, map(b -> ll_curr[b:b, b], 1:B)))
         end
 
         if k != 2
@@ -185,7 +185,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        loss += abs.(reverse_estimate - fow_estimate)
+        loss -= abs.(reverse_estimate - fow_estimate)
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(abs.(reverse_estimate - fow_estimate)))
 
@@ -202,8 +202,8 @@ function thermo_loss(
         end
     end
 
-    loss = mean(loss) + ex_llhood - ex_prior
-    @ignore_derivatives m.verbose && println("Final loss: ", loss, " MLE: ", ex_llhood - ex_prior)
+    loss = mean(loss) + MLE - ex_prior
+    @ignore_derivatives m.verbose && println("Final LLhood: ", loss, " MLE: ", MLE - ex_prior)
     return -loss*m.loss_scaling, st, seed
 end
 

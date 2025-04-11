@@ -155,8 +155,8 @@ function thermo_loss(
     T, B = size(z)[end], size(x)[end]
 
     loss = zeros(half_quant, B) |> device
-    ex_prior = half_quant(0)
-    ex_llhood = half_quant(0)
+    ex_prior, ex_llhood = half_quant(0), half_quant(0)
+    reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
 
     for k in 2:T
 
@@ -181,10 +181,13 @@ function thermo_loss(
             ll_rev_resampled = reduce(vcat, map(b -> ll_curr[b:b, rev_idxs[b, :]], 1:B))
             
             @tullio reverse_estimate[b] := weights_rev_resampled[b, s] * (lp_rev_resampled[s, b] + t_prev * ll_rev_resampled[b, s])
-            loss -= reverse_estimate
 
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
+
+        loss -= abs.(reverse_estimate - fow_estimate)
+
+        @ignore_derivatives m.verbose && println("Diff: ", mean(abs.(reverse_estimate - fow_estimate)))
 
         if k != T
             weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)
@@ -194,7 +197,6 @@ function thermo_loss(
             ll_fow_resampled = reduce(vcat, map(b -> ll_prev[b:b, fow_idxs[b, :]], 1:B))
 
             @tullio fow_estimate[b] := weights_fow_resampled[b, s] * (lp_fow_resampled[s, b] + t_curr * ll_fow_resampled[b, s])
-            loss += fow_estimate
 
             @ignore_derivatives m.verbose && println("Fow estimate for t=$t_curr: ", mean(fow_estimate))
         end

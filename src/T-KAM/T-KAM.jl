@@ -185,7 +185,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        loss -= abs.(reverse_estimate - fow_estimate)
+        loss += abs.(reverse_estimate - fow_estimate)
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(abs.(reverse_estimate - fow_estimate)))
 

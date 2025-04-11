@@ -202,8 +202,8 @@ function thermo_loss(
         end
     end
 
+    @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE: ", MLE - ex_prior)
     loss = mean(loss) + MLE - ex_prior
-    @ignore_derivatives m.verbose && println("Final LLhood: ", loss, " MLE: ", MLE - ex_prior)
     return -loss*m.loss_scaling, st, seed
 end
 

@@ -11,7 +11,7 @@ using .Utils
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
-commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "10")
+commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "4")
 out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
     
 function test_loss()

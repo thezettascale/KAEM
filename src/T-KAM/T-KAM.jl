@@ -154,52 +154,54 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = size(z)[end], size(x)[end]
 
-    lp_old, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε)
-    ll_old, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, T]; seed=seed, ε=m.ε)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
+    loss = zeros(half_quant, B) |> device
+    ex_prior = half_quant(0)
+    ex_llhood = half_quant(0)
 
-    # MLE for Z_T: final partition
-    loss = mean(lp_old' .+ reduce(vcat, map(b -> ll_old[b:b, b], 1:B)))
-    @ignore_derivatives m.verbose && println("MLE: ", loss)
-    MC_estimate, IS_estimate = half_quant(0), half_quant(0)
+    for k in 2:T
 
-    for k in reverse(2:T)
-        z_t = view(z, :, :, :, k-1)
-        ll_new, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
-        lp_new, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε)
-        @reset st.ebm = st_ebm
+        z_prev, z_curr = view(z, :, :, :, k-1), view(z, :, :, :, k)
+        t_prev, t_curr = temps[k-1], temps[k]
+        ll_prev, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_prev; seed=seed, ε=m.ε)
+        ll_curr, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_curr; seed=seed, ε=m.ε)
+        lp_prev, st_ebm = log_prior(m.prior, z_prev, ps.ebm, st.ebm; ε=m.ε)
+        lp_curr, st_ebm = log_prior(m.prior, z_curr, ps.ebm, st.ebm; ε=m.ε)
 
-        # Look ahead importance sampling, skip for Z_T
-        if k != T #
-            weights = @ignore_derivatives softmax(full_quant.(temps[k] .* ll_old - temps[k-1] .* ll_new), dims=2)
-            resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-            weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-            lp_resampled = reduce(hcat, map(b -> lp_new[resampled_idxs[b, :], :], 1:B))
-            ll_resampled = reduce(vcat, map(b -> ll_new[b:b, resampled_idxs[b, :]], 1:B))
-
-            # IS estimate of current power posterior with previous power post samples
-            IS_estimate =  mean(sum(weights_resampled .* (lp_resampled' .+ temps[k] .* ll_resampled), dims=2)) 
+        if k == 2 && m.prior.contrastive_div
+            ex_prior = mean(lp_prev)
+        elseif k == T
+            ex_llhood = mean(ll_curr)
         end
 
-        loss -= abs(IS_estimate - MC_estimate)
+        if k != 2
+            weights_rev = @ignore_derivatives softmax(full_quant.(t_prev .* ll_curr - t_curr .* ll_curr), dims=2)
+            rev_idxs, seed = m.lkhood.resample_z(weights_rev, seed)
+            weights_rev_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_rev[b:b, rev_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+            lp_rev_resampled = reduce(hcat, map(b -> lp_curr[rev_idxs[b, :], :], 1:B))
+            ll_rev_resampled = reduce(vcat, map(b -> ll_curr[b:b, rev_idxs[b, :]], 1:B))
+            
+            @tullio reverse_estimate[b] := weights_rev_resampled[b, s] * (lp_rev_resampled[s, b] + t_prev * ll_rev_resampled[b, s])
+            loss -= reverse_estimate
 
-        # MC estimate of current power posterior with true current power posterior samples
-        MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
+            @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
+        end
 
-        @ignore_derivatives m.verbose && println(
-            "Cumulative marginal llhood: ", loss,
-            ", logprior at t=$(temps[k-1]): ", mean(lp_new),
-            ", logllhood at t=$(temps[k-1]): ", mean(ll_new),
-            ", IS_estimate for t=$(temps[k]): ", IS_estimate,
-            ", MC_estimate for t=$(temps[k-1]): ", MC_estimate,
-            )
+        if k != T
+            weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)
+            fow_idxs, seed = m.lkhood.resample_z(weights_fow, seed)
+            weights_fow_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_fow[b:b, fow_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+            lp_fow_resampled = reduce(hcat, map(b -> lp_prev[fow_idxs[b, :], :], 1:B))
+            ll_fow_resampled = reduce(vcat, map(b -> ll_prev[b:b, fow_idxs[b, :]], 1:B))
 
-        ll_old = ll_new
+            @tullio fow_estimate[b] := weights_fow_resampled[b, s] * (lp_fow_resampled[s, b] + t_curr * ll_fow_resampled[b, s])
+            loss += fow_estimate
+
+            @ignore_derivatives m.verbose && println("Fow estimate for t=$t_curr: ", mean(fow_estimate))
+        end
     end
 
-    # Final ex_prior subtracted from original MLE partition
-    loss -= MC_estimate
+    loss = mean(loss) + ex_llhood - ex_prior
+    @ignore_derivatives m.verbose && println("Final loss: ", loss, " MLE: ", ex_llhood - ex_prior)
     return -loss*m.loss_scaling, st, seed
 end
 

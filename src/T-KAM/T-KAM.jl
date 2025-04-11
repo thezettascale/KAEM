@@ -155,7 +155,7 @@ function thermo_loss(
     T, B = size(z)[end], size(x)[end]
 
     loss = zeros(half_quant, B) |> device
-    ex_prior, ex_llhood = half_quant(0), half_quant(0)
+    ex_prior, MLE = half_quant(0), half_quant(0)
     reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
 
     for k in 2:T

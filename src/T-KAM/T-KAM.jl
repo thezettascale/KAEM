@@ -170,7 +170,7 @@ function thermo_loss(
         if k == 2 && m.prior.contrastive_div
             ex_prior = mean(lp_prev)
         elseif k == T
-            MLE = mean(lp_curr' + reduce(vcat, map(b -> ll_curr[b:b, b], 1:B)))
+            MLE = mean(lp_curr + reduce(vcat, map(b -> ll_curr[b:b, b], 1:B)))
         end
 
         if k != 2

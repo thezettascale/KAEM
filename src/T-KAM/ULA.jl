@@ -82,7 +82,7 @@ function langevin_sampler(
 
     while k < T + 1
         logpos_grad = (z_i) -> begin
-            logpos_z, st_ebm, st_gen = log_posterior(half_quant.(z_i), Lux.testmode(st), t[k])
+            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), Lux.testmode(st), t[k])
             ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, Lux.testmode(st), t[k]))), half_quant.(z_i)))
             @reset st.ebm = st_ebm
             @reset st.gen = st_gen

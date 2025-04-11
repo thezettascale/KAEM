@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("ULA.jl")
+include("autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -188,11 +188,11 @@ function thermo_loss(
         MC_estimate = mean(lp_new' .+ temps[k-1] .* reduce(vcat, map(b -> ll_new[b:b, b], 1:B)))
 
         @ignore_derivatives m.verbose && println(
-            " cumulative marginal llhood: ", loss,
-            " logprior at t=$(temps[k-1]): ", mean(lp_new),
-            " logllhood at t=$(temps[k-1]): ", mean(ll_new),
-            " IS_estimate for t=$(temps[k]): ", IS_estimate,
-            " MC_estimate for t=$(temps[k-1]): ", MC_estimate,
+            "Cumulative marginal llhood: ", loss,
+            ", logprior at t=$(temps[k-1]): ", mean(lp_new),
+            ", logllhood at t=$(temps[k-1]): ", mean(ll_new),
+            ", IS_estimate for t=$(temps[k]): ", IS_estimate,
+            ", MC_estimate for t=$(temps[k-1]): ", MC_estimate,
             )
 
         ll_old = ll_new

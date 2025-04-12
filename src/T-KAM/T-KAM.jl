@@ -186,9 +186,9 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        loss -= abs.(reverse_estimate - fow_estimate)
+        loss += reverse_estimate - fow_estimate
 
-        @ignore_derivatives m.verbose && println("Diff: ", mean(abs.(reverse_estimate - fow_estimate)))
+        @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
 
         if k != T
             weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)

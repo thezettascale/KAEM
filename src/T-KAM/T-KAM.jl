@@ -348,7 +348,7 @@ function init_T_KAM(
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
-        λ = parse(half_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "λ_tempering_regularization"))
+        λ = parse(half_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "λ_tempering_lagrange"))
         loss_fcn = thermo_loss
 
         # Cyclic p schedule

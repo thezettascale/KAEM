@@ -41,6 +41,7 @@ struct T_KAM <: Lux.AbstractLuxLayer
     ε::half_quant
     file_loc::AbstractString
     max_samples::Int
+    λ::half_quant
 end
 
 function generate_batch(
@@ -203,7 +204,7 @@ function thermo_loss(
     end
 
     @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE: ", MLE - ex_prior)
-    loss = mean(loss) + MLE - ex_prior
+    loss = m.λ*mean(loss) + MLE - ex_prior
     return -loss*m.loss_scaling, st, seed
 end
 
@@ -334,6 +335,7 @@ function init_T_KAM(
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
     Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
+    λ = half_quant(1)
 
     # Importance sampling or MALA
     posterior_fcn = identity
@@ -346,6 +348,7 @@ function init_T_KAM(
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        λ = parse(half_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "λ_tempering_regularization"))
         loss_fcn = thermo_loss
 
         # Cyclic p schedule
@@ -380,7 +383,8 @@ function init_T_KAM(
             loss_scaling,
             eps,
             file_loc,
-            max(IS_samples, batch_size)
+            max(IS_samples, batch_size),
+            λ
         )
 end
 

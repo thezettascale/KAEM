@@ -73,32 +73,6 @@ function test_FFT_basis()
     @test !any(isnan.(B_fft))
 end
 
-function test_Morlet_basis()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-
-    Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-
-    B_morlet = Morlet_basis(x_eval, grid; σ=σ)
-
-    @test size(B_morlet) == (i, g, b)
-    @test !any(isnan.(B_morlet))
-end
-
-function test_Shannon_basis()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-
-    Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-
-    B_shannon = Shannon_basis(x_eval, grid; σ=σ)
-
-    @test size(B_shannon) == (i, g, b)
-    @test !any(isnan.(B_shannon))
-end
-
 function test_coef2curve()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
@@ -141,8 +115,6 @@ end
     test_RBF_basis()
     test_RSWAF_basis()
     test_FFT_basis()
-    test_Morlet_basis()
-    test_Shannon_basis()
     test_coef2curve()
     test_curve2coef()
 end

@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("autoMALA.jl")
+include("ULA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -403,7 +403,7 @@ function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
     return model.N_t > 1 ? ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
         gen = Lux.initialparameters(rng, model.lkhood),
-        λ = zeros(full_quant, model.N_t),
+        λ = glorot_uniform(rng, model.N_t),
         ) : ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
         gen = Lux.initialparameters(rng, model.lkhood),

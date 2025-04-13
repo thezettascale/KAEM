@@ -41,7 +41,6 @@ struct T_KAM <: Lux.AbstractLuxLayer
     ε::half_quant
     file_loc::AbstractString
     max_samples::Int
-    λ::half_quant
 end
 
 function generate_batch(
@@ -159,8 +158,8 @@ function thermo_loss(
     ex_prior, MLE = half_quant(0), half_quant(0)
     reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
 
+    lagrange = zeros(half_quant, T-1)
     for k in 2:T
-
         z_prev, z_curr = view(z, :, :, :, k-1), view(z, :, :, :, k)
         t_prev, t_curr = temps[k-1], temps[k]
         ll_prev, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_prev; seed=seed, ε=m.ε)
@@ -186,7 +185,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        loss -= reverse_estimate - fow_estimate
+        lagrange[k-1] = mean(reverse_estimate - fow_estimate)
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
 
@@ -204,7 +203,7 @@ function thermo_loss(
     end
 
     @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE (w/o ex_prior): ", MLE)
-    loss = mean(m.λ .* loss) + MLE - ex_prior
+    loss = MLE - ex_prior - sum(ps.λ .* device(lagrange)) 
     return -loss*m.loss_scaling, st, seed
 end
 
@@ -335,7 +334,6 @@ function init_T_KAM(
     N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
     Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
-    λ = half_quant(1)
 
     # Importance sampling or MALA
     posterior_fcn = identity
@@ -348,7 +346,6 @@ function init_T_KAM(
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
-        λ = parse(half_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "λ_tempering_lagrange"))
         loss_fcn = thermo_loss
 
         # Cyclic p schedule
@@ -384,7 +381,6 @@ function init_T_KAM(
             eps,
             file_loc,
             max(IS_samples, batch_size),
-            λ
         )
 end
 
@@ -406,7 +402,8 @@ end
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
     return ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
-        gen = Lux.initialparameters(rng, model.lkhood)
+        gen = Lux.initialparameters(rng, model.lkhood),
+        λ = zeros(full_quant, model.N_t-1),
         )
 end
 

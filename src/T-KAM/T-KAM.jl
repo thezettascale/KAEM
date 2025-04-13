@@ -158,7 +158,7 @@ function thermo_loss(
     ex_prior, MLE = half_quant(0), half_quant(0)
     reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
 
-    lagrange = zeros(half_quant, T-1)
+    lagrange = zeros(half_quant, 0) |> device
     for k in 2:T
         z_prev, z_curr = view(z, :, :, :, k-1), view(z, :, :, :, k)
         t_prev, t_curr = temps[k-1], temps[k]
@@ -185,7 +185,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        lagrange[k-1] = mean(reverse_estimate - fow_estimate)
+        lagrange = vcat(lagrange, mean(reverse_estimate - fow_estimate))
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
 
@@ -203,7 +203,7 @@ function thermo_loss(
     end
 
     @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE (w/o ex_prior): ", MLE)
-    loss = MLE - ex_prior - sum(ps.λ .* device(lagrange)) 
+    loss = MLE - ex_prior - sum(ps.λ .* lagrange) 
     return -loss*m.loss_scaling, st, seed
 end
 
@@ -400,10 +400,13 @@ end
 
 
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
-    return ComponentArray(
+    return model.N_t > 1 ? ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior), 
         gen = Lux.initialparameters(rng, model.lkhood),
-        λ = zeros(full_quant, model.N_t-1),
+        λ = zeros(full_quant, model.N_t),
+        ) : ComponentArray(
+        ebm = Lux.initialparameters(rng, model.prior), 
+        gen = Lux.initialparameters(rng, model.lkhood),
         )
 end
 

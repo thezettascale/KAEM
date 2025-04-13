@@ -186,7 +186,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        loss += reverse_estimate - fow_estimate
+        loss -= reverse_estimate - fow_estimate
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
 
@@ -203,8 +203,8 @@ function thermo_loss(
         end
     end
 
-    @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE: ", MLE - ex_prior)
-    loss = m.λ*mean(loss) + MLE - ex_prior
+    @ignore_derivatives m.verbose && println("Final tempered LLhood: ", mean(loss), " MLE (w/o ex_prior): ", MLE)
+    loss = mean(m.λ .* loss) + MLE - ex_prior
     return -loss*m.loss_scaling, st, seed
 end
 

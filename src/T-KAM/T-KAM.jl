@@ -185,7 +185,7 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        lagrange = vcat(lagrange, mean(reverse_estimate - fow_estimate))
+        lagrange = vcat(lagrange, mean(fow_estimate - reverse_estimate))
 
         @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
 

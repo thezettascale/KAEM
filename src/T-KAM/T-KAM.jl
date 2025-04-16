@@ -11,7 +11,7 @@ using Zygote: Buffer
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("ULA.jl")
+include("autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -184,9 +184,9 @@ function thermo_loss(
             @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
         end
 
-        lagrange = vcat(lagrange, mean(fow_estimate - reverse_estimate))
+        lagrange = vcat(lagrange, mean(fow_estimate) - mean(reverse_estimate))
 
-        @ignore_derivatives m.verbose && println("Diff: ", mean(reverse_estimate - fow_estimate))
+        @ignore_derivatives m.verbose && println("Diff: ", mean(fow_estimate) - mean(reverse_estimate))
 
         if k != T
             weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)

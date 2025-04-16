@@ -116,24 +116,41 @@ function select_step_size(
         The log-ratio.
         The updated state.
     """
-    MH_criterion = (η) -> leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
 
+    # Find chains that need step size adjustment
     δ = (log_r .>= log_b) - (log_r .<= log_a)
-    all(δ .== 0) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    active_chains = findall(δ .!= 0)
+    isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    
+    # Store which chains had too high acceptance rate initially
     geq_bool = log_r .>= log_b
 
-    while !all(δ .== 0)
-        η_init = η_init .* Δη.^δ
-        ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = MH_criterion(η_init)
-        any(isnan.(log_r)) && error("NaN in acceptance ratio")
+    while !isempty(active_chains)
+        η_init[active_chains] .*= Δη.^δ[active_chains]
+        
+        # Run only on chains needing adjustment (efficient)
+        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = 
+            leapfrop_proposal(view(z,:,:,active_chains), st, view(logpos_z,active_chains), 
+                            view(∇z,:,:,active_chains), view(momentum,:,:,active_chains),
+                            M, view(η_init,active_chains), logpos_withgrad)
+        
+        any(isnan.(log_r_active)) && error("NaN in acceptance ratio")
 
-        δ = ifelse.(δ .== 1 .&& log_r .< log_b, 0, δ)
-        δ = ifelse.(δ .== -1 .&& log_r .> log_a, 0, δ)
-        δ = ifelse.(η_min .< η_init .< η_max, δ, 0) # I capped it
+        # Update active chain results
+        ẑ[:,:,active_chains] = ẑ_active
+        logpos_ẑ[active_chains] = logpos_ẑ_active  
+        ∇ẑ[:,:,active_chains] = ∇ẑ_active
+        p̂[:,:,active_chains] = p̂_active
+        log_r[active_chains] = log_r_active
 
+        # Update which chains still need adjustment
+        δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b, 0, δ[active_chains])
+        δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a, 0, δ[active_chains])
+        active_chains = findall(δ .!= 0)
     end
 
+    # Reduce step size for chains that initially had too high acceptance
     η_init = ifelse.(geq_bool, η_init ./ Δη, η_init)
     return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end

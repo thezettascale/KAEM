@@ -50,6 +50,7 @@ end
 
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
+    x::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -63,6 +64,7 @@ function leapfrop_proposal(
 
     Args:
         z: The current position.
+        x: The data.
         momentum: The current momentum.
         η: The step size per chain.
         logpos: The log-posterior function.
@@ -75,7 +77,7 @@ function leapfrop_proposal(
 
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
     @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p] # Full-step position update    
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, st)    
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)    
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
@@ -85,6 +87,7 @@ function select_step_size(
     log_a::full_quant,
     log_b::full_quant,
     z::AbstractArray{full_quant},
+    x::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -93,8 +96,6 @@ function select_step_size(
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function;
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
     )
     """
     Select a step size for the autoMALA sampler.
@@ -103,6 +104,7 @@ function select_step_size(
         a: The lower bound.
         b: The upper bound.
         z: The current position.
+        x: The data.
         st: The state of the model.
         logpos_z: The log-posterior at the current position.
         momentum: The current momentum.
@@ -116,7 +118,7 @@ function select_step_size(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
 
     # Find chains that need step size adjustment
     δ = (log_r .>= log_b) - (log_r .<= log_a)
@@ -130,8 +132,9 @@ function select_step_size(
         η_init[active_chains] .*= Δη.^δ[active_chains]
         
         # Run only on chains needing adjustment (efficient)
+        x_active = view(x, :, :, :, active_chains)
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = 
-            leapfrop_proposal(view(z,:,:,active_chains), st, view(logpos_z,active_chains), 
+            leapfrop_proposal(view(z,:,:,active_chains), x_active, st, view(logpos_z,active_chains), 
                             view(∇z,:,:,active_chains), view(momentum,:,:,active_chains),
                             M, view(η_init,active_chains), logpos_withgrad)
         
@@ -159,6 +162,7 @@ function autoMALA_step(
     log_a::full_quant,
     log_b::full_quant,
     z::AbstractArray{full_quant},
+    x::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -175,6 +179,7 @@ function autoMALA_step(
         a: The lower bound.
         b: The upper bound.
         z: The current position.
+        x: The data.
         st: The state of the model.
         logpos_z: The log-posterior at the current position.
         momentum: The current momentum.
@@ -188,8 +193,8 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
     return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
 end
 
@@ -244,11 +249,11 @@ function langevin_sampler(
 
     ll_fn = m.lkhood.seq_length > 1 ? (x,y,t) -> cross_entropy(x, y, t; ε=m.ε) : (x,y,t) -> l2(x, y, t; ε=m.ε)
 
-    function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
+    function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) 
-        logpos = lp + ll_fn(x, x̂, t_k) / (2*m.lkhood.σ_llhood^2)
+        logpos = lp + ll_fn(x_i, x̂, t_k) / (2*m.lkhood.σ_llhood^2)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
@@ -257,9 +262,9 @@ function langevin_sampler(
     mean_η = zeros(full_quant, T, S) 
     while k < T + 1
         
-        logpos_withgrad = (z_i, st_i) -> begin
-            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), Lux.testmode(st_i), t[k])
-            ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, Lux.testmode(st_i), t[k]))), half_quant.(z_i)))
+        logpos_withgrad = (z_i, x_i, st_i) -> begin
+            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), x_i, Lux.testmode(st_i), t[k])
+            ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t[k]))), half_quant.(z_i)))
             
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
@@ -268,17 +273,17 @@ function langevin_sampler(
         
         burn_in = 0
         η = device(st.η_init[k, 1:S]) # Per-chain per-temp step sizes
-        m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), Lux.testmode(st), t[k]))) ./ loss_scaling)
+        m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
         for i in 1:N
             momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
-            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), st) # Current position
+            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), x, st) # Current position
 
             if burn_in < N_unadjusted
-                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
+                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
                 accept = log_u[i,k,:] .< log_r
                 η_cpu = cpu_device()(η)
                 for s in 1:S
@@ -291,7 +296,7 @@ function langevin_sampler(
                 η = (η + η_prime) ./ 2
             end
         end
-        m.verbose && println("t=$(t[k]) posterior after update: ", sum(first(log_posterior(half_quant.(z), Lux.testmode(st), t[k]))) ./ loss_scaling)
+        m.verbose && println("t=$(t[k]) posterior after update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1
     end

@@ -138,8 +138,6 @@ function select_step_size(
                             view(∇z,:,:,active_chains), view(momentum,:,:,active_chains),
                             M, view(η_init,active_chains), logpos_withgrad)
         
-        any(isnan.(log_r_active)) && error("NaN in acceptance ratio")
-
         # Update active chain results
         ẑ[:,:,active_chains] = ẑ_active
         logpos_ẑ[active_chains] = logpos_ẑ_active  

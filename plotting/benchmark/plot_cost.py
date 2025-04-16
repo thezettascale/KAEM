@@ -12,23 +12,23 @@ plt.rcParams.update({
 
 latent_dim = pd.DataFrame({
     r"$n_z$" : [10, 20, 40, 80],
-    "Time (s)" : [11.090, 22.334, 47.870, 106.534],
-    "Memory Estimate (GiB)" : [0.765, 1.37, 2.75, 6.11],  
-    "Garbage Collection (%)" : [1.19, 1.23, 1.54, 1.51],
-    "Allocations" : [19762026, 39969383, 84700606, 191387658],
+    "Time (s)" : [6.887, 14.235, 29.748, 66.514],
+    "Memory Estimate (GiB)" : [0.868, 1.49, 2.95, 6.64],  
+    "Garbage Collection (%)" : [0.00, 1.56, 1.64, 1.85],
+    "Allocations" : [19991483, 40666450, 87218646, 201161187],
 })
 
 mala_steps = pd.DataFrame({
-    r"$N_{\text{local}}$, \n ($N_{\text{unadjusted}}=1, N_{t}=5$)" : [5, 10, 15, 20],
-    "Time (s)" : [267.152, 546.303, 862.790, 1172.531],
-    "Memory Estimate (GiB)" : [7.95, 14.63, 21.82, 28.50],
-    "Garbage Collection (%)" : [3.41, 5.80, 6.43, 6.87],
-    "Allocations" : [226208254, 419957709, 631231204, 825665112],
+    r"$N_{\text{local}}$ variable \\ ($N_{\text{unadjusted}}=1, N_{t}=5$)" : [1, 5, 10, 15],
+    "Time (s)" : [5.776, 69.266, 150.791, 226.335],
+    "Memory Estimate (GiB)" : [1.97, 12.94, 26.46, 39.71],
+    "Garbage Collection (%)" : [5.30, 3.83, 3.69, 3.62],
+    "Allocations" : [22407508, 301594303, 645196852, 980779216],
 })
 
-keys = [r"$n_z$", r"$N_{\text{local}}$, \n ($N_{\text{unadjusted}}=1, N_{t}=5$)"]
+keys = [r"$n_z$", r"$N_{\text{local}}$ variable \\ ($N_{\text{unadjusted}}=1, N_{t}=5$)"]
 colours = ["viridis", "cividis"]
-elevations = [0.45, 0.08]
+elevations = [0.2, 0.08]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:

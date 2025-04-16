@@ -96,6 +96,9 @@ function select_step_size(
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function;
+    seq::Bool=false,
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1)
     )
     """
     Select a step size for the autoMALA sampler.
@@ -132,7 +135,7 @@ function select_step_size(
         η_init[active_chains] .*= Δη.^δ[active_chains]
         
         # Run only on chains needing adjustment (efficient)
-        x_active = view(x, :, :, :, active_chains)
+        x_active = seq ? view(x, :, :, active_chains) : view(x, :, :, :, active_chains)
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = 
             leapfrop_proposal(view(z,:,:,active_chains), x_active, st, view(logpos_z,active_chains), 
                             view(∇z,:,:,active_chains), view(momentum,:,:,active_chains),
@@ -148,6 +151,7 @@ function select_step_size(
         # Update which chains still need adjustment
         δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b, 0, δ[active_chains])
         δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a, 0, δ[active_chains])
+        δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
         active_chains = findall(δ .!= 0)
     end
 
@@ -168,7 +172,10 @@ function autoMALA_step(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
-    logpos_withgrad::Function    
+    logpos_withgrad::Function;
+    seq::Bool=false,
+    η_min::full_quant=full_quant(1e-5),
+    η_max::full_quant=full_quant(1)
     )
     """
     Check the reversibility of the autoMALA step size selection.
@@ -191,8 +198,8 @@ function autoMALA_step(
         The log-ratio.
         The updated state.
     """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
+    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
     return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
 end
 
@@ -245,7 +252,8 @@ function langevin_sampler(
     seed, rng = next_rng(seed)
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
-    ll_fn = m.lkhood.seq_length > 1 ? (x,y,t) -> cross_entropy(x, y, t; ε=m.ε) : (x,y,t) -> l2(x, y, t; ε=m.ε)
+    seq = m.lkhood.seq_length > 1
+    ll_fn = seq ? (x,y,t) -> cross_entropy(x, y, t; ε=m.ε) : (x,y,t) -> l2(x, y, t; ε=m.ε)
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
@@ -281,7 +289,7 @@ function langevin_sampler(
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
                 accept = log_u[i,k,:] .< log_r
                 η_cpu = cpu_device()(η)
                 for s in 1:S

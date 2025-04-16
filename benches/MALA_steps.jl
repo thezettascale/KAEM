@@ -11,18 +11,19 @@ using .T_KAM_model
 using .DataUtils: get_vision_dataset
 using .Utils: device, half_quant
 
-conf = ConfParse("config/nist_config.ini")
+conf = ConfParse("config/cnn_config.ini")
 parse_conf!(conf)
 
-commit!(conf, "CNN", "use_cnn_lkhood", "false")
+commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0") 
 commit!(conf, "TRAINING", "verbose", "false") 
 
 dataset, img_size = get_vision_dataset(
-    "MNIST",
+    "SVHN",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
+    cnn=true
 )[1:2]
 
 function benchmark_MALA(N_l)
@@ -37,7 +38,7 @@ function benchmark_MALA(N_l)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
+display(@benchmark CUDA.@sync benchmark_MALA(1))
 display(@benchmark CUDA.@sync benchmark_MALA(5))
 display(@benchmark CUDA.@sync benchmark_MALA(10))
 display(@benchmark CUDA.@sync benchmark_MALA(15))
-display(@benchmark CUDA.@sync benchmark_MALA(20))

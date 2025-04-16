@@ -1,13 +1,15 @@
-Resized dataset to (28, 28, 1)
+┌ Warning: `training` is set to `Val{false}()` but is being used within an autodiff call (gradient, jacobian, etc...). This might lead to incorrect results. If you are using a `Lux.jl` model, set it to training mode using `LuxCore.trainmode`.
+└ @ LuxLib.Utils ~/.julia/packages/LuxLib/kH9PB/src/utils.jl:324
+Resized dataset to (32, 32, 3)
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 267.152 s (3.41% GC) to evaluate,
- with a memory estimate of 7.95 GiB, over 226208254 allocations.
+ Single result which took 5.776 s (5.30% GC) to evaluate,
+ with a memory estimate of 1.97 GiB, over 22407508 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 546.303 s (5.80% GC) to evaluate,
- with a memory estimate of 14.63 GiB, over 419957709 allocations.
+ Single result which took 69.266 s (3.83% GC) to evaluate,
+ with a memory estimate of 12.94 GiB, over 301594303 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 862.790 s (6.43% GC) to evaluate,
- with a memory estimate of 21.82 GiB, over 631231204 allocations.
+ Single result which took 150.791 s (3.69% GC) to evaluate,
+ with a memory estimate of 26.46 GiB, over 645196852 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 1172.531 s (6.87% GC) to evaluate,
- with a memory estimate of 28.50 GiB, over 825665112 allocations.
+ Single result which took 226.335 s (3.62% GC) to evaluate,
+ with a memory estimate of 39.71 GiB, over 980779216 allocations.

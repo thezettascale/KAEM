@@ -1,21 +1,29 @@
 module LangevinSampling
 
-export langevin_sampler
+export langevin_sampler, cross_entropy, l2
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
 
-include("../utils.jl")
-include("EBM_prior.jl")
+include("../../utils.jl")
+include("../EBM_prior.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 
-function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}, t::half_quant; ε::half_quant=eps(half_quant))
-    return dropdims(sum(t .* log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
+# function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+#     return dropdims(sum(log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
+# end
+
+# function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+#     return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+# end
+
+function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+    return log.(x .+ ε) .* y ./ size(x, 1)
 end
 
-function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}, t::half_quant; ε::half_quant=eps(half_quant))
-    return -dropdims(sum(t .* (x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
+function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+    return -(x - y).^2
 end
 
 function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
@@ -253,13 +261,13 @@ function langevin_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x,y,t) -> cross_entropy(x, y, t; ε=m.ε) : (x,y,t) -> l2(x, y, t; ε=m.ε)
+    ll_fn = seq ? (x,y) -> dropdims(sum(cross_entropy(x, y; ε=m.ε); dims=1); dims=1) : (x,y) -> dropdims(sum(l2(x, y; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) 
-        logpos = lp + ll_fn(x_i, x̂, t_k) / (2*m.lkhood.σ_llhood^2)
+        logpos = lp + t_k * ll_fn(x_i, x̂) / (2*m.lkhood.σ_llhood^2)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 

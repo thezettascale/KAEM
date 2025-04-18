@@ -5,8 +5,8 @@ export langevin_sampler
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
 
-include("../utils.jl")
-include("EBM_prior.jl")
+include("../../utils.jl")
+include("../EBM_prior.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 

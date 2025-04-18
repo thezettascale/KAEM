@@ -68,7 +68,7 @@ function langevin_sampler(
     seed, rng = next_rng(seed)
     noise = randn(rng, full_quant, Q, P, S, N, T)
 
-    ll_fn = m.lkhood.seq_length > 1 ? (x,y) -> cross_entropy(x, y; ε=m.ε) : (x,y) -> l2(x, y; ε=m.ε)
+    ll_fn = m.lkhood.seq_length > 1 ? (x_i, y_i) -> cross_entropy(x_i, y_i; ε=m.ε) : (x_i, y_i) -> l2(x_i, y_i; ε=m.ε)
 
     function log_posterior(z_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)

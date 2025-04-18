@@ -10,14 +10,6 @@ include("../EBM_prior.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 
-# function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-#     return dropdims(sum(log.(x .+ ε) .* y; dims=1); dims=1) ./ size(x, 1)
-# end
-
-# function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-#     return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3)) 
-# end
-
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     return log.(x .+ ε) .* y ./ size(x, 1)
 end
@@ -261,7 +253,7 @@ function langevin_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x,y) -> dropdims(sum(cross_entropy(x, y; ε=m.ε); dims=1); dims=1) : (x,y) -> dropdims(sum(l2(x, y; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=1); dims=1) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)

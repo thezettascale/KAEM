@@ -172,7 +172,7 @@ function thermo_loss(
 
     
     # Compute log marginal likelihood estimate
-    log_marginal = logsumexp(log_weights; dims=2)
+    log_marginal = logsumexp(log_weights; dims=2) .- log(S)
     loss = -mean(log_marginal)
     
     if m.prior.contrastive_div

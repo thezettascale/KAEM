@@ -8,6 +8,7 @@ using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
+using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
@@ -166,24 +167,35 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
 
+    ex_prior = half_quant(0)
     for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
+        z_t = view(z, :, :, :, k)
         
-        # Compute log-prior and log-likelihood
-        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)        
-        @reset st.gen = st_gen
-        
-        # Update log weights
+        logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)                
         log_weights += (t_next - t_curr) * logllhood
+
+        if k==1 && m.prior.contrastive_div
+            logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+            ex_prior = mean(logprior)
+        end
     end
     
-    logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=true)
-    @reset st.ebm = st_ebm
-    log_marginal = logsumexp(log_weights + logprior) - log(B)
+    z_t = view(z, :, :, :, T)
+    logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)
 
-    loss = -log_marginal
+    log_ais = logsumexp(log_weights) - log(B)
+    log_mle = mean(logprior + logllhood) - ex_prior
 
-    @ignore_derivatives m.verbose && println("AIS estimate of log p(x): ", log_marginal)
+    loss = -(log_ais + log_mle) / 2
+
+    @ignore_derivatives begin
+        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", log_mle)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
     return loss * m.loss_scaling, st, seed
 end
 

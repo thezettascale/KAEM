@@ -145,66 +145,44 @@ function thermo_loss(
     x::AbstractArray{half_quant};
     seed::Int=1
     )
-    """Thermodynamic Integration loss with Steppingstone sampling."""
+    """Annealed Importance Sampling (AIS) loss."""
 
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
-    # Schedule temperatures, and S-MALA
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    # Schedule temperatures
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = size(z)[end], size(x)[end]
 
-    ex_prior, MLE = half_quant(0), half_quant(0)
-
-    reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
-    lagrange = zeros(half_quant, 0) |> device
-
-    for k in 2:T
-        z_prev, z_curr = view(z, :, :, :, k-1), view(z, :, :, :, k)
-        t_prev, t_curr = temps[k-1], temps[k]
-        ll_prev, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_prev; seed=seed, ε=m.ε)
-        ll_curr, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_curr; seed=seed, ε=m.ε)
-        lp_prev, st_ebm = log_prior(m.prior, z_prev, ps.ebm, st.ebm; ε=m.ε)
-        lp_curr, st_ebm = log_prior(m.prior, z_curr, ps.ebm, st.ebm; ε=m.ε)
-
-        if k == 2 && m.prior.contrastive_div
-            ex_prior = mean(lp_prev)
-        elseif k == T
-            MLE = mean(lp_curr' .+ ll_curr)
-        end
-
-        if k != 2
-            weights_rev = @ignore_derivatives softmax(full_quant.(t_prev .* ll_curr - t_curr .* ll_curr), dims=2)
-            rev_idxs, seed = m.lkhood.resample_z(weights_rev, seed)
-            
-            weights_rev_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_rev[b:b, rev_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-            lp_rev_resampled = reduce(hcat, map(b -> lp_curr[rev_idxs[b, :], :], 1:B))
-            ll_rev_resampled = reduce(vcat, map(b -> ll_curr[b:b, rev_idxs[b, :]], 1:B))
-            
-            @tullio reverse_estimate[b] := weights_rev_resampled[b, s] * (lp_rev_resampled[s, b] + t_prev * ll_rev_resampled[b, s])
-            @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
-        end
-
-        lagrange = vcat(lagrange, mean(fow_estimate) - mean(reverse_estimate))
-
-        @ignore_derivatives m.verbose && println("Diff: ", mean(fow_estimate) - mean(reverse_estimate))
-
-        if k != T
-            weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)
-            fow_idxs, seed = m.lkhood.resample_z(weights_fow, seed)
-            
-            weights_fow_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_fow[b:b, fow_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-            lp_fow_resampled = reduce(hcat, map(b -> lp_prev[fow_idxs[b, :], :], 1:B))
-            ll_fow_resampled = reduce(vcat, map(b -> ll_prev[b:b, fow_idxs[b, :]], 1:B))
-            
-            @tullio fow_estimate[b] := weights_fow_resampled[b, s] * (lp_fow_resampled[s, b] + t_curr * ll_fow_resampled[b, s])
-            @ignore_derivatives m.verbose && println("Fow estimate for t=$t_curr: ", mean(fow_estimate))
-        end
+    log_weights = device(zeros(half_quant, B, S))
+    
+    for k in 1:T
+        t_curr, t_next = temps[k], temps[k+1]
+        z_t = view(z, :, :, :, k)
+        
+        # Compute log-prior and log-likelihood
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+        
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+        
+        # Update log weights
+        log_weights += (t_next - t_curr) * logllhood
     end
-    @ignore_derivatives m.verbose && println("Final tempered lagrange: ", sum(lagrange), " MLE (w/o ex_prior): ", MLE)
 
-    loss = MLE - ex_prior - sum(ps.λ .* lagrange) 
-    return -loss*m.loss_scaling, st, seed
+    
+    # Compute log marginal likelihood estimate
+    log_marginal = logsumexp(log_weights; dims=2)
+    loss = -mean(log_marginal)
+    
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+        loss -= mean(logprior)
+    end
+    
+    m.verbose && println("AIS estimate of log p(x): ", -loss)
+    
+    return loss * m.loss_scaling, st, seed
 end
 
 function update_model_grid(

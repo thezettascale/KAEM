@@ -152,18 +152,16 @@ function thermo_loss(
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    T, B = size(z)[end], size(x)[end]
+    Q, P, S, T, B = size(z)..., size(x)[end]
 
     log_weights = device(zeros(half_quant, B, S))
     
-    for k in 1:T
+    for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
         z_t = view(z, :, :, :, k)
         
         # Compute log-prior and log-likelihood
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
-        
-        @reset st.ebm = st_ebm
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)        
         @reset st.gen = st_gen
         
         # Update log weights
@@ -177,6 +175,7 @@ function thermo_loss(
     
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+        @reset st.ebm = st_ebm
         loss -= mean(logprior)
     end
     
@@ -378,11 +377,7 @@ end
 
 
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
-    return model.N_t > 1 ? ComponentArray(
-    ebm = Lux.initialparameters(rng, model.prior), 
-    gen = Lux.initialparameters(rng, model.lkhood),
-    λ = zeros(full_quant, model.N_t),
-    ) : ComponentArray(
+    return ComponentArray(
     ebm = Lux.initialparameters(rng, model.prior), 
     gen = Lux.initialparameters(rng, model.lkhood),
     )

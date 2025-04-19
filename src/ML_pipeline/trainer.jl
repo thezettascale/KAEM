@@ -167,11 +167,6 @@ function train!(t::T_KAM_trainer)
         loss, t.st, t.seed, grads = result.val..., first(result.grad) 
         t.loss = full_quant(loss) / loss_scaling # This may be inf for mixed precision training, but gradient matters more
         grads = full_quant.(grads) ./ loss_scaling
-
-        # Lagrange multipliers aim to maximise, so negate
-        if t.model.N_t > 1
-            grads.λ .= -grads.λ
-        end
        
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads) 
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")

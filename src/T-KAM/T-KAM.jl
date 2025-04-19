@@ -167,17 +167,13 @@ function thermo_loss(
         # Update log weights
         log_weights += (t_next - t_curr) * logllhood
     end
-
     
+    logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+    @reset st.ebm = st_ebm
+
     # Compute log marginal likelihood estimate
     log_marginal = logsumexp(log_weights; dims=2) .- log(S)
-    loss = -mean(log_marginal)
-    
-    if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
-        @reset st.ebm = st_ebm
-        loss -= mean(logprior)
-    end
+    loss = -(mean(log_marginal) + mean(logprior))
     
     m.verbose && println("AIS estimate of log p(x): ", -loss)
     

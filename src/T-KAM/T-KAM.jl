@@ -16,7 +16,7 @@ include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: langevin_sampler
+using .LangevinSampling: langevin_sampler, cross_entropy, l2
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -152,16 +152,25 @@ function thermo_loss(
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    Q, P, S, T, B = size(z)..., size(x)[end]
+    T, B = length(temps), size(x)[end]
 
-    log_weights = device(zeros(half_quant, B, S))
+    log_weights = device(zeros(half_quant, B))
+
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
     
+    function lkhood(z_i, st_i, seed_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        seed_i, rng = next_rng(seed_i)
+        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+    end
+
     for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
-        z_t = view(z, :, :, :, k)
         
         # Compute log-prior and log-likelihood
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)        
+        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)        
         @reset st.gen = st_gen
         
         # Update log weights
@@ -172,8 +181,8 @@ function thermo_loss(
     @reset st.ebm = st_ebm
 
     # Compute log marginal likelihood estimate
-    log_marginal = logsumexp(log_weights; dims=2) .- log(S)
-    loss = -(mean(log_marginal) + mean(logprior))
+    log_marginal = logsumexp(log_weights) - log(B)
+    loss = -(log_marginal + mean(logprior))
     
     m.verbose && println("AIS estimate of log p(x): ", -loss)
     

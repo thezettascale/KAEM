@@ -12,7 +12,7 @@ using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/ULA.jl")
+include("posterior_sampling/autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -168,17 +168,17 @@ function thermo_loss(
     end
 
     ex_prior = half_quant(0)
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        ex_prior = mean(logprior)
+    end
+
     for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
-        z_t = view(z, :, :, :, k)
+        z_t = view(z, :, :, :, k+1)
         
         logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)                
         log_weights += (t_next - t_curr) * logllhood
-
-        if k==1 && m.prior.contrastive_div
-            logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-            ex_prior = mean(logprior)
-        end
     end
     
     z_t = view(z, :, :, :, T)

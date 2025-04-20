@@ -12,7 +12,7 @@ using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/ULA.jl")
+include("posterior_sampling/autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -152,7 +152,7 @@ function thermo_loss(
 
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
-    z, st, seed = m.posterior_sample(m, x, temps[2:end-1], ps, st, seed) 
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = length(temps), size(x)[end]
 
     log_weights = device(zeros(half_quant, B))
@@ -167,7 +167,7 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
 
-    for k in 1:T-2
+    for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
         z_t = view(z, :, :, :, k+1)
         
@@ -175,13 +175,24 @@ function thermo_loss(
         log_weights += (t_next - t_curr) * logllhood
     end
     
-
     log_ais = logsumexp(log_weights) - log(B)
-    log_mle, st, seed = importance_loss(m, ps, st, x; seed=seed)
 
-    loss = -(log_ais - log_mle) / 2
+    logprior, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = lkhood(z[:, :, :, T], st.gen, seed)
+    log_mle = mean(logprior + logllhood)
 
-    @ignore_derivatives m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        log_mle -= mean(logprior)
+    end
+
+    loss = -(log_ais + log_mle) / 2
+
+    @ignore_derivatives begin
+        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
 
     return loss * m.loss_scaling, st, seed
 end
@@ -389,7 +400,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t-1, model.max_samples) : fill(model.η_init, 1, model.max_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
         )
 end

@@ -12,7 +12,7 @@ using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/autoMALA.jl")
+include("posterior_sampling/ULA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -189,7 +189,7 @@ function thermo_loss(
     loss = -(log_ais + log_mle) / 2
 
     @ignore_derivatives begin
-        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
+        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", log_mle)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
     end

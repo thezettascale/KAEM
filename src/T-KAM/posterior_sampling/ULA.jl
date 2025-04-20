@@ -30,6 +30,7 @@ function langevin_sampler(
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
     seed::Int=1,
+    max_zero_accept_iters::Int=50,
     )
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.

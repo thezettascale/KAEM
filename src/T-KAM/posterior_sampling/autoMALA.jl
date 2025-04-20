@@ -10,6 +10,23 @@ include("../EBM_prior.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 
+abstract type Preconditioner end
+
+struct IdentityPreconditioner <: Preconditioner end
+struct DiagonalPreconditioner <: Preconditioner end
+
+struct MixDiagonalPreconditioner{TR<:Real} <: Preconditioner
+    p0::TR  # Proportion of zeros
+    p1::TR  # Proportion of ones
+    
+    function MixDiagonalPreconditioner(p0::TR, p1::TR) where {TR<:Real}
+        zero(TR) ≤ p0+p1 ≤ one(TR) || throw(ArgumentError("p0+p1 < 0 or p0+p1 > 1"))
+        new{TR}(p0, p1)
+    end
+end
+
+MixDiagonalPreconditioner() = MixDiagonalPreconditioner(1//3, 1//3)
+
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     return log.(x .+ ε) .* y ./ size(x, 1)
 end
@@ -18,35 +35,78 @@ function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half
     return -(x - y).^2
 end
 
+function build_preconditioner!(
+    dest::AbstractArray{full_quant}, 
+    prec::MixDiagonalPreconditioner,
+    std_devs::AbstractArray{full_quant}; 
+    seed::Int=1
+    )
+    seed, rng = next_rng(seed)
+    u = rand(rng, full_quant)
+    if u ≤ prec.p0
+        # Use inverse standard deviations
+        dest .= ifelse.(iszero.(std_devs), one(full_quant), one(full_quant) ./ std_devs)
+    elseif u ≤ prec.p0 + prec.p1
+        # Use identity
+        dest .= one(full_quant)
+    else
+        # Random mixture
+        seed, rng = next_rng(seed)
+        mix = rand(rng, full_quant)
+        rmix = one(full_quant) - mix
+        dest .= ifelse.(iszero.(std_devs), 
+                       one(full_quant), 
+                       mix .+ rmix ./ std_devs)
+    end
+    return dest
+end
 
-function sample_momentum(z::AbstractArray{full_quant}; seed::Int=1)
-    """
-    Sample momentum for the autoMALA sampler, (with pre-conditioner).
-
-    Args:
-        z: The current position.
-        seed: The seed for the random number generator.
-
-    Returns:
-        The momentum.
-        The positive-definite mass matrix, (only the diagonals are returned for efficiency).
-        The updated seed.
-    """
+function sample_momentum(
+    z::AbstractArray{full_quant};
+    seed::Int=1,
+    preconditioner::Preconditioner=MixDiagonalPreconditioner(),
+    ε::full_quant=eps(full_quant)
+    )
     Q, P, S = size(z)
     z = cpu_device()(z)
     
-    # Covariance across chains
-    Σ = diag(cov(cpu_device()(reshape(z, Q*P, S))'))
-
-    # Pre-conditioner
+    # Compute standard deviations
+    Σ = sqrt.(diag(cov(reshape(z, S, Q*P))))
+    
+    # Initialize mass matrix
+    M = ones(full_quant, Q*P, S)
+    
+    # Build preconditioner
     seed, rng = next_rng(seed)
-    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
-    Σ_AM = (β .* sqrt.(1 ./ Σ) .+ (1 - β)) .^ 2
-
-    # Momentum
+    build_preconditioner!(M, preconditioner, Σ; seed=seed)
+    
+    # Sample momentum with preconditioned covariance
     seed, rng = next_rng(seed)
-    p = rand(rng, MvNormal(zeros(full_quant, length(Σ_AM)), Diagonal(Σ_AM)), S)
-    return device(reshape(p, Q, P, S)), device(reshape(Σ_AM, Q, P)), seed
+    M = reshape(M, Q, P, S)
+    p = randn(rng, full_quant, Q, P, S) ./ sqrt.(M .+ ε)
+    
+    return device(p), device(M), seed
+end
+
+function safe_step_size_update(
+    η::AbstractVector{full_quant}, 
+    δ::AbstractVector{Int}, 
+    Δη::full_quant
+    )
+    η_new = η .* Δη.^δ
+    return ifelse.(isfinite.(η_new), η_new, η)
+end
+
+function check_reversibility(
+    ẑ::AbstractArray{full_quant}, 
+    z::AbstractArray{full_quant}, 
+    η::AbstractVector{full_quant}, 
+    η_prime::AbstractVector{full_quant};
+    tol::full_quant=full_quant(1e-6)
+    )
+    pos_diff = maximum(abs.(ẑ - z)) < tol * maximum(abs.(z))
+    step_diff = abs.(η - η_prime) .< tol .* η
+    return pos_diff .&& all(step_diff)
 end
 
 function leapfrop_proposal(
@@ -77,7 +137,7 @@ function leapfrop_proposal(
     """
 
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
-    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p] # Full-step position update    
+    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p,s] # Full-step position update    
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)    
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
@@ -101,46 +161,35 @@ function select_step_size(
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1)
     )
-    """
-    Select a step size for the autoMALA sampler.
-
-    Args:
-        a: The lower bound.
-        b: The upper bound.
-        z: The current position.
-        x: The data.
-        st: The state of the model.
-        logpos_z: The log-posterior at the current position.
-        momentum: The current momentum.
-        M: The mass matrix.
-        η_init: The initial step size per chain.
-        Δη: The step size increment.
-        logpos_withgrad: The log-posterior function.
-
-    Returns:
-        The step size.
-        The log-ratio.
-        The updated state.
-    """
+    
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
 
-    # Find chains that need step size adjustment
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0)
     isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
     
-    # Store which chains had too high acceptance rate initially
     geq_bool = log_r .>= log_b
 
     while !isempty(active_chains)
-        η_init[active_chains] .*= Δη.^δ[active_chains]
+        η_init[active_chains] = safe_step_size_update(
+            η_init[active_chains], 
+            δ[active_chains], 
+            Δη
+        )
         
-        # Run only on chains needing adjustment (efficient)
         x_active = seq ? view(x, :, :, active_chains) : view(x, :, :, :, active_chains)
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = 
-            leapfrop_proposal(view(z,:,:,active_chains), x_active, st, view(logpos_z,active_chains), 
-                            view(∇z,:,:,active_chains), view(momentum,:,:,active_chains),
-                            M, view(η_init,active_chains), logpos_withgrad)
+            leapfrop_proposal(
+                view(z,:,:,active_chains), 
+                x_active, 
+                st, 
+                view(logpos_z,active_chains), 
+                view(∇z,:,:,active_chains), 
+                view(momentum,:,:,active_chains),
+                view(M,:,:,active_chains),
+                view(η_init,active_chains), 
+                logpos_withgrad
+            )
         
         # Update active chain results
         ẑ[:,:,active_chains] = ẑ_active
@@ -149,15 +198,15 @@ function select_step_size(
         p̂[:,:,active_chains] = p̂_active
         log_r[active_chains] = log_r_active
 
-        # Update which chains still need adjustment
+        # Update which chains still need adjustment with improved stability checks
         δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b, 0, δ[active_chains])
         δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a, 0, δ[active_chains])
-        δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
+        # δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
         active_chains = findall(δ .!= 0)
     end
 
-    # Reduce step size for chains that initially had too high acceptance
-    η_init = ifelse.(geq_bool, η_init ./ Δη, η_init)
+    # Reduce step size for chains that initially had too high acceptance with safety check
+    η_init = safe_step_size_update(η_init, -1 .* geq_bool, Δη)
     return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
 end
 
@@ -176,32 +225,22 @@ function autoMALA_step(
     logpos_withgrad::Function;
     seq::Bool=false,
     η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1)
+    η_max::full_quant=full_quant(1),
+    ε::full_quant=eps(full_quant)
     )
-    """
-    Check the reversibility of the autoMALA step size selection.
-
-    Args:
-        a: The lower bound.
-        b: The upper bound.
-        z: The current position.
-        x: The data.
-        st: The state of the model.
-        logpos_z: The log-posterior at the current position.
-        momentum: The current momentum.
-        M: The mass matrix.
-        η_init: The initial step size per chain.
-        Δη: The step size increment.
-        logpos_withgrad: The log-posterior function.
-
-    Returns:
-        The step size.
-        The log-ratio.
-        The updated state.
-    """
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
-    _, _, _, _, η_prime, _, st = select_step_size(log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
-    return ẑ, η, η_prime, cpu_device()(η .≈ η_prime), cpu_device()(log_r), st
+    
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
+        log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, 
+        logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
+    )
+    
+    _, _, _, _, η_prime, _, st = select_step_size(
+        log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, 
+        logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
+    )
+    
+    reversible = check_reversibility(ẑ, z, η, η_prime; tol=ε)
+    return ẑ, η, η_prime, cpu_device()(reversible), cpu_device()(log_r), st
 end
 
 function langevin_sampler(
@@ -293,7 +332,7 @@ function langevin_sampler(
         m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
         
         for i in 1:N
-            momentum, M, seed = sample_momentum(z; seed=seed)
+            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
             log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
             logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), x, st)
 
@@ -301,7 +340,7 @@ function langevin_sampler(
                 z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
                 burn_in += 1
             else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max, ε=full_quant(m.ε))
                 accept = log_u[i,k,:] .< log_r
                 η_cpu = cpu_device()(η)
                 for s in 1:S

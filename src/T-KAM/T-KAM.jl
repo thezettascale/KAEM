@@ -12,7 +12,7 @@ using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/ULA.jl")
+include("posterior_sampling/autoMALA.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -151,50 +151,54 @@ function thermo_loss(
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    T, B = length(temps), size(x)[end]
+    T, B = size(z)[end], size(x)[end]
 
-    log_weights = device(zeros(half_quant, B))
+    ex_prior, MLE = half_quant(0), half_quant(0)
+    reverse_estimate, fow_estimate = device(zeros(half_quant, B, 1)), device(zeros(half_quant, B, 1))
 
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-    
-    function lkhood(z_i, st_i, seed_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
-    end
+    lagrange = zeros(half_quant, 0) |> device
+    for k in 2:T
+        z_prev, z_curr = view(z, :, :, :, k-1), view(z, :, :, :, k)
+        t_prev, t_curr = temps[k-1], temps[k]
+        ll_prev, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_prev; seed=seed, ε=m.ε)
+        ll_curr, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_curr; seed=seed, ε=m.ε)
+        lp_prev, st_ebm = log_prior(m.prior, z_prev, ps.ebm, st.ebm; ε=m.ε)
+        lp_curr, st_ebm = log_prior(m.prior, z_curr, ps.ebm, st.ebm; ε=m.ε)
+        if k == 2 && m.prior.contrastive_div
+            ex_prior = mean(lp_prev)
+        elseif k == T
+            MLE = mean(lp_curr + reduce(vcat, map(b -> ll_curr[b:b, b], 1:B)))
+        end
 
-    for k in 1:T-1
-        t_curr, t_next = temps[k], temps[k+1]
-        z_t = view(z, :, :, :, k+1)
+        if k != 2
+            weights_rev = @ignore_derivatives softmax(full_quant.(t_prev .* ll_curr - t_curr .* ll_curr), dims=2)
+            rev_idxs, seed = m.lkhood.resample_z(weights_rev, seed)
+            weights_rev_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_rev[b:b, rev_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+            lp_rev_resampled = reduce(hcat, map(b -> lp_curr[rev_idxs[b, :], :], 1:B))
+            ll_rev_resampled = reduce(vcat, map(b -> ll_curr[b:b, rev_idxs[b, :]], 1:B))
+            @tullio reverse_estimate[b] := weights_rev_resampled[b, s] * (lp_rev_resampled[s, b] + t_prev * ll_rev_resampled[b, s])
+            @ignore_derivatives m.verbose && println("Rev estimate for t=$t_prev: ", mean(reverse_estimate))
+        end
         
-        logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)                
-        log_weights += (t_next - t_curr) * logllhood
-    end
-    
-    log_ais = logsumexp(log_weights) - log(B)
+        lagrange = vcat(lagrange, mean(fow_estimate) - mean(reverse_estimate))
+        @ignore_derivatives m.verbose && println("Diff: ", mean(fow_estimate) - mean(reverse_estimate))
 
-    logprior, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = lkhood(z[:, :, :, T], st.gen, seed)
-    log_mle = mean(logprior + logllhood)
-
-    if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        log_mle -= mean(logprior)
-    end
-
-    loss = -(log_ais + log_mle) / 2
-
-    @ignore_derivatives begin
-        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", log_mle)
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
+        if k != T
+            weights_fow = @ignore_derivatives softmax(full_quant.(t_curr .* ll_prev - t_prev .* ll_prev), dims=2)
+            fow_idxs, seed = m.lkhood.resample_z(weights_fow, seed)
+            weights_fow_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights_fow[b:b, fow_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+            lp_fow_resampled = reduce(hcat, map(b -> lp_prev[fow_idxs[b, :], :], 1:B))
+            ll_fow_resampled = reduce(vcat, map(b -> ll_prev[b:b, fow_idxs[b, :]], 1:B))
+            @tullio fow_estimate[b] := weights_fow_resampled[b, s] * (lp_fow_resampled[s, b] + t_curr * ll_fow_resampled[b, s])
+            @ignore_derivatives m.verbose && println("Fow estimate for t=$t_curr: ", mean(fow_estimate))
+        end
     end
 
-    return loss * m.loss_scaling, st, seed
+    @ignore_derivatives m.verbose && println("Final tempered lagrange: ", sum(lagrange), " MLE (w/o ex_prior): ", MLE)
+    loss = MLE - ex_prior - sum(lagrange) 
+    return -loss*m.loss_scaling, st, seed
 end
 
 function update_model_grid(
@@ -393,7 +397,11 @@ end
 
 
 function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
-    return ComponentArray(
+    return model.N_t > 1 ? ComponentArray(
+    ebm = Lux.initialparameters(rng, model.prior), 
+    gen = Lux.initialparameters(rng, model.lkhood),
+    λ = zeros(full_quant, model.N_t),
+    ) : ComponentArray(
     ebm = Lux.initialparameters(rng, model.prior), 
     gen = Lux.initialparameters(rng, model.lkhood),
     )

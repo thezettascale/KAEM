@@ -104,9 +104,8 @@ function check_reversibility(
     η_prime::AbstractVector{full_quant};
     tol::full_quant=full_quant(1e-6)
     )
-    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(2,3)); dims=(2,3)) .< tol * maximum(abs.(z))
+    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
     step_diff = abs.(η - η_prime) .< tol .* η
-    println(size(pos_diff), size(step_diff))
     return pos_diff .&& step_diff
 end
 

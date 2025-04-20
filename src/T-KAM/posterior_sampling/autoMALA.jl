@@ -97,6 +97,19 @@ function safe_step_size_update(
     return ifelse.(isfinite.(η_new), η_new, η)
 end
 
+function check_reversibility(
+    ẑ::AbstractArray{full_quant}, 
+    z::AbstractArray{full_quant}, 
+    η::AbstractVector{full_quant}, 
+    η_prime::AbstractVector{full_quant};
+    tol::full_quant=full_quant(1e-6)
+    )
+    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(2,3)); dims=(2,3)) .< tol * maximum(abs.(z))
+    step_diff = abs.(η - η_prime) .< tol .* η
+    println(size(pos_diff), size(step_diff))
+    return pos_diff .&& step_diff
+end
+
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
     x::AbstractArray{half_quant},
@@ -222,12 +235,12 @@ function autoMALA_step(
         logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
     )
     
-    _, _, _, _, η_prime, _, st = select_step_size(
+    z_rev, _, _, _, η_prime, _, st = select_step_size(
         log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, 
         logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
     )
     
-    reversible = abs.(η - η_prime) .< tol .* η
+    reversible = check_reversibility(z, z_rev, η, η_prime; tol=ε)
     return ẑ, η, η_prime, cpu_device()(reversible), cpu_device()(log_r), st
 end
 

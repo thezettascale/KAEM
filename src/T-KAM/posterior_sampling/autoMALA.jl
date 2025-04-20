@@ -137,7 +137,7 @@ function leapfrop_proposal(
     """
 
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
-    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) ./ M[q,p,s] # Full-step position update    
+    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) .* M[q,p,s] # Full-step position update    
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)    
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)

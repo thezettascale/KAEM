@@ -181,10 +181,7 @@ function thermo_loss(
 
     loss = -(log_ais - log_mle) / 2
 
-    @ignore_derivatives begin
-        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
-        @reset st.gen = st_gen
-    end
+    @ignore_derivatives m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
 
     return loss * m.loss_scaling, st, seed
 end

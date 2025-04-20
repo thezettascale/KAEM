@@ -325,17 +325,20 @@ function init_T_KAM(
     Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
 
+    # Add new config parameter
+    max_zero_accept_iters = parse(Int, retrieve(conf, "MALA", "max_zero_accept_iters"))
+
     # Importance sampling or MALA
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, max_zero_accept_iters=max_zero_accept_iters)
         loss_fcn = POST_loss
     end
     
     p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, max_zero_accept_iters=max_zero_accept_iters)
         loss_fcn = thermo_loss
 
         # Cyclic p schedule
@@ -402,6 +405,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
         gen = Lux.initialstates(rng, model.lkhood),
         η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
+        zero_accept_counter = zeros(Int, model.N_t)
         )
 end
 

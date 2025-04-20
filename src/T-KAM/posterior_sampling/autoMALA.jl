@@ -216,6 +216,7 @@ function langevin_sampler(
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
     seed::Int=1,
+    max_zero_accept_iters::Int=50
     )
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
@@ -242,6 +243,7 @@ function langevin_sampler(
 
     if isa(st.η_init, CuArray)
         @reset st.η_init = st.η_init |> cpu_device()
+        @reset st.zero_accept_counter = st.zero_accept_counter |> cpu_device()
     end
 
     T, Q, P, S = length(t), size(z)...
@@ -265,10 +267,15 @@ function langevin_sampler(
     end
 
     k = 1
-    num_acceptances = zeros(Int, T, S) 
-    mean_η = zeros(full_quant, T, S) 
+    num_acceptances = zeros(Int, T, S)
+    mean_η = zeros(full_quant, T, S)
+
     while k < T + 1
-        
+
+        # Determine if this temperature should use only unadjusted steps
+        use_only_unadjusted = st.zero_accept_counter[k] >= max_zero_accept_iters
+        local_burn_in = use_only_unadjusted ? N : N_unadjusted
+
         logpos_withgrad = (z_i, x_i, st_i) -> begin
             logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), x_i, Lux.testmode(st_i), t[k])
             ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t[k]))), half_quant.(z_i)))
@@ -279,15 +286,16 @@ function langevin_sampler(
         end
         
         burn_in = 0
-        η = device(st.η_init[k, 1:S]) # Per-chain per-temp step sizes
+        η = device(st.η_init[k, 1:S])
         m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
+        
         for i in 1:N
-            momentum, M, seed = sample_momentum(z; seed=seed) # Momentum
-            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...) # Bounds
-            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), x, st) # Current position
+            momentum, M, seed = sample_momentum(z; seed=seed)
+            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
+            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), x, st)
 
-            if burn_in < N_unadjusted
-                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad) 
+            if burn_in < local_burn_in
+                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
                 burn_in += 1
             else
                 ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max)
@@ -303,6 +311,13 @@ function langevin_sampler(
                 η = (η + η_prime) ./ 2
             end
         end
+
+        if sum(num_acceptances[k,:]) == 0
+            st.zero_accept_counter[k] += 1
+        else
+            st.zero_accept_counter[k] = 0
+        end
+
         m.verbose && println("t=$(t[k]) posterior after update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1

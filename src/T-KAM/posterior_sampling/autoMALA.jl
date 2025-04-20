@@ -243,6 +243,9 @@ function langevin_sampler(
 
     if isa(st.η_init, CuArray)
         @reset st.η_init = st.η_init |> cpu_device()
+    end
+
+    if isa(st.zero_accept_counter, CuArray)
         @reset st.zero_accept_counter = st.zero_accept_counter |> cpu_device()
     end
 

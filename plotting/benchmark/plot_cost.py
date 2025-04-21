@@ -20,15 +20,15 @@ latent_dim = pd.DataFrame({
 
 mala_steps = pd.DataFrame({
     r"$N_{\text{local}}$ variable \\ ($N_{\text{unadjusted}}=1, N_{t}=5$)" : [1, 5, 10, 15],
-    "Time (s)" : [5.776, 69.266, 150.791, 226.335],
-    "Memory Estimate (GiB)" : [1.97, 12.94, 26.46, 39.71],
-    "Garbage Collection (%)" : [5.30, 3.83, 3.69, 3.62],
-    "Allocations" : [22407508, 301594303, 645196852, 980779216],
+    "Time (s)" : [3.678, 82.855, 199.496, 321.181],
+    "Memory Estimate (GiB)" : [0.914, 12.48, 29.08, 46.17], 
+    "Garbage Collection (%)" : [4.31, 3.81, 3.76, 3.76],
+    "Allocations" : [16673999, 372935723, 882573427, 1412633594],
 })
 
 keys = [r"$n_z$", r"$N_{\text{local}}$ variable \\ ($N_{\text{unadjusted}}=1, N_{t}=5$)"]
 colours = ["viridis", "cividis"]
-elevations = [0.2, 0.08]
+elevations = [0.22, 0.04]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:

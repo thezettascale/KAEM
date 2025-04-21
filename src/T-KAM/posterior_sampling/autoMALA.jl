@@ -35,32 +35,57 @@ function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half
     return -(x - y).^2
 end
 
+# Default behavior - no preconditioning
 function build_preconditioner!(
-    dest::AbstractArray{full_quant}, 
-    prec::MixDiagonalPreconditioner,
-    std_devs::AbstractArray{full_quant}; 
+    dest::AbstractArray{T}, 
+    ::IdentityPreconditioner,
+    std_devs::AbstractArray{T}; 
     seed::Int=1
-    )
+    ) where T
+    fill!(dest, one(T))
+    return dest
+end
+
+# Diagonal preconditioning
+function build_preconditioner!(
+    dest::AbstractArray{T}, 
+    ::DiagonalPreconditioner,
+    std_devs::AbstractArray{T}; 
+    seed::Int=1
+    ) where T
+    @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
+    return dest
+end
+
+# Mixed diagonal preconditioning
+function build_preconditioner!(
+    dest::AbstractArray{T}, 
+    prec::MixDiagonalPreconditioner,
+    std_devs::AbstractArray{T}; 
+    seed::Int=1
+    ) where T
     seed, rng = next_rng(seed)
-    u = rand(rng, full_quant)
+    u = rand(rng, T)
+    
     if u ≤ prec.p0
         # Use inverse standard deviations
-        dest .= ifelse.(iszero.(std_devs), one(full_quant), one(full_quant) ./ std_devs)
+        @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
     elseif u ≤ prec.p0 + prec.p1
         # Use identity
-        dest .= one(full_quant)
+        fill!(dest, one(T))
     else
         # Random mixture
         seed, rng = next_rng(seed)
-        mix = rand(rng, full_quant)
-        rmix = one(full_quant) - mix
-        dest .= ifelse.(iszero.(std_devs), 
-                       one(full_quant), 
-                       mix .+ rmix ./ std_devs)
+        mix = rand(rng, T)
+        rmix = one(T) - mix
+        @. dest = ifelse(iszero(std_devs), 
+                        one(T), 
+                        mix + rmix / std_devs)
     end
     return dest
 end
 
+# This is transformed momentum!
 function sample_momentum(
     z::AbstractArray{full_quant};
     seed::Int=1,
@@ -68,24 +93,23 @@ function sample_momentum(
     ε::full_quant=eps(full_quant)
     )
     Q, P, S = size(z)
-    z = cpu_device()(z)
+    z_cpu = cpu_device()(z)
     
-    # Compute standard deviations
-    Σ = sqrt.(diag(cov(reshape(z, S, Q*P))))
+    # Compute M^{1/2}
+    z_reshaped = reshape(z_cpu, Q*P, S)
+    μ = mean(z_reshaped, dims=2)
+    Σ = sqrt.(@views sum((z_reshaped .- μ).^2, dims=2) ./ (S-1))
     
-    # Initialize mass matrix
-    M = ones(full_quant, Q*P, S)
+    # Initialize mass matrix (M^{1/2})
+    M = ones(full_quant, Q*P)
+    build_preconditioner!(M, preconditioner, vec(Σ); seed=seed)
+    M = reshape(M, Q, P)
     
-    # Build preconditioner
+    # Sample y ~ N(0,I) directly (transformed momentum)
     seed, rng = next_rng(seed)
-    build_preconditioner!(M, preconditioner, Σ; seed=seed)
+    y = randn(rng, full_quant, Q, P, S)
     
-    # Sample momentum with preconditioned covariance
-    seed, rng = next_rng(seed)
-    M = reshape(M, Q, P, S)
-    p = randn(rng, full_quant, Q, P, S) ./ sqrt.(M .+ ε)
-    
-    return device(p), device(M), seed
+    return device(y), device(M), seed
 end
 
 function safe_step_size_update(
@@ -115,32 +139,33 @@ function leapfrop_proposal(
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
-    momentum::AbstractArray{full_quant},
-    M::AbstractArray{full_quant},
+    momentum::AbstractArray{full_quant},  # This is y = M^{-1/2}p
+    M::AbstractArray{full_quant},         # This is M^{1/2}
     η::AbstractVector{full_quant},
     logpos_withgrad::Function
     )
     """
-    Generate a proposal for a particular step-size.
-
-    Args:
-        z: The current position.
-        x: The data.
-        momentum: The current momentum.
-        η: The step size per chain.
-        logpos: The log-posterior function.
-        seed: The seed for the random number generator.
-
-    Returns:
-        The proposal.
-        The log-ratio.
+    Implements preconditioned Hamiltonian dynamics with transformed momentum:
+    y*(x,y)   = y  + (eps/2)M^{-1/2}grad(log pi)(x)
+    x'(x,y*)  = x  + eps M^{-1/2}y*
+    y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
     """
+    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
+    @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s]/2) * ∇z[q,p,s] / M[q,p]
 
-    @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s] .* ∇z[q,p,s] / 2) # Half-step momentum update
-    @tullio ẑ[q,p,s] := z[q,p,s] + (η[s] .* p_in[q,p,s]) .* M[q,p,s] # Full-step position update    
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)    
-    @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s] .* ∇ẑ[q,p,s] / 2) # Half-step momentum update
+    # Full step position update (x' = x + eps M^{-1/2}y*)
+    @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
+
+    # Get gradient at new position
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
+
+    # Last half-step momentum update
+    @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]
+
+    # Compute Hamiltonian difference for transformed momentum
+    # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
     log_r = logpos_ẑ - logpos_z - (dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2)
+
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
 
@@ -186,7 +211,7 @@ function select_step_size(
                 view(logpos_z,active_chains), 
                 view(∇z,:,:,active_chains), 
                 view(momentum,:,:,active_chains),
-                view(M,:,:,active_chains),
+                M,
                 view(η_init,active_chains), 
                 logpos_withgrad
             )

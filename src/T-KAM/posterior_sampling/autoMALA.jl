@@ -128,9 +128,9 @@ function check_reversibility(
     η_prime::AbstractVector{full_quant};
     tol::full_quant=full_quant(1e-6)
     )
-    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
+    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
     step_diff = abs.(η - η_prime) .< tol .* η
-    return pos_diff .&& step_diff
+    return step_diff
 end
 
 function leapfrop_proposal(
@@ -226,7 +226,7 @@ function select_step_size(
         # Update which chains still need adjustment with improved stability checks
         δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b, 0, δ[active_chains])
         δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a, 0, δ[active_chains])
-        # δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
+        δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
         active_chains = findall(δ .!= 0)
     end
 

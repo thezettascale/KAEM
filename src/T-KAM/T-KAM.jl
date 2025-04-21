@@ -156,7 +156,7 @@ function thermo_loss(
     T, B = length(temps), size(x)[end]
 
     log_weights = device(zeros(half_quant, B))
-    
+
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i, seed_i)
@@ -169,7 +169,7 @@ function thermo_loss(
 
     for k in 1:T-1
         t_curr, t_next = temps[k], temps[k+1]
-        z_t = view(z, :, :, :, k+1)
+        z_t = view(z, :, :, :, k)
         logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)                
         log_weights += (t_next - t_curr) * logllhood
     end

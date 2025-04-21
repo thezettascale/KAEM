@@ -197,7 +197,7 @@ function thermo_loss(
     end
 
     @ignore_derivatives m.verbose && println("Final tempered lagrange: ", sum(lagrange), " MLE (w/o ex_prior): ", MLE)
-    loss = MLE - ex_prior - sum(lagrange) 
+    loss = MLE - ex_prior - sum(ps.λ .* lagrange) 
     return -loss*m.loss_scaling, st, seed
 end
 

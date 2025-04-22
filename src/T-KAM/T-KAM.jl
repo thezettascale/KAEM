@@ -404,7 +404,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
         gen = Lux.initialstates(rng, model.lkhood),
         η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
-        zero_accept_counter = zeros(Int, model.N_t)
+        zero_accept_counter = model.N_t > 1 ? zeros(Int, model.N_t) : 0
         )
 end
 

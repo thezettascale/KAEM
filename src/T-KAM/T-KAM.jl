@@ -170,18 +170,14 @@ function thermo_loss(
     for k in 1:T-1
         logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
         log_ais += logsumexp((temps[k+1] - temps[k]) * logllhood) - log(B)
+        @ignore_derivatives @reset st.gen = st_gen
     end
 
     log_mle, st, seed = importance_loss(m, ps, st, x; seed=seed)
 
     loss = -(log_ais - log_mle) / 2
 
-    @ignore_derivatives begin
-        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
-    end
-
+    @ignore_derivatives m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
     return loss * m.loss_scaling, st, seed
 end
 

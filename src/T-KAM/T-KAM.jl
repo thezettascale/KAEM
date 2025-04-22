@@ -155,28 +155,31 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = length(temps), size(x)[end]
 
-    log_ais = device(zeros(half_quant, B))
+    log_ais = half_quant(0)
 
-    for k in 1:T-1
-        t_curr, t_next = temps[k], temps[k+1]
-        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)
-        @ignore_derivatives @reset st.gen = st_gen
-        
-        weights = @ignore_derivatives softmax(full_quant.(t_next .* ll), dims=2)
-        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])), dims=2) .|> half_quant
-        
-        logllhood_resampled = reduce(vcat, map(b -> ll[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
-        log_ais += sum(weights_resampled .* (t_next - t_curr) .* logllhood_resampled; dims=2)
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+
+    function lkhood(z_i, st_i, seed_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        seed_i, rng = next_rng(seed_i)
+        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
 
-    log_ais = mean(log_ais)
+    for k in 1:T-1
+        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
+        log_ais += logsumexp((temps[k+1] - temps[k]) * logllhood) - log(B)
+    end
+
     log_mle, st, seed = importance_loss(m, ps, st, x; seed=seed)
 
     loss = -(log_ais - log_mle) / 2
 
     @ignore_derivatives begin
         m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
     end
 
     return loss * m.loss_scaling, st, seed

@@ -146,7 +146,7 @@ function thermo_loss(
     x::AbstractArray{half_quant};
     seed::Int=1
     )
-    """Annealed Importance Sampling (AIS) loss."""
+    """Steppingstone Sampling (SS) loss."""
 
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
@@ -155,7 +155,7 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = length(temps), size(x)[end]
 
-    log_ais = half_quant(0)
+    log_ss = half_quant(0)
 
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
@@ -170,22 +170,21 @@ function thermo_loss(
         logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
         Δt_loglk = (temps[k+1] - temps[k]) * logllhood
         max_term = maximum(Δt_loglk)
-        log_ais += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
+        log_ss += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
     end
 
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = lkhood(view(z, :, :, :, T), st.gen, seed)
-    log_mle = mean(logprior + logllhood)
+    log_contr_div = mean(logprior)
 
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        log_mle -= mean(logprior)
+        log_contr_div -= mean(logprior)
     end
 
-    loss = -(log_ais + log_mle) / 2
+    loss = -(log_ss + log_contr_div) 
 
     @ignore_derivatives begin
-        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", log_mle)
+        m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence estimate: ", log_contr_div)
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
     end

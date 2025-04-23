@@ -184,7 +184,7 @@ function thermo_loss(
         log_mle -= mean(logprior)
     end
 
-    loss = -(log_ss + log_mle) 
+    loss = -(log_ss + log_mle) / 2
 
     @ignore_derivatives begin
         m.verbose && println("SS estimate of log p(x): ", log_ss, " MLE estimate: ", log_mle)

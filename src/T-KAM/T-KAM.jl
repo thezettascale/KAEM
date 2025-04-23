@@ -172,12 +172,12 @@ function thermo_loss(
         log_ais += logsumexp((temps[k+1] - temps[k]) * logllhood) - log(B)
     end
 
-    logprior, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = lkhood(z[:, :, :, T], st.gen, seed)
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = lkhood(view(z, :, :, :, T), st.gen, seed)
     log_mle = mean(logprior + logllhood)
 
     if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         log_mle -= mean(logprior)
     end
 

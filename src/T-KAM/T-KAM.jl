@@ -164,20 +164,31 @@ function thermo_loss(
         seed_i, rng = next_rng(seed_i)
         noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
         x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+        return -ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
 
     for k in 1:T-1
         logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
         log_ais += logsumexp((temps[k+1] - temps[k]) * logllhood) - log(B)
-        @ignore_derivatives @reset st.gen = st_gen
     end
 
-    log_mle, st, seed = importance_loss(m, ps, st, x; seed=seed)
+    logprior, st_ebm = log_prior(m.prior, z[:, :, :, T], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = lkhood(z[:, :, :, T], st.gen, seed)
+    log_mle = mean(logprior + logllhood)
 
-    loss = -(log_ais - log_mle) / 2
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        log_mle -= mean(logprior)
+    end
 
-    @ignore_derivatives m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", -log_mle)
+    loss = -(log_ais + log_mle) / 2
+
+    @ignore_derivatives begin
+        m.verbose && println("AIS estimate of log p(x): ", log_ais, " MLE estimate of log p(x): ", log_mle)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
     return loss * m.loss_scaling, st, seed
 end
 

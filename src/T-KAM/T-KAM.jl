@@ -175,21 +175,19 @@ function thermo_loss(
     end
 
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = lkhood(view(z, :, :, :, T), st.gen, seed)
 
-    log_mle = mean(logprior) + mean(logllhood)
+    contrastive_div = mean(logprior) 
 
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        log_mle -= mean(logprior)
+        contrastive_div -= mean(logprior)
     end
 
-    loss = -(log_ss + log_mle) / 2
+    loss = -(log_ss + contrastive_div)
 
     @ignore_derivatives begin
-        m.verbose && println("SS estimate of log p(x): ", log_ss, " MLE estimate: ", log_mle)
+        m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
         @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
     end
 
     return loss * m.loss_scaling, st, seed

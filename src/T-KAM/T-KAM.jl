@@ -171,7 +171,7 @@ function thermo_loss(
         Δt_loglk = (temps[k+1] - temps[k]) * logllhood
         max_term = maximum(Δt_loglk)
         log_ss += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
-        @ignore_derivatives st.gen = st_gen
+        @ignore_derivatives @reset st.gen = st_gen
     end
 
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)

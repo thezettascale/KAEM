@@ -171,6 +171,7 @@ function thermo_loss(
         Δt_loglk = (temps[k+1] - temps[k]) * logllhood
         max_term = maximum(Δt_loglk)
         log_ss += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
+        @ignore_derivatives st.gen = st_gen
     end
 
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
@@ -186,7 +187,6 @@ function thermo_loss(
     @ignore_derivatives begin
         m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence estimate: ", log_contr_div)
         @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
     end
 
     return loss * m.loss_scaling, st, seed

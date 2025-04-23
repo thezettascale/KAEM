@@ -162,14 +162,15 @@ function thermo_loss(
     function lkhood(z_i, st_i, seed_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
         seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return -ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
 
     for k in 1:T-1
         logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
-        log_ais += logsumexp((temps[k+1] - temps[k]) * logllhood) - log(B)
+        Δt_loglk = (temps[k+1] - temps[k]) * logllhood
+        max_term = maximum(Δt_loglk)
+        log_ais += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
     end
 
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)

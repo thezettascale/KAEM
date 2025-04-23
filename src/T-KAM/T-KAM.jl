@@ -168,9 +168,9 @@ function thermo_loss(
 
     for k in 1:T-1
         logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
-        Δt_loglk = (temps[k+1] - temps[k]) * logllhood
-        max_term = maximum(Δt_loglk)
-        log_ss += logsumexp(Δt_loglk .- max_term) + max_term - log(B)
+        max_ll = maximum(logllhood)
+        Δt = temps[k+1] - temps[k]
+        log_ss += logsumexp(Δt .* (logllhood .- max_ll)) + (Δt .* max_ll) - log(B)
         @ignore_derivatives @reset st.gen = st_gen
     end
 

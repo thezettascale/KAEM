@@ -321,7 +321,8 @@ function langevin_sampler(
     k = 1
     num_acceptances = zeros(Int, T) |> device
     mean_η = zeros(full_quant, T) |> device
-    η = copy(st.η_init) |> device
+    @reset st.η_init = st.η_init |> device
+    η = copy(st.η_init) 
 
     burn_in = 0
     m.verbose && println("t=$t, posterior before update: ", first(log_posterior(half_quant.(z), t, Lux.testmode(st))))

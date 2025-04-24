@@ -17,7 +17,7 @@ include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: langevin_sampler, cross_entropy, l2
+using .LangevinSampling: langevin_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -105,50 +105,9 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", - mean(loss_llhood))
+    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
     return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
-
-function POST_loss(
-    m::T_KAM,
-    ps,
-    st,
-    x::AbstractArray{half_quant};
-    seed::Int=1
-    )
-    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
-
-
-    # MALA sampling
-    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-    
-    # Log-dists
-    logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
-    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
-
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i, seed_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
-    end
-
-    logllhood, st_gen, seed = lkhood(z[:, :, :, 2], st.gen, seed)
-    logprior = mean(logprior_pos) - mean(logprior_prior)
-
-    # Expected posterior
-    @ignore_derivatives begin
-        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
-    end
-
-    return -(logprior .+ logllhood)*m.loss_scaling, st, seed
-end 
-
 
 function thermo_loss(
     m::T_KAM,
@@ -157,56 +116,41 @@ function thermo_loss(
     x::AbstractArray{half_quant};
     seed::Int=1
     )
-    """Steppingstone Sampling (SS) loss."""
+    """Annealed importance sampling (AIS) loss."""
 
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t])
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = length(temps), size(x)[end]
 
-    ex_prior = half_quant(0);
-    log_ss = zeros(half_quant, 0) |> device
-    ais_weights = zeros(half_quant, 0) |> device
+    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
 
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i, seed_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
-    end
-
-    for k in 1:T-1
-        z_t = view(z, :, :, :, k)
-        Δt = temps[k+1] - temps[k]
-        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        logllhood, st_gen, seed = lkhood(z_t, st.gen, seed)
-
-        if k == 1 && m.prior.contrastive_div
-            ex_prior = mean(logprior)
-        end
-        
-        log_ss = vcat(log_ss, mean(logllhood + logprior) - ex_prior)
-        ais_weights = vcat(ais_weights, mean(Δt .* logllhood))
-        
-        @ignore_derivatives begin
-            @reset st.ebm = st_ebm
-            @reset st.gen = st_gen
-            m.verbose && println("t: $(temps[k]), log_llhood: ", mean(logllhood), " log_prior: ", mean(logprior))
-        end
-    end
-
-    weights = @ignore_derivatives softmax(full_quant.(ais_weights))
-    resampled_idxs, seed = m.lkhood.resample_z(weights', seed)
-    weights_resampled = @ignore_derivatives softmax(weights[resampled_idxs[1, :]])
-    log_ss_resampled = log_ss[resampled_idxs[1, :]]
-
+    weights = @ignore_derivatives softmax(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood), dims=2)
+    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+    weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
+    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
     
-    return -sum(weights_resampled .* log_ss_resampled) * m.loss_scaling, st, seed
+    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
+    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+
+    ex_prior = half_quant(0)
+    if m.prior.contrastive_div
+        z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st_ebm, seed)
+        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st_ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        ex_prior = mean(logprior)
+    end
+
+    @ignore_derivatives begin
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
+    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 
 function update_model_grid(
@@ -337,20 +281,12 @@ function init_T_KAM(
     Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
 
-    # Add new config parameter
-    max_zero_accept_iters = parse(Int, retrieve(conf, "MALA", "max_zero_accept_iters"))
-
     # Importance sampling or MALA
-    posterior_fcn = identity
-    if use_MALA && !(N_t > 1) 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, max_zero_accept_iters=max_zero_accept_iters)
-        loss_fcn = POST_loss
-    end
+    posterior_fcn, p = identity, [full_quant(1)]
     
-    p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, max_zero_accept_iters=max_zero_accept_iters)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = thermo_loss
 
         # Cyclic p schedule
@@ -415,9 +351,8 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t) : fill(model.η_init, model.max_samples),
         train_idx = 1,
-        zero_accept_counter = model.N_t > 1 ? zeros(Int, model.N_t) : 0
         )
 end
 

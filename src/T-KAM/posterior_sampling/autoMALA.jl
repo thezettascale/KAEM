@@ -7,8 +7,10 @@ using Zygote: gradient
 
 include("../../utils.jl")
 include("../EBM_prior.jl")
+include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
+using .KAN_likelihood: log_likelihood
 
 abstract type Preconditioner end
 
@@ -26,14 +28,6 @@ struct MixDiagonalPreconditioner{TR<:Real} <: Preconditioner
 end
 
 MixDiagonalPreconditioner() = MixDiagonalPreconditioner(1//3, 1//3)
-
-function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return log.(x .+ ε) .* y ./ size(x, 1)
-end
-
-function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return -(x - y).^2
-end
 
 # Default behavior - no preconditioning
 function build_preconditioner!(
@@ -135,7 +129,7 @@ end
 
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
+    t::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -157,7 +151,7 @@ function leapfrop_proposal(
     @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, t, st)
 
     # Last half-step momentum update
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]
@@ -173,7 +167,7 @@ function select_step_size(
     log_a::full_quant,
     log_b::full_quant,
     z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
+    t::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -182,12 +176,11 @@ function select_step_size(
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function;
-    seq::Bool=false,
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1)
     )
     
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, t, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0)
@@ -202,11 +195,10 @@ function select_step_size(
             Δη
         )
         
-        x_active = seq ? view(x, :, :, active_chains) : view(x, :, :, :, active_chains)
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = 
             leapfrop_proposal(
                 view(z,:,:,active_chains), 
-                x_active, 
+                view(t, active_chains),
                 st, 
                 view(logpos_z,active_chains), 
                 view(∇z,:,:,active_chains), 
@@ -239,7 +231,7 @@ function autoMALA_step(
     log_a::full_quant,
     log_b::full_quant,
     z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
+    t::AbstractArray{half_quant},
     st,
     logpos_z::AbstractVector{full_quant},
     ∇z::AbstractArray{full_quant},
@@ -248,24 +240,23 @@ function autoMALA_step(
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
     logpos_withgrad::Function;
-    seq::Bool=false,
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
     ε::full_quant=eps(full_quant)
     )
     
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
-        log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, 
-        logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
+        log_a, log_b, z, t, st, logpos_z, ∇z, momentum, M, η_init, Δη, 
+        logpos_withgrad; η_min=η_min, η_max=η_max
     )
     
     z_rev, _, _, _, η_prime, _, st = select_step_size(
-        log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, 
-        logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max
+        log_a, log_b, ẑ, t, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, 
+        logpos_withgrad; η_min=η_min, η_max=η_max
     )
     
     reversible = check_reversibility(z, z_rev, η, η_prime; tol=ε)
-    return ẑ, η, η_prime, cpu_device()(reversible), cpu_device()(log_r), st
+    return ẑ, η, η_prime, reversible, log_r, st
 end
 
 function langevin_sampler(
@@ -280,7 +271,6 @@ function langevin_sampler(
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
     seed::Int=1,
-    max_zero_accept_iters::Int=50
     )
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
@@ -300,110 +290,71 @@ function langevin_sampler(
         The updated seed.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m.prior, length(t), ps.ebm, st.ebm, seed)
     @reset st.ebm = st_ebm
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 
-    if isa(st.η_init, CuArray)
-        @reset st.η_init = st.η_init |> cpu_device()
-    end
-
-    if isa(st.zero_accept_counter, CuArray)
-        @reset st.zero_accept_counter = st.zero_accept_counter |> cpu_device()
-    end
-
-    T, Q, P, S = length(t), size(z)...
-    output = reshape(z, Q, P, S, 1)
+    Q, P, T = size(z)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, full_quant, N, T, S))  
+    log_u = log.(rand(rng, full_quant, N, T)) |> device
     seed, rng = next_rng(seed)
-    ratio_bounds = log.(rand(rng, Uniform(0,1), N, T, 2)) .|> full_quant
+    ratio_bounds = log.(rand(rng, Uniform(0,1), N, 2)) .|> full_quant
 
-    seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=1); dims=1) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
+    function log_posterior(z_i::AbstractArray{half_quant}, t_k::AbstractArray{half_quant}, st_i)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε) 
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂) 
-        logpos = lp + t_k * ll_fn(x̂, x_i) / (2*m.lkhood.σ_llhood^2)
+        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_i; ε=m.ε, seed=seed)
+        logpos = lp + dropdims(sum(t_k' .* ll; dims=1); dims=1)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
+    function logpos_withgrad(z_i::AbstractArray{full_quant}, t_k::AbstractArray{half_quant}, st_i)
+        logpos, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), t_k, Lux.testmode(st_i))
+        ∇logpos = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, t_k, Lux.testmode(st_i)))), half_quant.(z_i)))
+        @reset st_i.ebm = st_ebm
+        @reset st_i.gen = st_gen
+        return full_quant.(logpos) ./ loss_scaling, full_quant.(∇logpos) ./ loss_scaling, st_i
+    end
+
     k = 1
-    num_acceptances = zeros(Int, T, S)
-    mean_η = zeros(full_quant, T, S)
+    num_acceptances = zeros(Int, T) |> device
+    mean_η = zeros(full_quant, T) |> device
+    η = copy(st.η_init) 
 
-    while k < T + 1
+    burn_in = 0
+    m.verbose && println("t=$t, posterior before update: ", first(log_posterior(half_quant.(z), t, Lux.testmode(st))))
 
-        # Determine if this temperature should use only unadjusted steps
-        use_only_unadjusted = st.zero_accept_counter[k] >= max_zero_accept_iters
-        # local_burn_in = use_only_unadjusted ? N : N_unadjusted
-        local_burn_in = N_unadjusted
+    for i in 1:N
+        momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
+        log_a, log_b = min(ratio_bounds[i, :]...), max(ratio_bounds[i, :]...)
+        logpos_z, ∇z, st = logpos_withgrad(z, t, st)
 
-        logpos_withgrad = (z_i, x_i, st_i) -> begin
-            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), x_i, Lux.testmode(st_i), t[k])
-            ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t[k]))), half_quant.(z_i)))
-            
-            @reset st_i.ebm = st_ebm
-            @reset st_i.gen = st_gen
-            return full_quant.(logpos_z) ./ loss_scaling, full_quant.(∇z) ./ loss_scaling, st_i
-        end
-        
-        burn_in = 0
-        η = device(st.η_init[k, 1:S])
-        m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
-        
-        for i in 1:N
-            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
-            log_a, log_b = min(ratio_bounds[i, k, :]...), max(ratio_bounds[i, k, :]...)
-            logpos_z, ∇z, st = logpos_withgrad(half_quant.(z), x, st)
-
-            if burn_in < local_burn_in
-                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
-                burn_in += 1
-            else
-                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; seq=seq, η_min=η_min, η_max=η_max, ε=full_quant(m.ε))
-                accept = log_u[i,k,:] .< log_r
-                η_cpu = cpu_device()(η)
-                for s in 1:S
-                    if reversible[s] && accept[s]
-                        z[:,:,s] .= ẑ[:,:,s]
-                        num_acceptances[k,s] += 1
-                        mean_η[k,s] += η_cpu[s]
-                    end
-                end
-                η = (η + η_prime) ./ 2
-            end
-        end
-
-        if sum(num_acceptances[k,:]) == 0
-            st.zero_accept_counter[k] += 1
+        if burn_in < N_unadjusted
+            z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, t, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
+            burn_in += 1
         else
-            st.zero_accept_counter[k] = 0
-        end
-
-        m.verbose && println("t=$(t[k]) posterior after update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
-        output = cat(output, reshape(z, Q, P, S, 1); dims=4)
-        k += 1
-    end
-
-    # Update step size for next training iteration - now per chain
-    for s in 1:S
-        mean_η[:,s] = clamp.(mean_η[:,s] ./ num_acceptances[:,s], η_min, η_max)
-        for k in 1:T
-            mean_η[k,s] = ifelse(isnan(mean_η[k,s]), st.η_init[k,s], mean_η[k,s])
+            ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(log_a, log_b, z, t, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad; η_min=η_min, η_max=η_max, ε=full_quant(m.ε))
+            accept = (view(log_u,i,:) .< log_r) .* reversible
+            z = ẑ .* reshape(accept, 1, 1, :) + z .* reshape(1 .- accept, 1, 1, :)
+            mean_η += η .* accept
+            η = (η + η_prime) ./ 2
+            num_acceptances += accept
         end
     end
-    @reset st.η_init .= mean_η
 
-    m.verbose && println("Mean acceptance rates: ", mean(num_acceptances ./ (N - N_unadjusted), dims=2)[:,1])
-    m.verbose && println("Mean step sizes: ", mean(mean_η, dims=2))
+    m.verbose && println("t=$t, posterior after update: ", first(log_posterior(half_quant.(z), t, Lux.testmode(st))))
 
-    return half_quant.(output), st, seed
+    # Update step size for next training iteration 
+    mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
+    mean_η = ifelse.(isnan.(mean_η), st.η_init, mean_η) |> device
+    @reset st.η_init = mean_η
+
+    m.verbose && println("Acceptance rates: ", num_acceptances ./ (N - N_unadjusted))
+    m.verbose && println("Mean step sizes: ", mean_η)
+
+    return half_quant.(z), st, seed
 end
 
 end

@@ -139,9 +139,9 @@ function thermo_loss(
 
     ex_prior = half_quant(0)
     if m.prior.contrastive_div
-        z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st_ebm, seed)
-        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st_ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        ex_prior = mean(logprior)
+        z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st_ebm, seed)
+        logprior_prior, st_ebm = log_prior(m.prior, z_prior, ps.ebm, st_ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        ex_prior = mean(logprior_prior)
     end
 
     @ignore_derivatives begin

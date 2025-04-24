@@ -126,16 +126,27 @@ function POST_loss(
     logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
 
-    x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st.gen, z[:, :, :, 2])
-    logllhood = mse(x̂, x; agg=mean)
-    logprior = mean(logprior_prior) - mean(logprior_pos)
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
+    function lkhood(z_i, st_i, seed_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        seed_i, rng = next_rng(seed_i)
+        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+    end
+
+    logllhood, st_gen, seed = lkhood(z[:, :, :, 2], st.gen, seed)
+    logprior = mean(logprior_pos) - mean(logprior_prior)
 
     # Expected posterior
-    m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
-    return (logprior .+ logllhood)*m.loss_scaling, st, seed
+    @ignore_derivatives begin
+        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
+    return -(logprior .+ logllhood)*m.loss_scaling, st, seed
 end 
 
 
@@ -155,42 +166,48 @@ function thermo_loss(
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
     T, B = length(temps), size(x)[end]
 
-    log_ss = half_quant(0)
-
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i, seed_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
-    end
+    ex_prior = half_quant(0)
+    log_ss = zeros(half_quant, B, 0) |> device
+    ais_weights = zeros(full_quant, B, 0) |> device
 
     for k in 1:T-1
-        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
+        z_t = view(z, :, :, :, k)
         Δt = temps[k+1] - temps[k]
-        log_ss += logsumexp(Δt .* logllhood)
-        @ignore_derivatives @reset st.gen = st_gen
+        logprior, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+
+        if k ==1 && m.prior.contrastive_div
+            ex_prior = mean(logprior)
+        end
+
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z_t; seed=seed, ε=m.ε)
+
+        weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
+        resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+        weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])), dims=2) .|> half_quant
+        logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
+        logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
+
+        logprior_resampled = logprior_resampled .- ex_prior # Expectation is linear, so we can move constant in
+        @tullio logprior_ss[b] := weights_resampled[b, s] * logprior_resampled[s, b]
+        @tullio logllhood_ss[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+
+        log_ss = hcat(log_ss, reshape(logllhood_ss + logprior_ss, B, 1))
+        
+        @ignore_derivatives begin
+            @reset st.ebm = st_ebm
+            @reset st.gen = st_gen
+            m.verbose && println("t: $k, log_llhood: ", mean(logllhood_ss), " log_prior: ", mean(logprior_ss))
+            ais_weights = hcat(ais_weights, reshape(full_quant.(Δt .* logllhood_ss), B, 1))
+        end
     end
 
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    ais_weights = @ignore_derivatives softmax(ais_weights, dims=2)
+    resampled_idxs, seed = m.lkhood.resample_z(ais_weights, seed)
+    ais_weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> ais_weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
+    log_ss_resampled = reduce(vcat, map(b -> log_ss[b:b, resampled_idxs[b, :]], 1:B))
 
-    contrastive_div = mean(logprior) 
-
-    if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        contrastive_div -= mean(logprior)
-    end
-
-    loss = -(log_ss + contrastive_div)
-
-    @ignore_derivatives begin
-        m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
-        @reset st.ebm = st_ebm
-    end
-
-    return loss * m.loss_scaling, st, seed
+    @tullio loss[b] := ais_weights_resampled[b, t] * log_ss_resampled[b, t]
+    return -mean(loss) * m.loss_scaling, st, seed
 end
 
 function update_model_grid(

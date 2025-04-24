@@ -326,7 +326,7 @@ function langevin_sampler(
     ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=1); dims=1) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
-        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε, normalize=true)
+        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε) 
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) 
         logpos = lp + t_k * ll_fn(x̂, x_i) / (2*m.lkhood.σ_llhood^2)

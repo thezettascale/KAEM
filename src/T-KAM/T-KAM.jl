@@ -128,9 +128,10 @@ function thermo_loss(
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
 
-    weights = @ignore_derivatives softmax(
-        cumsum(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood) # Accumulate ais weights
-        ; dims=2), dims=2)
+    # weights = @ignore_derivatives softmax(
+    #     cumsum(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood) # Accumulate ais weights
+    #     ; dims=2), dims=2)
+    @ignore_derivatives softmax(full_quant.(temps[2:end])' * full_quant.(logllhood); dims=2)
 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant

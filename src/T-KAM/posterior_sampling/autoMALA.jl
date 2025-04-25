@@ -259,21 +259,21 @@ function autoMALA_step(
     return ẑ, η, η_prime, reversible, log_r, st
 end
 
-function transform_to_unbounded(z::AbstractArray{T}, domain::Tuple{T,T}) where T
+function transform_to_unbounded(z::AbstractArray{T}, domain::Tuple{T,T}, ε::T) where T
     a, b = domain
     # Transform [a,b] -> [-∞,∞] using logit
-    z_unbounded = log.((z .- a) ./ (b .- z))
+    z_unbounded = log.((z .- a) ./ (b .- z) .+ ε)
     # Compute log|det(J)| for the transform
-    log_det_J = dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z))); dims=(1,2)); dims=(1,2))
+    log_det_J = dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z)) .+ ε); dims=(1,2)); dims=(1,2))
     return z_unbounded, log_det_J
 end
 
-function transform_to_bounded(z_unbounded::AbstractArray{T}, domain::Tuple{T,T}) where T
+function transform_to_bounded(z_unbounded::AbstractArray{T}, domain::Tuple{T,T}, ε::T) where T
     a, b = domain
     # Transform [-∞,∞] -> [a,b] using sigmoid
     z = a .+ (b .- a) .* sigmoid_fast.(z_unbounded)
     # Compute log|det(J)| for the inverse transform
-    log_det_J = -dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z))); dims=(1,2)); dims=(1,2))
+    log_det_J = -dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z)) .+ ε); dims=(1,2)); dims=(1,2))
     return z, log_det_J
 end
 
@@ -313,7 +313,7 @@ function langevin_sampler(
     # Initialize from prior and transform to unbounded space
     z, st_ebm, seed = m.prior.sample_z(m.prior, length(t), ps.ebm, st.ebm, seed)
     z = z .|> full_quant
-    z_unbounded, log_det_J = transform_to_unbounded(z, full_quant.(domain))
+    z_unbounded, log_det_J = transform_to_unbounded(z, full_quant.(domain), full_quant(m.ε))
     loss_scaling = m.loss_scaling |> full_quant
 
     Q, P, T = size(z)
@@ -326,7 +326,7 @@ function langevin_sampler(
 
     function log_posterior(z_unbounded::AbstractArray{half_quant}, t_k::AbstractArray{half_quant}, st_i)
         # Bound to prior domain
-        z_bounded, log_det_J = transform_to_bounded(z_unbounded, domain)
+        z_bounded, log_det_J = transform_to_bounded(z_unbounded, domain, m.ε)
         
         lp, st_ebm = log_prior(m.prior, z_bounded, ps.ebm, st_i.ebm; ε=m.ε) 
         ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_i.gen, x, z_bounded; ε=m.ε, seed=seed)
@@ -382,7 +382,7 @@ function langevin_sampler(
     m.verbose && println("Mean step sizes: ", mean_η)
 
     # Transform back to bounded space for return
-    z_final, _ = transform_to_bounded(z_unbounded, full_quant.(domain))
+    z_final, _ = transform_to_bounded(z_unbounded, full_quant.(domain), full_quant(m.ε))
     return half_quant.(z_final), st, seed
 end
 

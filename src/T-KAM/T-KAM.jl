@@ -122,13 +122,16 @@ function thermo_loss(
 
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    T, B = length(temps), size(x)[end]
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
+    T, B = size(z, 3), size(x)[end]
 
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
 
-    weights = @ignore_derivatives softmax(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood), dims=2)
+    weights = @ignore_derivatives softmax(
+        cumsum(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood) # Accumulate ais weights
+        ; dims=2), dims=2)
+
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
     weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))

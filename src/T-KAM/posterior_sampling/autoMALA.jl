@@ -363,7 +363,7 @@ function langevin_sampler(
         end
 
         burn_in = 0
-        η = st.η_init[k, :]
+        η = device(st.η_init[k, :])
         m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
 
         for i in 1:N

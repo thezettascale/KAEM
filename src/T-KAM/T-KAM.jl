@@ -7,8 +7,6 @@ using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
-using Zygote: Buffer
-using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
@@ -17,7 +15,7 @@ include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: langevin_sampler
+using .LangevinSampling: langevin_sampler, l2, cross_entropy
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -121,40 +119,54 @@ function thermo_loss(
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) # Only sample from intermediate temps
-    T, B = size(z, 3), size(x)[end]
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
 
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    T, B = length(temps), size(x)[end]
 
-    # weights = @ignore_derivatives softmax(
-    #     cumsum(full_quant.(temps[2:end] - temps[1:end-1])' .* full_quant.(logllhood) # Accumulate ais weights
-    #     ; dims=2), dims=2)
-    @ignore_derivatives softmax(full_quant.(temps[2:end])' * full_quant.(logllhood); dims=2)
+    log_ss, log_weights = half_quant(0), zeros(half_quant, B) .- log(B) |> device
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:B)), dims=2) .|> half_quant
-    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
-    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-    
-    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
-    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
-
-    ex_prior = half_quant(0)
-    if m.prior.contrastive_div
-        z_prior, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st_ebm, seed)
-        logprior_prior, st_ebm = log_prior(m.prior, z_prior, ps.ebm, st_ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        ex_prior = mean(logprior_prior)
+    function lkhood(z_i, st_i, seed_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        seed_i, rng = next_rng(seed_i)
+        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
     end
+
+    for k in 1:T-1
+        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
+        Δt = temps[k+1] - temps[k]
+        r = Δt .* logllhood
+        log_ss += mean(r)
+        @ignore_derivatives begin
+            @reset st.gen = st_gen
+            log_weights += r # Accum AIS weights
+        end
+    end
+
+    # Posterior expected prior
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    weights = @ignore_derivatives softmax(log_weights)'
+    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+    weights_resampled = weights[1, resampled_idxs[1, :]]
+    logprior_resampled = logprior[resampled_idxs[1, :]]
+    contrastive_div = sum(weights_resampled .* logprior_resampled)
+
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        contrastive_div -= mean(logprior)
+    end
+
+    loss = -(log_ss + contrastive_div)
 
     @ignore_derivatives begin
+        m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
         @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
     end
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
+    return loss * m.loss_scaling, st, seed
 end
 
 function update_model_grid(
@@ -286,8 +298,13 @@ function init_T_KAM(
     η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
 
     # Importance sampling or MALA
-    posterior_fcn, p = identity, [full_quant(1)]
+    posterior_fcn = identity
+    if use_MALA && !(N_t > 1) 
+        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        loss_fcn = POST_loss
+    end
     
+    p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
@@ -355,7 +372,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t) : fill(model.η_init, model.max_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
         train_idx = 1,
         )
 end

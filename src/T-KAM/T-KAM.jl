@@ -144,7 +144,7 @@ function thermo_loss(
 
     # Posterior expected prior
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    contrastive_div = mean(log_prior)
+    contrastive_div = mean(logprior)
 
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)

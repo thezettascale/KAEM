@@ -133,6 +133,24 @@ function check_reversibility(
     return step_diff
 end
 
+function reflect_at_boundaries(
+    z::AbstractArray{T}, 
+    ∇z::AbstractArray{T},
+    domain::Tuple{T,T}
+) where T
+    a, b = domain
+    
+    # Reflect position
+    z_reflected = clamp.(z, a, b)
+    
+    # Reflect gradient at boundaries
+    at_lower = z .<= a
+    at_upper = z .>= b
+    ∇z_reflected = ∇z .* .!at_lower .* .!at_upper
+    
+    return z_reflected, ∇z_reflected
+end
+
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
     x::AbstractArray{half_quant},
@@ -142,7 +160,8 @@ function leapfrop_proposal(
     momentum::AbstractArray{full_quant},  # This is y = M^{-1/2}p
     M::AbstractArray{full_quant},         # This is M^{1/2}
     η::AbstractVector{full_quant},
-    logpos_withgrad::Function
+    logpos_withgrad::Function,
+    domain::Tuple{full_quant, full_quant}
     )
     """
     Implements preconditioned Hamiltonian dynamics with transformed momentum:
@@ -153,13 +172,17 @@ function leapfrop_proposal(
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s]/2) * ∇z[q,p,s] / M[q,p]
 
-    # Full step position update (x' = x + eps M^{-1/2}y*)
-    @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
+    # Full step position update with reflection
+    @tullio z_proposed[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
+    ẑ, ∇z_reflected = reflect_at_boundaries(z_proposed, ∇z, domain)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
+    
+    # Reflect new gradient
+    ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
-    # Last half-step momentum update
+    # Last half-step momentum update with reflected gradient
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]
 
     # Compute Hamiltonian difference for transformed momentum
@@ -181,13 +204,14 @@ function select_step_size(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
+    domain::Tuple{full_quant, full_quant},
     logpos_withgrad::Function;
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
     seq::Bool=false
     )
     
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad, domain)
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0)
@@ -213,7 +237,8 @@ function select_step_size(
                 view(momentum,:,:,active_chains),
                 M,
                 view(η_init,active_chains), 
-                logpos_withgrad
+                logpos_withgrad,
+                domain
             )
         
         # Update active chain results
@@ -247,6 +272,7 @@ function autoMALA_step(
     M::AbstractArray{full_quant},
     η_init::AbstractVector{full_quant},
     Δη::full_quant,
+    domain::Tuple{full_quant, full_quant},
     logpos_withgrad::Function;
     η_min::full_quant=full_quant(1e-5),
     η_max::full_quant=full_quant(1),
@@ -255,35 +281,17 @@ function autoMALA_step(
     )
     
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
-        log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, 
+        log_a, log_b, z, x, st, logpos_z, ∇z, momentum, M, η_init, Δη, domain,
         logpos_withgrad; η_min=η_min, η_max=η_max, seq=seq
     )
     
     z_rev, _, _, _, η_prime, _, st = select_step_size(
-        log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, 
+        log_a, log_b, ẑ, x, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, domain,
         logpos_withgrad; η_min=η_min, η_max=η_max, seq=seq
     )
     
     reversible = check_reversibility(z, z_rev, η, η_prime; tol=ε)
     return ẑ, η, η_prime, reversible, log_r, st
-end
-
-function transform_to_unbounded(z::AbstractArray{T}, domain::Tuple{T,T}, ε::T) where T
-    a, b = domain
-    # Transform [a,b] -> [-∞,∞] using logit
-    z_unbounded = log.((z .- a) ./ (b .- z) .+ ε)
-    # Compute log|det(J)| for the transform
-    log_det_J = dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z)) .+ ε); dims=(1,2)); dims=(1,2))
-    return z_unbounded, log_det_J
-end
-
-function transform_to_bounded(z_unbounded::AbstractArray{T}, domain::Tuple{T,T}, ε::T) where T
-    a, b = domain
-    # Transform [-∞,∞] -> [a,b] using sigmoid
-    z = a .+ (b .- a) .* sigmoid_fast.(z_unbounded)
-    # Compute log|det(J)| for the inverse transform
-    log_det_J = -dropdims(sum(log.((b .- a) ./ ((z .- a) .* (b .- z)) .+ ε); dims=(1,2)); dims=(1,2))
-    return z, log_det_J
 end
 
 function langevin_sampler(
@@ -317,15 +325,17 @@ function langevin_sampler(
         The updated seed.
     """
     # Get domain bounds
-    domain = m.prior.fcns_qp[Symbol("1")].grid_range
+    domain = full_quant.(m.prior.fcns_qp[Symbol("1")].grid_range)
     
-    # Initialize from prior and transform to unbounded space
+    # Initialize from prior (already in bounded space)
     z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
-    z_unbounded, log_det_J = transform_to_unbounded(full_quant.(z), full_quant.(domain), full_quant(m.ε))
+    z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 
     T, Q, P, S = length(t), size(z)...
     output = reshape(z, Q, P, S, 1)
+
+    @reset st.η_init = device(st.η_init)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
@@ -337,14 +347,10 @@ function langevin_sampler(
     ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=1); dims=1) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
-
-        # Bound to prior domain
-        z_bounded, log_det_J = transform_to_bounded(z_i, domain, m.ε)
-
-        lp, st_ebm = log_prior(m.prior, z_bounded, ps.ebm, st_i.ebm; ε=m.ε)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_bounded)
+        lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i.gen, z_i)
         x̂ = m.lkhood.output_activation(x̂) 
-        logpos = lp + t_k * ll_fn(x̂, x_i) / (2*m.lkhood.σ_llhood^2) + log_det_J # Jacobian correction
+        logpos = lp + t_k * ll_fn(x̂, x_i) / (2*m.lkhood.σ_llhood^2)
         return logpos .* m.loss_scaling, st_ebm, st_gen
     end
 
@@ -363,22 +369,22 @@ function langevin_sampler(
         end
 
         burn_in = 0
-        η = device(st.η_init[k, :])
+        η = st.η_init[k, :]
         m.verbose && println("t=$(t[k]) posterior before update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
 
         for i in 1:N
-            momentum, M, seed = sample_momentum(z_unbounded; seed=seed, ε=full_quant(m.ε))
+            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
             log_a, log_b = dropdims(minimum(ratio_bounds[k, i, :, :]; dims=2); dims=2), dropdims(maximum(ratio_bounds[k, i, :, :]; dims=2); dims=2)
-            logpos_z, ∇z, st = logpos_withgrad(z_unbounded, x, st)
+            logpos_z, ∇z, st = logpos_withgrad(z, x, st)
 
             if burn_in < N_unadjusted
-                z_unbounded, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z_unbounded, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad)
+                z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η, logpos_withgrad, domain)
                 burn_in += 1
             else
-                ẑ_unbounded, η, η_prime, reversible, log_r, st = autoMALA_step(
+                ẑ, η, η_prime, reversible, log_r, st = autoMALA_step(
                     log_a, 
                     log_b, 
-                    z_unbounded, 
+                    z, 
                     x, st, 
                     logpos_z, 
                     ∇z, 
@@ -386,6 +392,7 @@ function langevin_sampler(
                     M, 
                     η, 
                     Δη, 
+                    domain,
                     logpos_withgrad; 
                     η_min=η_min, 
                     η_max=η_max, 
@@ -394,7 +401,7 @@ function langevin_sampler(
                     )
 
                 accept = (view(log_u,k,i,:) .< log_r) .* reversible
-                z_unbounded = ẑ_unbounded .* reshape(accept, 1, 1, :) + z_unbounded .* reshape(1 .- accept, 1, 1, :)
+                z = ẑ .* reshape(accept, 1, 1, :) + z .* reshape(1 .- accept, 1, 1, :)
                 mean_η[k, :] .= mean_η[k, :] .+ η .* accept
                 η = (η + η_prime) ./ 2
                 num_acceptances[k, :] .= num_acceptances[k, :] .+ accept
@@ -402,7 +409,7 @@ function langevin_sampler(
         end
         m.verbose && println("t=$(t[k]) posterior after update: ", sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling)
         
-        z_out, _ = transform_to_bounded(z_unbounded, full_quant.(domain), full_quant(m.ε))
+        z_out = clamp.(z, domain...)
         output = cat(output, reshape(z_out, Q, P, S, 1); dims=4)
         k += 1
     end

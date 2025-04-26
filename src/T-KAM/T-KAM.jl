@@ -150,7 +150,7 @@ function thermo_loss(
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     weights = @ignore_derivatives softmax(log_weights)'
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = weights[1, resampled_idxs[1, :]]
+    weights_resampled = @ignore_derivatives weights[1, resampled_idxs[1, :]]
     logprior_resampled = logprior[resampled_idxs[1, :]]
     contrastive_div = sum(weights_resampled .* logprior_resampled)
 

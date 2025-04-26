@@ -179,8 +179,6 @@ function leapfrop_proposal(
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
-    
-    # Reflect new gradient
     ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
     # Last half-step momentum update with reflected gradient

@@ -124,7 +124,7 @@ function thermo_loss(
 
     T, B = length(temps), size(x)[end]
 
-    log_ss, log_weights = half_quant(0), zeros(half_quant, B) .- log(B) |> device
+    log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i, seed_i)
@@ -140,19 +140,11 @@ function thermo_loss(
         Δt = temps[k+1] - temps[k]
         r = Δt .* logllhood
         log_ss += mean(r)
-        @ignore_derivatives begin
-            @reset st.gen = st_gen
-            log_weights += r # Accum AIS weights
-        end
     end
 
     # Posterior expected prior
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    weights = @ignore_derivatives softmax(log_weights)'
-    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives weights[1, resampled_idxs[1, :]]
-    logprior_resampled = logprior[resampled_idxs[1, :]]
-    contrastive_div = sum(weights_resampled .* logprior_resampled)
+    contrastive_div = mean(log_prior)
 
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)

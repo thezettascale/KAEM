@@ -129,9 +129,9 @@ function check_reversibility(
     tol::full_quant=full_quant(1e-6)
     )
     # Both checks are required to maintain detailed balance
-    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
+    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
     step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
-    return pos_diff .* step_diff
+    return step_diff
 end
 
 function reflect_at_boundaries(

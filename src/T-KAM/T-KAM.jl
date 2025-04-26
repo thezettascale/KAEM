@@ -154,7 +154,7 @@ function thermo_loss(
     loss = -(log_ss + contrastive_div)
 
     @ignore_derivatives begin
-        m.verbose && println("SS estimate of log p(x): ", -log_ss, " Contrastive divergence: ", -contrastive_div)
+        m.verbose && println("SS estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
         @reset st.ebm = st_ebm
     end
 

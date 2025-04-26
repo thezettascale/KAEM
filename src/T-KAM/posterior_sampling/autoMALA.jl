@@ -128,9 +128,10 @@ function check_reversibility(
     η_prime::AbstractVector{full_quant};
     tol::full_quant=full_quant(1e-6)
     )
-    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
-    step_diff = abs.(η - η_prime) .< tol .* η
-    return step_diff
+    # Both checks are required to maintain detailed balance
+    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
+    step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
+    return pos_diff .* step_diff
 end
 
 function reflect_at_boundaries(

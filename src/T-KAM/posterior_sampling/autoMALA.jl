@@ -420,7 +420,7 @@ function langevin_sampler(
     @reset st.η_init = mean_η
 
     m.verbose && println("Acceptance rates: ", dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims=2); dims=2))
-    m.verbose && println("Mean step sizes: ", mean_η)
+    m.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims=2); dims=2))
 
     return half_quant.(output), st, seed
 end

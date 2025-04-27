@@ -186,7 +186,7 @@ function leapfrop_proposal(
 
     # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
-    log_r = logpos_ẑ - sqrt(dropdims(sum(p_out .^ 2; dims=(1,2)); dims=(1,2))) ./ 2
+    log_r = logpos_ẑ - sqrt.(dropdims(sum(p_out .^ 2; dims=(1,2)); dims=(1,2))) ./ 2
 
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end

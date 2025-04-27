@@ -409,7 +409,7 @@ function langevin_sampler(
         pos_after = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
         m.verbose && println("t=$(t[k]) posterior change: $(pos_after - pos_before)")
         
-        z_out = clamp.(z, domain...)
+        # z_out = clamp.(z, domain...)
         output = cat(output, reshape(z_out, Q, P, S, 1); dims=4)
         k += 1
     end

@@ -250,7 +250,7 @@ function select_step_size(
         # Update which chains still need adjustment with improved stability checks
         δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b[active_chains], 0, δ[active_chains])
         δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a[active_chains], 0, δ[active_chains])
-        # δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
+        δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
         active_chains = findall(δ .!= 0)
     end
 

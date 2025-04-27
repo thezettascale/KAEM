@@ -184,9 +184,9 @@ function leapfrop_proposal(
     # Last half-step momentum update with reflected gradient
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]
 
-    # Compute Hamiltonian difference for transformed momentum
+    # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
-    log_r = logpos_ẑ - logpos_z - (dropdims(sum((p_out.^2 - momentum.^2) ./ M; dims=(1,2)); dims=(1,2)) ./ 2)
+    log_r = logpos_ẑ - sqrt(dropdims(sum(p_out .^ 2; dims=(1,2); dims=(1,2)))) ./ 2
 
     return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
@@ -250,7 +250,7 @@ function select_step_size(
         # Update which chains still need adjustment with improved stability checks
         δ[active_chains] = ifelse.(δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b[active_chains], 0, δ[active_chains])
         δ[active_chains] = ifelse.(δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a[active_chains], 0, δ[active_chains])
-        δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
+        # δ[active_chains] = ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
         active_chains = findall(δ .!= 0)
     end
 

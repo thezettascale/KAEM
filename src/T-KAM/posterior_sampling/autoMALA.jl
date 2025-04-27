@@ -87,7 +87,8 @@ end
 
 # This is transformed momentum!
 function sample_momentum(
-    z::AbstractArray{full_quant};
+    z::AbstractArray{full_quant},
+    M::AbstractArray{full_quant};
     seed::Int=1,
     preconditioner::Preconditioner=MixDiagonalPreconditioner(),
     ε::full_quant=eps(full_quant)
@@ -101,15 +102,13 @@ function sample_momentum(
     Σ = sqrt.(@views sum((z_reshaped .- μ).^2, dims=2) ./ (S-1))
     
     # Initialize mass matrix (M^{1/2})
-    M = ones(full_quant, Q*P)
-    build_preconditioner!(M, preconditioner, vec(Σ); seed=seed)
-    M = reshape(M, Q, P)
+    build_preconditioner!(cpu_device()(reshape(M, Q*P)), preconditioner, vec(Σ); seed=seed)
     
     # Sample y ~ N(0,I) directly (transformed momentum)
     seed, rng = next_rng(seed)
     y = randn(rng, full_quant, Q, P, S)
     
-    return device(y), device(M), seed
+    return device(y), device(reshape(M, Q, P)), seed
 end
 
 function safe_step_size_update(
@@ -175,11 +174,11 @@ function leapfrop_proposal(
 
     # Full step position update with reflection
     @tullio z_proposed[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
-    ẑ, ∇z_reflected = reflect_at_boundaries(z_proposed, ∇z, domain)
+    # ẑ, ∇z_reflected = reflect_at_boundaries(z_proposed, ∇z, domain)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
-    ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
+    # ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
     # Last half-step momentum update with reflected gradient
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]
@@ -333,6 +332,7 @@ function langevin_sampler(
 
     T, Q, P, S = length(t), size(z)...
     output = reshape(z, Q, P, S, 1)
+    M = ones(full_quant, Q, P)
 
     @reset st.η_init = device(st.η_init)
 
@@ -372,7 +372,7 @@ function langevin_sampler(
 
         pos_before = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
         for i in 1:N
-            momentum, M, seed = sample_momentum(z; seed=seed, ε=full_quant(m.ε))
+            momentum, M, seed = sample_momentum(z, M; seed=seed, ε=full_quant(m.ε))
             log_a, log_b = dropdims(minimum(ratio_bounds[k, i, :, :]; dims=2); dims=2), dropdims(maximum(ratio_bounds[k, i, :, :]; dims=2); dims=2)
             logpos_z, ∇z, st = logpos_withgrad(z, x, st)
 

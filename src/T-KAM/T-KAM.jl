@@ -127,19 +127,16 @@ function thermo_loss(
     log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    function lkhood(z_i, st_i, seed_i)
+    function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
     for k in 1:T-1
-        logllhood, st_gen, seed = lkhood(view(z, :, :, :, k), st.gen, seed)                
-        Δt = temps[k+1] - temps[k]
-        r = Δt .* logllhood
-        log_ss += mean(r)
+        logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
+        log_ss += mean((temps[k+1] - temps[k]) .* logllhood)
+        @ignore_derivatives @reset st.gen = st_gen
     end
 
     # Posterior expected prior

@@ -135,7 +135,7 @@ function mala_loss(
 
     # Expected posterior
     @ignore_derivatives begin
-        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
+        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", mean(logllhood))
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen
     end

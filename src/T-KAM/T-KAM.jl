@@ -124,15 +124,13 @@ function mala_loss(
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    function lkhood(z_i, st_i, seed_i)
+    function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        seed_i, rng = next_rng(seed_i)
-        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    logllhood, st_gen, seed = lkhood(z[:, :, :, 2], st.gen, seed)
+    logllhood, st_gen = lkhood(z[:, :, :, 2], st.gen)
     logprior = mean(logprior_pos) - mean(logprior_prior)
 
     # Expected posterior

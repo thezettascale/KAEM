@@ -187,11 +187,11 @@ function leapfrop_proposal(
     @tullio p_in[q,p,s] := momentum[q,p,s] + (η[s]/2) * ∇z[q,p,s] / M[q,p]
 
     # Full step position update with reflection
-    @tullio z_proposed[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
-    # ẑ, ∇z_reflected = reflect_at_boundaries(z_proposed, ∇z, domain)
+    @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
+    ẑ, _ = reflect_at_boundaries(ẑ, ∇z, domain)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(z_proposed, x, st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
     # ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
     # Last half-step momentum update with reflected gradient
@@ -423,7 +423,7 @@ function langevin_sampler(
         pos_after = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
         m.verbose && println("t=$(t[k]) posterior change: $(pos_after - pos_before)")
         
-        # z_out = clamp.(z, domain...)
+        z_out = clamp.(z, domain...)
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1
     end

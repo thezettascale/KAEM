@@ -177,7 +177,7 @@ function leapfrop_proposal(
     # ẑ, ∇z_reflected = reflect_at_boundaries(z_proposed, ∇z, domain)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(z_proposed, x, st)
     # ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
     # Last half-step momentum update with reflected gradient
@@ -187,7 +187,7 @@ function leapfrop_proposal(
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
     log_r = logpos_ẑ - logpos_z - dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2
 
-    return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
+    return z_proposed, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
 
 function select_step_size(
@@ -410,7 +410,7 @@ function langevin_sampler(
         m.verbose && println("t=$(t[k]) posterior change: $(pos_after - pos_before)")
         
         # z_out = clamp.(z, domain...)
-        output = cat(output, reshape(z_out, Q, P, S, 1); dims=4)
+        output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1
     end
 

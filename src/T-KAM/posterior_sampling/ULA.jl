@@ -60,6 +60,9 @@ function langevin_sampler(
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 
+    # Get domain bounds
+    domain = full_quant.(m.prior.fcns_qp[Symbol("1")].grid_range)
+
     η = mean(st.η_init)
 
     T, Q, P, S = length(t), size(z)...
@@ -94,6 +97,12 @@ function langevin_sampler(
         for i in 1:N
             ξ = device(noise[:,:,:,i,k])            
             z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
+
+            # Reflect at boundaries
+            reflect_low = z .< first(domain)
+            reflect_high = z .> last(domain)
+            z = ifelse.(reflect_low, 2*first(domain) .- z, z)
+            z = ifelse.(reflect_high, 2*last(domain) .- z, z)
         end
         m.verbose && println("t=$(t[k]) posterior after update: ", full_quant(first(log_posterior(half_quant.(z), Lux.testmode(st), t[k]))) ./ loss_scaling)
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)

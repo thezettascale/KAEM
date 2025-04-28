@@ -85,13 +85,27 @@ function build_preconditioner!(
     return dest
 end
 
+function init_mass_matrix(
+    z::AbstractArray{full_quant},
+    seed::Int=1,
+    )
+    Q, P, S = size(z)
+    z = cpu_device()(z)
+    Σ = diag(cov(cpu_device()(reshape(z, Q*P, S))'))
+
+    seed, rng = next_rng(seed)
+    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
+
+    Σ_AM = sqrt.(β .* (1 ./ Σ) .+ (1 - β)) 
+    return device(reshape(Σ_AM, Q, P)), seed
+end
+
 # This is transformed momentum!
 function sample_momentum(
     z::AbstractArray{full_quant},
     M::AbstractArray{full_quant};
     seed::Int=1,
     preconditioner::Preconditioner=MixDiagonalPreconditioner(),
-    ε::full_quant=eps(full_quant)
     )
     Q, P, S = size(z)
     z_cpu = cpu_device()(z)
@@ -109,7 +123,7 @@ function sample_momentum(
     y = randn(rng, full_quant, Q, P, S)
     
     return device(y), device(reshape(M, Q, P)), seed
-end
+end 
 
 function safe_step_size_update(
     η::AbstractVector{full_quant}, 
@@ -332,7 +346,7 @@ function langevin_sampler(
 
     T, Q, P, S = length(t), size(z)...
     output = reshape(z, Q, P, S, 1)
-    M = ones(full_quant, Q, P)
+    M, seed = init_mass_matrix(z, seed)
 
     @reset st.η_init = device(st.η_init)
 
@@ -372,7 +386,7 @@ function langevin_sampler(
 
         pos_before = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
         for i in 1:N
-            momentum, M, seed = sample_momentum(z, M; seed=seed, ε=full_quant(m.ε))
+            momentum, M, seed = sample_momentum(z, M; seed=seed)
             log_a, log_b = dropdims(minimum(ratio_bounds[k, i, :, :]; dims=2); dims=2), dropdims(maximum(ratio_bounds[k, i, :, :]; dims=2); dims=2)
             logpos_z, ∇z, st = logpos_withgrad(z, x, st)
 

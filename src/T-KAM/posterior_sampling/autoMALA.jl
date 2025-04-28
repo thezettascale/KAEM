@@ -147,24 +147,6 @@ function check_reversibility(
     return step_diff
 end
 
-function reflect_at_boundaries(
-    z::AbstractArray{T}, 
-    ∇z::AbstractArray{T},
-    domain::Tuple{T,T}
-) where T
-    a, b = domain
-    
-    # Reflect position
-    z_reflected = clamp.(z, a, b)
-    
-    # Reflect gradient at boundaries
-    at_lower = z .<= a
-    at_upper = z .>= b
-    ∇z_reflected = ∇z .* .!at_lower .* .!at_upper
-    
-    return z_reflected, ∇z_reflected
-end
-
 function leapfrop_proposal(
     z::AbstractArray{full_quant},
     x::AbstractArray{half_quant},
@@ -188,11 +170,17 @@ function leapfrop_proposal(
 
     # Full step position update with reflection
     @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
-    ẑ, _ = reflect_at_boundaries(ẑ, ∇z, domain)
+
+    # Reflect at boundaries, both position and momentum
+    reflect_low = ẑ .< first(domain)
+    reflect_high = ẑ .> last(domain)
+    ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
+    ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
+    p_in = ifelse.(reflect_low, -p_in, p_in)
+    p_in = ifelse.(reflect_high, -p_in, p_in)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)
-    # ∇ẑ, _ = reflect_at_boundaries(ẑ, ∇ẑ, domain)
 
     # Last half-step momentum update with reflected gradient
     @tullio p_out[q,p,s] := p_in[q,p,s] + (η[s]/2) * ∇ẑ[q,p,s] / M[q,p]

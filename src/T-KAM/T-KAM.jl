@@ -107,6 +107,44 @@ function importance_loss(
     return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 
+function mala_loss(
+    m::T_KAM,
+    ps,
+    st,
+    x::AbstractArray{half_quant};
+    seed::Int=1
+    )
+    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
+
+    # MALA sampling
+    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
+
+    # Log-dists
+    logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+
+    function lkhood(z_i, st_i, seed_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        seed_i, rng = next_rng(seed_i)
+        noise = m.lkhood.σ_llhood * randn(rng, half_quant, size(x̂)...) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen, seed_i
+    end
+
+    logllhood, st_gen, seed = lkhood(z[:, :, :, 2], st.gen, seed)
+    logprior = mean(logprior_pos) - mean(logprior_prior)
+
+    # Expected posterior
+    @ignore_derivatives begin
+        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", logllhood)
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
+    return -(logprior .+ logllhood)*m.loss_scaling, st, seed
+end 
+
 function thermo_loss(
     m::T_KAM,
     ps,
@@ -290,7 +328,7 @@ function init_T_KAM(
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
         posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, st, x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
-        loss_fcn = POST_loss
+        loss_fcn = mala_loss
     end
     
     p = [full_quant(1)]

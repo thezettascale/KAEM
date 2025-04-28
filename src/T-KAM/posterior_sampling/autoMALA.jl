@@ -201,7 +201,7 @@ function leapfrop_proposal(
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
     log_r = logpos_ẑ - logpos_z - dropdims(sum(p_out.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2
 
-    return z_proposed, logpos_ẑ, ∇ẑ, -p_out, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, -p_out, log_r, st
 end
 
 function select_step_size(
@@ -357,7 +357,7 @@ function langevin_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), T, N, S, 2)) .|> full_quant |> device
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=1); dims=1) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=(1,2)); dims=(1,2)) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::half_quant)
         lp, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)

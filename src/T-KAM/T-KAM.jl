@@ -140,7 +140,7 @@ function mala_loss(
         @reset st.gen = st_gen
     end
 
-    return -(logprior .+ logllhood)*m.loss_scaling, st, seed
+    return -(logprior + mean(logllhood))*m.loss_scaling, st, seed
 end 
 
 function thermo_loss(

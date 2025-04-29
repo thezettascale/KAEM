@@ -372,7 +372,7 @@ function langevin_sampler(
         burn_in = 0
         η = st.η_init[k, :]
 
-        pos_before = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
+        pos_before = first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k])) ./ loss_scaling
         for i in 1:N
             momentum, M, seed = sample_momentum(z, M; seed=seed)
             log_a, log_b = dropdims(minimum(ratio_bounds[k, i, :, :]; dims=2); dims=2), dropdims(maximum(ratio_bounds[k, i, :, :]; dims=2); dims=2)
@@ -408,8 +408,8 @@ function langevin_sampler(
                 num_acceptances[k, :] .= num_acceptances[k, :] .+ accept
             end
         end
-        pos_after = sum(first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k]))) ./ loss_scaling
-        m.verbose && println("t=$(t[k]) posterior change: $(pos_after - pos_before)")
+        pos_after = first(log_posterior(half_quant.(z), x, Lux.testmode(st), t[k])) ./ loss_scaling
+        m.verbose && println("t=$(t[k]) posterior change: $(mean(pos_after - pos_before))")
         
         output = cat(output, reshape(z, Q, P, S, 1); dims=4)
         k += 1

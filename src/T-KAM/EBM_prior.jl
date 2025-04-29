@@ -33,6 +33,7 @@ struct ebm_prior <: Lux.AbstractLuxLayer
     nodes::AbstractArray{half_quant}
     weights::AbstractArray{half_quant}
     contrastive_div::Bool
+    quad_type::AbstractString
 end
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
@@ -295,17 +296,18 @@ function init_ebm_prior(
 
     contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
 
+    quad_type = retrieve(conf, "EBM_PRIOR", "quadrature_method")
     quadrature_method = Dict(
         "gausslegendre" => (m, p, s) -> gausslegendre_quadrature(m, p, s; ε=eps),
         "trapezium" => (m, p, s) -> trapezium_quadrature(m, p, s; ε=eps)
-    )[retrieve(conf, "EBM_PRIOR", "quadrature_method")]
+    )[quad_type]
 
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
 
-    return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights, contrastive_div)
+    return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights, contrastive_div, quad_type)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::ebm_prior)

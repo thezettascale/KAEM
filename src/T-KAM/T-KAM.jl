@@ -10,7 +10,7 @@ using ChainRules: @ignore_derivatives
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/autoMALA.jl")
+include("posterior_sampling/ITS.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -107,43 +107,6 @@ function importance_loss(
     return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 
-function mala_loss(
-    m::T_KAM,
-    ps,
-    st,
-    x::AbstractArray{half_quant};
-    seed::Int=1
-    )
-    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
-
-    # MALA sampling
-    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
-
-    # Log-dists
-    logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
-    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
-    end
-
-    logllhood, st_gen = lkhood(z[:, :, :, 2], st.gen)
-    logprior = mean(logprior_pos) - mean(logprior_prior)
-
-    # Expected posterior
-    @ignore_derivatives begin
-        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", mean(logllhood))
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen  
-    end 
-
-    
-    return -(logprior + mean(logllhood))*m.loss_scaling, st, seed
-end
-
 # function mala_loss(
 #     m::T_KAM,
 #     ps,
@@ -156,54 +119,44 @@ end
 #     # MALA sampling
 #     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
 
-#     Q, P, B, S, T = size(z)
+#     # Log-dists
+#     logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
+#     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
+#     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-#     # means = zeros(half_quant, 0) |> device
-#     # temps = [0,1] .|> half_quant
-
-#     loss = half_quant(0)
-
-#     for t in 1:T
-#         for b in 1:B
-#             z_t = device(z[:, :, b, :, t])
-#             lp, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-#             x_i = m.lkhood.seq_length > 1 ? view(x, :, :, b) : view(x, :, :, :, b)
-#             ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x_i, z_t; seed=seed, ε=m.ε)
-
-#             if t == 1
-#                 loss -= mean(lp) 
-#             else
-#                 loss += mean(lp) + mean(ll)
-#             end
-
-#             @ignore_derivatives begin
-#                 @reset st.ebm = st_ebm
-#                 @reset st.gen = st_gen
-#             end
-#         end
+#     function lkhood(z_i, st_i)
+#         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+#         x̂ = m.lkhood.output_activation(x̂)
+#         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
 #     end
 
-#     return -loss * m.loss_scaling / size(x)[end], st, seed
+#     logllhood, st_gen = lkhood(z[:, :, :, 2], st.gen)
+#     logprior = mean(logprior_pos) - mean(logprior_prior)
+
+#     # Expected posterior
+#     @ignore_derivatives begin
+#         m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", mean(logllhood))
+#         @reset st.ebm = st_ebm
+#         @reset st.gen = st_gen  
+#     end 
+
+    
+#     return -(logprior + mean(logllhood))*m.loss_scaling, st, seed
 # end
 
-function thermo_loss(
+function mala_loss(
     m::T_KAM,
     ps,
     st,
     x::AbstractArray{half_quant};
     seed::Int=1
     )
-    """Annealed importance sampling (AIS) loss."""
+    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
-    @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
+    # MALA sampling
+    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
+    Q, P, B, T = size(z)
 
-    # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-
-    T, B = length(temps), size(x)[end]
-
-    log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i)
@@ -212,29 +165,25 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    for k in 1:T-1
-        logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        log_ss += mean(logllhood) * (temps[k+1] - temps[k])
-        @ignore_derivatives @reset st.gen = st_gen
+    loss = half_quant(0)
+
+    for t in 1:T
+        z_t = device(z[:, :, :, t])
+        lp, st_ebm = log_prior(m.prior, z_t, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        ll, st_gen = lkhood(z_t, st.gen)
+        if t == 1
+            loss -= mean(lp) 
+        else
+            loss += mean(lp) + mean(ll)
+        end
+
+        @ignore_derivatives begin
+            @reset st.ebm = st_ebm
+            @reset st.gen = st_gen
+        end
     end
 
-    # Posterior expected prior
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    contrastive_div = mean(logprior)
-
-    if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        contrastive_div -= mean(logprior)
-    end
-
-    loss = -(log_ss/2 + contrastive_div) 
-
-    @ignore_derivatives begin
-        m.verbose && println("TI estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
-        @reset st.ebm = st_ebm
-    end
-
-    return loss * m.loss_scaling, st, seed
+    return -loss * m.loss_scaling, st, seed
 end
 
 # function thermo_loss(
@@ -246,33 +195,88 @@ end
 #     )
 #     """Annealed importance sampling (AIS) loss."""
 
+#     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
+
 #     # Schedule temperatures
 #     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
 #     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
 
 #     T, B = length(temps), size(x)[end]
 
-#     loss = half_quant(0)
+#     log_ss = half_quant(0)
+#     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-#     for b in 1:B
-#         for t in 1:T-1
-#             x_b = m.lkhood.seq_length > 1 ? view(x, :, :, b) : view(x, :, :, :, b)
-#             ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x_b, device(z[:, :, b, :, t]); seed=seed, ε=m.ε)
-#             loss += (temps[t+1] - temps[t]) * mean(ll)
-#             @ignore_derivatives @reset st.gen = st_gen
-#         end
-        
-#         logprior, st_ebm = log_prior(m.prior, device(z[:, :, b, :, T]), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-#         loss += mean(logprior)
-#         if m.prior.contrastive_div
-#             logprior, st_ebm = log_prior(m.prior, device(z[:, :, b, :, 1]), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-#             loss -= mean(logprior)
-#         end
-#         @ignore_derivatives @reset st.ebm = st_ebm
+#     function lkhood(z_i, st_i)
+#         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+#         x̂ = m.lkhood.output_activation(x̂)
+#         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
 #     end
 
-#     return -loss * m.loss_scaling / B, st, seed
+#     for k in 1:T-1
+#         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
+#         log_ss += mean(logllhood .* (temps[k+1] - temps[k]))
+#         @ignore_derivatives @reset st.gen = st_gen
+#     end
+
+#     # Posterior expected prior
+#     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+#     contrastive_div = mean(logprior)
+
+#     if m.prior.contrastive_div
+#         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+#         contrastive_div -= mean(logprior)
+#     end
+
+#     loss = -(log_ss + contrastive_div) 
+
+#     @ignore_derivatives begin
+#         m.verbose && println("TI estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
+#         @reset st.ebm = st_ebm
+#     end
+
+#     return loss * m.loss_scaling, st, seed
 # end
+
+function thermo_loss(
+    m::T_KAM,
+    ps,
+    st,
+    x::AbstractArray{half_quant};
+    seed::Int=1
+    )
+    """Annealed importance sampling (AIS) loss."""
+
+    # Schedule temperatures
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
+
+    T, B = length(temps), size(x)[end]
+
+    loss = half_quant(0)
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+
+    function lkhood(z_i, st_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
+    end
+
+    for t in 1:T-1
+        ll, st_gen = lkhood(device(z[:, :, :, t]), st.gen)
+        loss += mean((temps[t+1] - temps[t]) .* ll)
+        @ignore_derivatives @reset st.gen = st_gen
+    end
+    
+    logprior, st_ebm = log_prior(m.prior, device(z[:, :, :, T]), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    loss += mean(logprior)
+    if m.prior.contrastive_div
+        logprior, st_ebm = log_prior(m.prior, device(z[:, :, :, 1]), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        loss -= mean(logprior)
+    end
+    @ignore_derivatives @reset st.ebm = st_ebm
+
+    return -loss * m.loss_scaling, st, seed
+end
 
 function update_model_grid(
     model::T_KAM,

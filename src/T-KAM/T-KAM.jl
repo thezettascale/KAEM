@@ -203,7 +203,7 @@ function thermo_loss(
 
     T, B = length(temps), size(x)[end]
 
-    log_ti = half_quant(0)
+    log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i)
@@ -212,14 +212,9 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    logllhood, st_gen = lkhood(view(z, :, :, :, 1), st.gen)                
-    ll_prev = mean(logllhood)
-    @ignore_derivatives @reset st.gen = st_gen
-    for k in 2:T
+    for k in 1:T-1
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        ll_curr = mean(logllhood)
-        log_ti += (ll_curr + ll_prev) * (temps[k] - temps[k-1])
-        ll_prev = ll_curr
+        log_ss += mean(logllhood) * (temps[k+1] - temps[k])
         @ignore_derivatives @reset st.gen = st_gen
     end
 
@@ -232,10 +227,10 @@ function thermo_loss(
         contrastive_div -= mean(logprior)
     end
 
-    loss = -(log_ti/2 + contrastive_div) 
+    loss = -(log_ss/2 + contrastive_div) 
 
     @ignore_derivatives begin
-        m.verbose && println("TI estimate of log p(x): ", log_ti, " Contrastive divergence: ", contrastive_div)
+        m.verbose && println("TI estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
         @reset st.ebm = st_ebm
     end
 

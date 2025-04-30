@@ -7,6 +7,7 @@ using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
+using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
@@ -158,6 +159,7 @@ function thermo_loss(
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
+    Δt = temps[2:end] - temps[1:end-1]
 
     T, B = length(temps), size(x)[end]
 
@@ -172,7 +174,8 @@ function thermo_loss(
 
     for k in 1:T-1
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        log_ss += mean(logllhood .* (temps[k+1] - temps[k]))
+        max_ll, Δt_k = maximum(logllhood), Δt[k]
+        log_ss += logsumexp((logllhood .- max_ll) .* Δt_k) - log(B) + max_ll * Δt_k
         @ignore_derivatives @reset st.gen = st_gen
     end
 

@@ -171,13 +171,13 @@ function leapfrop_proposal(
     # Full step position update with reflection
     @tullio ẑ[q,p,s] := z[q,p,s] + η[s] * p_in[q,p,s] / M[q,p]
 
-    # Reflect at boundaries, both position and momentum
-    reflect_low = ẑ .< first(domain)
-    reflect_high = ẑ .> last(domain)
-    ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
-    ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
-    p_in = ifelse.(reflect_low, -p_in, p_in)
-    p_in = ifelse.(reflect_high, -p_in, p_in)
+    # # Reflect at boundaries, both position and momentum
+    # reflect_low = ẑ .< first(domain)
+    # reflect_high = ẑ .> last(domain)
+    # ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
+    # ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
+    # p_in = ifelse.(reflect_low, -p_in, p_in)
+    # p_in = ifelse.(reflect_high, -p_in, p_in)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st)

@@ -16,7 +16,7 @@ include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: langevin_sampler, l2, cross_entropy
+using .LangevinSampling: langevin_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -123,15 +123,7 @@ function mala_loss(
     # Log-dists
     logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
-    end
-
-    logllhood, st_gen = lkhood(z[:, :, :, 2], st.gen)
+    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 2]; seed=seed, ε=m.ε)
     logprior = mean(logprior_pos) - mean(logprior_prior)
 
     # Expected posterior
@@ -162,20 +154,11 @@ function thermo_loss(
     Δt = temps[2:end] - temps[1:end-1]
 
     T, B = length(temps), size(x)[end]
-
     log_ss = half_quant(0)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-
-    function lkhood(z_i, st_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
-        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
-    end
 
     for k in 1:T-1
-        logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        max_ll, Δt_k = maximum(logllhood), Δt[k]
-        log_ss += logsumexp((logllhood .- max_ll) .* Δt_k) - log(B) + max_ll * Δt_k
+        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)
+        log_ss += mean(logllhood .* Δt[k])
         @ignore_derivatives @reset st.gen = st_gen
     end
 

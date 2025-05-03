@@ -196,7 +196,7 @@ function langevin_sampler(
     ps,
     st,
     x::AbstractArray{half_quant};
-    temps::AbstractArray{half_quant}=half_quant.([0,1]),
+    temps::AbstractArray{half_quant}=[half_quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
     Δη::full_quant=full_quant(2),

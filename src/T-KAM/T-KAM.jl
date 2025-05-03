@@ -158,8 +158,8 @@ function thermo_loss(
 
     # Schedule temperatures
     temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, st, seed = m.posterior_sample(m, x, temps, ps, st, seed) 
-    Δt, T = temps[2:end] - temps[1:end-1], length(temps)
+    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
+    Δt, T, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
@@ -181,7 +181,8 @@ function thermo_loss(
     contrastive_div = mean(logprior)
 
     if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        z, st_ebm, seed = m.prior.sample_z(m.prior, B, ps.ebm, st.ebm, seed)
+        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
     end
 

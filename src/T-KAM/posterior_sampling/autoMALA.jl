@@ -368,7 +368,7 @@ function langevin_sampler(
 
     end
     pos_after = CUDA.@fastmath first(log_posterior(half_quant.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
-    m.verbose && println("t=$(temps) posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))")
+    m.verbose && println("Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))")
 
     mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
     mean_η = ifelse.(isnan.(mean_η), st.η_init, mean_η) |> device

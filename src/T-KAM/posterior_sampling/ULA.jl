@@ -23,7 +23,7 @@ function langevin_sampler(
     ps,
     st,
     x::AbstractArray{half_quant};
-    t::AbstractArray{half_quant}=[half_quant(1)],
+    temps::AbstractArray{half_quant}=[half_quant(1)],
     N::Int=20,
     N_unadjusted::Int=1,
     Δη::full_quant=full_quant(2),
@@ -31,6 +31,7 @@ function langevin_sampler(
     η_max::full_quant=full_quant(1),
     seed::Int=1,
     max_zero_accept_iters::Int=50,
+    RE_frequency::Int=10,
     )
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.

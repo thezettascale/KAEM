@@ -157,11 +157,9 @@ function thermo_loss(
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    Δt = temps[2:end] - temps[1:end-1]
-
-    T, B = length(temps), size(x)[end]
+    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
+    z, st, seed = m.posterior_sample(m, x, temps, ps, st, seed) 
+    Δt, T = temps[2:end] - temps[1:end-1], length(temps)
 
     log_ss = half_quant(0)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
@@ -174,7 +172,7 @@ function thermo_loss(
 
     for k in 1:T-1
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        log_ss += mean(logllhood .* Δt[k]) 
+        log_ss += mean(logllhood .* view(Δt, k)) 
         @ignore_derivatives @reset st.gen = st_gen
     end
 
@@ -335,8 +333,21 @@ function init_T_KAM(
     p = [full_quant(1)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; t=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))
         loss_fcn = thermo_loss
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(
+            m, 
+            ps, 
+            Lux.testmode(st), 
+            x; 
+            temps=t, 
+            N=num_steps, 
+            N_unadjusted=N_unadjusted, 
+            Δη=Δη, η_min=η_minmax[1], 
+            η_max=η_minmax[2], 
+            seed=seed, 
+            RE_frequency=replica_exchange_frequency
+        )
 
         # Cyclic p schedule
         initial_p = parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
@@ -400,7 +411,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.N_t, model.max_samples) : fill(model.η_init, 1, model.max_samples),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.max_samples, model.N_t) : fill(model.η_init, model.max_samples, 1),
         train_idx = 1,
         )
 end

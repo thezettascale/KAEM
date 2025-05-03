@@ -174,20 +174,17 @@ function thermo_loss(
 
     for k in 1:T-1
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        max_ll, Δt_k = maximum(logllhood), Δt[k]
-        log_ss += logsumexp((logllhood .* Δt_k) .- max_ll) - log(B) + max_ll * Δt_k
+        log_ss += mean(logllhood .* Δt[k]) 
         @ignore_derivatives @reset st.gen = st_gen
     end
 
     # Posterior expected prior
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    max_lp = maximum(logprior)
-    contrastive_div = logsumexp(logprior .- max_lp) + max_lp
+    contrastive_div = mean(logprior)
 
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, 1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        max_lp = maximum(logprior)
-        contrastive_div -= logsumexp(logprior .- max_lp) + max_lp
+        contrastive_div -= mean(logprior)
     end
 
     loss = -(log_ss + contrastive_div) 

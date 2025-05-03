@@ -121,8 +121,7 @@ function mala_loss(
     z, st, seed = m.posterior_sample(m, x, ps, st, seed)
 
     # Log-dists
-    logprior_prior, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε)
-    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 2], ps.ebm, st.ebm; ε=m.ε)
+    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i)
@@ -131,17 +130,23 @@ function mala_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    logllhood, st_gen = lkhood(z[:, :, :, 2], st.gen)
-    logprior = mean(logprior_pos) - mean(logprior_prior)
+    logllhood, st_gen = lkhood(z[:, :, :, 1], st.gen)
+    contrastive_div = mean(logprior_pos)
+
+    if m.prior.contrastive_div
+        z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
+        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        contrastive_div -= mean(logprior)
+    end
 
     # Expected posterior
     @ignore_derivatives begin
-        m.verbose && println("Prior loss: ", logprior, " LLhood loss: ", mean(logllhood))
+        m.verbose && println("Prior loss: ", contrastive_div, " LLhood loss: ", mean(logllhood))
         @reset st.ebm = st_ebm
         @reset st.gen = st_gen  
     end 
 
-    return -(logprior + mean(logllhood))*m.loss_scaling, st, seed
+    return -(contrastive_div + mean(logllhood))*m.loss_scaling, st, seed
 end
 
 
@@ -170,21 +175,26 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    for k in 1:T-1
+    # Posterior 
+    for k in 1:T-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
-        log_ss += mean(logllhood .* view(Δt, k)) 
+        log_ss += mean(logllhood .* view(Δt, k+1)) 
         @ignore_derivatives @reset st.gen = st_gen
     end
 
-    # Posterior expected prior
     logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     contrastive_div = mean(logprior)
 
+    # Prior
+    z, st_ebm, seed = m.prior.sample_z(m.prior, B, ps.ebm, st.ebm, seed)
     if m.prior.contrastive_div
-        z, st_ebm, seed = m.prior.sample_z(m.prior, B, ps.ebm, st.ebm, seed)
         logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
     end
+
+    logllhood, st_gen = lkhood(z, st.gen)
+    log_ss += mean(logllhood .* view(Δt, 1)) 
+    @ignore_derivatives @reset st.gen = st_gen
 
     loss = -(log_ss + contrastive_div) 
 

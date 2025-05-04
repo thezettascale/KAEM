@@ -17,6 +17,7 @@ parse_conf!(conf)
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
+ENV["autoMALA"] = retrieve(conf, "MALA", "use_autoMALA")
 
 include("src/ML_pipeline/trainer.jl")
 using .trainer

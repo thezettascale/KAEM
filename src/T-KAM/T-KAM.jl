@@ -9,11 +9,18 @@ using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 using LogExpFunctions: logsumexp
 
+
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/autoMALA.jl") # Either autoMALA or ULA
 include("univariate_functions.jl")
 include("../utils.jl")
+
+if parse(Bool, get(ENV, "autoMALA", "false"))
+    include("posterior_sampling/autoMALA.jl")
+else
+    include("posterior_sampling/ULA.jl")
+end
+
 using .ebm_ebm_prior
 using .KAN_likelihood
 using .LangevinSampling: langevin_sampler, l2, cross_entropy

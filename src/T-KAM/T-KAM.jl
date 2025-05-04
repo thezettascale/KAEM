@@ -11,7 +11,7 @@ using LogExpFunctions: logsumexp
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")
-include("posterior_sampling/autoMALA.jl")
+include("posterior_sampling/autoMALA.jl") # Either autoMALA or ULA
 include("univariate_functions.jl")
 include("../utils.jl")
 using .ebm_ebm_prior
@@ -20,25 +20,25 @@ using .LangevinSampling: langevin_sampler, l2, cross_entropy
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
-struct T_KAM <: Lux.AbstractLuxLayer
+struct T_KAM{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
     prior::ebm_prior
     lkhood::KAN_lkhood 
     train_loader::DataLoader
     test_loader::DataLoader
     update_prior_grid::Bool
     update_llhood_grid::Bool
-    grid_update_decay::half_quant
+    grid_update_decay::T
     grid_updates_samples::Int
     IS_samples::Int
     verbose::Bool
-    p::AbstractArray{full_quant}
+    p::AbstractArray{U}
     N_t::Int
     MALA::Bool
-    η_init::full_quant
+    η_init::U
     posterior_sample::Function
     loss_fcn::Function
-    loss_scaling::half_quant    
-    ε::half_quant
+    loss_scaling::T    
+    ε::T
     file_loc::AbstractString
     max_samples::Int
 end
@@ -78,9 +78,9 @@ function importance_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
+    x::AbstractArray{T};
     seed::Int=1
-    )
+    ) where {T<:half_quant}
     """MLE loss with importance sampling."""
     
     z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
@@ -88,7 +88,7 @@ function importance_loss(
 
     # Log-dists
     logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : half_quant(0)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
@@ -96,7 +96,7 @@ function importance_loss(
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])), dims=2) .|> half_quant
+    weights_resampled = @ignore_derivatives softmax(reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])), dims=2) .|> T
     logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
@@ -112,9 +112,9 @@ function mala_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
+    x::AbstractArray{T};
     seed::Int=1
-    )
+    ) where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     # MALA sampling
@@ -154,19 +154,19 @@ function thermo_loss(
     m::T_KAM,
     ps,
     st,
-    x::AbstractArray{half_quant};
+    x::AbstractArray{T};
     seed::Int=1
-    )
+    ) where {T<:half_quant}
     """Annealed importance sampling (AIS) loss."""
 
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(half_quant, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
+    temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
-    Δt, T, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
+    Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
-    log_ss = half_quant(0)
+    log_ss = zero(T)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i)
@@ -176,13 +176,13 @@ function thermo_loss(
     end
 
     # Posterior 
-    for k in 1:T-2
+    for k in 1:T_length-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)                
         log_ss += mean(logllhood .* view(Δt, k+1)) 
         @ignore_derivatives @reset st.gen = st_gen
     end
 
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     contrastive_div = mean(logprior)
 
     # Prior
@@ -341,7 +341,7 @@ function init_T_KAM(
         loss_fcn = mala_loss
     end
     
-    p = [full_quant(1)]
+    p = [one(full_quant)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))

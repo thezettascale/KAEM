@@ -19,7 +19,7 @@ prior_pdf = Dict(
     "ebm" => z -> ones(half_quant, size(z)) |> device,
 )
 
-struct ebm_prior <: Lux.AbstractLuxLayer
+struct ebm_prior{T<:half_quant} <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple
     layernorm::Bool
     depth::Int
@@ -30,13 +30,13 @@ struct ebm_prior <: Lux.AbstractLuxLayer
     q_size::Int
     quad::Function
     N_quad::Int
-    nodes::AbstractArray{half_quant}
-    weights::AbstractArray{half_quant}
+    nodes::AbstractArray{T}
+    weights::AbstractArray{T}
     contrastive_div::Bool
     quad_type::AbstractString
 end
 
-function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
+function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
 
@@ -64,7 +64,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{half_quant})
     return reshape(z, ebm.q_size, ebm.p_size, :), st
 end
 
-function trapezium_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
+function trapezium_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
@@ -101,7 +101,7 @@ function get_gausslegendre(ebm, ps, st)
     return nodes, weights, nodes_cpu
 end
 
-function gausslegendre_quadrature(ebm, ps, st; ε::half_quant=eps(half_quant))
+function gausslegendre_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
@@ -121,8 +121,8 @@ function sample_prior(
     ps,
     st;
     seed::Int=1,
-    ε::half_quant=eps(half_quant)
-    )
+    ε::T=eps(T)
+    ) where {T<:half_quant}
     """
     Component-wise inverse transform sampling for the ebm-prior.
     p = components of model
@@ -172,17 +172,17 @@ function sample_prior(
         end
     end
 
-    return device(half_quant.(z)), st, seed
+    return device(T.(z)), st, seed
 end
 
 function log_prior(
     ebm, 
-    z::AbstractArray{half_quant},
+    z::AbstractArray{T},
     ps, 
     st;
-    ε::half_quant=eps(half_quant),
+    ε::T=eps(half_quant),
     normalize::Bool=false
-    )
+    ) where {T<:half_quant}
     """
     Evaluate the unnormalized log-probability of the ebm-prior.
     The likelihood of samples from each model, z_qp, is evaluated .
@@ -203,9 +203,9 @@ function log_prior(
         The updated states of the ebm-prior.
     """
 
-    log_p = zeros(half_quant, size(z)[end]) |> device
+    log_p = zeros(T, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
-    log_Z = zeros(half_quant, size(z)[1:2]...) |> device
+    log_Z = zeros(T, size(z)[1:2]...) |> device
 
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
@@ -265,8 +265,8 @@ function init_ebm_prior(
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)
-        base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
-        .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
+        base_scale = (μ_scale * (one(full_quant) / √(full_quant(widths[i])))
+        .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- one(full_quant)) .* (one(full_quant) / √(full_quant(widths[i]))))
 
         grid_range_i = i == 1 ? grid_range_first : grid_range
 

@@ -10,7 +10,7 @@ using .Utils: removeNaN, device, half_quant, full_quant
 
 method = get(ENV, "method", "B-spline") 
 
-function extend_grid(grid::AbstractArray{half_quant}; k_extend::Int64=0)
+function extend_grid(grid::AbstractArray{T}; k_extend::Int=0) where {T<:half_quant}
     """
     Extend the grid of knots to include boundary knots.
 
@@ -32,11 +32,11 @@ function extend_grid(grid::AbstractArray{half_quant}; k_extend::Int64=0)
 end
 
 function B_spline_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
+    x::AbstractArray{T},
+    grid::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
     """
     Compute the B-spline basis functions for a batch of points x and a grid of knots.
 
@@ -59,8 +59,8 @@ function B_spline_basis(
         # B0 is piecewise constant
         @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
         @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
-        term1 = half_quant.(term1)
-        term2 = half_quant.(term2)
+        term1 = T.(term1)
+        term2 = T.(term2)
 
         B = term1 .* term2
 
@@ -85,11 +85,11 @@ function B_spline_basis(
 end
 
 function RBF_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
+    x::AbstractArray{T},
+    grid::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
     """
     Compute the RBF basis functions for a batch of points x and a grid of knots.
 
@@ -103,15 +103,15 @@ function RBF_basis(
     """
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
     @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
-    return exp.(-half_quant(0.5) * (diff ./ σ).^2)  
+    return exp.(-T(0.5) * (diff ./ σ).^2)  
 end
 
 function RSWAF_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
+    x::AbstractArray{T},
+    grid::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
     """
     Compute the RSWAF basis functions for a batch of points x and a grid of knots.
         Be careful of vanishing gradients when using this in a deep network.
@@ -131,11 +131,11 @@ function RSWAF_basis(
 end
 
 function FFT_basis(
-    x::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    degree::Int64=3, 
-    σ::Union{half_quant, AbstractArray{half_quant}}=half_quant(1)
-    )
+    x::AbstractArray{T},
+    grid::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
     """
     Compute the FFT basis functions for a batch of points x and a grid of knots.
 
@@ -148,18 +148,18 @@ function FFT_basis(
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
-    freq = half_quant(2π) .* freq .* σ
+    freq = T(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
 end
 
 function coef2curve(
-    x_eval::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant},
-    coef::AbstractArray{half_quant};
-    k::Int64=3, 
-    scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
+    x_eval::AbstractArray{T},
+    grid::AbstractArray{T},
+    coef::AbstractArray{T};
+    k::Int=3, 
+    scale::Union{T, AbstractArray{T}}=one(half_quant), 
     basis_function::Function=B_spline_basis
-    )
+    ) where {T<:half_quant}
     """
     Compute the B-spline curves from the B-spline coefficients.
 
@@ -182,14 +182,14 @@ function coef2curve(
 end
 
 function curve2coef(
-    x::AbstractArray{half_quant},
-    y::AbstractArray{half_quant},
-    grid::AbstractArray{half_quant};
-    k::Int64=3,
-    scale::Union{half_quant, AbstractArray{half_quant}}=half_quant(1), 
-    ε::full_quant=full_quant(1f-4), 
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+    grid::AbstractArray{T};
+    k::Int=3,
+    scale::Union{T, AbstractArray{T}}=one(half_quant), 
+    ε::U=full_quant(1f-4), 
     basis_function::Function=B_spline_basis
-    )
+    ) where {T<:half_quant, U<:full_quant}
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs. CuSolver works best for higher precisions.
@@ -210,7 +210,7 @@ function curve2coef(
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
-    coef = Array{full_quant}(undef, in_size, out_size, G) |> device
+    coef = Array{U}(undef, in_size, out_size, G) |> device
     for i in 1:in_size
         for o in 1:out_size
             coef[i, o, :] .= (

@@ -36,7 +36,7 @@ function device(x)
 end
 
 function removeNaN(x)
-    return ifelse.(isnan.(x), half_quant(0), x) |> device
+    return ifelse.(isnan.(x), zero(half_quant), x) |> device
 end
 
 function removeZero(x; ε=half_quant(1e-4))

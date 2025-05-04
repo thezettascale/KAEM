@@ -23,9 +23,11 @@ output_activation_mapping = Dict(
     "none" => identity,
 )
 
-lkhood_rgb = (x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant)) -> -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+function lkhood_rgb(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
+    -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+end
 
-function lkhood_seq(x::AbstractArray{half_quant}, x̂::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+function lkhood_seq(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
@@ -37,12 +39,12 @@ resampler_map = Dict(
     "stratified" => stratified_resampler,
 )
 
-struct KAN_lkhood <: Lux.AbstractLuxLayer
+struct KAN_lkhood{T<:half_quant} <: Lux.AbstractLuxLayer
     Φ_fcns
     layernorm::Bool
     depth::Int
     out_size::Int
-    σ_llhood::half_quant
+    σ_llhood::T
     log_lkhood::Function
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
@@ -57,8 +59,8 @@ function KAN_gen(
     lkhood, 
     ps, 
     st, 
-    z::AbstractArray{half_quant}    
-    )
+    z::AbstractArray{T}    
+    ) where {T<:half_quant}
     """
     Generate data from the KAN likelihood model.
 
@@ -96,8 +98,8 @@ function CNN_gen(
     lkhood, 
     ps, 
     st, 
-    z::AbstractArray{half_quant}    
-    )
+    z::AbstractArray{T}    
+    ) where {T<:half_quant}
     """
     Generate data from the CNN likelihood model.
     Args:
@@ -128,13 +130,13 @@ function CNN_gen(
 end
 
 function scaled_dot_product_attention(
-    Q::AbstractArray{half_quant},
-    K::AbstractArray{half_quant},
-    V::AbstractArray{half_quant},
+    Q::AbstractArray{T},
+    K::AbstractArray{T},
+    V::AbstractArray{T},
     d_model::Int
-    )
+    ) where {T<:half_quant}
 
-    d_model = sqrt(d_model) |> half_quant
+    d_model = sqrt(d_model) |> T
     @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b] / d_model
     QK = softmax(QK, dims=2)
     return @tullio out[d, t, b] := QK[t, i, b] * V[d, i, b]
@@ -144,8 +146,8 @@ function SEQ_gen(
     lkhood, 
     ps, 
     st, 
-    z::AbstractArray{half_quant}
-    )
+    z::AbstractArray{T}
+    ) where {T<:half_quant}
     """
     Generate data from the Transformer decoder.
 
@@ -202,11 +204,11 @@ function log_likelihood(
     lkhood, 
     ps, 
     st, 
-    x::AbstractArray{half_quant}, 
-    z::AbstractArray{half_quant};
+    x::AbstractArray{T}, 
+    z::AbstractArray{T};
     seed::Int=1,
-    ε::half_quant=eps(half_quant),
-    )
+    ε::T=eps(T),
+    ) where {T<:half_quant}
     """
     Evaluate the unnormalized log-likelihood of the KAN generator.
 
@@ -229,7 +231,7 @@ function log_likelihood(
 
     # Add noise
     seed, rng = next_rng(seed)
-    noise = lkhood.σ_llhood * randn(rng, half_quant, size(x̂)..., B) |> device
+    noise = lkhood.σ_llhood * randn(rng, T, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise) 
     ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
     
@@ -237,12 +239,12 @@ function log_likelihood(
 end
 
 function importance_resampler(
-    weights::AbstractArray{full_quant};
+    weights::AbstractArray{U};
     seed::Int=1,
-    ESS_threshold::full_quant=full_quant(0.5),
+    ESS_threshold::U=full_quant(0.5),
     resampler::Function=systematic_sampler,
     verbose::Bool=false,
-)
+) where {U<:full_quant}
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 
@@ -396,8 +398,8 @@ function init_KAN_lkhood(
     else
         for i in eachindex(widths[1:end-1])
             lkhood_seed, rng = next_rng(lkhood_seed)
-            base_scale = (μ_scale * (full_quant(1) / √(full_quant(widths[i])))
-            .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- full_quant(1)) .* (full_quant(1) / √(full_quant(widths[i]))))
+            base_scale = (μ_scale * (one(full_quant) / √(full_quant(widths[i])))
+            .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- one(full_quant)) .* (one(full_quant) / √(full_quant(widths[i]))))
             @reset Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
 
             if (layernorm && i < depth)

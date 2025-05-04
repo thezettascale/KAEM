@@ -9,7 +9,7 @@ include("../src/utils.jl")
 using .spline_functions
 using .Utils
 
-b, i, g, o, degree, σ = 5, 8, 7, 2, 2, half_quant(1)
+b, i, g, o, degree, σ = 5, 8, 7, 2, 2, one(half_quant)
 
 function test_extend_grid()
     Random.seed!(42)

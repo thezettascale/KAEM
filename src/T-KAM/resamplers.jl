@@ -9,12 +9,12 @@ include("../utils.jl")
 using .Utils: next_rng, full_quant
 
 function residual_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::AbstractArray{U}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 
     seed::Int=1
-    )
+    ) where {U<:full_quant}
     """
     Residual resampling for weight filtering.
 
@@ -36,7 +36,7 @@ function residual_resampler(
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, full_quant, B, maximum(num_remaining))
+    u = rand(rng, U, B, maximum(num_remaining))
     cdf = cumsum(residual_weights, dims=2)
 
     idxs = Array{Int}(undef, B, N)
@@ -66,12 +66,12 @@ function residual_resampler(
 end
 
 function systematic_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::AbstractArray{U}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int;
     seed::Int=1
-    )
+    ) where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -89,7 +89,7 @@ function systematic_resampler(
 
     # Systematic thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, full_quant, B, 1) .+ (0:N-1)') ./ N
+    u = (rand(rng, U, B, 1) .+ (0:N-1)') ./ N
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B
@@ -100,12 +100,12 @@ function systematic_resampler(
 end
 
 function stratified_resampler(
-    weights::AbstractArray{full_quant}, 
+    weights::AbstractArray{U}, 
     ESS_bool::AbstractArray{Bool}, 
     B::Int, 
     N::Int; 
     seed::Int=1
-    )
+    ) where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -123,7 +123,7 @@ function stratified_resampler(
 
     # Stratified thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, full_quant, B, N) .+ (0:N-1)') ./ N
+    u = (rand(rng, U, B, N) .+ (0:N-1)') ./ N
 
     idxs = Array{Int}(undef, B, N)
     Threads.@threads for b in 1:B

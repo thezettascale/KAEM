@@ -15,30 +15,30 @@ using .Preconditioning
 using .HamiltonianDynamics
 
 
-function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+function cross_entropy(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
     return log.(x .+ ε) .* y ./ size(x, 1)
 end
 
-function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
+function l2(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
     return -(x - y).^2
 end
 
 function safe_step_size_update(
-    η::AbstractArray{full_quant}, 
+    η::AbstractArray{U}, 
     δ::AbstractArray{Int}, 
-    Δη::full_quant
-    )
+    Δη::U
+    ) where {U<:full_quant}
     η_new = η .* Δη.^δ
     return ifelse.(isfinite.(η_new), η_new, η)
 end
 
 function check_reversibility(
-    ẑ::AbstractArray{full_quant}, 
-    z::AbstractArray{full_quant}, 
-    η::AbstractArray{full_quant}, 
-    η_prime::AbstractArray{full_quant};
-    tol::full_quant=full_quant(1e-6)
-    )
+    ẑ::AbstractArray{U}, 
+    z::AbstractArray{U}, 
+    η::AbstractArray{U}, 
+    η_prime::AbstractArray{U};
+    tol::U=full_quant(1e-6)
+    ) where {U<:full_quant}
     # Both checks are required to maintain detailed balance
     # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
     step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
@@ -46,18 +46,18 @@ function check_reversibility(
 end
 
 function leapfrop_proposal(
-    z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
+    z::AbstractArray{U},
+    x::AbstractArray{T},
     st,
-    logpos_z::AbstractArray{full_quant},
-    ∇z::AbstractArray{full_quant},
-    momentum::AbstractArray{full_quant},  # This is y = M^{-1/2}p
-    M::AbstractArray{full_quant},         # This is M^{1/2}
-    η::AbstractArray{full_quant},
+    logpos_z::AbstractArray{U},
+    ∇z::AbstractArray{U},
+    momentum::AbstractArray{U},  # This is y = M^{-1/2}p
+    M::AbstractArray{U},         # This is M^{1/2}
+    η::AbstractArray{U},
     logpos_withgrad::Function,
-    domain::Tuple{full_quant, full_quant},
-    temps::AbstractArray{half_quant}
-    )
+    domain::Tuple{U, U},
+    temps::AbstractArray{T}
+    ) where {T<:half_quant, U<:full_quant}
     """
     Implements preconditioned Hamiltonian dynamics with transformed momentum:
     y*(x,y)   = y  + (eps/2)M^{-1/2}grad(log pi)(x)
@@ -88,24 +88,24 @@ function leapfrop_proposal(
 end
 
 function select_step_size(
-    log_a::AbstractArray{full_quant},
-    log_b::AbstractArray{full_quant},
-    z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
-    temps::AbstractArray{half_quant},
+    log_a::AbstractArray{U},
+    log_b::AbstractArray{U},
+    z::AbstractArray{U},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
     st,
-    logpos_z::AbstractArray{full_quant},
-    ∇z::AbstractArray{full_quant},
-    momentum::AbstractArray{full_quant},
-    M::AbstractArray{full_quant},
-    η_init::AbstractArray{full_quant},
-    Δη::full_quant,
-    domain::Tuple{full_quant, full_quant},
+    logpos_z::AbstractArray{U},
+    ∇z::AbstractArray{U},
+    momentum::AbstractArray{U},
+    M::AbstractArray{U},
+    η_init::AbstractArray{U},
+    Δη::U,
+    domain::Tuple{U, U},
     logpos_withgrad::Function;
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
+    η_min::U=full_quant(1e-5),
+    η_max::U=one(full_quant),
     seq::Bool=false
-    )
+    ) where {T<:half_quant, U<:full_quant}
     
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad, domain, temps)
 
@@ -157,25 +157,25 @@ function select_step_size(
 end
 
 function autoMALA_step(
-    log_a::AbstractArray{full_quant},
-    log_b::AbstractArray{full_quant},
-    z::AbstractArray{full_quant},
-    x::AbstractArray{half_quant},
-    temps::AbstractArray{half_quant},
+    log_a::AbstractArray{U},
+    log_b::AbstractArray{U},
+    z::AbstractArray{U},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
     st,
-    logpos_z::AbstractArray{full_quant},
-    ∇z::AbstractArray{full_quant},
-    momentum::AbstractArray{full_quant},
-    M::AbstractArray{full_quant},
-    η_init::AbstractArray{full_quant},
-    Δη::full_quant,
-    domain::Tuple{full_quant, full_quant},
+    logpos_z::AbstractArray{U},
+    ∇z::AbstractArray{U},
+    momentum::AbstractArray{U},
+    M::AbstractArray{U},
+    η_init::AbstractArray{U},
+    Δη::U,
+    domain::Tuple{U, U},
     logpos_withgrad::Function;
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
-    ε::full_quant=eps(full_quant),
+    η_min::U=full_quant(1e-5),
+    η_max::U=one(full_quant),
+    ε::U=eps(full_quant),
     seq::Bool=false
-    )
+    ) where {T<:half_quant, U<:full_quant}
     
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
         log_a, log_b, z, x, temps, st, logpos_z, ∇z, momentum, M, η_init, Δη, domain,
@@ -195,16 +195,16 @@ function langevin_sampler(
     m,
     ps,
     st,
-    x::AbstractArray{half_quant};
-    temps::AbstractArray{half_quant}=[half_quant(1)],
+    x::AbstractArray{T};
+    temps::AbstractArray{T}=[one(half_quant)],
     N::Int=20,
     N_unadjusted::Int=1,
-    Δη::full_quant=full_quant(2),
-    η_min::full_quant=full_quant(1e-5),
-    η_max::full_quant=full_quant(1),
+    Δη::U=full_quant(2),
+    η_min::U=full_quant(1e-5),
+    η_max::U=one(full_quant),
     RE_frequency::Int=10,
     seed::Int=1,
-    )
+    ) where {T<:half_quant, U<:full_quant}  
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 
@@ -223,37 +223,37 @@ function langevin_sampler(
         The updated seed.
     """
     # Get domain bounds
-    domain = full_quant.(m.prior.fcns_qp[Symbol("1")].grid_range)
+    domain = U.(m.prior.fcns_qp[Symbol("1")].grid_range)
     
     # Initialize from prior (already in bounded space)
     z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end]*length(temps), ps.ebm, st.ebm, seed)
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 
-    T, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    z = reshape(z, Q, P, S, T)
+    T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
+    z = reshape(z, Q, P, S, T_length)
 
-    temps = repeat(reshape(temps, 1, T), S, 1)
+    temps = repeat(reshape(temps, 1, T_length), S, 1)
 
     # Initialize preconditioner
-    M = zeros(full_quant, Q, P, 1, T) 
+    M = zeros(U, Q, P, 1, T_length) 
     z_cpu = cpu_device()(z)
-    for k in 1:T
+    for k in 1:T_length
         M[:,:,1,k], seed = init_mass_matrix(view(z_cpu,:,:,:,k), seed)
     end
     @reset st.η_init = device(st.η_init)
 
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, full_quant, S, T, N)) |> device
+    log_u = log.(rand(rng, U, S, T_length, N)) |> device
     seed, rng = next_rng(seed)
-    ratio_bounds = log.(rand(rng, Uniform(0,1), S, T, 2, N)) .|> full_quant |> device
+    ratio_bounds = log.(rand(rng, Uniform(0,1), S, T_length, 2, N)) .|> U |> device
     seed, rng = next_rng(seed)
-    log_u_swap = log.(rand(rng, full_quant, S, T, N)) |> device
+    log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     seq = m.lkhood.seq_length > 1
     ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=(1,2)); dims=(1,2)) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
-    x_t = seq ? repeat(x, 1, 1, 1, T) : repeat(x, 1, 1, 1, 1, T)
+    x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
     
     log_llhood_fcn = (z_i, x_i, st_gen) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
@@ -261,13 +261,13 @@ function langevin_sampler(
         return ll_fn(x̂, x_i) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    function log_posterior(z_i::AbstractArray{half_quant}, x_i::AbstractArray{half_quant}, st_i, t_k::AbstractArray{half_quant})
+    function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t_k::AbstractArray{T}) 
         if ndims(z_i) == 4
-            z_3D = reshape(z_i, Q, P, S*T)
-            x_3D = seq ? reshape(x_i, size(x,1), size(x,2), S*T) : reshape(x_i, size(x,1), size(x,2), size(x,3), S*T)
+            z_3D = reshape(z_i, Q, P, S*T_length)
+            x_3D = seq ? reshape(x_i, size(x,1), size(x,2), S*T_length) : reshape(x_i, size(x,1), size(x,2), size(x,3), S*T_length)
             logprior, st_ebm = log_prior(m.prior, z_3D, ps.ebm, st_i.ebm; ε=m.ε)
             logllhood, st_gen = log_llhood_fcn(z_3D, x_3D, st_i.gen)
-            logpos = reshape(logprior, S, T) + t_k .* reshape(logllhood, S, T)
+            logpos = reshape(logprior, S, T_length) + t_k .* reshape(logllhood, S, T_length)
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
             logprior, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
@@ -276,26 +276,25 @@ function langevin_sampler(
         end
     end
 
-    k = 1
-    num_acceptances = zeros(Int, S, T) |> device
-    mean_η = zeros(full_quant, S, T) |> device
+    num_acceptances = zeros(Int, S, T_length) |> device
+    mean_η = zeros(U, S, T_length) |> device    
     momentum = similar(z) |> cpu_device()
     
     logpos_withgrad = (z_i, x_i, st_i, t_k) -> begin
-        logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(half_quant.(z_i), x_i, Lux.testmode(st_i), t_k)
-        ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))), half_quant.(z_i)))
+        logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(T.(z_i), x_i, Lux.testmode(st_i), t_k)
+        ∇z = CUDA.@fastmath first(gradient(z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))), T.(z_i)))
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
-        return full_quant.(logpos_z) ./ loss_scaling, full_quant.(∇z) ./ loss_scaling, st_i
+        return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
     end 
 
     burn_in = 0
     η = st.η_init
 
-    pos_before = CUDA.@fastmath first(log_posterior(half_quant.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
+    pos_before = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
     for i in 1:N
         z_cpu = cpu_device()(z)
-        for k in 1:T
+        for k in 1:T_length
             momentum[:,:,:,k], M[:,:,1,k], seed = sample_momentum(view(z_cpu,:,:,:,k), M[:,:,1,k]; seed=seed)
         end
 
@@ -331,26 +330,26 @@ function langevin_sampler(
                 device(momentum), 
                 device(repeat(M, 1, 1, S, 1)), 
                 η, 
-                full_quant(Δη), 
+                U(Δη), 
                 domain, 
                 logpos_withgrad; 
                 η_min=η_min, 
                 η_max=η_max, 
-                ε=full_quant(m.ε), 
+                ε=U(m.ε), 
                 seq=seq)
 
             accept = (view(log_u,:,:,i) .< log_r) .* reversible
-            z = z .* reshape(accept, 1, 1, S, T) + z .* reshape(1 .- accept, 1, 1, S, T)
+            z = z .* reshape(accept, 1, 1, S, T_length) + z .* reshape(1 .- accept, 1, 1, S, T_length)
             mean_η .= mean_η .+ η .* accept
             η = (η + η_prime) ./ 2
             num_acceptances .= num_acceptances .+ accept
 
             # Replica exchange Monte Carlo
-            if i % RE_frequency == 0 && T > 1
-                for t in 1:T-1
+            if i % RE_frequency == 0 && T_length > 1
+                for t in 1:T_length-1
 
                     # Global swap criterion
-                    z_hq = half_quant.(z)
+                    z_hq = T.(z)
                     ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
                     ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
                     log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
@@ -367,7 +366,7 @@ function langevin_sampler(
 
 
     end
-    pos_after = CUDA.@fastmath first(log_posterior(half_quant.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
+    pos_after = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
     m.verbose && println("Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))")
 
     mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
@@ -377,6 +376,6 @@ function langevin_sampler(
     m.verbose && println("Acceptance rates: ", dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims=1); dims=1))
     m.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims=1); dims=1))
     
-    return half_quant.(z), st, seed
+    return T.(z), st, seed
 end
 end

@@ -75,14 +75,14 @@ function build_preconditioner!(
 end
 
 function init_mass_matrix(
-    z::AbstractArray{full_quant},
+    z::AbstractArray{U},
     seed::Int=1,
-    )
+    ) where {U<:full_quant}
     Q, P, S = size(z)
     Σ = diag(cov(reshape(z, Q*P, S)'))
 
     seed, rng = next_rng(seed)
-    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> full_quant
+    β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> U
 
     Σ_AM = sqrt.(β .* (1 ./ Σ) .+ (1 - β)) 
     return reshape(Σ_AM, Q, P), seed
@@ -90,11 +90,11 @@ end
 
 # This is transformed momentum!
 function sample_momentum(
-    z::AbstractArray{full_quant},
-    M::AbstractArray{full_quant};
+    z::AbstractArray{U},
+    M::AbstractArray{U};
     seed::Int=1,
     preconditioner::Preconditioner=MixDiagonalPreconditioner(),
-    )
+    ) where {U<:full_quant}
     Q, P, S = size(z)
     
     # Compute M^{1/2}
@@ -107,7 +107,7 @@ function sample_momentum(
     
     # Sample y ~ N(0,I) directly (transformed momentum)
     seed, rng = next_rng(seed)
-    y = randn(rng, full_quant, Q, P, S)
+    y = randn(rng, U, Q, P, S)
     
     return y, M, seed
 end 

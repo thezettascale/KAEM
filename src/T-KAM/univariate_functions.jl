@@ -29,23 +29,23 @@ activation_mapping = Dict(
     "silu" => x -> x .* NNlib.sigmoid_fast(x),
     "elu" => NNlib.elu,
     "celu" => NNlib.celu,
-    "none" => x -> x .* half_quant(0)
+    "none" => x -> x .* zero(half_quant)
 )
 
-struct univariate_function <: Lux.AbstractLuxLayer
+struct univariate_function{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
     spline_degree::Int
     base_activation::Function
     spline_function::Function
-    init_grid::AbstractArray{half_quant}
+    init_grid::AbstractArray{T}
     grid_size::Int
-    grid_update_ratio::half_quant
-    grid_range::Tuple{half_quant, half_quant}
-    ε_scale::half_quant
-    σ_base::AbstractArray{full_quant}
-    σ_spline::full_quant
-    init_τ::AbstractArray{full_quant}
+    grid_update_ratio::T
+    grid_range::Tuple{T, T}
+    ε_scale::T
+    σ_base::AbstractArray{U}
+    σ_spline::U
+    init_τ::AbstractArray{U}
     τ_trainable::Bool
 end
 
@@ -56,23 +56,38 @@ function init_function(
     base_activation::AbstractString="silu",
     spline_function::AbstractString="B-spline",
     grid_size::Int=5,
-    grid_update_ratio::half_quant=half_quant(half_quant(0.02)),
-    grid_range::Tuple{half_quant, half_quant}=(half_quant(0), half_quant(1)),
-    ε_scale::half_quant=half_quant(0.1),
-    σ_base::AbstractArray{full_quant}=[full_quant(NaN)],
-    σ_spline::full_quant=full_quant(1),
-    init_τ::full_quant=full_quant(1),
+    grid_update_ratio::T=half_quant(0.02),
+    grid_range::Tuple{T, T}=(zero(half_quant), one(half_quant)),
+    ε_scale::T=half_quant(0.1),
+    σ_base::AbstractArray{U}=[full_quant(NaN)],
+    σ_spline::U=one(full_quant),
+    init_τ::U=one(full_quant),
     τ_trainable::Bool=true
-)
+) where {T<:half_quant, U<:full_quant}
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid = spline_function == "FFT" ? collect(half_quant, 0:grid_size) : range(grid_range[1], grid_range[2], length=grid_size + 1)
-    grid = half_quant.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
+    grid = spline_function == "FFT" ? collect(T, 0:grid_size) : range(grid_range[1], grid_range[2], length=grid_size + 1)
+    grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
     grid = extend_grid(grid; k_extend=spline_degree) 
-    σ_base = any(isnan.(σ_base)) ? ones(full_quant, in_dim, out_dim) : σ_base
+    σ_base = any(isnan.(σ_base)) ? ones(U, in_dim, out_dim) : σ_base
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
     spline_function = get(SplineBasis_mapping, spline_function, B_spline_basis)
-    return univariate_function(in_dim, out_dim, spline_degree, base_activation, spline_function, grid, grid_size, grid_update_ratio, grid_range, ε_scale, σ_base, σ_spline, [init_τ], τ_trainable)
+    
+    return univariate_function(
+        in_dim, 
+        out_dim, 
+        spline_degree, 
+        base_activation, 
+        spline_function, 
+        grid, grid_size, 
+        grid_update_ratio, 
+        grid_range, 
+        ε_scale,
+        σ_base, 
+        σ_spline, 
+        [init_τ], 
+        τ_trainable
+        )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
@@ -97,7 +112,7 @@ function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
     return l.τ_trainable ? (mask=mask, grid=l.init_grid) : (mask=mask, grid=l.init_grid, basis_τ=half_quant.(l.init_τ))
 end
 
-function fwd(l, ps, st, x)
+function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     """
     Forward pass for the univariate function.
 
@@ -121,7 +136,7 @@ function fwd(l, ps, st, x)
     return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
 end
 
-function update_fcn_grid(l, ps, st, x)
+function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     """
     Adapt the function's grid to the distribution of the input data.
 
@@ -151,7 +166,7 @@ function update_fcn_grid(l, ps, st, x)
 
     # Uniform grid
     h = (grid_adaptive[:, end:end] .- grid_adaptive[:, 1:1]) ./ num_interval # step size
-    range = collect(half_quant, 0:num_interval)[:, :] |> permutedims |> device
+    range = collect(T, 0:num_interval)[:, :] |> permutedims |> device
     grid_uniform = h .* range .+ grid_adaptive[:, 1:1] 
 
     # Grid is a convex combination of the uniform and adaptive grid

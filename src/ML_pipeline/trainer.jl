@@ -17,7 +17,7 @@ using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Zygote: withgradient
 
-mutable struct T_KAM_trainer
+mutable struct T_KAM_trainer{T <: full_quant, U <: full_quant}
     model
     cnn::Bool
     o::opt
@@ -26,7 +26,7 @@ mutable struct T_KAM_trainer
     st::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any, Int}
-    x::AbstractArray{half_quant}
+    x::AbstractArray{T}
     num_generated_samples::Int
     batch_size_for_gen::Int
     seed::Int
@@ -34,7 +34,7 @@ mutable struct T_KAM_trainer
     last_grid_update::Int
     save_model::Bool
     gen_type::AbstractString
-    loss::full_quant
+    loss::U
     checkpoint_every::Int
 end
 
@@ -113,7 +113,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         1,
         save_model,
         gen_type,
-        full_quant(0),
+        zero(full_quant),
         checkpoint_every,
     )
 end
@@ -249,23 +249,23 @@ function train!(t::T_KAM_trainer)
     res = Optimization.solve(optprob, t.o.init_optimizer();
         maxiters=num_param_updates, 
         verbose=true,
-        abstol=-full_quant(1),
-        reltol=-full_quant(1),
-        x_tol=-full_quant(1), 
-        x_abstol=-full_quant(1), 
-        x_reltol=-full_quant(1), 
-        f_tol=-full_quant(1), 
-        f_abstol=-full_quant(1), 
-        f_reltol=-full_quant(1), 
-        g_tol=-full_quant(1),
-        g_abstol=-full_quant(1), 
-        g_reltol=-full_quant(1),
-        outer_x_abstol=-full_quant(1), 
-        outer_x_reltol=-full_quant(1), 
-        outer_f_abstol=-full_quant(1), 
-        outer_f_reltol=-full_quant(1), 
-        outer_g_abstol=-full_quant(1), 
-        outer_g_reltol=-full_quant(1), 
+        abstol=-one(full_quant),
+        reltol=-one(full_quant),
+        x_tol=-one(full_quant), 
+        x_abstol=-one(full_quant), 
+        x_reltol=-one(full_quant), 
+        f_tol=-one(full_quant), 
+        f_abstol=-one(full_quant), 
+        f_reltol=-one(full_quant), 
+        g_tol=-one(full_quant),
+        g_abstol=-one(full_quant), 
+        g_reltol=-one(full_quant),
+        outer_x_abstol=-one(full_quant), 
+        outer_x_reltol=-one(full_quant), 
+        outer_f_abstol=-one(full_quant), 
+        outer_f_reltol=-one(full_quant), 
+        outer_g_abstol=-one(full_quant), 
+        outer_g_reltol=-one(full_quant), 
         successive_f_tol=num_param_updates,
         allow_f_increases=true, 
         allow_outer_f_increases=true,

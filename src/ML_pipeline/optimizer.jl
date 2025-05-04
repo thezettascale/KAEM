@@ -34,7 +34,7 @@ function create_opt(conf::ConfParse)
         "strongwolfe" => LineSearches.StrongWolfe{full_quant}(c_1=c_1, c_2=c_2, ρ=ρ),
         "backtrack" => LineSearches.BackTracking{full_quant}(c_1=c_1, ρ_hi=ρ, ρ_lo=full_quant(0.1), maxstep=Inf32),
         "hagerzhang" => LineSearches.HagerZhang{full_quant}(),
-        "morethuente" => LineSearches.MoreThuente{full_quant}(f_tol=full_quant(0), gtol=full_quant(0), x_tol=full_quant(0)),
+        "morethuente" => LineSearches.MoreThuente{full_quant}(f_tol=zero(full_quant), gtol=zero(full_quant), x_tol=zero(full_quant)),
     )[ls_type]
 
     linesearch = (a...) -> linesearch(a...) 

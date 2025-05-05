@@ -346,10 +346,10 @@ function langevin_sampler(
 
             # Replica exchange Monte Carlo
             if i % RE_frequency == 0 && T_length > 1
+                z_hq = T.(z)
                 for t in 1:T_length-1
 
                     # Global swap criterion
-                    z_hq = T.(z)
                     ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
                     ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
                     log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)

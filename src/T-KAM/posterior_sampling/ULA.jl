@@ -7,9 +7,10 @@ using Zygote: gradient
 
 include("../../utils.jl")
 include("../EBM_prior.jl")
+include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
-
+using .KAN_likelihood: log_likelihood
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     return log.(x .+ ε) .* y ./ size(x, 1)
 end
@@ -72,19 +73,25 @@ function langevin_sampler(
     # Avoid looped stochasticity
     seed, rng = next_rng(seed)
     noise = randn(rng, U, Q, P, S, T_length, N)
+    seed, rng = next_rng(seed)
+    log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
-    seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    # seq = m.lkhood.seq_length > 1
+    # ll_fn = seq ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
     
+    log_llhood_fcn = (z_i, st_gen) -> begin
+        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
+        return ll, st_gen
+    end
+
     function log_posterior(z_i::AbstractArray{T}, st_i)
         logpos_tot = zero(T)
         st_ebm, st_gen = st_i.ebm, st_i.gen
         for k in 1:T_length
             z_k = view(z_i, :, :, :, k)
             lp, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-            x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_k)
-            x̂ = m.lkhood.output_activation(x̂) 
-            logpos_tot += sum(lp) + sum(view(temps, k) .* ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2))
+            ll, st_gen = log_llhood_fcn(z_k, st_gen)
+            logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
         end
         return logpos_tot * m.loss_scaling, st_ebm, st_gen
     end
@@ -107,6 +114,21 @@ function langevin_sampler(
         reflect_high = z .> last(domain)
         z = ifelse.(reflect_low, 2*first(domain) .- z, z)
         z = ifelse.(reflect_high, 2*last(domain) .- z, z)
+
+        if i % RE_frequency == 0 && T_length > 1
+            z_hq = T.(z)
+            for t in 1:T_length-1
+                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
+                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
+                log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
+                swap = view(log_u_swap,:,t,i) .< log_swap_ratio
+                @reset st.gen = st_gen
+
+                # Swap samples where accepted
+                z[:,:,:,t] .= z[:,:,:,t] .* reshape(swap, 1, 1, S) + z[:,:,:,t+1] .* reshape(1 .- swap, 1, 1, S)
+                z[:,:,:,t+1] .= z[:,:,:,t+1] .* reshape(swap, 1, 1, S) + z[:,:,:,t] .* reshape(1 .- swap, 1, 1, S)
+            end
+        end
     end
 
     pos_after = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling

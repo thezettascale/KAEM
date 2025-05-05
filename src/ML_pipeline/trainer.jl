@@ -17,7 +17,7 @@ using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Zygote: withgradient
 
-mutable struct T_KAM_trainer{T <: full_quant, U <: full_quant}
+mutable struct T_KAM_trainer{T <: half_quant, U <: full_quant}
     model
     cnn::Bool
     o::opt

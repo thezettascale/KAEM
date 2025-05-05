@@ -76,13 +76,20 @@ function langevin_sampler(
     seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
-    # seq = m.lkhood.seq_length > 1
-    # ll_fn = seq ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    seq = m.lkhood.seq_length > 1
+    ll_fn = seq ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
     
+    # log_llhood_fcn = (z_i, st_gen) -> begin
+    #     ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
+    #     return ll, st_gen
+    # end
+
     log_llhood_fcn = (z_i, st_gen) -> begin
-        ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
-        return ll, st_gen
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂, x_i) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
+
 
     function log_posterior(z_i::AbstractArray{T}, st_i)
         logpos_tot = zero(T)

@@ -129,16 +129,16 @@ function mala_loss(
 
     # Log-dists
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    # ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    # function lkhood(z_i, st_i)
-    #     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-    #     x̂ = m.lkhood.output_activation(x̂)
-    #     return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
-    # end
+    function lkhood(z_i, st_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
+    end
 
-    # logllhood, st_gen = lkhood(z[:, :, :, 1], st.gen)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 1]; seed=seed, ε=m.ε)
+    logllhood, st_gen = lkhood(z[:, :, :, 1], st.gen)
+    # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 1]; seed=seed, ε=m.ε)
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
@@ -175,18 +175,18 @@ function thermo_loss(
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
-    # ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
-    # function lkhood(z_i, st_i)
-    #     x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-    #     x̂ = m.lkhood.output_activation(x̂)
-    #     return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
-    # end
+    function lkhood(z_i, st_i)
+        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
+        x̂ = m.lkhood.output_activation(x̂)
+        return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
+    end
 
     # Posterior 
     for k in 1:T_length-2
-        # logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
-        logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)              
+        logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
+        # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)              
         log_ss += mean(logllhood .* view(Δt, k+1)) 
         @ignore_derivatives @reset st.gen = st_gen
     end
@@ -201,8 +201,8 @@ function thermo_loss(
         contrastive_div -= mean(logprior)
     end
 
-    # logllhood, st_gen = lkhood(z, st.gen)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    logllhood, st_gen = lkhood(z, st.gen)
+    # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     log_ss += mean(logllhood .* view(Δt, 1)) 
     @ignore_derivatives @reset st.gen = st_gen
 

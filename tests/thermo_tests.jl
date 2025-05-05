@@ -3,6 +3,7 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, ComponentArrays
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP16"
+ENV["autoMALA"] = "true"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/utils.jl")

@@ -344,7 +344,7 @@ function langevin_sampler(
             accept = (view(log_u,:,:,i) .< log_r) .* reversible
             z = z .* reshape(accept, 1, 1, S, T_length) + z .* reshape(1 .- accept, 1, 1, S, T_length)
             mean_η .= mean_η .+ η .* accept
-            η = (η + η_prime) ./ 2
+            η = η .* accept .+ η_prime .* (1 .- accept)
             num_acceptances .= num_acceptances .+ accept
 
             # Replica exchange Monte Carlo

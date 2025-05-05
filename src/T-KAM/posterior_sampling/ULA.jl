@@ -118,8 +118,8 @@ function langevin_sampler(
         if i % RE_frequency == 0 && T_length > 1
             z_hq = T.(z)
             for t in 1:T_length-1
-                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
-                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
+                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen)
+                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), st_gen)
                 log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
                 swap = view(log_u_swap,:,t,i) .< log_swap_ratio
                 @reset st.gen = st_gen

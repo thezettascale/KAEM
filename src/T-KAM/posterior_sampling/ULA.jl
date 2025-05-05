@@ -86,8 +86,7 @@ function langevin_sampler(
 
     log_llhood_fcn = (z_i, st_gen) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
-        return ll_fn(x̂, x_i) ./ (2*m.lkhood.σ_llhood^2), st_gen
+        return ll_fn(m.lkhood.output_activation(x̂)) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
 

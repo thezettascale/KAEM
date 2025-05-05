@@ -25,5 +25,5 @@ using .trainer
 rng = Random.seed!(1)
 
 # Thermodynamic
-t = init_trainer(rng, conf, dataset; img_resize=(16,16))
+t = init_trainer(rng, conf, dataset)
 train!(t)  

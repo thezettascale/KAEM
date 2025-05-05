@@ -261,18 +261,21 @@ function langevin_sampler(
         return ll_fn(x̂, x_i) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t_k::AbstractArray{T}) 
+    function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t::AbstractArray{T}) 
         if ndims(z_i) == 4
-            z_3D = reshape(z_i, Q, P, S*T_length)
-            x_3D = seq ? reshape(x_i, size(x,1), size(x,2), S*T_length) : reshape(x_i, size(x,1), size(x,2), size(x,3), S*T_length)
-            logprior, st_ebm = log_prior(m.prior, z_3D, ps.ebm, st_i.ebm; ε=m.ε)
-            logllhood, st_gen = log_llhood_fcn(z_3D, x_3D, st_i.gen)
-            logpos = reshape(logprior, S, T_length) + t_k .* reshape(logllhood, S, T_length)
+            logpos = zeros(T, S, 0) |> device
+            for k in 1:T_length
+                z_k, t_k = view(z_i,:,:,:,k), view(t,:,k)
+                x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
+                logprior, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
+                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_i.gen)
+                logpos = hcat(logpos, logprior + t_k .* logllhood)
+            end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
             logprior, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
             logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_i.gen)
-            return (logprior + t_k .* logllhood) .* m.loss_scaling, st_ebm, st_gen
+            return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
         end
     end
 

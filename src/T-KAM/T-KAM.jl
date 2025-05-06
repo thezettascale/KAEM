@@ -222,7 +222,7 @@ function update_model_grid(
     ps, 
     st; 
     seed::Int=1
-    ) where {T :< half_quant}
+    )  where {T<:half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 

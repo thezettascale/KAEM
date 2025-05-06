@@ -74,4 +74,4 @@ Julia/Lux is adopted instead of PyTorch or JAX because:
 - I find Julia easier to prototype with than JAX.
 - Julia codes natively to the GPU, (i.e. no separate CUDA/TPU code). Native GPU Python programming was only recently announced. This is important for KANs.
 
-I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in different applications. I started off with PyTorch, then JAX, then Julia. I also wish Julia were more popular, hence why I'm trying to spread it. 
+I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in different applications. I gradually moved from PyTorch, to JAX, then Julia due to things I like. I also wish Julia were more popular, hence why I'm trying to spread it. 

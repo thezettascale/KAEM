@@ -2,7 +2,7 @@ using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/ML_pipeline/data_utils.jl")
@@ -39,7 +39,7 @@ function benchmark_dim(n_z)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
-display(@benchmark CUDA.@sync benchmark_dim(10))
-display(@benchmark CUDA.@sync benchmark_dim(20))
-display(@benchmark CUDA.@sync benchmark_dim(40))
-display(@benchmark CUDA.@sync benchmark_dim(80))
+display(@benchmark CUDA.@sync benchmark_dim(25))
+display(@benchmark CUDA.@sync benchmark_dim(50))
+display(@benchmark CUDA.@sync benchmark_dim(100))
+display(@benchmark CUDA.@sync benchmark_dim(200))

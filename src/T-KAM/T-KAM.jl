@@ -125,7 +125,7 @@ function mala_loss(
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     # MALA sampling
-    z, st, seed = m.posterior_sample(m, x, ps, st, seed)
+    z, st, seed = m.posterior_sample(m, x, 0, ps, st, seed)
 
     # Log-dists
     logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
@@ -239,10 +239,12 @@ function update_model_grid(
     """
     ps = ps .|> T
 
+    temps = model.N_t > 1 ? collect(T, [(k / model.N_t)^model.p[st.train_idx] for k in 0:model.N_t])[2:end] |> device : 0
+
     if model.update_prior_grid
 
         z, _, seed = ((model.MALA || model.N_t > 1) ? 
-            model.posterior_sample(model, x, ps, st, seed) : 
+            model.posterior_sample(model, x, temps, ps, st, seed) : 
             model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
             )
 
@@ -269,7 +271,7 @@ function update_model_grid(
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, T.(ps), st, seed
 
     z, _, seed = ((model.MALA || model.N_t > 1) ? 
-        model.posterior_sample(model, x, ps, st, seed) : 
+        model.posterior_sample(model, x, temps, ps, st, seed) : 
         model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed))
 
     z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims=2); dims=2)
@@ -357,7 +359,7 @@ function init_T_KAM(
     # Importance sampling or MALA
     posterior_fcn = identity
     if use_MALA && !(N_t > 1) 
-        posterior_fcn = (m, x, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = mala_loss
     end
     

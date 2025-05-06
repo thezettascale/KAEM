@@ -248,6 +248,7 @@ function update_model_grid(
 
         z = reshape(z, size(z, 1), size(z, 2), :)
         P, Q, B = size(z)
+        z = reshape(z, P, Q*B)
 
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)

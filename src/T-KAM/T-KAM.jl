@@ -276,12 +276,12 @@ function update_model_grid(
         if (model.MALA || model.N_t > 1)
             z, st, seed = model.posterior_sample(model, x, ps, st, seed)
             Q, P, B, T = size(z)
-            z = reshape(dropdims(sum(z, dims=2); dims=2), Q, B*T)
+            reshape(dropdims(sum(z, dims=2); dims=2), Q, B*T)
         else
             z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
             Q, P, B = size(z)
             @reset st.ebm = st_ebm
-            z = dropdims(sum(z, dims=2); dims=2)
+            dropdims(sum(z, dims=2); dims=2)
         end
     end
 

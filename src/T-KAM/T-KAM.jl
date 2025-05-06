@@ -246,8 +246,9 @@ function update_model_grid(
             model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
             )
 
-        z = reshape(z, size(z, 1), size(z, 2), :)
-        P, Q, B = size(z)
+        P, Q = model.prior.p_size, model.prior.q_size
+        z = reshape(z, P, Q, :)
+        B = size(z, 3)
         z = reshape(z, P, Q*B)
 
         for i in 1:model.prior.depth
@@ -256,7 +257,7 @@ function update_model_grid(
             @reset st.ebm[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, size(z, 2), P*B) : dropdims(sum(z, dims=1); dims=1)
+            z = i == 1 ? reshape(z, size(z, 2), P*Q*B) : dropdims(sum(z, dims=1); dims=1)
 
             if model.prior.layernorm && i < model.prior.depth
                 z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])

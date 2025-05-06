@@ -241,12 +241,12 @@ function update_model_grid(
 
     if model.update_prior_grid
 
-        z, Q, P, B, T = begin
+        z, Q, P, B, T_length = begin
             if (model.MALA || model.N_t > 1)
                 z, st, seed = model.posterior_sample(model, x, ps, st, seed)
-                Q, P, B, T = size(z)
-                z = reshape(z, P, Q*B*T)
-                z, Q, P, B, T
+                Q, P, B, T_length = size(z)
+                z = reshape(z, P, Q*B*T_length)
+                z, Q, P, B, T_length
             else
                 z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
                 Q, P, B = size(z)
@@ -275,8 +275,8 @@ function update_model_grid(
     z = begin
         if (model.MALA || model.N_t > 1)
             z, st, seed = model.posterior_sample(model, x, ps, st, seed)
-            Q, P, B, T = size(z)
-            reshape(dropdims(sum(z, dims=2); dims=2), Q, B*T)
+            Q, P, B, T_length = size(z)
+            reshape(dropdims(sum(z, dims=2); dims=2), Q, B*T_length)
         else
             z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
             Q, P, B = size(z)

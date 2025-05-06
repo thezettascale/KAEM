@@ -1,6 +1,6 @@
 #!/bin/bash
 
-JL_FILES=("benches/MALA_steps.jl")
+JL_FILES=("benches/latent_dim.jl")
 
 for benchmark in "${JL_FILES[@]}"; do
 

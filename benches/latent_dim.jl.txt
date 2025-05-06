@@ -1,17 +1,22 @@
-Precompiling BenchmarkTools...
-    941.9 ms  ✓ JSON
-    850.5 ms  ✓ BenchmarkTools
-  2 dependencies successfully precompiled in 2 seconds. 14 already precompiled.
 Resized dataset to (28, 28, 1)
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 6.887 s (0.00% GC) to evaluate,
- with a memory estimate of 868.37 MiB, over 19991483 allocations.
+ Single result which took 12.325 s (1.20% GC) to evaluate,
+ with a memory estimate of 819.62 MiB, over 21760537 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 14.235 s (1.56% GC) to evaluate,
- with a memory estimate of 1.49 GiB, over 40666450 allocations.
+ Single result which took 25.240 s (1.30% GC) to evaluate,
+ with a memory estimate of 1.48 GiB, over 44223592 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 29.748 s (1.64% GC) to evaluate,
- with a memory estimate of 2.95 GiB, over 87218646 allocations.
+ Single result which took 40.650 s (1.76% GC) to evaluate,
+ with a memory estimate of 2.23 GiB, over 68530209 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 66.514 s (1.85% GC) to evaluate,
- with a memory estimate of 6.64 GiB, over 201161187 allocations.
+ Single result which took 52.286 s (1.59% GC) to evaluate,
+ with a memory estimate of 3.04 GiB, over 94673691 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 66.928 s (1.61% GC) to evaluate,
+ with a memory estimate of 3.93 GiB, over 122657531 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 82.800 s (1.63% GC) to evaluate,
+ with a memory estimate of 4.87 GiB, over 152481722 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 112.640 s (1.56% GC) to evaluate,
+ with a memory estimate of 5.87 GiB, over 184145695 allocations.

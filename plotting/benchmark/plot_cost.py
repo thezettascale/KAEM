@@ -10,12 +10,36 @@ plt.rcParams.update({
     'text.latex.preamble': r'\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}'  
 })
 
+# Resized dataset to (28, 28, 1)
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 12.325 s (1.20% GC) to evaluate,
+#  with a memory estimate of 819.62 MiB, over 21760537 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 25.240 s (1.30% GC) to evaluate,
+#  with a memory estimate of 1.48 GiB, over 44223592 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 40.650 s (1.76% GC) to evaluate,
+#  with a memory estimate of 2.23 GiB, over 68530209 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 52.286 s (1.59% GC) to evaluate,
+#  with a memory estimate of 3.04 GiB, over 94673691 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 66.928 s (1.61% GC) to evaluate,
+#  with a memory estimate of 3.93 GiB, over 122657531 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 82.800 s (1.63% GC) to evaluate,
+#  with a memory estimate of 4.87 GiB, over 152481722 allocations.
+# BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+#  Single result which took 112.640 s (1.56% GC) to evaluate,
+#  with a memory estimate of 5.87 GiB, over 184145695 allocations.
+
+
 latent_dim = pd.DataFrame({
-    r"$n_z$" : [10, 20, 40, 80],
-    "Time (s)" : [6.887, 14.235, 29.748, 66.514],
-    "Memory Estimate (GiB)" : [0.868, 1.49, 2.95, 6.64],  
-    "Garbage Collection (%)" : [0.00, 1.56, 1.64, 1.85],
-    "Allocations" : [19991483, 40666450, 87218646, 201161187],
+    r"$n_z$" : [10, 20, 30, 40, 50, 60, 70],
+    "Time (s)" : [12.325, 25.240, 40.650, 52.286, 66.928, 82.800, 112.640],
+    "Memory Estimate (GiB)" : [0.819, 1.48, 2.23, 3.04, 3.93, 4.87, 5.87],  
+    "Garbage Collection (%)" : [0.00, 1.30, 1.76, 1.59, 1.61, 1.63, 1.56],
+    "Allocations" : [21760537, 44223592, 68530209, 94673691, 122657531, 152481722, 184145695],
 })
 
 mala_steps = pd.DataFrame({
@@ -27,8 +51,8 @@ mala_steps = pd.DataFrame({
 })
 
 keys = [r"$n_z$", r"$N_{\text{local}}$ variable \\ ($N_{\text{unadjusted}}=1, N_{t}=5$)"]
-colours = ["viridis", "cividis"]
-elevations = [0.22, 0.04]
+colours = ["autumn", "cividis"]
+elevations = [0.24, 0.04]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:
@@ -40,12 +64,12 @@ def add_text_annotations(ax, round=False, elevation=0.45):
         ax.text(
             bar.get_x() + bar.get_width() / 2, 
             elevation * ax.get_ylim()[1], 
-            text, ha='center', va='bottom', color='red', 
+            text, ha='center', va='bottom', color='blue', 
             rotation=45
         )
 
 for (idx, df) in enumerate([latent_dim, mala_steps]):
-    fig, axs = plt.subplots(2, 2, figsize=(7, 7))
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
     selected_colors = sns.color_palette(colours[idx], len("Time (s)") + 1)
     colors = [selected_colors[0], selected_colors[2], selected_colors[3], selected_colors[4]]
 

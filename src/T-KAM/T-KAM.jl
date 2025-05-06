@@ -218,15 +218,17 @@ end
 
 function update_model_grid(
     model::T_KAM,
+    x::AbstractArray{T},
     ps, 
     st; 
     seed::Int=1
-    )
+    ) where {T :< half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 
     Args:
         model: The model.
+        x: Data samples.
         ps: The parameters of the model.
         st: The states of the model.
 
@@ -235,13 +237,23 @@ function update_model_grid(
         The updated params.
         The updated seed.
     """
-    ps = ps .|> half_quant
+    ps = ps .|> T
 
     if model.update_prior_grid
-        z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-        Q, P, B = size(z)
-        z = reshape(z, P, Q*B)
-        @reset st.ebm = st_ebm
+
+        z, Q, P, B, T = begin
+            if (model.MALA || model.N_t > 1)
+                z, st, seed = model.posterior_sample(model, x, ps, st, seed)
+                Q, P, B, T = size(z)
+                z = reshape(z, P, Q*B*T)
+                z, Q, P, B, T
+            else
+                z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+                Q, P, B = size(z)
+                z = reshape(z, P, Q*B)
+                z, Q, P, B, 1
+            end
+        end
 
         for i in 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
@@ -249,7 +261,7 @@ function update_model_grid(
             @reset st.ebm[Symbol("$i")].grid = new_grid
 
             z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, size(z, 2), P*Q*B) : dropdims(sum(z, dims=1); dims=1)
+            z = i == 1 ? reshape(z, size(z, 2), P*Q*B*T) : dropdims(sum(z, dims=1); dims=1)
 
             if model.prior.layernorm && i < model.prior.depth
                 z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
@@ -258,11 +270,20 @@ function update_model_grid(
         end
     end
          
-    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, half_quant.(ps), st, seed
+    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, T.(ps), st, seed
 
-    z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
-    z = dropdims(sum(z, dims=2); dims=2)
-    @reset st.ebm = st_ebm
+    z = begin
+        if (model.MALA || model.N_t > 1)
+            z, st, seed = model.posterior_sample(model, x, ps, st, seed)
+            Q, P, B, T = size(z)
+            z = reshape(dropdims(sum(z, dims=2); dims=2), Q, B*T)
+        else
+            z, st_ebm, seed = model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+            Q, P, B = size(z)
+            @reset st.ebm = st_ebm
+            z = dropdims(sum(z, dims=2); dims=2)
+        end
+    end
 
     for i in 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
@@ -278,7 +299,7 @@ function update_model_grid(
         end
     end
 
-    return model, half_quant.(ps), st, seed
+    return model, T.(ps), st, seed
 end
 
 function init_T_KAM(

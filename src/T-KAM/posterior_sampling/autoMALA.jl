@@ -55,7 +55,6 @@ function leapfrop_proposal(
     M::AbstractArray{U},         # This is M^{1/2}
     η::AbstractArray{U},
     logpos_withgrad::Function,
-    domain::Tuple{U, U},
     temps::AbstractArray{T}
     ) where {T<:half_quant, U<:full_quant}
     """
@@ -66,14 +65,6 @@ function leapfrop_proposal(
     """
     # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
     p, ẑ = ndims(z) == 4 ? position_update_4d(z, momentum, ∇z, M, η) : position_update_3d(z, momentum, ∇z, M, η)
-
-    # # Reflect at boundaries, both position and momentum
-    # reflect_low = ẑ .< first(domain)
-    # reflect_high = ẑ .> last(domain)
-    # ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
-    # ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
-    # p = ifelse.(reflect_low, -p, p)
-    # p = ifelse.(reflect_high, -p, p)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st, temps)
@@ -100,14 +91,13 @@ function select_step_size(
     M::AbstractArray{U},
     η_init::AbstractArray{U},
     Δη::U,
-    domain::Tuple{U, U},
     logpos_withgrad::Function;
     η_min::U=full_quant(1e-5),
     η_max::U=one(full_quant),
     seq::Bool=false
     ) where {T<:half_quant, U<:full_quant}
     
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad, domain, temps)
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(z, x, st, logpos_z, ∇z, momentum, M, η_init, logpos_withgrad, temps)
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0) |> cpu_device()
@@ -135,7 +125,6 @@ function select_step_size(
                 M[:,:,active_chains],
                 η_init[active_chains], 
                 logpos_withgrad,
-                domain,
                 temps[active_chains]
             )
         
@@ -169,7 +158,6 @@ function autoMALA_step(
     M::AbstractArray{U},
     η_init::AbstractArray{U},
     Δη::U,
-    domain::Tuple{U, U},
     logpos_withgrad::Function;
     η_min::U=full_quant(1e-5),
     η_max::U=one(full_quant),
@@ -178,12 +166,12 @@ function autoMALA_step(
     ) where {T<:half_quant, U<:full_quant}
     
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
-        log_a, log_b, z, x, temps, st, logpos_z, ∇z, momentum, M, η_init, Δη, domain,
+        log_a, log_b, z, x, temps, st, logpos_z, ∇z, momentum, M, η_init, Δη,
         logpos_withgrad; η_min=η_min, η_max=η_max, seq=seq
     )
     
     z_rev, _, _, _, η_prime, _, st = select_step_size(
-        log_a, log_b, ẑ, x, temps, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη, domain,
+        log_a, log_b, ẑ, x, temps, st, logpos_ẑ, ∇ẑ, p̂, M, η_init, Δη,
         logpos_withgrad; η_min=η_min, η_max=η_max, seq=seq
     )
     
@@ -222,8 +210,6 @@ function langevin_sampler(
         The posterior samples.
         The updated seed.
     """
-    # Get domain bounds
-    domain = U.(m.prior.fcns_qp[Symbol("1")].grid_range)
     
     # Initialize from prior (already in bounded space)
     z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end]*length(temps), ps.ebm, st.ebm, seed)
@@ -317,7 +303,6 @@ function langevin_sampler(
                 device(repeat(M, 1, 1, S, 1)), 
                 η, 
                 logpos_withgrad, 
-                domain, 
                 temps
                 )
         else
@@ -334,7 +319,6 @@ function langevin_sampler(
                 device(repeat(M, 1, 1, S, 1)), 
                 η, 
                 U(Δη), 
-                domain, 
                 logpos_withgrad; 
                 η_min=η_min, 
                 η_max=η_max, 

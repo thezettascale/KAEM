@@ -1,17 +1,21 @@
-# T-KAM
+# T-KAM 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Official implementation of the Thermodynamic Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
 
 Go see our [website!](https://exalaboratories.com). We are more efficient and versatile than GPUs/TPUs!
 
+It's early stages and I'm planning to add more - for updates, please follow me on [LinkedIn](https://www.linkedin.com/in/prithvi-raj-eng/) or [Twitter (will add link when password found)]().
+
 ## What is T-KAM.
 
-T-KAM is an alt-gen AI model presented by Exa Laboratories at ...
+T-KAM is a generative model presented at ...
 
 It uses:
 
 - **The Kolmogorov-Arnold theorem** - any continous function can be represented in a finite manner.
 - **Empirical Bayes** - the prior is initialized and updated using observations from the data. It can also be recovered by visualizing its components.
-- **Thermodynamic Integration** - the practicality of the theorem is improved using another means of marginal likelihood estimation.
+- **Thermodynamic Integration [MAYBE COMING SOON]** - the practicality of the theorem is hopefully going to be improved using another means of marginal likelihood estimation.
 
 ## Setup:
 
@@ -71,4 +75,4 @@ Julia/Lux is adopted instead of PyTorch or JAX because:
 - I find Julia easier to prototype with than JAX.
 - Julia codes natively to the GPU, (i.e. no separate CUDA/TPU code). Native GPU Python programming was only recently announced. This is important for KANs.
 
-I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in different applications. I started off with PyTorch, then JAX, then Julia. I just wish Julia were more popular, hence why I'm trying to popularize it lol. 
+I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in different applications. I started off with PyTorch, then JAX, then Julia. I also wish Julia were more popular, hence why I'm trying to spread it. 

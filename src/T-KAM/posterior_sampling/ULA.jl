@@ -115,11 +115,11 @@ function langevin_sampler(
         ξ = device(noise[:,:,:,:,i])
         z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
 
-        # Reflect at boundaries
-        reflect_low = z .< first(domain)
-        reflect_high = z .> last(domain)
-        z = ifelse.(reflect_low, 2*first(domain) .- z, z)
-        z = ifelse.(reflect_high, 2*last(domain) .- z, z)
+        # # Reflect at boundaries
+        # reflect_low = z .< first(domain)
+        # reflect_high = z .> last(domain)
+        # z = ifelse.(reflect_low, 2*first(domain) .- z, z)
+        # z = ifelse.(reflect_high, 2*last(domain) .- z, z)
 
         if i % RE_frequency == 0 && T_length > 1
             z_hq = T.(z)

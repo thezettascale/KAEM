@@ -67,13 +67,13 @@ function leapfrop_proposal(
     # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
     p, ẑ = ndims(z) == 4 ? position_update_4d(z, momentum, ∇z, M, η) : position_update_3d(z, momentum, ∇z, M, η)
 
-    # Reflect at boundaries, both position and momentum
-    reflect_low = ẑ .< first(domain)
-    reflect_high = ẑ .> last(domain)
-    ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
-    ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
-    p = ifelse.(reflect_low, -p, p)
-    p = ifelse.(reflect_high, -p, p)
+    # # Reflect at boundaries, both position and momentum
+    # reflect_low = ẑ .< first(domain)
+    # reflect_high = ẑ .> last(domain)
+    # ẑ = ifelse.(reflect_low, 2*first(domain) .- ẑ, ẑ)
+    # ẑ = ifelse.(reflect_high, 2*last(domain) .- ẑ, ẑ)
+    # p = ifelse.(reflect_low, -p, p)
+    # p = ifelse.(reflect_high, -p, p)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st, temps)

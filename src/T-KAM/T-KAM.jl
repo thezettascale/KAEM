@@ -467,7 +467,9 @@ function move_to_hq(model::T_KAM)
     if model.lkhood.CNN
         for i in 1:model.lkhood.depth
             @reset model.lkhood.Φ_fcns[Symbol("$i")] = model.lkhood.Φ_fcns[Symbol("$i")] |> hq
-            @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
+            model.lkhood.batchnorm
+                @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] = model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
+            end
         end
         @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] = model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
     end

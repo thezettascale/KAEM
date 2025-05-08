@@ -46,10 +46,12 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size_for_gen = parse(Int, retrieve(conf, "TRAINING", "batch_size_for_gen"))
-    cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
+    # cnn = dataset_name == "CIFAR10" || dataset_name == "SVHN" 
     seq = dataset_name == "PTB" || dataset_name == "SMS_SPAM"
+    # cnn = false
     gen_type = seq ? "logits" : "images"
-    commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
+    # commit!(conf, "CNN", "use_cnn_lkhood", string(cnn))
+    cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = seq ? parse(Int, retrieve(conf, "SEQ", "sequence_length")) : 0
     commit!(conf, "SEQ", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
     vocab_size = parse(Int, retrieve(conf, "SEQ", "vocab_size"))
@@ -65,7 +67,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "autoMALA" : "importance"
     n_z = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
-    model_type = N_t > 1 ? "Thermodynamic/n_z=$n_z" : "Vanilla/n_z=$n_z/$mala"
+    model_type = N_t > 1 ? "Thermodynamic/n_z=$n_z" : "Vanilla/n_z=$n_z/$mala/cnn=$cnn"
     spline_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
     model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW" || dataset_name == "MNIST" || dataset_name == "FMNIST") ? retrieve(conf, "EBM_PRIOR", "π_0") * "_" * spline_fcn : model_type
     

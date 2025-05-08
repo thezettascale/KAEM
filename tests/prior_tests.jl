@@ -6,7 +6,7 @@ ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/EBM_prior.jl")
 include("../src/utils.jl")
-using .ebm_ebm_prior
+using .ebm_ebm_prior: ebm_prior, init_ebm_prior, log_prior, sample_prior
 using .Utils
 
 conf = ConfParse("tests/test_conf.ini")
@@ -25,7 +25,7 @@ function test_sampling()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(prior.sample_z(prior, b_size, ps, st,1))
+    z_test = sample_prior(prior, b_size, ps, st) 
     @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
@@ -35,7 +35,7 @@ function test_log_prior()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
+    z_test = sample_prior(prior, b_size, ps, st)
     log_p = first(log_prior(prior, z_test, ps, st))
     @test size(log_p) == (b_size, )
 end
@@ -46,7 +46,7 @@ function test_log_prior_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
     ps, st = ps |> device, st |> device
 
-    z_test = first(prior.sample_z(prior, b_size, ps, st, 1))
+    z_test = sample_prior(prior, b_size, ps, st)
     ∇ = first(gradient(x -> sum(first(log_prior(prior, x, ps, st))), z_test))
     @test size(∇) == size(z_test)
 end

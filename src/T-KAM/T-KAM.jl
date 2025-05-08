@@ -90,7 +90,7 @@ function importance_loss(
     ) where {T<:half_quant}
     """MLE loss with importance sampling."""
     
-    z, st_ebm, seed = m.prior.sample_z(m.prior, m.IS_samples, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
     @reset st.ebm = st_ebm
 
     # Log-dists
@@ -142,7 +142,7 @@ function mala_loss(
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
-        z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end], ps.ebm, st.ebm, seed)
+        z, st_ebm, seed = m.prior.sample_z(m, size(x)[end], ps, st, seed)
         logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
     end
@@ -195,7 +195,7 @@ function thermo_loss(
     contrastive_div = mean(logprior)
 
     # Prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, B, ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
     if m.prior.contrastive_div
         logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
@@ -309,7 +309,7 @@ function init_T_KAM(
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
-    update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
+    update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid")) 
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
     cnn = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     seq = parse(Int, retrieve(conf, "SEQ", "sequence_length")) > 1
@@ -338,6 +338,14 @@ function init_T_KAM(
         update_llhood_grid = false
         commit!(conf, "KAN_LIKELIHOOD", "layer_norm", "true")
     end
+
+    if prior_fcn == "Cheby" || prior_fcn == "Gottlieb"
+        update_prior_grid = false
+    end
+
+    if lkhood_fcn == "Cheby" || lkhood_fcn == "Gottlieb" || cnn
+        update_llhood_grid = false
+    end
     
     prior_model = init_ebm_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
@@ -349,16 +357,23 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     loss_fcn = importance_loss
 
-    use_MALA = parse(Bool, retrieve(conf, "MALA", "use_langevin"))
-    initial_step_size = parse(full_quant, retrieve(conf, "MALA", "initial_step_size"))
-    num_steps = parse(Int, retrieve(conf, "MALA", "iters"))
-    N_unadjusted = parse(Int, retrieve(conf, "MALA", "N_unadjusted"))
-    Δη = parse(full_quant, retrieve(conf, "MALA", "autoMALA_η_changerate"))
-    η_minmax = parse.(full_quant, retrieve(conf, "MALA", "step_size_bounds"))
+    use_MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
+    initial_step_size = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
+    num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
+    N_unadjusted = parse(Int, retrieve(conf, "POST_LANGEVIN", "N_unadjusted"))
+    Δη = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "autoMALA_η_changerate"))
+    η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
 
     # Importance sampling or MALA
+    widths = (
+        try 
+            parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths"))
+        catch
+            parse.(Int, split(retrieve(conf, "EBM_PRIOR", "layer_widths"), ","))
+        end
+    )
     posterior_fcn = identity
-    if use_MALA && !(N_t > 1) 
+    if (use_MALA && !(N_t > 1)) || (length(widths) > 2)
         posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
         loss_fcn = mala_loss
     end

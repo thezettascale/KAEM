@@ -1,6 +1,6 @@
 module spline_functions
 
-export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Morlet_basis, Shannon_basis
+export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Cheby_basis, Gottlieb_basis
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra, NNlib
@@ -150,6 +150,67 @@ function FFT_basis(
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
     freq = T(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
+end
+
+function Cheby_basis(
+    x::AbstractArray{T},
+    grid_::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
+    """
+    Compute the Chebyshev polynomial basis functions for a batch of points x and a grid of knots.
+    Be careful of vanishing gradients when using this in a deep network.
+
+    Args:
+        x: A matrix of size (b, i) containing the points at which to evaluate the Chebyshev basis functions.
+        grid: not used in this function, so set G to 1, when using.
+        σ: Tuning for the bandwidth (standard deviation) of the Chebyshev kernel.
+
+    Returns:
+        A matrix of size (b, i, k) containing the Chebyshev basis functions evaluated at the points x.
+    """
+    x = NNlib.tanh_fast(x) ./ σ
+    x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
+    linspace = collect(0:degree) |> device
+    B = @tullio out[i, j, l] := cos(linspace[l] * acos(x[i, j, l]))
+
+    # any(isnan.(B)) && error("NaN in B")
+    any(isnan.(B)) && println("NaN in Chebyshev basis")
+
+    return B
+end
+
+function Gottlieb_basis(
+    x::AbstractArray{T},
+    grid_::AbstractArray{T};
+    degree::Int=3, 
+    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    ) where {T<:half_quant}
+    """
+    Compute the Gottlieb polynomial basis functions for a batch of points x and a grid of knots.
+    
+    Args:
+        x: A matrix of size (b, i) containing the points at which to evaluate the Gottlieb basis functions.
+        grid: not used in this function, so set G to 1, when using.
+        σ: Tuning for the bandwidth (standard deviation) of the Gottlieb kernel.
+
+    Returns:
+        A matrix of size (b, i, k) containing the Gottlieb basis functions evaluated at the points x.
+    """
+    x = NNlib.sigmoid_fast(x)
+    x = reshape(x, size(x)..., 1)
+    B = ones(Float32, size(x, 1), size(x, 2), 1) |> device   
+    B = cat(B, 2σ .* x, dims=3)
+    for i in 3:degree+1
+        y = 2(σ .+ (i-2)) .* x .* B[:, :, i-1] .- (σ .+ (2i-4)) .* B[:, :, i-2]
+        B = cat(B, y, dims=3)
+    end
+    
+    # any(isnan.(B)) && error("NaN in B")
+    any(isnan.(B)) && println("NaN in Gottlieb basis")
+
+    return B
 end
 
 function coef2curve(

@@ -64,8 +64,12 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     )
 
     println("Dataset loaded")
+    
+    # Log against ULA and autoMALA
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    mala = parse(Bool, retrieve(conf, "MALA", "use_langevin")) ? "autoMALA" : "importance"
+    mala = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")) ? "autoMALA" : "importance"
+    mala = (mala == "autoMALA" && parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))) ? mala : "ULA" 
+    
     n_z = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
     model_type = N_t > 1 ? "Thermodynamic/n_z=$n_z" : "Vanilla/n_z=$n_z/$mala/cnn=$cnn"
     spline_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")

@@ -212,7 +212,7 @@ function langevin_sampler(
     """
     
     # Initialize from prior (already in bounded space)
-    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end]*length(temps), ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
     z = z .|> full_quant
     loss_scaling = m.loss_scaling |> full_quant
 

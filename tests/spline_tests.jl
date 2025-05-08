@@ -73,6 +73,29 @@ function test_FFT_basis()
     @test !any(isnan.(B_fft))
 end
 
+function test_Cheby_basis()
+    Random.seed!(42)
+    x_eval = rand(half_quant, i, b) |> device
+
+    Random.seed!(42)
+    grid = rand(half_quant, i, g) |> device
+
+    B_cheby = Cheby_basis(x_eval, grid; degree=degree, σ=σ)
+
+    @test size(B_cheby) == (i, g, b)
+    @test !any(isnan.(B_cheby))
+end
+
+function test_Gottlieb_basis()
+    Random.seed!(42)
+    x_eval = rand(half_quant, i, b) |> device
+
+    Random.seed!(42)
+    grid = rand(half_quant, i, g) |> device
+
+    B_gottlieb = Gottlieb_basis(x_eval, grid; degree=degree, σ=σ)
+end
+
 function test_coef2curve()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device

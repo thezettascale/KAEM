@@ -15,6 +15,8 @@ SplineBasis_mapping = Dict(
     "RBF" => RBF_basis,
     "RSWAF" => RSWAF_basis,
     "FFT" => FFT_basis,
+    "Cheby" => Cheby_basis,
+    "Gottlieb" => Gottlieb_basis
 )
 
 activation_mapping = Dict(
@@ -65,6 +67,7 @@ function init_function(
     τ_trainable::Bool=true
 ) where {T<:half_quant, U<:full_quant}
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
+    grid_size = (spline_function == "Cheby" || spline_function == "Gottlieb") ? 1 : grid_size
     grid = spline_function == "FFT" ? collect(T, 0:grid_size) : range(grid_range[1], grid_range[2], length=grid_size + 1)
     grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1) 
@@ -104,7 +107,11 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
         coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
     end
 
-    return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
+    if l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis
+        return (coef=coef, basis_τ=l.init_τ)
+    else
+        return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
+    end
 end
 
 function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
@@ -126,14 +133,18 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
         The output, (b, i, o), containing all fcn_{q,p}(x_p)
     """
 
-    w_base, w_sp, coef = ps.w_base, ps.w_sp, ps.coef
-    mask = st.mask
+    coef, mask = ps.coef, st.mask
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
     base = l.base_activation(x)
     y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
-    return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
+    if !(l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis)
+        w_base, w_sp = ps.w_base, ps.w_sp
+        return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
+    else
+        return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
+    end
 end
 
 function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}

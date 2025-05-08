@@ -31,8 +31,9 @@ function langevin_sampler(
     η_min::U=full_quant(1e-5),
     η_max::U=one(full_quant),
     seed::Int=1,
-    max_zero_accept_iters::Int=50,
     RE_frequency::Int=10,
+    sample_prior::Bool=false,
+    prior_η::U=full_quant(1e-3),
     ) where {T<:half_quant, U<:full_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
@@ -57,12 +58,12 @@ function langevin_sampler(
         The posterior samples.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m.prior, size(x)[end]*length(temps), ps.ebm, st.ebm, seed)
+    z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
     @reset st.ebm = st_ebm
     z = z .|> U
     loss_scaling = m.loss_scaling |> U
 
-    η = mean(st.η_init)
+    η = sample_prior ? prior_η : mean(st.η_init)
 
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, T_length)
@@ -93,8 +94,12 @@ function langevin_sampler(
         for k in 1:T_length
             z_k = view(z_i, :, :, :, k)
             lp, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-            ll, st_gen = log_llhood_fcn(z_k, st_gen)
-            logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
+            if !sample_prior
+                ll, st_gen = log_llhood_fcn(z_k, st_gen)
+                logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
+            else
+                logpos_tot += sum(lp)
+            end
         end
         return logpos_tot * m.loss_scaling, st_ebm, st_gen
     end

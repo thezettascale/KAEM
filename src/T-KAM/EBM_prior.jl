@@ -8,9 +8,11 @@ using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
+include("posterior_sampling/ULA.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
+using .LangevinSampling: langevin_sampler
 
 prior_pdf = Dict(
     "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
@@ -252,6 +254,7 @@ function init_ebm_prior(
     σ_spline = parse(full_quant, retrieve(conf, "EBM_PRIOR", "σ_spline"))
     init_τ = parse(full_quant, retrieve(conf, "EBM_PRIOR", "init_τ"))
     τ_trainable = parse(Bool, retrieve(conf, "EBM_PRIOR", "τ_trainable"))
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size")) 
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
 
     grid_range = parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
@@ -267,8 +270,15 @@ function init_ebm_prior(
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m, n, p, Lux.testmode(s); seed=seed, ε=eps)
+    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
     
+    if length(widths) > 2
+        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
+        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
+        x = zeros(full_quant, 1, batch_size)
+        sample_function = (m, n, p, s, seed) -> @ignore_derivatives langevin_sampler(m, p, Lux.testmode(s), x; seed=seed, prior_η=step_size, N=num_steps)
+    end
+
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
         prior_seed, rng = next_rng(prior_seed)

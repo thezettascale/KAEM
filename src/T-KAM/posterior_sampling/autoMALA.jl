@@ -1,6 +1,6 @@
-module LangevinSampling
+module autoMALA_sampling
 
-export langevin_sampler, cross_entropy, l2
+export autoMALA_sampler, cross_entropy, l2
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
@@ -179,7 +179,7 @@ function autoMALA_step(
     return ẑ, η, η_prime, reversible, log_r, st
 end
 
-function langevin_sampler(
+function autoMALA_sampler(
     m,
     ps,
     st,

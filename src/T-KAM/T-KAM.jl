@@ -14,16 +14,12 @@ include("EBM_prior.jl")
 include("KAN_likelihood.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
-
-if parse(Bool, get(ENV, "autoMALA", "false"))
-    include("posterior_sampling/autoMALA.jl")
-else
-    include("posterior_sampling/ULA.jl")
-end
-
+include("posterior_sampling/autoMALA.jl")
+include("posterior_sampling/ULA.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
-using .LangevinSampling: langevin_sampler, l2, cross_entropy
+using .autoMALA_sampling: autoMALA_sampler, cross_entropy, l2
+using .ULA_sampling: ULA_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
@@ -350,6 +346,13 @@ function init_T_KAM(
     prior_model = init_ebm_prior(conf; prior_seed=prior_seed)
     lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
 
+    if prior_model.ula
+        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
+        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
+        x = zeros(full_quant, 1, batch_size)
+        @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> ULA_sampler(m, p, Lux.testmode(s), x; seed=seed_prior, prior_η=step_size, sample_prior=true, N=num_steps)
+    end
+
     grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     num_grid_updating_samples = parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
@@ -373,8 +376,13 @@ function init_T_KAM(
         end
     )
     posterior_fcn = identity
+    autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
     if (use_MALA && !(N_t > 1)) || (length(widths) > 2)
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        posterior_fcn = (
+            autoMALA_bool ? 
+            (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed) :
+            (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, seed=seed)
+        )
         loss_fcn = mala_loss
     end
     
@@ -383,18 +391,11 @@ function init_T_KAM(
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))
         loss_fcn = thermo_loss
-        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(
-            m, 
-            ps, 
-            Lux.testmode(st), 
-            x; 
-            temps=t, 
-            N=num_steps, 
-            N_unadjusted=N_unadjusted, 
-            Δη=Δη, η_min=η_minmax[1], 
-            η_max=η_minmax[2], 
-            seed=seed, 
-            RE_frequency=replica_exchange_frequency
+        posterior_fcn = (
+            autoMALA_bool ? 
+            (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, RE_frequency=replica_exchange_frequency) :
+            (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, seed=seed, RE_frequency=replica_exchange_frequency)
+            )
         )
 
         # Cyclic p schedule

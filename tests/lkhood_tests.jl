@@ -7,7 +7,7 @@ ENV["HALF_QUANT"] = "FP32"
 include("../src/T-KAM/EBM_prior.jl")
 include("../src/T-KAM/KAN_likelihood.jl")
 include("../src/utils.jl")
-using .ebm_ebm_prior
+using .ebm_ebm_prior: init_ebm_prior, sample_prior
 using .KAN_likelihood
 using .Utils
 
@@ -29,7 +29,7 @@ function test_generate()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
     @test size(x) == (out_dim, out_dim, 1, b_size)
 end
@@ -47,7 +47,7 @@ function test_cnn_generate()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
     @test size(x) == (32, 32, out_dim, b_size)
 
@@ -67,7 +67,7 @@ function test_SEQ_generate()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device 
 
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
     @test size(x) == (lkhood.out_size, 8, b_size)
 
@@ -86,7 +86,7 @@ function test_logllhood()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     x = randn(Float32, out_dim, out_dim, 1, b_size) |> device
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     logllhood, _, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
     @test size(logllhood) == (b_size, b_size)
 end
@@ -103,7 +103,7 @@ function test_derivative()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     x = randn(Float32, out_dim, out_dim, 1, b_size) |> device
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     ∇ = first(gradient(z_i -> sum(first(log_likelihood(lkhood, ps.gen, st.gen, x, z_i))), z))
     @test size(∇) == size(z)
 end
@@ -122,7 +122,7 @@ function test_cnn_derivative()
     st = (ebm=ebm_st, gen=gen_st) |> device
 
     x = randn(Float32, 32, 32, out_dim, b_size) |> device
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
     @test size(∇) == size(ps.gen)
 
@@ -143,7 +143,7 @@ function test_SEQ_derivative()
     st = (ebm=ebm_st, gen=gen_st) |> device 
 
     x = randn(Float32, lkhood.out_size, 8, b_size) |> device
-    z = first(prior.sample_z(prior, b_size, ps.ebm, st.ebm, 1))
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
     @test size(∇) == size(ps.gen)
 

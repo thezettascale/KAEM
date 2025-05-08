@@ -13,10 +13,14 @@ using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 
 prior_pdf = Dict(
-    "uniform" => z -> half_quant.(0 .<= z .<= 1) |> device,
-    "gaussian" => z -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
+    "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
+    "gaussian" => (z, ε) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
     "lognormal" => (z, ε) -> exp.(-(log.(z .+ ε)).^2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "ebm" => z -> ones(half_quant, size(z)) |> device,
+    "ebm" => (z, ε) -> ones(half_quant, size(z)) |> device,
+    "learnable_gaussian" => (z, ps, ε) -> (
+        one(half_quant) ./ (abs.(ps[Symbol("π_σ")]) .* half_quant(sqrt(2π)) .+ ε) 
+    .* exp.(-(z .- ps[Symbol("π_μ")].^2) ./ (2 .* (ps[Symbol("π_σ")].^2) .+ ε))
+    )
 )
 
 struct ebm_prior{T<:half_quant} <: Lux.AbstractLuxLayer
@@ -72,7 +76,8 @@ function trapezium_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half
     grid = f_grid |> cpu_device() 
     Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] 
     
-    π_grid = ebm.prior_type == "lognormal" ? ebm.π_pdf(f_grid, ε) : ebm.π_pdf(f_grid)
+    π_grid = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(f_grid', ps, ε) : ebm.π_pdf(f_grid, ε)
+    π_grid = ebm.prior_type == "learnable_gaussian" ? π_grid' : π_grid
     grid_size = size(f_grid, 2)
 
     # Energy function of each component
@@ -105,7 +110,8 @@ function gausslegendre_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
-    π_nodes = ebm.prior_type == "lognormal" ? ebm.π_pdf(nodes, ε) : ebm.π_pdf(nodes)
+    π_nodes = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(nodes', ps, ε) : ebm.π_pdf(nodes, ε)
+    π_nodes = ebm.prior_type == "learnable_gaussian" ? π_nodes' : π_nodes
 
     # Energy function of each component
     nodes, st = prior_fwd(ebm, ps, st, nodes)
@@ -204,7 +210,7 @@ function log_prior(
     """
 
     log_p = zeros(T, size(z)[end]) |> device
-    log_π0 = ebm.prior_type == "lognormal" ? log.(ebm.π_pdf(z, ε) .+ ε) : log.(ebm.π_pdf(z) .+ ε)
+    log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
     log_Z = zeros(T, size(z)[1:2]...) |> device
 
     if normalize
@@ -253,6 +259,7 @@ function init_ebm_prior(
 
     grid_range_first = Dict(
         "ebm" => grid_range,
+        "learnable_gaussian" => grid_range,
         "lognormal" => [0,4] .|> half_quant,
         "gaussian" => [-1,1] .|> half_quant,
         "uniform" => [0,1] .|> half_quant,
@@ -319,6 +326,10 @@ function Lux.initialparameters(rng::AbstractRNG, prior::ebm_prior)
         end
     end
 
+    if prior.prior_type == "learnable_gaussian"
+        @reset ps[Symbol("π_μ")] = zeros(half_quant, 1, prior.p_size)
+        @reset ps[Symbol("π_σ")] = ones(half_quant, 1, prior.p_size)
+    end
     return ps 
 end
  

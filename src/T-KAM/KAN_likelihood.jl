@@ -42,6 +42,7 @@ resampler_map = Dict(
 struct KAN_lkhood{T<:half_quant} <: Lux.AbstractLuxLayer
     Φ_fcns
     layernorm::Bool
+    batchnorm::Bool
     depth::Int
     out_size::Int
     σ_llhood::T
@@ -119,8 +120,10 @@ function CNN_gen(
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
         @reset st[Symbol("$i")] = st_new    
 
-        z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
-        @reset st[Symbol("bn_$i")] = st_new
+        if lkhood.batchnorm
+            z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
+            @reset st[Symbol("bn_$i")] = st_new
+        end
     end
 
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")], z, ps[Symbol("$(lkhood.depth+1)")], st[Symbol("$(lkhood.depth+1)")])
@@ -323,6 +326,7 @@ function init_KAN_lkhood(
     resampler = retrieve(conf, "KAN_LIKELIHOOD", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
+    batchnorm = false
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
     ll_model = lkhood_rgb
@@ -358,6 +362,7 @@ function init_KAN_lkhood(
         k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
         paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
         act = activation_mapping[retrieve(conf, "CNN", "activation")]
+        batchnorm = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
         generate_fcn = CNN_gen
         layernorm = false
 
@@ -367,7 +372,9 @@ function init_KAN_lkhood(
 
         for i in eachindex(hidden_c[1:end-1])
             @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose((k_size[i], k_size[i]), hidden_c[i] => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i])
-            @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
+            if batchnorm
+                @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
+            end
         end
         @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
 
@@ -408,7 +415,7 @@ function init_KAN_lkhood(
         end
     end
 
-    return KAN_lkhood(Φ_functions, layernorm, depth, output_dim, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
+    return KAN_lkhood(Φ_functions, layernorm, batchnorm, depth, output_dim, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
@@ -417,8 +424,10 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)
 
     if lkhood.CNN
         @reset ps[Symbol("$(lkhood.depth+1)")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
-        for i in 1:lkhood.depth
-            @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+        if lkhood.batchnorm
+            for i in 1:lkhood.depth
+                @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+            end
         end
     end
 
@@ -443,8 +452,11 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::KAN_lkhood)
 
     if lkhood.CNN
         @reset st[Symbol("$(lkhood.depth+1)")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")]) |> hq
-        for i in 1:lkhood.depth
-            @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
+        
+        if lkhood.batchnorm
+            for i in 1:lkhood.depth
+                @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
+            end
         end
     end
 

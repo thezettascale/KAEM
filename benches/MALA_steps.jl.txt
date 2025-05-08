@@ -1,22 +1,18 @@
 ┌ Warning: `training` is set to `Val{false}()` but is being used within an autodiff call (gradient, jacobian, etc...). This might lead to incorrect results. If you are using a `Lux.jl` model, set it to training mode using `LuxCore.trainmode`.
 └ @ LuxLib.Utils ~/.julia/packages/LuxLib/kH9PB/src/utils.jl:324
 Resized dataset to (32, 32, 3)
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  3.611 s …   3.746 s  ┊ GC (min … max): 3.58% … 5.02%
- Time  (median):     3.678 s              ┊ GC (median):    4.31%
- Time  (mean ± σ):   3.678 s ± 95.579 ms  ┊ GC (mean ± σ):  4.31% ± 1.02%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  3.61 s         Histogram: frequency by time        3.75 s <
-
- Memory estimate: 913.98 MiB, allocs estimate: 16673999.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 82.855 s (3.81% GC) to evaluate,
- with a memory estimate of 12.48 GiB, over 372935723 allocations.
+ Single result which took 26.441 s (11.04% GC) to evaluate,
+ with a memory estimate of 2.15 GiB, over 44411702 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 199.496 s (3.76% GC) to evaluate,
- with a memory estimate of 29.08 GiB, over 882573427 allocations.
+ Single result which took 26.532 s (11.17% GC) to evaluate,
+ with a memory estimate of 2.15 GiB, over 44414208 allocations.
 BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
- Single result which took 321.181 s (3.76% GC) to evaluate,
- with a memory estimate of 46.17 GiB, over 1412633594 allocations.
+ Single result which took 27.382 s (11.35% GC) to evaluate,
+ with a memory estimate of 2.15 GiB, over 44410572 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 27.354 s (11.30% GC) to evaluate,
+ with a memory estimate of 2.15 GiB, over 44411468 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 26.761 s (11.58% GC) to evaluate,
+ with a memory estimate of 2.15 GiB, over 44411574 allocations.

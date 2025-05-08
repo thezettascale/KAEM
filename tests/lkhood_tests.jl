@@ -29,7 +29,7 @@ function test_generate()
     ps = (ebm=ebm_ps, gen=gen_ps) |> device
     st = (ebm=ebm_st, gen=gen_st) |> device
 
-    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm)
+    z = first(sample_prior(prior, b_size, ps.ebm, st.ebm))
     x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
     @test size(x) == (out_dim, out_dim, 1, b_size)
 end

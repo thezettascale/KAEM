@@ -17,6 +17,7 @@ parse_conf!(conf)
 commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0") 
 commit!(conf, "TRAINING", "verbose", "false") 
+commit!(conf, "MALA", "use_langevin", "true")
 
 dataset, img_size = get_vision_dataset(
     "SVHN",
@@ -38,10 +39,8 @@ function benchmark_MALA(N_l)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
-display(@benchmark CUDA.@sync benchmark_dim(10))
-display(@benchmark CUDA.@sync benchmark_dim(15))
-display(@benchmark CUDA.@sync benchmark_dim(20))
-display(@benchmark CUDA.@sync benchmark_dim(25))
-display(@benchmark CUDA.@sync benchmark_dim(30))
-display(@benchmark CUDA.@sync benchmark_dim(35))
-display(@benchmark CUDA.@sync benchmark_dim(40))
+display(@benchmark CUDA.@sync benchmark_MALA(20))
+display(@benchmark CUDA.@sync benchmark_MALA(40))
+display(@benchmark CUDA.@sync benchmark_MALA(60))
+display(@benchmark CUDA.@sync benchmark_MALA(80))
+display(@benchmark CUDA.@sync benchmark_MALA(100))

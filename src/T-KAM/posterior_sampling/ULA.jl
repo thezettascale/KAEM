@@ -1,6 +1,6 @@
-module LangevinSampling
+module ULA_sampling
 
-export langevin_sampler
+export ULA_sampler
 
 using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
@@ -11,6 +11,13 @@ include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 using .KAN_likelihood: log_likelihood
+
+π_dist = (
+  "uniform" => (q, b, rng) -> rand(rng, q, 1, b),
+  "gaussian" => (q, b, rng) -> randn(rng, q, 1, b),
+  "lognormal" => (q, b, rng) -> rand(rng, LogNormal(0, 1), q, 1, b),
+)
+
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
     return log.(x .+ ε) .* y ./ size(x, 1)
 end
@@ -19,17 +26,13 @@ function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half
     return -(x - y).^2
 end
 
-function langevin_sampler(
+function ULA_sampler(
     m,
     ps,
     st,
     x::AbstractArray{T};
     temps::AbstractArray{T}=device([one(half_quant)]),
     N::Int=20,
-    N_unadjusted::Int=1,
-    Δη::U=full_quant(2),
-    η_min::U=full_quant(1e-5),
-    η_max::U=one(full_quant),
     seed::Int=1,
     RE_frequency::Int=10,
     sample_prior::Bool=false,
@@ -58,8 +61,17 @@ function langevin_sampler(
         The posterior samples.
     """
     # Initialize from prior
-    z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
-    @reset st.ebm = st_ebm
+    z = begin
+        if m.prior.ula
+            seed, rng = next_rng(seed)
+            π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng)
+        else
+            z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
+            @reset st.ebm = st_ebm
+            z
+        end
+    end
+    
     z = z .|> U
     loss_scaling = m.loss_scaling |> U
 
@@ -117,7 +129,7 @@ function langevin_sampler(
         ξ = device(noise[:,:,:,:,i])
         z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
 
-        if i % RE_frequency == 0 && T_length > 1
+        if i % RE_frequency == 0 && T_length > 1 && !sample_prior
             z_hq = T.(z)
             for t in 1:T_length-1
                 ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen)
@@ -134,7 +146,8 @@ function langevin_sampler(
     end
 
     pos_after = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
-    m.verbose && println("Posterior change: $(pos_after - pos_before)")
+    dist = sample_prior ? "Prior" : "Posterior"
+    m.verbose && println("$(dist) change: $(pos_after - pos_before)")
 
     return T.(z), st, seed
 end

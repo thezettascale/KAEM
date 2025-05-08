@@ -8,11 +8,9 @@ using NNlib: softmax, sigmoid_fast
 using ChainRules: @ignore_derivatives
 
 include("univariate_functions.jl")
-include("posterior_sampling/ULA.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
-using .LangevinSampling: langevin_sampler
 
 prior_pdf = Dict(
     "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
@@ -40,6 +38,7 @@ struct ebm_prior{T<:half_quant} <: Lux.AbstractLuxLayer
     weights::AbstractArray{T}
     contrastive_div::Bool
     quad_type::AbstractString
+    ula::Bool
 end
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
@@ -60,14 +59,15 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
     for i in 1:ebm.depth
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = i == 1 ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
+        z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
 
         if ebm.layernorm && i < ebm.depth
             z, st_new = Lux.apply(ebm.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
             @reset st[Symbol("ln_$i")] = st_new
         end
     end
-    return reshape(z, ebm.q_size, ebm.p_size, :), st
+    z = ebm.ula ? reshape(z, ebm.q_size, 1, :) : reshape(z, ebm.q_size, ebm.p_size, :)
+    return z, st
 end
 
 function trapezium_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half_quant}
@@ -271,13 +271,7 @@ function init_ebm_prior(
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
-    
-    if length(widths) > 2
-        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
-        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
-        x = zeros(full_quant, 1, batch_size)
-        sample_function = (m, n, p, s, seed) -> @ignore_derivatives langevin_sampler(m, p, Lux.testmode(s), x; seed=seed, prior_η=step_size, N=num_steps)
-    end
+    ula = length(widths) > 2
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
@@ -324,7 +318,23 @@ function init_ebm_prior(
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
 
-    return ebm_prior(functions, layernorm, length(widths)-1, prior_type, prior_pdf[prior_type], sample_function, first(widths), last(widths), quadrature_method, N_quad, nodes, weights, contrastive_div, quad_type)
+    return ebm_prior(
+        functions, 
+        layernorm, 
+        length(widths)-1, 
+        prior_type, 
+        prior_pdf[prior_type], 
+        sample_function, 
+        first(widths), 
+        last(widths), 
+        quadrature_method, 
+        N_quad, 
+        nodes, 
+        weights, 
+        contrastive_div, 
+        quad_type, 
+        ula
+        )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::ebm_prior)

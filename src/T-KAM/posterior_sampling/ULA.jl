@@ -79,6 +79,7 @@ function ULA_sampler(
     η = sample_prior ? prior_η : mean(st.η_init)
 
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
+    T_length = sample_prior ? 1 : T_length
     z = reshape(z, Q, P, S, T_length)
 
     # Avoid looped stochasticity

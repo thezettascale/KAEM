@@ -172,7 +172,7 @@ function Cheby_basis(
     """
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = collect(0:degree) |> device
+    linspace = collect(T, 0:degree) |> device
     B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 
     # any(isnan.(B)) && error("NaN in B")
@@ -200,7 +200,7 @@ function Gottlieb_basis(
     """
     x = NNlib.sigmoid_fast(x)
     x = reshape(x, size(x)..., 1)
-    B = ones(Float32, size(x, 1), size(x, 2), 1) |> device   
+    B = ones(T, size(x, 1), size(x, 2), 1) |> device   
     B = cat(B, 2σ .* x, dims=3)
     for i in 3:degree+1
         y = 2(σ .+ (i-2)) .* x .* B[:, :, i-1] .- (σ .+ (2i-4)) .* B[:, :, i-2]

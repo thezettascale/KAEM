@@ -108,7 +108,7 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     end
 
     if l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis
-        return (coef=coef, basis_τ=l.init_τ)
+        return (coef=glorot_normal(rng, full_quant, l.in_dim, l.out_dim, l.degree+1) .* (1 / (l.in_dim * (l.degree + 1))), basis_τ=l.init_τ)
     else
         return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
     end

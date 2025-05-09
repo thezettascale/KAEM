@@ -173,7 +173,7 @@ function Cheby_basis(
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
     linspace = collect(0:degree) |> device
-    B = @tullio out[i, j, l] := cos(linspace[l] * acos(x[i, j, l]))
+    B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 
     # any(isnan.(B)) && error("NaN in B")
     any(isnan.(B)) && println("NaN in Chebyshev basis")
@@ -210,7 +210,7 @@ function Gottlieb_basis(
     # any(isnan.(B)) && error("NaN in B")
     any(isnan.(B)) && println("NaN in Gottlieb basis")
 
-    return B
+    return permutedims(B, [1, 3, 2])
 end
 
 function coef2curve(

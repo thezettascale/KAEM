@@ -64,7 +64,7 @@ function ULA_sampler(
     z = begin
         if m.prior.ula
             seed, rng = next_rng(seed)
-            z = π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng)
+            z = π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng) |> device
         else
             z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm

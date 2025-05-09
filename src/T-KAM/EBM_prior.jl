@@ -66,7 +66,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
             @reset st[Symbol("ln_$i")] = st_new
         end
     end
-    z = ebm.ula ? reshape(z, ebm.q_size, 1, :) : reshape(z, ebm.q_size, ebm.p_size, :)
+    z = ebm.ula ? dropdims(sum(z; dims=1); dims=1) : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end
 
@@ -228,9 +228,8 @@ function log_prior(
             log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
         end
     else
-        f, st = prior_fwd(ebm, ps, st, z[1, :, :])
-        lp = dropdims(f .+ log_π0; dims=2)
-        log_p += dropdims(sum(lp; dims=1); dims=1)
+        f, st = prior_fwd(ebm, ps, st, z[:, 1, :])
+        log_p += f + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2))
     end
 
     return log_p, st
@@ -278,6 +277,8 @@ function init_ebm_prior(
     
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
     ula = length(widths) > 2
+
+    widths = ula ? reverse(widths) : widths
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

@@ -68,7 +68,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         end
     end
 
-    z = ebm.ula ? dropdims(sum(z; dims=1); dims=1) : reshape(z, ebm.q_size, ebm.p_size, :)
+    z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end
 
@@ -213,28 +213,28 @@ function log_prior(
         The updated states of the ebm-prior.
     """
 
-    log_p = zeros(T, size(z)[end]) |> device
     log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
-    log_Z = zeros(T, size(z)[1:2]...) |> device
-
-    if normalize && !ebm.ula
-        norm, _, st = ebm.quad(ebm, ps, st)
-        log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
-    end
 
     if !ebm.ula
+        log_p = zeros(T, size(z)[end]) |> device
+        log_Z = zeros(T, size(z)[1:2]...) |> device
+
+        if normalize && !ebm.ula
+            norm, _, st = ebm.quad(ebm, ps, st)
+            log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
+        end
+
         for q in 1:size(z, 1)
             log_Zq = view(log_Z, q, :)
             f, st = prior_fwd(ebm, ps, st, z[q, :, :])
             lp = f[q, :, :] .+ log_π0[q, :, :]
             log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
         end
+        return log_p, st
     else
         f, st = prior_fwd(ebm, ps, st, dropdims(z[:, :, :]; dims=2))
-        log_p = f + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2))
+        return dropdims(sum(f; dims=1); dims=1) + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2)), st
     end
-
-    return log_p, st
 end
 
 function init_ebm_prior(

@@ -350,7 +350,7 @@ function init_T_KAM(
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
         x_ = zeros(half_quant, 1, batch_size) |> device
-        @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> ULA_sampler(m, p, Lux.testmode(s), x_; seed=seed_prior, prior_η=step_size, sample_prior=true, N=num_steps)
+        @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> ULA_sampler(m, p, Lux.testmode(s), x_; seed=seed_prior, prior_η=step_size, sample_prior=true, N=num_steps, num_samples=n)
     end
 
     grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))

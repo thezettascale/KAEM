@@ -37,6 +37,7 @@ function ULA_sampler(
     RE_frequency::Int=10,
     sample_prior::Bool=false,
     prior_η::U=full_quant(1e-3),
+    num_samples::Int=100,
     ) where {T<:half_quant, U<:full_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
@@ -64,7 +65,7 @@ function ULA_sampler(
     z = begin
         if m.prior.ula
             seed, rng = next_rng(seed)
-            z = π_dist[m.prior.prior_type](m.prior.p_size, size(x)[end], rng) |> device
+            z = π_dist[m.prior.prior_type](m.prior.p_size, num_samples, rng) |> device
         else
             z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm

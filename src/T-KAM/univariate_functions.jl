@@ -139,11 +139,11 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     base = l.base_activation(x)
     y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
-    if !(l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis)
+    if l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis
+        return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
+    else
         w_base, w_sp = ps.w_base, ps.w_sp
         return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
-    else
-        return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
     end
 end
 

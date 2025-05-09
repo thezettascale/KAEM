@@ -13,9 +13,9 @@ using .ebm_ebm_prior: log_prior
 using .KAN_likelihood: log_likelihood
 
 π_dist = Dict(
-  "uniform" => (q, b, rng) -> rand(rng, q, 1, b),
-  "gaussian" => (q, b, rng) -> randn(rng, q, 1, b),
-  "lognormal" => (q, b, rng) -> rand(rng, LogNormal(0, 1), q, 1, b),
+  "uniform" => (p, b, rng) -> rand(rng, 1, p, b),
+  "gaussian" => (p, b, rng) -> randn(rng, 1, p, b),
+  "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), q, 1, b),
 )
 
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
@@ -64,7 +64,7 @@ function ULA_sampler(
     z = begin
         if m.prior.ula
             seed, rng = next_rng(seed)
-            z = π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng) |> device
+            z = π_dist[m.prior.prior_type](m.prior.p_size, size(x)[end], rng) |> device
         else
             z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm
@@ -152,7 +152,7 @@ function ULA_sampler(
     if sample_prior
         st = st.ebm
     end
-    
+
     return T.(z), st, seed
 end
 

@@ -163,12 +163,12 @@ function Cheby_basis(
     Be careful of vanishing gradients when using this in a deep network.
 
     Args:
-        x: A matrix of size (b, i) containing the points at which to evaluate the Chebyshev basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the Chebyshev basis functions.
         grid: not used in this function, so set G to 1, when using.
         σ: Tuning for the bandwidth (standard deviation) of the Chebyshev kernel.
 
     Returns:
-        A matrix of size (b, i, k) containing the Chebyshev basis functions evaluated at the points x.
+        A matrix of size (i, k, b) containing the Chebyshev basis functions evaluated at the points x.
     """
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
@@ -191,7 +191,7 @@ function Gottlieb_basis(
     Compute the Gottlieb polynomial basis functions for a batch of points x and a grid of knots.
     
     Args:
-        x: A matrix of size (b, i) containing the points at which to evaluate the Gottlieb basis functions.
+        x: A matrix of size (i, b) containing the points at which to evaluate the Gottlieb basis functions.
         grid: not used in this function, so set G to 1, when using.
         σ: Tuning for the bandwidth (standard deviation) of the Gottlieb kernel.
 
@@ -235,6 +235,7 @@ function coef2curve(
     """
 
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
+    println(size(splines), size(coef))
     !isa(splines, Tuple) && return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
 
     even, odd = splines

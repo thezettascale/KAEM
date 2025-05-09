@@ -76,4 +76,4 @@ Julia/Lux is adopted instead of PyTorch or JAX because:
 
 I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in your applications. Justfying here, because not sure how people will react.
 
-I gradually moved from PyTorch, to JAX, then Julia - but Julia is not as widely adopted and sometimes its AutoDiff can be limited. 
+I gradually moved from PyTorch, to JAX, then Julia - but Julia is not as widely adopted and sometimes its AutoDiff can be limited. Although, Enzyme is usually worth it.

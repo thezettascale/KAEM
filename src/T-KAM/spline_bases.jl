@@ -172,7 +172,7 @@ function Cheby_basis(
     """
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = collect(T, 0:degree) |> device
+    linspace = collect(0:degree) .|> T |> device
     B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 
     # any(isnan.(B)) && error("NaN in B")

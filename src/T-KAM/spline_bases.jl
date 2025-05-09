@@ -156,7 +156,7 @@ function Cheby_basis(
     x::AbstractArray{T},
     grid_::AbstractArray{T};
     degree::Int=3, 
-    σ::Union{T, AbstractArray{T}}=one(half_quant)
+    σ::Union{T, AbstractArray{T}}=half_quant(1.1)
     ) where {T<:half_quant}
     """
     Compute the Chebyshev polynomial basis functions for a batch of points x and a grid of knots.
@@ -170,7 +170,8 @@ function Cheby_basis(
     Returns:
         A matrix of size (i, k, b) containing the Chebyshev basis functions evaluated at the points x.
     """
-    x = NNlib.tanh_fast(x) ./ σ
+    # IMPORTANT; to make sure acos is well-defined, set σ > 1, e.g. 1.1
+    x = NNlib.tanh_fast(x) ./ σ 
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
     linspace = collect(0:degree) .|> T |> device
     B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))

@@ -12,7 +12,7 @@ using .Utils: device, next_rng, half_quant, full_quant, fq
 using .ebm_ebm_prior: log_prior
 using .KAN_likelihood: log_likelihood
 
-π_dist = (
+π_dist = Dict(
   "uniform" => (q, b, rng) -> rand(rng, q, 1, b),
   "gaussian" => (q, b, rng) -> randn(rng, q, 1, b),
   "lognormal" => (q, b, rng) -> rand(rng, LogNormal(0, 1), q, 1, b),
@@ -64,7 +64,7 @@ function ULA_sampler(
     z = begin
         if m.prior.ula
             seed, rng = next_rng(seed)
-            π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng)
+            z = π_dist[m.prior.prior_type](m.prior.q_size, size(x)[end], rng)
         else
             z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm

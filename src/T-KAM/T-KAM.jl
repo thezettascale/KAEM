@@ -378,25 +378,24 @@ function init_T_KAM(
     posterior_fcn = identity
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
     if (use_MALA && !(N_t > 1)) || (length(widths) > 2)
-        posterior_fcn = (
-            autoMALA_bool ? 
-            (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed) :
-            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, seed=seed)
-        )
         loss_fcn = mala_loss
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, seed=seed)
+        if autoMALA_bool
+            posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed)
+        end
     end
     
     p = [one(full_quant)]
     if N_t > 1
         num_steps = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))
+        
         loss_fcn = thermo_loss
-        posterior_fcn = (
-            autoMALA_bool ? 
-            (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, RE_frequency=replica_exchange_frequency) :
-            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, seed=seed, RE_frequency=replica_exchange_frequency)
-        )
-
+        posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, seed=seed, RE_frequency=replica_exchange_frequency)
+        if autoMALA_bool
+            posterior_fcn = (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, RE_frequency=replica_exchange_frequency)
+        end
+        
         # Cyclic p schedule
         initial_p = parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
         end_p = parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))

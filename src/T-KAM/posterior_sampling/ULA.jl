@@ -147,6 +147,7 @@ function ULA_sampler(
 
     if ULA_prior
         st = st.ebm
+        z = dropdims(z; dims=4)
     end
 
     return T.(z), st, seed

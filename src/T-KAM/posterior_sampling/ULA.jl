@@ -63,7 +63,7 @@ function ULA_sampler(
     """
     # Initialize from prior
     z = begin
-        if m.prior.ula
+        if m.prior.ula && sample_prior
             seed, rng = next_rng(seed)
             z = π_dist[m.prior.prior_type](m.prior.q_size, num_samples, rng) .|> U |> device
         else

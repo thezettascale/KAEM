@@ -51,10 +51,10 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         ebm: The ebm-prior.
         ps: The parameters of the ebm-prior.
         st: The states of the ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+        z: The component-wise latent samples to evaulate the measure on, (q, num_samples) or (p, num_samples)
 
     Returns:
-        f: The energy function, (num_samples, q)
+        f: The energy function, (num_samples,) or (q, p, num_samples)
         st: The updated states of the ebm-prior.
     """
     for i in 1:ebm.depth
@@ -278,6 +278,7 @@ function init_ebm_prior(
     sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
     ula = length(widths) > 2
 
+    P, Q = first(widths), last(widths)
     widths = ula ? reverse(widths) : widths
 
     functions = NamedTuple()
@@ -332,8 +333,8 @@ function init_ebm_prior(
         prior_type, 
         prior_pdf[prior_type], 
         sample_function, 
-        first(widths), 
-        last(widths), 
+        P, 
+        Q, 
         quadrature_method, 
         N_quad, 
         nodes, 

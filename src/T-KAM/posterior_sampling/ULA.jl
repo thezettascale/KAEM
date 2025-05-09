@@ -149,6 +149,10 @@ function ULA_sampler(
     dist = sample_prior ? "Prior" : "Posterior"
     m.verbose && println("$(dist) change: $(pos_after - pos_before)")
 
+    if sample_prior
+        st = st.ebm
+    end
+    
     return T.(z), st, seed
 end
 

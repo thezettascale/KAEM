@@ -57,6 +57,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         f: The energy function, (num_samples,) or (q, p, num_samples)
         st: The updated states of the ebm-prior.
     """
+
     for i in 1:ebm.depth
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
@@ -66,6 +67,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
             @reset st[Symbol("ln_$i")] = st_new
         end
     end
+
     z = ebm.ula ? dropdims(sum(z; dims=1); dims=1) : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end
@@ -228,8 +230,8 @@ function log_prior(
             log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
         end
     else
-        f, st = prior_fwd(ebm, ps, st, z[:, 1, :])
-        log_p += f + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2))
+        f, st = prior_fwd(ebm, ps, st, dropdims(z[:, :, :]; dims=2))
+        log_p = f + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2))
     end
 
     return log_p, st

@@ -70,8 +70,10 @@ In this project, implicit types/quantization are never used. Quantization is exp
 
 Julia/Lux is adopted instead of PyTorch or JAX because:
 
-- Julia is faster than Python for repeated code calls, (i.e. training), even against similar Python compilation strategies, (i.e. jax.jit).
-- I find Julia easier to prototype with than JAX.
-- Julia codes natively to the GPU, (i.e. no separate CUDA/TPU code). Native GPU Python programming was only recently announced. This is important for KANs.
+- Julia is often faster than Python for repeated code calls, (i.e. training), even against similar Python compilation strategies, (i.e. jax.jit).
+- I find Julia easier to prototype with than JAX. It also compiles fairly quick.
+- Julia codes natively to the GPU, (i.e. no separate CUDA/TPU code). Native GPU Python programming was only recently announced.
 
-I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in different applications. I gradually moved from PyTorch, to JAX, then Julia due to things I like. I also wish Julia were more popular, hence why I'm trying to spread it. 
+I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in your applications. Justfying here, because not sure how people will react.
+
+I gradually moved from PyTorch, to JAX, then Julia - but Julia is not as widely adopted and sometimes its AutoDiff can be limited. 

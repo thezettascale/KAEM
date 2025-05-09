@@ -226,6 +226,8 @@ function log_prior(
         lp = f[q, :, :] .+ log_π0[q, :, :]
         log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
     end
+
+    return log_p, st
 end
 
 function init_ebm_prior(

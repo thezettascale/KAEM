@@ -349,7 +349,7 @@ function init_T_KAM(
     if prior_model.ula
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
-        x = zeros(full_quant, 1, batch_size)
+        x = zeros(half_quant, 1, batch_size)
         @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> ULA_sampler(m, p, Lux.testmode(s), x; seed=seed_prior, prior_η=step_size, sample_prior=true, N=num_steps)
     end
 

@@ -40,6 +40,7 @@ struct univariate_function{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
     spline_degree::Int
     base_activation::Function
     spline_function::Function
+    spline_string::String
     init_grid::AbstractArray{T}
     grid_size::Int
     grid_update_ratio::T
@@ -74,14 +75,14 @@ function init_function(
     grid = extend_grid(grid; k_extend=spline_degree) 
     σ_base = any(isnan.(σ_base)) ? ones(U, in_dim, out_dim) : σ_base
     base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
-    spline_function = get(SplineBasis_mapping, spline_function, B_spline_basis)
     
     return univariate_function(
         in_dim, 
         out_dim, 
         spline_degree, 
         base_activation, 
-        spline_function, 
+        get(SplineBasis_mapping, spline_function, B_spline_basis), 
+        spline_function,
         grid, grid_size, 
         grid_update_ratio, 
         grid_range, 
@@ -99,7 +100,7 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
     
     coef = nothing
-    if l.spline_function == FFT_basis 
+    if l.spline_string == "FFT" 
         grid_norm_factor = collect(1:l.grid_size+1) .^ 2
         coef = glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./ (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:,:,:,:], [2, 3, 4, 1])) 
     else
@@ -107,7 +108,7 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
         coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
     end
 
-    if l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis
+    if l.spline_string == "Cheby" || l.spline_string == "Gottlieb"
         return (coef=glorot_normal(rng, full_quant, l.in_dim, l.out_dim, l.spline_degree+1) .* (1 / (l.in_dim * (l.spline_degree + 1))), basis_τ=l.init_τ)
     else
         return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
@@ -139,7 +140,7 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     base = l.base_activation(x)
     y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
-    if l.spline_function == Cheby_basis || l.spline_function == Gottlieb_basis
+    if l.spline_string == "Cheby" || l.spline_string == "Gottlieb"
         return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
     else
         w_base, w_sp = ps.w_base, ps.w_sp

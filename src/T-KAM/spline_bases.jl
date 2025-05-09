@@ -235,7 +235,6 @@ function coef2curve(
     """
 
     splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    println(size(splines), size(coef))
     !isa(splines, Tuple) && return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
 
     even, odd = splines

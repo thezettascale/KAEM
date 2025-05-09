@@ -215,7 +215,7 @@ function log_prior(
     log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
     log_Z = zeros(T, size(z)[1:2]...) |> device
 
-    if normalize
+    if normalize && !ebm.ula
         norm, _, st = ebm.quad(ebm, ps, st)
         log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
     end

@@ -381,7 +381,7 @@ function init_T_KAM(
         posterior_fcn = (
             autoMALA_bool ? 
             (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed) :
-            (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; N=num_steps, seed=seed)
+            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; N=num_steps, seed=seed)
         )
         loss_fcn = mala_loss
     end
@@ -394,8 +394,7 @@ function init_T_KAM(
         posterior_fcn = (
             autoMALA_bool ? 
             (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, N_unadjusted=N_unadjusted, Δη=Δη, η_min=η_minmax[1], η_max=η_minmax[2], seed=seed, RE_frequency=replica_exchange_frequency) :
-            (m, x, t, ps, st, seed) -> @ignore_derivatives langevin_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, seed=seed, RE_frequency=replica_exchange_frequency)
-            )
+            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(m, ps, Lux.testmode(st), x; temps=t, N=num_steps, seed=seed, RE_frequency=replica_exchange_frequency)
         )
 
         # Cyclic p schedule

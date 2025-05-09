@@ -4,7 +4,6 @@ export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_bas
 
 using CUDA, KernelAbstractions
 using Tullio, LinearAlgebra, NNlib
-using ChainRules: @ignore_derivatives
 
 include("../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
@@ -102,8 +101,9 @@ function RBF_basis(
     Returns:
         A matrix of size (i, g, b) containing the RBF basis functions evaluated at the points x.
     """
-    σ = @ignore_derivatives ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
-    return exp.(-T(0.5) * ((permutedims(x[:,:,:], [1,3,2]) .- grid) ./ σ).^2)  
+    σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    return exp.(-T(0.5) * (diff ./ σ).^2)  
 end
 
 function RSWAF_basis(
@@ -125,7 +125,8 @@ function RSWAF_basis(
         A matrix of size (i, g, b) containing the RSWAF basis functions evaluated at the points x.
     """
     # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    diff = NNlib.tanh_fast((permutedims(x[:,:,:], [1,3,2]) .- grid) ./ σ)     
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    diff = NNlib.tanh_fast(diff ./ σ)     
     return 1 .- diff.^2
 end
 
@@ -146,7 +147,7 @@ function FFT_basis(
     Returns:
         A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
     """
-    freq = permutedims(x[:,:,:], [1,3,2]) .* grid
+    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
     freq = T(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
 end
@@ -171,7 +172,7 @@ function Cheby_basis(
     """
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = @ignore_derivatives collect(0:degree) .|> T |> device
+    linspace = collect(0:degree) .|> T |> device
     B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 
     # any(isnan.(B)) && error("NaN in B")

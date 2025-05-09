@@ -90,7 +90,7 @@ function importance_loss(
     @reset st.ebm = st_ebm
 
     # Log-dists
-    logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
@@ -124,7 +124,7 @@ function mala_loss(
     z, st, seed = m.posterior_sample(m, x, 0, ps, st, seed)
 
     # Log-dists
-    logprior_pos, st_ebm = log_prior(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logprior_pos, st_ebm = m.prior.lp_fcn(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
 
     function lkhood(z_i, st_i)
@@ -139,7 +139,7 @@ function mala_loss(
 
     if m.prior.contrastive_div
         z, st_ebm, seed = m.prior.sample_z(m, size(x)[end], ps, st, seed)
-        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
     end
 
@@ -187,13 +187,13 @@ function thermo_loss(
         @ignore_derivatives @reset st.gen = st_gen
     end
 
-    logprior, st_ebm = log_prior(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+    logprior, st_ebm = m.prior.lp_fcn(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     contrastive_div = mean(logprior)
 
     # Prior
     z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
     if m.prior.contrastive_div
-        logprior, st_ebm = log_prior(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
+        logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
         contrastive_div -= mean(logprior)
     end
 

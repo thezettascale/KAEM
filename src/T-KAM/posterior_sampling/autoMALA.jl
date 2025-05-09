@@ -6,11 +6,9 @@ using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Dis
 using Zygote: gradient
 
 include("../../utils.jl")
-include("../EBM_prior.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
 using .Utils: device, next_rng, half_quant, full_quant
-using .ebm_ebm_prior: log_prior
 using .Preconditioning
 using .HamiltonianDynamics
 
@@ -253,13 +251,13 @@ function autoMALA_sampler(
             for k in 1:T_length
                 z_k, t_k = view(z_i,:,:,:,k), view(t,:,k)
                 x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
-                logprior, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
+                logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
                 logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_i.gen)
                 logpos = hcat(logpos, logprior + t_k .* logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
-            logprior, st_ebm = log_prior(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
+            logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
             logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_i.gen)
             return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
         end

@@ -39,9 +39,15 @@ struct ebm_prior{T<:half_quant} <: Lux.AbstractLuxLayer
     contrastive_div::Bool
     quad_type::AbstractString
     ula::Bool
+    lp_fcn::Function
 end
 
-function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
+function prior_fwd(
+    ebm, 
+    ps, 
+    st, 
+    z::AbstractArray{T}
+    ) where {T<:half_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
 
@@ -59,7 +65,6 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
 
     for i in 1:ebm.depth
-        println(z)
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
 
@@ -73,7 +78,12 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     return z, st
 end
 
-function trapezium_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half_quant}
+function trapezium_quadrature(
+    ebm, 
+    ps, 
+    st; 
+    ε::T=eps(half_quant)
+    ) where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
@@ -216,26 +226,35 @@ function log_prior(
 
     log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
 
-    if !ebm.ula
-        log_p = zeros(T, size(z)[end]) |> device
-        log_Z = zeros(T, size(z)[1:2]...) |> device
+    log_p = zeros(T, size(z)[end]) |> device
+    log_Z = zeros(T, size(z)[1:2]...) |> device
 
-        if normalize && !ebm.ula
-            norm, _, st = ebm.quad(ebm, ps, st)
-            log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
-        end
-
-        for q in 1:size(z, 1)
-            log_Zq = view(log_Z, q, :)
-            f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-            lp = f[q, :, :] .+ log_π0[q, :, :]
-            log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
-        end
-        return log_p, st
-    else
-        f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
-        return dropdims(sum(f; dims=1); dims=1) + dropdims(sum(log_π0; dims=1); dims=(1,2)), st
+    if normalize && !ebm.ula
+        norm, _, st = ebm.quad(ebm, ps, st)
+        log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
     end
+
+    for q in 1:size(z, 1)
+        log_Zq = view(log_Z, q, :)
+        f, st = prior_fwd(ebm, ps, st, z[q, :, :])
+        lp = f[q, :, :] .+ log_π0[q, :, :]
+        log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
+    end
+    return log_p, st
+end
+
+function log_prior_ula(
+    ebm, 
+    z::AbstractArray{T},
+    ps, 
+    st;
+    ε::T=eps(half_quant),
+    normalize::Bool=false
+    ) where {T<:half_quant}
+    log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
+    log_π0 = dropdims(sum(log_π0; dims=1);dims=1)
+    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
+    return dropdims(sum(f; dims=1) .+ log_π0; dims=1), st
 end
 
 function init_ebm_prior(
@@ -329,6 +348,8 @@ function init_ebm_prior(
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
 
+    lp_fcn = ula ? log_prior_ula : log_prior
+
     return ebm_prior(
         functions, 
         layernorm, 
@@ -344,7 +365,8 @@ function init_ebm_prior(
         weights, 
         contrastive_div, 
         quad_type, 
-        ula
+        ula,
+        lp_fcn
         )
 end
 

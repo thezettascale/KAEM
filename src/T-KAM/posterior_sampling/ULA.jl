@@ -6,10 +6,8 @@ using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Dis
 using Zygote: gradient
 
 include("../../utils.jl")
-include("../EBM_prior.jl")
 include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-using .ebm_ebm_prior: log_prior
 using .KAN_likelihood: log_likelihood
 
 π_dist = Dict(
@@ -107,7 +105,7 @@ function ULA_sampler(
         st_ebm, st_gen = st_i.ebm, st_i.gen
         for k in 1:T_length
             z_k = view(z_i, :, :, :, k)
-            lp, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
+            lp, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
             ll, st_gen = log_llhood_fcn(z_k, st_gen)
             logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
         end
@@ -125,7 +123,7 @@ function ULA_sampler(
     pos_before = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
     for i in 1:N
         ξ = device(noise[:,:,:,:,i])
-        z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
+        z += η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
 
         if i % RE_frequency == 0 && T_length > 1 && !ULA_prior
             z_hq = T.(z)

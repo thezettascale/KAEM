@@ -209,7 +209,6 @@ function Gottlieb_basis(
     
     # any(isnan.(B)) && error("NaN in B")
     any(isnan.(B)) && println("NaN in Gottlieb basis")
-
     return permutedims(B, [1, 3, 2])
 end
 

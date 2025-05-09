@@ -134,7 +134,6 @@ function mala_loss(
     end
 
     logllhood, st_gen = lkhood(z[:, :, :, 1], st.gen)
-    # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 1]; seed=seed, ε=m.ε)
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
@@ -182,7 +181,6 @@ function thermo_loss(
     # Posterior 
     for k in 1:T_length-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
-        # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, view(z, :, :, :, k); seed=seed, ε=m.ε)              
         log_ss += mean(logllhood .* view(Δt, k+1)) 
         @ignore_derivatives @reset st.gen = st_gen
     end
@@ -198,7 +196,6 @@ function thermo_loss(
     end
 
     logllhood, st_gen = lkhood(z, st.gen)
-    # logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     log_ss += mean(logllhood .* view(Δt, 1)) 
     @ignore_derivatives @reset st.gen = st_gen
 
@@ -350,7 +347,7 @@ function init_T_KAM(
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
         x_ = zeros(half_quant, 1, batch_size) |> device
-        @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> ULA_sampler(m, p, Lux.testmode(s), x_; seed=seed_prior, prior_η=step_size, ULA_prior=true, N=num_steps, num_samples=n)
+        @reset prior_model.sample_z = (m, n, p, s, seed_prior) -> @ignore_derivatives ULA_sampler(m, p, Lux.testmode(s), x_; seed=seed_prior, prior_η=step_size, ULA_prior=true, N=num_steps, num_samples=n)
     end
 
     grid_update_decay = parse(half_quant, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))

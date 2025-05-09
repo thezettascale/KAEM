@@ -213,8 +213,8 @@ function autoMALA_sampler(
     
     # Initialize from prior (already in bounded space)
     z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
-    z = z .|> full_quant
-    loss_scaling = m.loss_scaling |> full_quant
+    z = z .|> U
+    loss_scaling = m.loss_scaling |> U
 
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, T_length)

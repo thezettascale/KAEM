@@ -220,11 +220,17 @@ function log_prior(
         log_Z = log.(dropdims(sum(norm; dims=3); dims=3) .+ ε)
     end
 
-    for q in 1:size(z, 1)
-        log_Zq = view(log_Z, q, :)
-        f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q, :, :] .+ log_π0[q, :, :]
-        log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
+    if !ebm.ula
+        for q in 1:size(z, 1)
+            log_Zq = view(log_Z, q, :)
+            f, st = prior_fwd(ebm, ps, st, z[q, :, :])
+            lp = f[q, :, :] .+ log_π0[q, :, :]
+            log_p += dropdims(sum(lp .- log_Zq; dims=1); dims=1)
+        end
+    else
+        f, st = prior_fwd(ebm, ps, st, z[1, :, :])
+        lp = dropdims(f .+ log_π0; dims=2)
+        log_p += dropdims(sum(lp; dims=1); dims=1)
     end
 
     return log_p, st

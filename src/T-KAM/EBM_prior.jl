@@ -59,6 +59,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
 
     for i in 1:ebm.depth
+        println(z)
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
         z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
 
@@ -233,7 +234,7 @@ function log_prior(
         return log_p, st
     else
         f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
-        return dropdims(sum(f; dims=1); dims=1) + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2)), st
+        return dropdims(sum(f; dims=1); dims=1) + dropdims(sum(log_π0; dims=1); dims=(1,2)), st
     end
 end
 

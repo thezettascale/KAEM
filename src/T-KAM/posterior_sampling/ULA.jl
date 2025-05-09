@@ -35,7 +35,7 @@ function ULA_sampler(
     N::Int=20,
     seed::Int=1,
     RE_frequency::Int=10,
-    sample_prior::Bool=false,
+    ULA_prior::Bool=false,
     prior_η::U=full_quant(1e-3),
     num_samples::Int=100,
     ) where {T<:half_quant, U<:full_quant}
@@ -63,7 +63,7 @@ function ULA_sampler(
     """
     # Initialize from prior
     z = begin
-        if m.prior.ula && sample_prior
+        if m.prior.ula && ULA_prior
             seed, rng = next_rng(seed)
             z = π_dist[m.prior.prior_type](m.prior.q_size, num_samples, rng) .|> U |> device
         else
@@ -75,10 +75,10 @@ function ULA_sampler(
     
     loss_scaling = m.loss_scaling |> U
 
-    η = sample_prior ? prior_η : mean(st.η_init)
+    η = ULA_prior ? prior_η : mean(st.η_init)
 
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    S = sample_prior ? size(z)[end] : S
+    S = ULA_prior ? size(z)[end] : S
     z = reshape(z, Q, P, S, T_length)
 
     # Avoid looped stochasticity
@@ -100,7 +100,7 @@ function ULA_sampler(
         return ll_fn(m.lkhood.output_activation(x̂)) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    log_llhood_fcn = sample_prior ? (z_i, st_gen) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
+    log_llhood_fcn = ULA_prior ? (z_i, st_gen) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
 
     function log_posterior(z_i::AbstractArray{T}, st_i)
         logpos_tot = zero(T)
@@ -127,7 +127,7 @@ function ULA_sampler(
         ξ = device(noise[:,:,:,:,i])
         z = z + η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
 
-        if i % RE_frequency == 0 && T_length > 1 && !sample_prior
+        if i % RE_frequency == 0 && T_length > 1 && !ULA_prior
             z_hq = T.(z)
             for t in 1:T_length-1
                 ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen)
@@ -144,10 +144,10 @@ function ULA_sampler(
     end
 
     pos_after = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
-    dist = sample_prior ? "Prior" : "Posterior"
+    dist = ULA_prior ? "Prior" : "Posterior"
     m.verbose && println("$(dist) change: $(pos_after - pos_before)")
 
-    if sample_prior
+    if ULA_prior
         st = st.ebm
     end
 

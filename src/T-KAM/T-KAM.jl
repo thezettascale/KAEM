@@ -244,7 +244,7 @@ function update_model_grid(
             model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
             )
 
-        P, Q = model.prior.p_size, model.prior.q_size
+        P, Q = size(z)[1:2]
         z = reshape(z, P, Q, :)
         B = size(z, 3)
         z = reshape(z, P, Q*B)

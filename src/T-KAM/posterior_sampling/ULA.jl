@@ -100,6 +100,7 @@ function ULA_sampler(
         return ll_fn(m.lkhood.output_activation(x̂)) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
+    log_llhood_fcn = sample_prior ? (z_i, st_gen) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
 
     function log_posterior(z_i::AbstractArray{T}, st_i)
         logpos_tot = zero(T)
@@ -107,12 +108,8 @@ function ULA_sampler(
         for k in 1:T_length
             z_k = view(z_i, :, :, :, k)
             lp, st_ebm = log_prior(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-            if !sample_prior
-                ll, st_gen = log_llhood_fcn(z_k, st_gen)
-                logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
-            else
-                logpos_tot += sum(lp)
-            end
+            ll, st_gen = log_llhood_fcn(z_k, st_gen)
+            logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
         end
         return logpos_tot * m.loss_scaling, st_ebm, st_gen
     end

@@ -232,7 +232,7 @@ function log_prior(
         end
         return log_p, st
     else
-        f, st = prior_fwd(ebm, ps, st, dropdims(z[:, :, :]; dims=2))
+        f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
         return dropdims(sum(f; dims=1); dims=1) + dropdims(sum(log_π0; dims=(1,2)); dims=(1,2)), st
     end
 end
@@ -315,7 +315,7 @@ function init_ebm_prior(
 
     end
 
-    contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training"))
+    contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EBM_PRIOR", "quadrature_method")
     quadrature_method = Dict(

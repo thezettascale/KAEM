@@ -65,15 +65,14 @@ function ULA_sampler(
     z = begin
         if m.prior.ula
             seed, rng = next_rng(seed)
-            z = π_dist[m.prior.prior_type](m.prior.q_size, num_samples, rng) |> device
+            z = π_dist[m.prior.prior_type](m.prior.q_size, num_samples, rng) .|> U |> device
         else
             z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm
-            z
+            z .|> U
         end
     end
     
-    z = z .|> U
     loss_scaling = m.loss_scaling |> U
 
     η = sample_prior ? prior_η : mean(st.η_init)

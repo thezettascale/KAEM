@@ -344,6 +344,7 @@ function init_T_KAM(
     lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
 
     if prior_model.ula
+        loss_fcn = mala_loss
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
         x_ = zeros(half_quant, 1, batch_size) |> device

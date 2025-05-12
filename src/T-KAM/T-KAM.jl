@@ -165,8 +165,8 @@ function thermo_loss(
     @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
 
     # Schedule temperatures
-    temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) |> device
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed) 
+    temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
+    z, st, seed = m.posterior_sample(m, x, device(temps[2:end]), ps, st, seed) 
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
@@ -181,7 +181,7 @@ function thermo_loss(
     # Posterior 
     for k in 1:T_length-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
-        log_ss += mean(logllhood .* view(Δt, k+1)) 
+        log_ss += mean(logllhood) .* Δt[k+1] 
         @ignore_derivatives @reset st.gen = st_gen
     end
 

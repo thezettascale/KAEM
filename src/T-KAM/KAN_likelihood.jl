@@ -282,13 +282,15 @@ function init_KAN_lkhood(
     lkhood_seed::Int=1,
     )
 
-    q_size = (
+    prior_widths = (
         try 
-            last(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
+            parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths"))
         catch
-            last(parse.(Int, split(retrieve(conf, "EBM_PRIOR", "layer_widths"), ",")))
+            parse.(Int, split(retrieve(conf, "EBM_PRIOR", "layer_widths"), ","))
         end
     )
+
+    q_size = length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
 
     widths = (
         try 

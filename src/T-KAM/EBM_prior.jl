@@ -301,7 +301,6 @@ function init_ebm_prior(
     ula = length(widths) > 2
 
     P, Q = first(widths), last(widths)
-    widths = ula ? reverse(widths) : widths
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])

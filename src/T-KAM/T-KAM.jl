@@ -129,7 +129,8 @@ function mala_loss(
 
     function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
+        noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
@@ -174,7 +175,8 @@ function thermo_loss(
 
     function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
+        noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 

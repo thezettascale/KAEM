@@ -185,7 +185,7 @@ function thermo_loss(
     # Posterior 
     for k in 1:T_length-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
-        log_ss += mean(logllhood) * Δt[k+1] 
+        log_ss += mean(logllhood .* Δt[k+1])  
         @ignore_derivatives @reset st.gen = st_gen
     end
 
@@ -200,7 +200,7 @@ function thermo_loss(
     end
 
     logllhood, st_gen = lkhood(z, st.gen)
-    log_ss += mean(logllhood * Δt[1]) 
+    log_ss += mean(logllhood .* Δt[1]) 
     @ignore_derivatives @reset st.gen = st_gen
 
     loss = -(log_ss + contrastive_div) 

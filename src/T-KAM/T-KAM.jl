@@ -191,7 +191,7 @@ function thermo_loss(
 
     # MLE estimator
     logprior, st_ebm = m.prior.lp_fcn(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen = lkhood(view(z, :, :, :, T_length), st.gen)
+    logllhood, st_gen = lkhood(view(z, :, :, :, T_length-1), st.gen)
     mle = mean(logprior) + mean(logllhood)
 
     z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)

@@ -237,7 +237,7 @@ function autoMALA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x_i, y_i) -> dropdims(sum(cross_entropy(x_i, y_i; ε=m.ε); dims=(1,2)); dims=(1,2)) : (x_i, y_i) -> dropdims(sum(l2(x_i, y_i; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = seq ? (x_i, y_i) -> cross_entropy(x_i, y_i; ε=m.ε) : (x_i, y_i) -> l2(x_i, y_i; ε=m.ε)
     x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
     
     log_llhood_fcn = (z_i, x_i, st_gen) -> begin
@@ -254,13 +254,17 @@ function autoMALA_sampler(
                 x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
                 logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
                 logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_i.gen)
-                logpos = hcat(logpos, logprior + t_k .* logllhood)
+                t_k = seq ? reshape(t_k, 1, 1, length(t_k)) : reshape(t_k, 1, 1, 1, length(t_k))
+                logllhood = seq ? dropdims(sum(t_k .* logllhood; dims=(1,2)); dims=(1,2)) : dropdims(sum(t_k .* logllhood; dims=(1,2,3)); dims=(1,2,3))
+                logpos = hcat(logpos, logprior + logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
             logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
             logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_i.gen)
-            return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
+            t = seq ? reshape(t, 1, 1, length(t)) : reshape(t, 1, 1, 1, length(t))
+            logllhood = seq ? dropdims(sum(t .* logllhood; dims=(1,2)); dims=(1,2)) : dropdims(sum(t .* logllhood; dims=(1,2,3)); dims=(1,2,3))
+            return (logprior + logllhood) .* m.loss_scaling, st_ebm, st_gen
         end
     end
 
@@ -305,7 +309,7 @@ function autoMALA_sampler(
                 temps
                 )
         else
-            z, η, η_prime, reversible, log_r, st = autoMALA_step(
+            ẑ, η_prop, η_prime, reversible, log_r, st = autoMALA_step(
                 log_a, 
                 log_b, 
                 z, 
@@ -325,9 +329,9 @@ function autoMALA_sampler(
                 seq=seq)
 
             accept = (view(log_u,:,:,i) .< log_r) .* reversible
-            z = z .* reshape(accept, 1, 1, S, T_length) + z .* reshape(1 .- accept, 1, 1, S, T_length)
-            mean_η .= mean_η .+ η .* accept
-            η = η .* accept .+ η_prime .* (1 .- accept)
+            z = ẑ .* reshape(accept, 1, 1, S, T_length) + z .* reshape(1 .- accept, 1, 1, S, T_length)
+            mean_η .= mean_η .+ η_prop .* accept
+            η .= η_prop .* accept .+ η .* (1 .- accept)
             num_acceptances .= num_acceptances .+ accept
 
             # Replica exchange Monte Carlo
@@ -338,7 +342,9 @@ function autoMALA_sampler(
                     z_hq = T.(z)
                     ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
                     ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
-                    log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
+                    Δt = view(temps,t+1) - view(temps,t)
+                    log_swap_ratio = Δt .* (ll_t - ll_t1)
+                    log_swap_ratio = seq ? dropdims(sum(log_swap_ratio; dims=(1,2)); dims=(1,2)) : dropdims(sum(log_swap_ratio; dims=(1,2,3)); dims=(1,2,3))
                     
                     swap = view(log_u_swap,:,t,i) .< log_swap_ratio
                     @reset st.gen = st_gen

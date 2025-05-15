@@ -204,10 +204,10 @@ function thermo_loss(
     log_ss += mean(logllhood .* Δt[1]) 
     @ignore_derivatives @reset st.gen = st_gen
 
-    loss = -(log_ss + contrastive_div) / 2
+    loss = -(log_ss + mle) / 2
 
     @ignore_derivatives begin
-        m.verbose && println("TI estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)
+        m.verbose && println("Steppingstone estimate of log p(x): ", log_ss, " MLE: ", mle)
         @reset st.ebm = st_ebm
     end
 

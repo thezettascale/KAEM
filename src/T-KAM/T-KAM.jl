@@ -182,28 +182,29 @@ function thermo_loss(
         return ll_fn(x̂) ./ (2*m.lkhood.σ_llhood^2), st_gen
     end
 
-    # Posterior 
+    # Steppingstone estimator
     for k in 1:T_length-2
         logllhood, st_gen = lkhood(view(z, :, :, :, k), st.gen)   
         log_ss += mean(logllhood .* Δt[k+1])  
         @ignore_derivatives @reset st.gen = st_gen
     end
 
+    # MLE estimator
     logprior, st_ebm = m.prior.lp_fcn(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    contrastive_div = mean(logprior)
+    logllhood, st_gen = lkhood(view(z, :, :, :, T_length), st.gen)
+    mle = mean(logprior) + mean(logllhood)
 
-    # Prior
     z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
     if m.prior.contrastive_div
         logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        contrastive_div -= mean(logprior)
+        mle -= mean(logprior)
     end
 
     logllhood, st_gen = lkhood(z, st.gen)
     log_ss += mean(logllhood .* Δt[1]) 
     @ignore_derivatives @reset st.gen = st_gen
 
-    loss = -(log_ss + contrastive_div) 
+    loss = -(log_ss + contrastive_div) / 2
 
     @ignore_derivatives begin
         m.verbose && println("TI estimate of log p(x): ", log_ss, " Contrastive divergence: ", contrastive_div)

@@ -361,6 +361,7 @@ function autoMALA_sampler(
     m.verbose && println("Acceptance rates: ", dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims=1); dims=1))
     m.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims=1); dims=1))
     
+    any(isnan.(z)) && error("NaN in z") 
     return T.(z), st, seed
 end
 end

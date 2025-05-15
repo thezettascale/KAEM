@@ -177,7 +177,7 @@ function Cheby_basis(
     B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 
     # any(isnan.(B)) && error("NaN in B")
-    any(isnan.(B)) && println("NaN in Chebyshev basis")
+    # any(isnan.(B)) && println("NaN in Chebyshev basis")
 
     return B
 end
@@ -209,7 +209,7 @@ function Gottlieb_basis(
     end
     
     # any(isnan.(B)) && error("NaN in B")
-    any(isnan.(B)) && println("NaN in Gottlieb basis")
+    # any(isnan.(B)) && println("NaN in Gottlieb basis")
     return permutedims(B, [1, 3, 2])
 end
 

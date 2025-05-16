@@ -4,7 +4,7 @@ Official implementation of the Thermodynamic Kolmogov-Arnold Model - a novel gen
 
 Go see our [website!](https://exalaboratories.com). We are more efficient and versatile than GPUs/TPUs!
 
-It's early stages and I'm planning to add more - for updates, please follow me on [LinkedIn](https://www.linkedin.com/in/prithvi-raj-eng/) or [Twitter (will add link when password found)]().
+It's early stages and I'm planning to add more - for updates, please follow me on [LinkedIn](https://www.linkedin.com/in/prithvi-raj-eng/) or Twitter (@PritManGuy - link will be added soon).
 
 ## What is T-KAM.
 

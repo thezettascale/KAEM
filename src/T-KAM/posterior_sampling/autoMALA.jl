@@ -14,11 +14,11 @@ using .HamiltonianDynamics
 
 
 function cross_entropy(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
-    return log.(x .+ ε) .* y ./ size(x, 1)
+    return dropdims(sum(log.(x .+ ε) .* y ./ size(x, 1); dims=(1,2)); dims=(1,2))
 end
 
 function l2(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
-    return -(x - y).^2
+    return dropdims(sum(-(x - y).^2; dims=(1,2,3)); dims=(1,2,3))
 end
 
 function safe_step_size_update(
@@ -254,17 +254,13 @@ function autoMALA_sampler(
                 x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
                 logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
                 logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_i.gen)
-                t_k = seq ? reshape(t_k, 1, 1, length(t_k)) : reshape(t_k, 1, 1, 1, length(t_k))
-                logllhood = seq ? dropdims(sum(t_k .* logllhood; dims=(1,2)); dims=(1,2)) : dropdims(sum(t_k .* logllhood; dims=(1,2,3)); dims=(1,2,3))
-                logpos = hcat(logpos, logprior + logllhood)
+                logpos = hcat(logpos, logprior + t_k .* logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
             logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
             logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_i.gen)
-            t = seq ? reshape(t, 1, 1, length(t)) : reshape(t, 1, 1, 1, length(t))
-            logllhood = seq ? dropdims(sum(t .* logllhood; dims=(1,2)); dims=(1,2)) : dropdims(sum(t .* logllhood; dims=(1,2,3)); dims=(1,2,3))
-            return (logprior + logllhood) .* m.loss_scaling, st_ebm, st_gen
+            return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
         end
     end
 
@@ -342,9 +338,7 @@ function autoMALA_sampler(
                     z_hq = T.(z)
                     ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
                     ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
-                    Δt = view(temps,t+1) - view(temps,t)
-                    log_swap_ratio = Δt .* (ll_t - ll_t1)
-                    log_swap_ratio = seq ? dropdims(sum(log_swap_ratio; dims=(1,2)); dims=(1,2)) : dropdims(sum(log_swap_ratio; dims=(1,2,3)); dims=(1,2,3))
+                    log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
                     
                     swap = view(log_u_swap,:,t,i) .< log_swap_ratio
                     @reset st.gen = st_gen

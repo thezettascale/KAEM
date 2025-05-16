@@ -125,7 +125,7 @@ function mala_loss(
 
     # Log-dists
     logprior_pos, st_ebm = m.prior.lp_fcn(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> cross_entropy(y_i, x; ε=m.ε) : (y_i) -> l2(y_i, x; ε=m.ε)
 
     function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
@@ -172,7 +172,7 @@ function thermo_loss(
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> cross_entropy(y_i, x; ε=m.ε) : (y_i) -> l2(y_i, x; ε=m.ε)
 
     function lkhood(z_i, st_i)
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)

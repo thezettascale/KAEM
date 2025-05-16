@@ -17,11 +17,11 @@ using .KAN_likelihood: log_likelihood
 )
 
 function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return log.(x .+ ε) .* y ./ size(x, 1)
+    return dropdims(sum(log.(x .+ ε) .* y ./ size(x, 1); dims=(1,2)); dims=(1,2))
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return -(x - y).^2
+    return dropdims(sum(-(x - y).^; dims=(1,2,3)); dims=(1,2,3))
 end
 
 function ULA_sampler(
@@ -86,7 +86,7 @@ function ULA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (y_i) -> dropdims(sum(cross_entropy(y_i, x; ε=m.ε); dims=1); dims=1) : (y_i) -> dropdims(sum(l2(y_i, x; ε=m.ε); dims=(1,2,3)); dims=(1,2,3))
+    ll_fn = seq ? (y_i) -> cross_entropy(y_i, x; ε=m.ε) : (y_i) -> l2(y_i, x; ε=m.ε)
     
     # log_llhood_fcn = (z_i, st_gen) -> begin
     #     ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)

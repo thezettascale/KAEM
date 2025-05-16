@@ -168,7 +168,7 @@ function thermo_loss(
 
     # Schedule temperatures
     temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, device(temps[2:end-1]), ps, st, seed) 
+    z, st, seed = m.posterior_sample(m, x, device(temps[2:end]), ps, st, seed) 
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
@@ -460,7 +460,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     return (
         ebm = Lux.initialstates(rng, model.prior), 
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([model.η_init], model.max_samples, model.N_t-1) : fill(model.η_init, model.max_samples, 1),
+        η_init = model.N_t > 1 ? repeat([model.η_init], model.max_samples, model.N_t) : fill(model.η_init, model.max_samples, 1),
         train_idx = 1,
         )
 end

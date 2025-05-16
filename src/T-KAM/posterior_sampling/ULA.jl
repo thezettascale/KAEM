@@ -91,7 +91,7 @@ function ULA_sampler(
         return m.lkhood.MALA_ll_fcn(x, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
     end
 
-    log_llhood_fcn = ULA_prior ? (z_i, st_gen) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
+    log_llhood_fcn = ULA_prior ? (z_i, st_gen, _) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
 
     function log_posterior(z_i::AbstractArray{T}, st_i)
         logpos_tot = zero(T)

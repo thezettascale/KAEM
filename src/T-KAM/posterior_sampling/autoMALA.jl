@@ -232,7 +232,9 @@ function autoMALA_sampler(
     
     log_llhood_fcn = (z_i, x_i, st_gen, t_i) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
+        seed, rng = next_rng(seed)
+        noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+        x̂ = m.lkhood.output_activation(x̂ + noise)
         return m.lkhood.MALA_ll_fcn(x_i, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
     end
 

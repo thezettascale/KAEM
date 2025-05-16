@@ -18,7 +18,7 @@ function cross_entropy(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) w
 end
 
 function l2(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
-    return dropdims(sum(-(x - y).^2; dims=(1,2,3)); dims=(1,2,3))
+    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3))
 end
 
 function safe_step_size_update(
@@ -247,19 +247,20 @@ function autoMALA_sampler(
     end
 
     function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t::AbstractArray{T}) 
+        st_ebm, st_gen = st_i.ebm, st_i.gen
         if ndims(z_i) == 4
             logpos = zeros(T, S, 0) |> device
             for k in 1:T_length
                 z_k, t_k = view(z_i,:,:,:,k), view(t,:,k)
                 x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
-                logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_i.ebm; ε=m.ε)
-                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_i.gen)
+                logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
+                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_gen)
                 logpos = hcat(logpos, logprior + t_k .* logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
-            logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_i.ebm; ε=m.ε)
-            logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_i.gen)
+            logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_ebm; ε=m.ε)
+            logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_gen)
             return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
         end
     end

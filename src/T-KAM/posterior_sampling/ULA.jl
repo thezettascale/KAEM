@@ -21,7 +21,7 @@ function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant
 end
 
 function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return dropdims(sum(-(x - y).^2; dims=(1,2,3)); dims=(1,2,3))
+    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3))
 end
 
 function ULA_sampler(

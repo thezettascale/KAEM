@@ -168,7 +168,7 @@ function thermo_loss(
 
     # Schedule temperatures
     temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k in 0:m.N_t]) 
-    z, st, seed = m.posterior_sample(m, x, device(temps[2:end]), ps, st, seed) 
+    z, st, seed = m.posterior_sample(m, x, device(temps[2:en-1d]), ps, st, seed) 
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
@@ -191,23 +191,22 @@ function thermo_loss(
 
     # MLE estimator
     logprior, st_ebm = m.prior.lp_fcn(m.prior, view(z, :, :, :, T_length-1), ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-    logllhood, st_gen = lkhood(view(z, :, :, :, T_length-1), st.gen)
-    mle = mean(logprior) + mean(logllhood)
+    contrastive_div = mean(logprior)
 
     z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
     if m.prior.contrastive_div
         logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-        mle -= mean(logprior)
+        contrastive_div -= mean(logprior)
     end
 
     logllhood, st_gen = lkhood(z, st.gen)
     log_ss += mean(logllhood .* Δt[1]) 
     @ignore_derivatives @reset st.gen = st_gen
 
-    loss = -(log_ss + mle) / 2
+    loss = -(log_ss + contrastive_div) 
 
     @ignore_derivatives begin
-        m.verbose && println("Steppingstone estimate of log p(x): ", log_ss, " MLE: ", mle)
+        m.verbose && println("Steppingstone estimate of log p(x): ", log_ss, " Constrastive div: ", contrastive_div)
         @reset st.ebm = st_ebm
     end
 

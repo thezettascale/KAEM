@@ -58,7 +58,7 @@ function l2(
     t = reshape(t, 1, 1, 1, length(t))
     ll = -(x - y).^2
     ll = t .* ll ./ (2*σ^2)
-    return -dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3))
+    return dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3))
 end
 
 resampler_map = Dict(

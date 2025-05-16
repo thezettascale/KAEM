@@ -16,14 +16,6 @@ using .KAN_likelihood: log_likelihood
   "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
 )
 
-function cross_entropy(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return dropdims(sum(log.(x .+ ε) .* y ./ size(x, 1); dims=(1,2)); dims=(1,2))
-end
-
-function l2(x::AbstractArray{half_quant}, y::AbstractArray{half_quant}; ε::half_quant=eps(half_quant))
-    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3))
-end
-
 function ULA_sampler(
     m,
     ps,
@@ -93,9 +85,10 @@ function ULA_sampler(
     #     return ll, st_gen
     # end
 
-    log_llhood_fcn = (z_i, st_gen) -> begin
+    log_llhood_fcn = (z_i, st_gen, t_i) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
-        return ll_fn(m.lkhood.output_activation(x̂)) ./ (2*m.lkhood.σ_llhood^2), st_gen
+        x̂ = m.lkhood.output_activation(x̂)
+        return m.lkhood.MALA_ll_fcn(x, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
     end
 
     log_llhood_fcn = ULA_prior ? (z_i, st_gen) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
@@ -106,8 +99,8 @@ function ULA_sampler(
         for k in 1:T_length
             z_k = view(z_i, :, :, :, k)
             lp, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-            ll, st_gen = log_llhood_fcn(z_k, st_gen)
-            logpos_tot += sum(lp) + sum(view(temps, k) .* ll)
+            ll, st_gen = log_llhood_fcn(z_k, st_gen, view(temps, k))
+            logpos_tot += sum(lp) + sum(ll)
         end
         return logpos_tot * m.loss_scaling, st_ebm, st_gen
     end
@@ -128,8 +121,8 @@ function ULA_sampler(
         if i % RE_frequency == 0 && T_length > 1 && !ULA_prior
             z_hq = T.(z)
             for t in 1:T_length-1
-                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen)
-                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), st_gen)
+                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen, view(temps, T_length))
+                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), st_gen, view(temps, T_length))
                 log_swap_ratio = dropdims(sum((view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1); dims=1); dims=1)
                 swap = view(log_u_swap,:,t,i) .< log_swap_ratio
                 @reset st.gen = st_gen

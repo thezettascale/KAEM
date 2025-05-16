@@ -23,6 +23,7 @@ output_activation_mapping = Dict(
     "none" => identity,
 )
 
+# Fcns for the Vanilla model
 function lkhood_rgb(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
     -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 end
@@ -31,6 +32,33 @@ function lkhood_seq(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) wh
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
+end
+ 
+# Fcns for model with Lagenvin methods
+function cross_entropy(
+    x::AbstractArray{T}, 
+    y::AbstractArray{T};
+    t::AbstractArray{T}=device([one(half_quant)]), 
+    ε::T=eps(half_quant),
+    σ::T=one(half_quant),
+    ) where {T<:half_quant}
+    t = reshape(t, 1, 1, length(t))
+    ll = log.(x .+ ε) .* y ./ size(x, 1)
+    ll = t .* ll ./ (2*σ^2)
+    return dropdims(sum(ll; dims=(1,2)); dims=(1,2))
+end
+
+function l2(
+    x::AbstractArray{T}, 
+    y::AbstractArray{T}; 
+    t::AbstractArray{T}=device([one(half_quant)]), 
+    ε::T=eps(half_quant),
+    σ::T=one(half_quant),
+    ) where {T<:half_quant}
+    t = reshape(t, 1, 1, 1, length(t))
+    ll = -(x - y).^2
+    ll = t .* ll ./ (2*σ^2)
+    return -dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3))
 end
 
 resampler_map = Dict(
@@ -54,6 +82,7 @@ struct KAN_lkhood{T<:half_quant} <: Lux.AbstractLuxLayer
     CNN::Bool
     seq_length::Int
     d_model::Int
+    MALA_ll_fcn::Function
 end
 
 function KAN_gen(
@@ -335,6 +364,7 @@ function init_KAN_lkhood(
     generate_fcn = KAN_gen
 
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : get(output_activation_mapping, output_act, identity)
+    sampling_fcn = sequence_length > 1 ? cross_entropy : l2
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1
@@ -417,7 +447,23 @@ function init_KAN_lkhood(
         end
     end
 
-    return KAN_lkhood(Φ_functions, layernorm, batchnorm, depth, output_dim, gen_var, ll_model, output_activation, x_shape, resample_fcn, generate_fcn, CNN, sequence_length, d_model)
+    return KAN_lkhood(
+        Φ_functions, 
+        layernorm, 
+        batchnorm, 
+        depth, 
+        output_dim, 
+        gen_var, 
+        ll_model, 
+        output_activation, 
+        x_shape, 
+        resample_fcn, 
+        generate_fcn, 
+        CNN, 
+        sequence_length, 
+        d_model,
+        sampling_fcn
+        )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::KAN_lkhood)

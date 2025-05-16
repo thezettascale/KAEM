@@ -12,15 +12,6 @@ using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
 
-
-function cross_entropy(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
-    return dropdims(sum(log.(x .+ ε) .* y ./ size(x, 1); dims=(1,2)); dims=(1,2))
-end
-
-function l2(x::AbstractArray{T}, y::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
-    return -dropdims(sum((x - y).^2; dims=(1,2,3)); dims=(1,2,3))
-end
-
 function safe_step_size_update(
     η::AbstractArray{U}, 
     δ::AbstractArray{Int}, 
@@ -237,13 +228,12 @@ function autoMALA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (x_i, y_i) -> cross_entropy(x_i, y_i; ε=m.ε) : (x_i, y_i) -> l2(x_i, y_i; ε=m.ε)
     x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
     
-    log_llhood_fcn = (z_i, x_i, st_gen) -> begin
+    log_llhood_fcn = (z_i, x_i, st_gen, t_i) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
         x̂ = m.lkhood.output_activation(x̂)
-        return ll_fn(x̂, x_i) ./ (2*m.lkhood.σ_llhood^2), st_gen
+        return m.lkhood.MALA_ll_fcn(x_i, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
     end
 
     function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t::AbstractArray{T}) 
@@ -251,17 +241,17 @@ function autoMALA_sampler(
         if ndims(z_i) == 4
             logpos = zeros(T, S, 0) |> device
             for k in 1:T_length
-                z_k, t_k = view(z_i,:,:,:,k), view(t,:,k)
+                z_k= view(z_i,:,:,:,k)
                 x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
                 logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_gen)
-                logpos = hcat(logpos, logprior + t_k .* logllhood)
+                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_gen, view(t,:,k))
+                logpos = hcat(logpos, logprior + logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
             logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_ebm; ε=m.ε)
-            logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_gen)
-            return (logprior + t .* logllhood) .* m.loss_scaling, st_ebm, st_gen
+            logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_gen, t)
+            return (logprior + logllhood) .* m.loss_scaling, st_ebm, st_gen
         end
     end
 
@@ -337,8 +327,8 @@ function autoMALA_sampler(
 
                     # Global swap criterion
                     z_hq = T.(z)
-                    ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen)
-                    ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen)
+                    ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen, view(temps, T_length))
+                    ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen, view(temps, T_length))
                     log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
                     
                     swap = view(log_u_swap,:,t,i) .< log_swap_ratio

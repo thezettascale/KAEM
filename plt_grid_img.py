@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # File path to your HDF5 file
-file_path = 'logs/Thermodynamic/n_z=50/SVHN_1/generated_images.h5'
+file_path = 'logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1/generated_images_epoch_2.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
     image_data = h5_file['samples'][()] 
@@ -24,3 +24,4 @@ for i in range(grid_size[0] * grid_size[1]):
 
 plt.subplots_adjust(wspace=0, hspace=0)
 plt.show()
+plt.savefig('garbage/grid.png', bbox_inches='tight', pad_inches=0)

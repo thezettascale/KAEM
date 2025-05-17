@@ -314,7 +314,7 @@ function autoMALA_sampler(
                 ε=U(m.ε), 
                 seq=seq)
 
-            accept = (view(log_u,:,:,i) .< log_r) .* reversible
+            accept = (log_u[:,:,i] .< log_r) .* reversible
             z = ẑ .* reshape(accept, 1, 1, S, T_length) + z .* reshape(1 .- accept, 1, 1, S, T_length)
             mean_η .= mean_η .+ η_prop .* accept
             η .= η_prop .* accept .+ η .* (1 .- accept)

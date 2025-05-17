@@ -211,7 +211,7 @@ function autoMALA_sampler(
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, T_length)
 
-    temps = repeat(reshape(temps, 1, T_length), S, 1) |> device
+    t_expanded = repeat(reshape(temps, 1, T_length), S, 1) |> device
     seq = m.lkhood.seq_length > 1
     x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
 
@@ -269,7 +269,7 @@ function autoMALA_sampler(
     burn_in = 0
     η = st.η_init
 
-    pos_before = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
+    pos_before = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), t_expanded)) ./ loss_scaling
     for i in 1:N
         z_cpu = cpu_device()(z)
         for k in 1:T_length
@@ -277,7 +277,7 @@ function autoMALA_sampler(
         end
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:,:,:,i]; dims=3); dims=3), dropdims(maximum(ratio_bounds[:,:,:,i]; dims=3); dims=3)
-        logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, temps)
+        logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t)
 
         if burn_in < N_unadjusted
             burn_in += 1
@@ -292,7 +292,7 @@ function autoMALA_sampler(
                 device(repeat(M, 1, 1, S, 1)), 
                 η, 
                 logpos_withgrad, 
-                temps
+                t_expanded
                 )
         else
             ẑ, η_prop, η_prime, reversible, log_r, st = autoMALA_step(
@@ -300,7 +300,7 @@ function autoMALA_sampler(
                 log_b, 
                 z, 
                 x_t, 
-                temps,
+                t_expanded,
                 st, 
                 logpos_z, 
                 ∇z, 
@@ -342,7 +342,7 @@ function autoMALA_sampler(
 
 
     end
-    pos_after = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), temps)) ./ loss_scaling
+    pos_after = CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), t_expanded)) ./ loss_scaling
     m.verbose && println("Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))")
 
     mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)

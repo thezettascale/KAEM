@@ -24,11 +24,19 @@ output_activation_mapping = Dict(
 )
 
 # Fcns for the Vanilla model
-function lkhood_rgb(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
+function lkhood_rgb(
+    x::AbstractArray{T}, 
+    x̂::AbstractArray{T}; 
+    ε::T=eps(T)
+    ) where {T<:half_quant}
     -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
 end
 
-function lkhood_seq(x::AbstractArray{T}, x̂::AbstractArray{T}; ε::T=eps(T)) where {T<:half_quant}
+function lkhood_seq(
+    x::AbstractArray{T}, 
+    x̂::AbstractArray{T}; 
+    ε::T=eps(T)
+    ) where {T<:half_quant}
     log_x̂ = log.(x̂ .+ ε)    
     ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)

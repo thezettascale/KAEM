@@ -37,23 +37,23 @@ end
 # Fcns for model with Lagenvin methods
 function cross_entropy(
     x::AbstractArray{T}, 
-    y::AbstractArray{T};
+    x̂::AbstractArray{T};
     t::AbstractArray{T}=device([one(half_quant)]), 
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    ll = log.(x .+ ε) .* y ./ size(x, 1)
+    ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
     return t .* dropdims(sum(ll; dims=(1,2)); dims=(1,2)) ./ (2*σ^2)
 end
 
 function l2(
     x::AbstractArray{T}, 
-    y::AbstractArray{T}; 
+    x̂::AbstractArray{T}; 
     t::AbstractArray{T}=device([one(half_quant)]), 
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    ll = -(x - y).^2
+    ll = -(x - x̂).^2
     return t .* dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) ./ (2*σ^2)
 end
 

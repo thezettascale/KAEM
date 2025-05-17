@@ -8,9 +8,11 @@ using Zygote: gradient
 include("../../utils.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
+include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
+using .KAN_likelihood: log_likelihood_MALA
 
 function safe_step_size_update(
     η::AbstractArray{U}, 
@@ -230,11 +232,8 @@ function autoMALA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
     
     log_llhood_fcn = (z_i, x_i, st_gen, t_i) -> begin
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
-        seed, rng = next_rng(seed)
-        noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
-        x̂ = m.lkhood.output_activation(x̂ + noise)
-        return m.lkhood.MALA_ll_fcn(x_i, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
+        logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x_i, z_i; seed=seed, ε=m.ε)
+        return t_i .* logllhood, st_gen
     end
 
     function log_posterior(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i, t::AbstractArray{T}) 

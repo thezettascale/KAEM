@@ -87,7 +87,7 @@ function test_logllhood()
 
     x = randn(Float32, out_dim, out_dim, 1, b_size) |> device
     z = first(sample_prior(prior, b_size, ps.ebm, st.ebm; ε=half_quant(1e-6)))
-    logllhood, _, _ = log_likelihood(lkhood, ps.gen, st.gen, x, z)
+    logllhood, _, _ = log_likelihood_IS(lkhood, ps.gen, st.gen, x, z)
     @test size(logllhood) == (b_size, b_size)
 end
 
@@ -104,7 +104,7 @@ function test_derivative()
 
     x = randn(Float32, out_dim, out_dim, 1, b_size) |> device
     z = first(sample_prior(prior, b_size, ps.ebm, st.ebm; ε=half_quant(1e-6)))
-    ∇ = first(gradient(z_i -> sum(first(log_likelihood(lkhood, ps.gen, st.gen, x, z_i))), z))
+    ∇ = first(gradient(z_i -> sum(first(log_likelihood_IS(lkhood, ps.gen, st.gen, x, z_i))), z))
     @test size(∇) == size(z)
 end
 
@@ -123,7 +123,7 @@ function test_cnn_derivative()
 
     x = randn(Float32, 32, 32, out_dim, b_size) |> device
     z = first(sample_prior(prior, b_size, ps.ebm, st.ebm; ε=half_quant(1e-6)))
-    ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
+    ∇ = first(gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), ps.gen))
     @test size(∇) == size(ps.gen)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -144,7 +144,7 @@ function test_SEQ_derivative()
 
     x = randn(Float32, lkhood.out_size, 8, b_size) |> device
     z = first(sample_prior(prior, b_size, ps.ebm, st.ebm; ε=half_quant(1e-6)))
-    ∇ = first(gradient(p -> sum(first(log_likelihood(lkhood, p, st.gen, x, z))), ps.gen))
+    ∇ = first(gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), ps.gen))
     @test size(∇) == size(ps.gen)
 
     commit!(conf, "SEQ", "sequence_length", "1")

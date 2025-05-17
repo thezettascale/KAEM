@@ -8,7 +8,7 @@ using Zygote: gradient
 include("../../utils.jl")
 include("../KAN_likelihood.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-using .KAN_likelihood: log_likelihood
+using .KAN_likelihood: log_likelihood_MALA
 
 π_dist = Dict(
   "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -79,9 +79,8 @@ function ULA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     log_llhood_fcn = (z_i, st_gen, t_i) -> begin
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)
-        x̂ = m.lkhood.output_activation(x̂)
-        return m.lkhood.MALA_ll_fcn(x, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
+        logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
+        return t_i .* logllhood, st_gen
     end
 
     log_llhood_fcn = ULA_prior ? (z_i, st_gen, t_i) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn

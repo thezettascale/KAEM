@@ -1,6 +1,6 @@
 module KAN_likelihood
 
-export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_likelihood
+export KAN_lkhood, init_KAN_lkhood, generate_from_z, importance_resampler, log_likelihood_IS, log_likelihood_MALA
 
 using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
@@ -24,45 +24,44 @@ output_activation_mapping = Dict(
 )
 
 # Fcns for the Vanilla model
-function lkhood_rgb(
+
+function cross_entropy_IS(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T}; 
     ε::T=eps(T)
     ) where {T<:half_quant}
-    -dropdims( sum( (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^ 2, dims=(1,2,3) ); dims=(1,2,3) )
+    log_x̂ = log.(x̂ .+ ε) 
+    ll = permutedims(log_x̂, [1, 2, 4, 3]) .* x   
+    ll = dropdims(sum(ll, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
+    return ll ./ size(x̂, 1)
 end
 
-function lkhood_seq(
+function l2_IS(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T}; 
     ε::T=eps(T)
     ) where {T<:half_quant}
-    log_x̂ = log.(x̂ .+ ε)    
-    ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
-    return ll ./ size(x̂, 1)
+    ll = (x .- permutedims(x̂, [1, 2, 3, 5, 4])).^2
+    return -dropdims( sum(ll, dims=(1,2,3)); dims=(1,2,3) )
 end
  
 # Fcns for model with Lagenvin methods
-function cross_entropy(
+function cross_entropy_MALA(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T};
-    t::Union{AbstractArray{T}, T}=one(half_quant), 
     ε::T=eps(half_quant),
-    σ::T=one(half_quant),
     ) where {T<:half_quant}
     ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
-    return t .* dropdims(sum(ll; dims=(1,2)); dims=(1,2)) ./ (2*σ^2)
+    return dropdims(sum(ll; dims=(1,2)); dims=(1,2)) 
 end
 
-function l2(
+function l2_MALA(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T}; 
-    t::Union{AbstractArray{T}, T}=one(half_quant), 
     ε::T=eps(half_quant),
-    σ::T=one(half_quant),
     ) where {T<:half_quant}
     ll = -(x .- x̂).^2
-    return t .* dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) ./ (2*σ^2)
+    return dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) 
 end
 
 resampler_map = Dict(
@@ -78,7 +77,6 @@ struct KAN_lkhood{T<:half_quant} <: Lux.AbstractLuxLayer
     depth::Int
     out_size::Int
     σ_llhood::T
-    log_lkhood::Function
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
     resample_z::Function
@@ -86,7 +84,6 @@ struct KAN_lkhood{T<:half_quant} <: Lux.AbstractLuxLayer
     CNN::Bool
     seq_length::Int
     d_model::Int
-    MALA_ll_fcn::Function
 end
 
 function KAN_gen(
@@ -236,7 +233,7 @@ function SEQ_gen(
     return z, st
 end
 
-function log_likelihood(
+function log_likelihood_IS(
     lkhood, 
     ps, 
     st, 
@@ -269,8 +266,44 @@ function log_likelihood(
     seed, rng = next_rng(seed)
     noise = lkhood.σ_llhood * randn(rng, T, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise) 
-    ll = lkhood.log_lkhood(x, x̂; ε=ε) ./ (2*lkhood.σ_llhood^2) 
+    ll = lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂; ε=ε) : l2_IS(x, x̂; ε=ε)
+    ll = ll ./ (2*lkhood.σ_llhood^2) 
     
+    return ll, st, seed
+end
+
+function log_likelihood_MALA(
+    lkhood, 
+    ps, 
+    st, 
+    x::AbstractArray{T}, 
+    z::AbstractArray{T};
+    seed::Int=1,
+    ε::T=eps(T),
+    ) where {T<:half_quant}
+    """
+    Evaluate the unnormalized log-likelihood of the KAN generator.
+
+    Args:
+        lkhood: The likelihood model.
+        ps: The parameters of the likelihood model.
+        st: The states of the likelihood model.
+        x: The data.
+        z: The latent variable.
+        seed: The seed for the random number generator.
+
+    Returns:
+        The unnormalized log-likelihood.
+        The updated seed.
+    """
+    Q, P, S, B = size(z)..., size(x)[end]
+
+    x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
+    seed, rng = next_rng(seed)
+    noise = lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+    x̂ = lkhood.output_activation(x̂ .+ noise) 
+    ll = lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂; ε=ε) : l2_MALA(x, x̂; ε=ε)
+    ll = ll ./ (2*lkhood.σ_llhood^2) 
     return ll, st, seed
 end
 
@@ -364,13 +397,9 @@ function init_KAN_lkhood(
     batchnorm = false
 
     resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
-    ll_model = lkhood_rgb
     generate_fcn = KAN_gen
 
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : get(output_activation_mapping, output_act, identity)
-    sampling_fcn = sequence_length > 1 ? cross_entropy : l2
-
-    println("Using KAN likelihood with ", sequence_length > 1 ? "cross-entropy" : "L2", " loss function.")
 
     Φ_functions = NamedTuple() 
     depth = length(widths)-1
@@ -420,7 +449,7 @@ function init_KAN_lkhood(
         
         act = gelu
         generate_fcn = SEQ_gen
-        ll_model = lkhood_seq
+
         # Single block Transformer decoder
         d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
@@ -460,7 +489,6 @@ function init_KAN_lkhood(
         depth, 
         output_dim, 
         gen_var, 
-        ll_model, 
         output_activation, 
         x_shape, 
         resample_fcn, 
@@ -468,7 +496,6 @@ function init_KAN_lkhood(
         CNN, 
         sequence_length, 
         d_model,
-        sampling_fcn
         )
 end
 

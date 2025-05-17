@@ -90,7 +90,7 @@ function importance_loss(
     # Log-dists
     logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
+    logllhood, st_gen, seed = log_likelihood_IS(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
     @reset st.ebm = st_ebm
     @reset st.gen = st_gen
 
@@ -123,16 +123,7 @@ function mala_loss(
 
     # Log-dists
     logprior_pos, st_ebm = m.prior.lp_fcn(m.prior, z[:, :, :, 1], ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
-
-    function lkhood(z_i, st_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        # seed, rng = next_rng(seed)
-        # noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
-        x̂ = m.lkhood.output_activation(x̂)
-        return m.lkhood.MALA_ll_fcn(x, x̂; ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
-    end
-
-    logllhood, st_gen = lkhood(z[:, :, :, 1], st.gen)
+    logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 1]; seed=seed, ε=m.ε)
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
@@ -168,20 +159,11 @@ function thermo_loss(
     Δt, T_length, B = temps[2:end] - temps[1:end-1], length(temps), size(x)[end]
 
     log_ss = zero(T)
-    ll_fn = m.lkhood.seq_length > 1 ? (y_i) -> cross_entropy(y_i, x; ε=m.ε) : (y_i) -> l2(y_i, x; ε=m.ε)
-
-    function lkhood(z_i, st_i, t_i)
-        x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_i, z_i)
-        # seed, rng = next_rng(seed)
-        # noise = m.lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
-        x̂ = m.lkhood.output_activation(x̂)
-        return m.lkhood.MALA_ll_fcn(x, x̂; t=t_i, ε=m.ε, σ=m.lkhood.σ_llhood), st_gen
-    end
 
     # Steppingstone estimator
     for k in 1:T_length-2
-        logllhood, st_gen = lkhood(z[:, :, :, k], st.gen, Δt[k+1])   
-        log_ss += mean(logllhood)  
+        logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st.gen, x, z[:, :, :, k]; seed=seed, ε=m.ε)
+        log_ss += mean(logllhood .* Δt[k+1])  
         @ignore_derivatives @reset st.gen = st_gen
     end
 
@@ -195,8 +177,8 @@ function thermo_loss(
         contrastive_div -= mean(logprior)
     end
 
-    logllhood, st_gen = lkhood(z, st.gen, Δt[1])
-    log_ss += mean(logllhood) 
+    logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st.gen, x, z[:, :, :, 1]; seed=seed, ε=m.ε)
+    log_ss += mean(logllhood .* Δt[1]) 
     @ignore_derivatives @reset st.gen = st_gen
 
     loss = -(log_ss + contrastive_div) 

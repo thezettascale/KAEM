@@ -268,7 +268,6 @@ function log_likelihood_IS(
     x̂ = lkhood.output_activation(x̂ .+ noise) 
     ll = lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂; ε=ε) : l2_IS(x, x̂; ε=ε)
     ll = ll ./ (2*lkhood.σ_llhood^2) 
-    
     return ll, st, seed
 end
 

@@ -277,7 +277,7 @@ function autoMALA_sampler(
         end
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:,:,:,i]; dims=3); dims=3), dropdims(maximum(ratio_bounds[:,:,:,i]; dims=3); dims=3)
-        logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t)
+        logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t_expanded)
 
         if burn_in < N_unadjusted
             burn_in += 1

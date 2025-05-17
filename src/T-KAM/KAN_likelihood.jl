@@ -46,7 +46,7 @@ end
 function cross_entropy(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T};
-    t::Union{AbstractArray{T}, T}=device([one(half_quant)]), 
+    t::Union{AbstractArray{T}, T}=one(half_quant), 
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
@@ -57,7 +57,7 @@ end
 function l2(
     x::AbstractArray{T}, 
     x̂::AbstractArray{T}; 
-    t::Union{AbstractArray{T}, T}=device([one(half_quant)]), 
+    t::Union{AbstractArray{T}, T}=one(half_quant), 
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}

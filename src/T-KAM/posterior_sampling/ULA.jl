@@ -97,9 +97,8 @@ function ULA_sampler(
         logpos_tot = zero(T)
         st_ebm, st_gen = st_i.ebm, st_i.gen
         for k in 1:T_length
-            z_k = view(z_i, :, :, :, k)
-            lp, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-            ll, st_gen = log_llhood_fcn(z_k, st_gen, view(temps, k))
+            lp, st_ebm = m.prior.lp_fcn(m.prior, z_i[:, :, :, k], ps.ebm, st_ebm; ε=m.ε)
+            ll, st_gen = log_llhood_fcn(z_i[:, :, :, k], st_gen, temps[k])
             logpos_tot += sum(lp) + sum(ll)
         end
         return logpos_tot * m.loss_scaling, st_ebm, st_gen
@@ -121,10 +120,10 @@ function ULA_sampler(
         if i % RE_frequency == 0 && T_length > 1 && !ULA_prior
             z_hq = T.(z)
             for t in 1:T_length-1
-                ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), st.gen, view(temps, T_length))
-                ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), st_gen, view(temps, T_length))
-                log_swap_ratio = dropdims(sum((view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1); dims=1); dims=1)
-                swap = view(log_u_swap,:,t,i) .< log_swap_ratio
+                ll_t, st_gen = log_llhood_fcn(z_hq[:,:,:,t], st.gen, temps[end])
+                ll_t1, st_gen = log_llhood_fcn(z_hq[:,:,:,t+1], st_gen, temps[end])
+                log_swap_ratio = dropdims(sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims=1); dims=1)
+                swap = log_u_swap[:,t,i] .< log_swap_ratio
                 @reset st.gen = st_gen
 
                 # Swap samples where accepted

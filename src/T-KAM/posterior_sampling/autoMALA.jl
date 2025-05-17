@@ -243,10 +243,9 @@ function autoMALA_sampler(
         if ndims(z_i) == 4
             logpos = zeros(T, S, 0) |> device
             for k in 1:T_length
-                z_k= view(z_i,:,:,:,k)
-                x_k = seq ? view(x_i,:,:,:,k) : view(x_i,:,:,:,:,k)
-                logprior, st_ebm = m.prior.lp_fcn(m.prior, z_k, ps.ebm, st_ebm; ε=m.ε)
-                logllhood, st_gen = log_llhood_fcn(z_k, x_k, st_gen, view(t,:,k))
+                x_k = seq ? x_i[:,:,:,k] : x_i[:,:,:,:,k]
+                logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i[:,:,:,k], ps.ebm, st_ebm; ε=m.ε)
+                logllhood, st_gen = log_llhood_fcn(z_i[:,:,:,k], x_k, st_gen, t[:,k])
                 logpos = hcat(logpos, logprior + logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
@@ -276,7 +275,7 @@ function autoMALA_sampler(
     for i in 1:N
         z_cpu = cpu_device()(z)
         for k in 1:T_length
-            momentum[:,:,:,k], M[:,:,1,k], seed = sample_momentum(view(z_cpu,:,:,:,k), M[:,:,1,k]; seed=seed)
+            momentum[:,:,:,k], M[:,:,1,k], seed = sample_momentum(z_cpu[:,:,:,k], M[:,:,1,k]; seed=seed)
         end
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:,:,:,i]; dims=3); dims=3), dropdims(maximum(ratio_bounds[:,:,:,i]; dims=3); dims=3)
@@ -329,11 +328,11 @@ function autoMALA_sampler(
 
                     # Global swap criterion
                     z_hq = T.(z)
-                    ll_t, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t), x, st.gen, view(temps, T_length))
-                    ll_t1, st_gen = log_llhood_fcn(view(z_hq,:,:,:,t+1), x, st_gen, view(temps, T_length))
-                    log_swap_ratio = (view(temps,t+1) - view(temps,t)) .* (ll_t - ll_t1)
+                    ll_t, st_gen = log_llhood_fcn(z_hq[:,:,:,t], x, st.gen, temps[end])
+                    ll_t1, st_gen = log_llhood_fcn(z_hq[:,:,:,t+1], x, st_gen, temps[end])
+                    log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
                     
-                    swap = view(log_u_swap,:,t,i) .< log_swap_ratio
+                    swap = log_u_swap[:,t,i] .< log_swap_ratio
                     @reset st.gen = st_gen
                     
                     # Swap samples where accepted

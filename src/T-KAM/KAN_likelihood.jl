@@ -362,6 +362,8 @@ function init_KAN_lkhood(
     output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : get(output_activation_mapping, output_act, identity)
     sampling_fcn = sequence_length > 1 ? cross_entropy : l2
 
+    println("Using KAN likelihood with ", sequence_length > 1 ? "cross-entropy" : "L2", " loss function.")
+
     Φ_functions = NamedTuple() 
     depth = length(widths)-1
     d_model = 0

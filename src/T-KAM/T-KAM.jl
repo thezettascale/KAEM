@@ -7,8 +7,6 @@ using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
-using LogExpFunctions: logsumexp
-
 
 include("EBM_prior.jl")
 include("KAN_likelihood.jl")

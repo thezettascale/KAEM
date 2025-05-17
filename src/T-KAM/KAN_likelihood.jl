@@ -60,8 +60,8 @@ function l2_MALA(
     x̂::AbstractArray{T}; 
     ε::T=eps(half_quant),
     ) where {T<:half_quant}
-    ll = -(x .- x̂).^2
-    return dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) 
+    ll = (x - x̂).^2
+    return -dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) 
 end
 
 resampler_map = Dict(

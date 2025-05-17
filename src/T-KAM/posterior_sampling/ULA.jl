@@ -79,8 +79,8 @@ function ULA_sampler(
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
 
     log_llhood_fcn = (z_i, st_gen, t_i) -> begin
-        logllhood, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
-        return t_i .* logllhood, st_gen
+        ll, st_gen, seed = log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
+        return t_i .* ll, st_gen
     end
 
     log_llhood_fcn = ULA_prior ? (z_i, st_gen, t_i) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn

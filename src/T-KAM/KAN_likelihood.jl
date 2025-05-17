@@ -37,10 +37,9 @@ function lkhood_seq(
     x̂::AbstractArray{T}; 
     ε::T=eps(T)
     ) where {T<:half_quant}
-    t = reshape(t, 1, 1, length(t))
-    ll = log.(x .+ ε) .* y ./ size(x, 1)
-    ll = t .* ll ./ (2*σ^2)
-    return dropdims(sum(ll; dims=(1,2)); dims=(1,2))
+    log_x̂ = log.(x̂ .+ ε)    
+    ll = dropdims(sum(permutedims(log_x̂, [1, 2, 4, 3]) .* x, dims=(1,2)), dims=(1,2)) # One-hot encoded cross-entropy
+    return ll ./ size(x̂, 1)
 end
  
 # Fcns for model with Lagenvin methods
@@ -51,11 +50,8 @@ function cross_entropy(
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    t = reshape(t, 1, 1, 1, length(t))
-    ll = -(x - y).^2
-    ll = t .* ll ./ (2*σ^2)
-    return dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3))
-
+    ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
+    return t .* dropdims(sum(ll; dims=(1,2)); dims=(1,2)) ./ (2*σ^2)
 end
 
 function l2(
@@ -65,7 +61,7 @@ function l2(
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    ll = -(x - x̂).^2
+    ll = -(x .- x̂).^2
     return t .* dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) ./ (2*σ^2)
 end
 

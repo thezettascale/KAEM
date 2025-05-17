@@ -42,10 +42,8 @@ function cross_entropy(
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    t = reshape(t, 1, 1, length(t))
     ll = log.(x .+ ε) .* y ./ size(x, 1)
-    ll = t .* ll ./ (2*σ^2)
-    return dropdims(sum(ll; dims=(1,2)); dims=(1,2))
+    return t .* dropdims(sum(ll; dims=(1,2)); dims=(1,2)) ./ (2*σ^2)
 end
 
 function l2(
@@ -55,10 +53,8 @@ function l2(
     ε::T=eps(half_quant),
     σ::T=one(half_quant),
     ) where {T<:half_quant}
-    t = reshape(t, 1, 1, 1, length(t))
     ll = -(x - y).^2
-    ll = t .* ll ./ (2*σ^2)
-    return dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3))
+    return t .* dropdims(sum(ll; dims=(1,2,3)); dims=(1,2,3)) ./ (2*σ^2)
 end
 
 resampler_map = Dict(

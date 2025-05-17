@@ -21,7 +21,7 @@ function ULA_sampler(
     ps,
     st,
     x::AbstractArray{T};
-    temps::AbstractArray{T}=device([one(half_quant)]),
+    temps::AbstractArray{T}=[one(half_quant)],
     N::Int=20,
     seed::Int=1,
     RE_frequency::Int=10,

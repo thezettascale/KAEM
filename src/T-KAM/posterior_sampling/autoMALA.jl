@@ -209,7 +209,7 @@ function autoMALA_sampler(
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, T_length)
 
-    temps = repeat(reshape(temps, 1, T_length), S, 1)
+    temps = repeat(reshape(temps, 1, T_length), S, 1) |> device
 
     # Initialize preconditioner
     M = zeros(U, Q, P, 1, T_length) 

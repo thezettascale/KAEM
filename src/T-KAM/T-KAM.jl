@@ -151,7 +151,6 @@ function mala_loss(
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st, seed
 end
 
-
 function thermo_loss(
     m::T_KAM,
     ps,

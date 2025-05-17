@@ -66,6 +66,7 @@ function ULA_sampler(
     loss_scaling = m.loss_scaling |> U
 
     η = ULA_prior ? prior_η : mean(st.η_init)
+    seq = m.lkhood.seq_length > 1
 
     T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     S = ULA_prior ? size(z)[end] : S
@@ -76,14 +77,6 @@ function ULA_sampler(
     noise = randn(rng, U, Q, P, S, T_length, N)
     seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
-
-    seq = m.lkhood.seq_length > 1
-    ll_fn = seq ? (y_i) -> cross_entropy(y_i, x; ε=m.ε) : (y_i) -> l2(y_i, x; ε=m.ε)
-    
-    # log_llhood_fcn = (z_i, st_gen) -> begin
-    #     ll, st_gen, seed = log_likelihood(m.lkhood, ps.gen, st_gen, x, z_i; seed=seed, ε=m.ε)
-    #     return ll, st_gen
-    # end
 
     log_llhood_fcn = (z_i, st_gen, t_i) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)

@@ -210,6 +210,8 @@ function autoMALA_sampler(
     z = reshape(z, Q, P, S, T_length)
 
     temps = repeat(reshape(temps, 1, T_length), S, 1) |> device
+    seq = m.lkhood.seq_length > 1
+    x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
 
     # Initialize preconditioner
     M = zeros(U, Q, P, 1, T_length) 
@@ -226,9 +228,6 @@ function autoMALA_sampler(
     ratio_bounds = log.(rand(rng, Uniform(0,1), S, T_length, 2, N)) .|> U |> device
     seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
-
-    seq = m.lkhood.seq_length > 1
-    x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
     
     log_llhood_fcn = (z_i, x_i, st_gen, t_i) -> begin
         x̂, st_gen = m.lkhood.generate_from_z(m.lkhood, ps.gen, st_gen, z_i)

@@ -14,6 +14,7 @@ using .KAN_likelihood: log_likelihood_MALA
   "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
   "gaussian" => (p, b, rng) -> randn(rng, p, 1, b),
   "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
+  "ebm" => (p, b, rng) -> randn(rng, p, 1, b),
 )
 
 function ULA_sampler(

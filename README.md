@@ -68,12 +68,4 @@ tmux new-session -d -s T_KAM_benchmark "bash benches/run_benchmarks.sh"
 
 In this project, implicit types/quantization are never used. Quantization is explicitly declared in function headers using `half_quant` and `full_quant`, defined in [utils.jl](src/utils.jl). Model parameterization is also explicit.
 
-Julia/Lux is adopted instead of PyTorch or JAX because:
-
-- Julia is often faster than Python for repeated code calls, (i.e. training), even against similar Python compilation strategies, (i.e. jax.jit).
-- I find Julia easier to prototype with than JAX. It also compiles fairly quick.
-- Julia codes natively to the GPU, (i.e. no separate CUDA/TPU code). Native GPU Python programming was only recently announced.
-
-I'm not a code supremacist - these are all subjective/personal preferences that work for me, but may be different for you in your applications. Justfying here, because not sure how people will react.
-
-I gradually moved from PyTorch, to JAX, then Julia - but Julia is not as widely adopted and sometimes its AutoDiff can be limited. Although, Enzyme is usually worth it.
+Julia/Lux is adopted instead of PyTorch or JAX because.

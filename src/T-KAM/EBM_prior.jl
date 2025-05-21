@@ -16,7 +16,7 @@ prior_pdf = Dict(
     "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
     "gaussian" => (z, ε) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z.^2 ./ 2),
     "lognormal" => (z, ε) -> exp.(-(log.(z .+ ε)).^2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "ebm" => (z, ε) -> ones(half_quant, size(z)) |> device,
+    "ebm" => (z, ε) -> ones(half_quant, size(z)) .- ε |> device,
     "learnable_gaussian" => (z, ps, ε) -> (
         one(half_quant) ./ (abs.(ps[Symbol("π_σ")]) .* half_quant(sqrt(2π)) .+ ε) 
     .* exp.(-(z .- ps[Symbol("π_μ")].^2) ./ (2 .* (ps[Symbol("π_σ")].^2) .+ ε))

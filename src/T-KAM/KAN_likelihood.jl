@@ -298,9 +298,9 @@ function log_likelihood_MALA(
     Q, P, S, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
-    # seed, rng = next_rng(seed)
-    # noise = lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
-    x̂ = lkhood.output_activation(x̂) 
+    seed, rng = next_rng(seed)
+    noise = lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+    x̂ = lkhood.output_activation(x̂ + seed) 
     ll = lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂; ε=ε) : l2_MALA(x, x̂; ε=ε)
     ll = ll ./ (2*lkhood.σ_llhood^2) 
     return ll, st, seed

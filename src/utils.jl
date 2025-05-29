@@ -22,7 +22,7 @@ const full_quant = Dict(
 )[get(ENV, "FULL_QUANT", "FP32")]
 
 const hq = Dict(
-    "BF16" => Lux.bf16
+    "BF16" => Lux.bf16,
     "FP16" => Lux.f16,
     "FP32" => Lux.f32,
 )[get(ENV, "HALF_QUANT", "FP32")]

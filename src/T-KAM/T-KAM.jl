@@ -85,15 +85,13 @@ function importance_loss(
     """MLE loss with importance sampling."""
     
     z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
-    @reset st.ebm = st_ebm
+    @ignore_derivatives @reset st.ebm = st_ebm
 
     # Log-dists
     logprior, st_ebm = m.prior.lp_fcn(m.prior, z, ps.ebm, st.ebm; ε=m.ε, normalize=!m.prior.contrastive_div)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen, seed = log_likelihood_IS(m.lkhood, ps.gen, st.gen, x, z; seed=seed, ε=m.ε)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
-
+    
     # Weights and resampling
     weights = @ignore_derivatives softmax(full_quant.(logllhood), dims=2) 
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
@@ -105,7 +103,12 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
+    @ignore_derivatives begin 
+        m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
+        @reset st.ebm = st_ebm
+        @reset st.gen = st_gen
+    end
+
     return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
 end
 

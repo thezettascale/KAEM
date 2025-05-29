@@ -328,7 +328,7 @@ function autoMALA_sampler(
                     z_hq = T.(z)
                     ll_t, st_gen = log_llhood_fcn(z_hq[:,:,:,t], x, st.gen, one(T))
                     ll_t1, st_gen = log_llhood_fcn(z_hq[:,:,:,t+1], x, st_gen, one(T))
-                    log_swap_ratio = (view(temps, t+1) - view(temps, t)) .* (ll_t - ll_t1)
+                    log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
                     
                     swap = log_u_swap[:,t,i] .< log_swap_ratio
                     @reset st.gen = st_gen

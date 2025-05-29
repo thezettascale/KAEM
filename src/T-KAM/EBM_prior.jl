@@ -70,7 +70,7 @@ function prior_fwd(
 
         if ebm.layernorm && i < ebm.depth
             z, st_new = Lux.apply(ebm.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @reset st[Symbol("ln_$i")] = st_new
+            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
         end
     end
 

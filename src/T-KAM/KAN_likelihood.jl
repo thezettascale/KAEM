@@ -117,7 +117,7 @@ function KAN_gen(
 
         if lkhood.layernorm && i < lkhood.depth
             z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
-            @reset st[Symbol("ln_$i")] = st_new
+            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
         end
     end
 
@@ -148,16 +148,16 @@ function CNN_gen(
 
     for i in 1:lkhood.depth
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
-        @reset st[Symbol("$i")] = st_new    
+        @ignore_derivatives @reset st[Symbol("$i")] = st_new    
 
         if lkhood.batchnorm
             z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("bn_$i")], z, ps[Symbol("bn_$i")], st[Symbol("bn_$i")])
-            @reset st[Symbol("bn_$i")] = st_new
+            @ignore_derivatives @reset st[Symbol("bn_$i")] = st_new
         end
     end
 
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")], z, ps[Symbol("$(lkhood.depth+1)")], st[Symbol("$(lkhood.depth+1)")])
-    @reset st[Symbol("$(lkhood.depth+1)")] = st_new
+    @ignore_derivatives @reset st[Symbol("$(lkhood.depth+1)")] = st_new
 
     return z, st
 end
@@ -198,29 +198,29 @@ function SEQ_gen(
     
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
-    @reset st[Symbol("1")] = st_new
+    @ignore_derivatives @reset st[Symbol("1")] = st_new
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    @reset st[Symbol("ln_1")] = st_new
+    @ignore_derivatives @reset st[Symbol("ln_1")] = st_new
 
     z_prev = z
     for t in 2:lkhood.seq_length
 
         # Self-attention
         Q, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("Q")], z, ps[Symbol("Q")], st[Symbol("Q")])
-        @reset st[Symbol("Q")] = st_new
+        @ignore_derivatives @reset st[Symbol("Q")] = st_new
         K, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("K")], z, ps[Symbol("K")], st[Symbol("K")])
-        @reset st[Symbol("K")] = st_new
+        @ignore_derivatives @reset st[Symbol("K")] = st_new
         V, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("V")], z, ps[Symbol("V")], st[Symbol("V")])
-        @reset st[Symbol("V")] = st_new
+        @ignore_derivatives @reset st[Symbol("V")] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z .+ attn
 
         # Feed forward
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-        @reset st[Symbol("2")] = st_new
+        @ignore_derivatives @reset st[Symbol("2")] = st_new
         z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("ln_2")], z[:, end:end, :], ps[Symbol("ln_2")], st[Symbol("ln_2")])
-        @reset st[Symbol("ln_2")] = st_new
+        @ignore_derivatives @reset st[Symbol("ln_2")] = st_new
 
         z = cat(z_prev, z, dims=2)
         z_prev = z
@@ -228,7 +228,7 @@ function SEQ_gen(
 
     # Output layer
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
-    @reset st[Symbol("3")] = st_new
+    @ignore_derivatives @reset st[Symbol("3")] = st_new
 
     return z, st
 end

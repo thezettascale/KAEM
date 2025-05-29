@@ -10,7 +10,7 @@ const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device
 
 # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const half_quant = Dict(
-    "BF16" => Bfloat16,
+    "BF16" => BFloat16,
     "FP16" => Float16,
     "FP32" => Float32,
 )[get(ENV, "HALF_QUANT", "FP32")]

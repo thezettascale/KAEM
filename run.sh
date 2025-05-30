@@ -1,6 +1,6 @@
 #!/bin/bash
 
-datasets=("SVHN" "CIFAR10")
+datasets=("SVHN")
 
 for dataset in "${datasets[@]}"; do
     session_name="TI_$dataset"

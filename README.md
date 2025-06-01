@@ -25,7 +25,7 @@ bash <conda-installer-name>-latest-Linux-x86_64.sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
-The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM", (including tmux from conda forge). Just need to run:
+The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM", (including [tmux](https://github.com/tmux/tmux/wiki) from conda forge). Just need to run:
 
 ```bash
 bash setup/setup.sh
@@ -38,7 +38,25 @@ conda activate T-KAM
 tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 ```
 
-Note: if you are on windows you will need to use git bash to run any of the shell files, and may need to manually source conda before opening. Alternatively, just use WSL. The shell files are just for convenience and cleanliness though, you could also just run as you please.
+### Note for windows users:
+
+This repo uses shell scripts solely for convenience and cleanliness, you can run everything without them too. If you want to use the shell scripts, then off the top of my head, do this:
+
+Get [Git Bash](https://gitforwindows.org/), right click the project directory, and click "Git bash here":
+ 
+ ```bash
+# Find your path
+where conda
+
+# Source it
+source /c/path/to/windows/conda.sh
+
+# Activate 
+conda activate base
+
+# Run the setup script
+bash setup.sh
+```
 
 ## To run experiments:
 

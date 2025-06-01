@@ -38,6 +38,8 @@ conda activate T-KAM
 tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 ```
 
+Note: if you are on windows you will need to use git bash to run any of the shell files, and may need to manually source conda before opening. Alternatively, just use WSL. The shell files are just for convenience and cleanliness though, you could also just run as you please.
+
 ## To run experiments:
 
 Activate conda env:

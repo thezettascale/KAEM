@@ -25,24 +25,25 @@ bash <conda-installer-name>-latest-Linux-x86_64.sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
-The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM". Just need to run:
+The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM", (including tmux from conda forge). Just need to run:
 
 ```bash
 bash setup/setup.sh
-```
-[Optional;] Install tmux - very useful
-
-```
-bash sudo apt install tmux
 ```
 
 [Optional;] Test all Julia scripts:
 
 ```bash
+conda activate T-KAM
 tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 ```
 
 ## To run experiments:
+
+Activate conda env:
+```
+conda activate T-KAM
+```
 
 Edit the config files:
 

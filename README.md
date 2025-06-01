@@ -68,7 +68,7 @@ conda activate T-KAM
 Edit the config files:
 
 ```bash
-nano config/nist_config.ini
+vim config/nist_config.ini
 ```
 
 For main experiments run:

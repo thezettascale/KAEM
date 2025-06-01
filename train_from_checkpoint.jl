@@ -1,5 +1,5 @@
 """Warning: this script will not carry over optimizer state 
-or updated seed, only the current, model, and parameters"""
+or updated seed - only the current model and parameters/lux_state."""
 
 using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser
 
@@ -22,7 +22,6 @@ include("src/utils.jl")
 include("src/ML_pipeline/trainer.jl")
 using .Utils
 using .trainer
-
 
 saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
 ps = convert(ComponentArray, saved_data["params"]) |> hq |> device

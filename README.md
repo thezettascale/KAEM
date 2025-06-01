@@ -14,7 +14,7 @@ It uses:
 
 - **The Kolmogorov-Arnold theorem** - any continous function can be represented in a finite manner.
 - **Empirical Bayes** - the prior is initialized and updated using observations from the data. It can also be recovered by visualizing its components.
-- **Thermodynamic Integration [MAYBE COMING SOON]** - the practicality of the theorem is hopefully going to be improved using another means of marginal likelihood estimation.
+- **Thermodynamic Integration** - training is improved using another means of marginal likelihood estimation.
 
 ## Setup:
 

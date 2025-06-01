@@ -10,7 +10,7 @@ if [ $? -ne 0 ]; then
 fi
 
 conda activate T-KAM
-conda install -c conda-forge tmux
+conda install -c conda-forge tmux -y
 
 # Install Python requirements
 echo "Installing Python requirements..."

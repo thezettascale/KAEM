@@ -95,4 +95,4 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 
 
 
-The MIT license open-sources the code - the paper is licensed separately with arXiv.org license.
+The MIT license open-sources the code. The paper is licensed separately with arXiv.org license - also open with citation:

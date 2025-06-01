@@ -1,5 +1,7 @@
 #!/bin/bash
 
+conda activate T-KAM
+
 datasets=("CIFAR10")
 
 for dataset in "${datasets[@]}"; do

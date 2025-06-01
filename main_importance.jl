@@ -28,21 +28,25 @@ prior_type = Dict(
     1 => "lognormal",
     2 => "gaussian",
     3 => "uniform",
+    4 => "ebm",
 )
 
 bases = Dict(
-    4 => "RBF",
-    5 => "FFT",
+    5 => "RBF",
+    6 => "FFT",
+    7 => "Cheby",
 )
 
 acts = Dict(
-    4 => "silu",
     5 => "silu",
+    6 => "silu",
+    7 => "none",
 )
 
 grid_sizes = Dict(
-    4 => "20",
-    5 => "50",
+    5 => "20",
+    6 => "50",
+    7 => "1",
 )
 
 if dataset == "CIFAR10" || dataset == "SVHN" 
@@ -50,9 +54,9 @@ if dataset == "CIFAR10" || dataset == "SVHN"
     t = init_trainer(rng, conf, dataset)
     train!(t)
 else
-    for prior_idx in [3,2,1]
+    for prior_idx in [4]
         commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
-        for base_idx in [4,5]
+        for base_idx in [5,6,7]
             commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])

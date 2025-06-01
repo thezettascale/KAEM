@@ -8,7 +8,7 @@ It's early stages and I'm planning to add more - for updates, please follow me o
 
 ## What is T-KAM.
 
-T-KAM is a generative model presented at ...
+T-KAM is a MLE model presented at ...
 
 It uses:
 
@@ -34,36 +34,14 @@ bash setup/setup.sh
 [Optional;] Test all Julia scripts:
 
 ```bash
-conda activate T-KAM
 tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 ```
 
 ### Note for windows users:
 
-This repo uses shell scripts solely for convenience and cleanliness, you can run everything without them too. If you want to use the shell scripts without WSL, then off the top of my head, do this:
-
-Get [Git Bash](https://gitforwindows.org/), right click the project directory, and click "Git bash here":
- 
- ```bash
-# Find your path
-where conda
-
-# Source it
-source /c/path/to/windows/conda.sh
-
-# Activate 
-conda activate base
-
-# Run the setup script
-bash setup.sh
-```
+This repo uses shell scripts solely for convenience, you can run everything without them too. If you want to use the shell scripts, [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) is recommended.
 
 ## To run experiments:
-
-Activate conda env:
-```
-conda activate T-KAM
-```
 
 Edit the config files:
 
@@ -92,7 +70,5 @@ In this project, implicit types/quantization are never used. Quantization is exp
 Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-
 
 The MIT license open-sources the code. The paper is licensed separately with arXiv.org license - also open with citation:

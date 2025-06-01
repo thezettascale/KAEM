@@ -40,7 +40,7 @@ tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
 
 ### Note for windows users:
 
-This repo uses shell scripts solely for convenience and cleanliness, you can run everything without them too. If you want to use the shell scripts, then off the top of my head, do this:
+This repo uses shell scripts solely for convenience and cleanliness, you can run everything without them too. If you want to use the shell scripts without WSL, then off the top of my head, do this:
 
 Get [Git Bash](https://gitforwindows.org/), right click the project directory, and click "Git bash here":
  
@@ -89,4 +89,4 @@ tmux new-session -d -s T_KAM_benchmark "bash benches/run_benchmarks.sh"
 
 In this project, implicit types/quantization are never used. Quantization is explicitly declared in function headers using `half_quant` and `full_quant`, defined in [utils.jl](src/utils.jl). Model parameterization is also explicit.
 
-Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ) ₊˚✩♡.
+Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.

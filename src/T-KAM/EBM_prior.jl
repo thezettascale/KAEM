@@ -109,7 +109,13 @@ function get_gausslegendre(ebm, ps, st)
     """Get Gauss-Legendre nodes and weights for prior's domain"""
     
     a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
-    if any(b .== ebm.fcns_qp[Symbol("1")].grid_size)
+    
+    no_grid = (ebm.fcns_qp[Symbol("1")].spline_string == "FFT" || 
+        ebm.fcns_qp[Symbol("1")].spline_string == "Cheby" ||
+        ebm.fcns_qp[Symbol("1")].spline_string == "Gottlieb"
+    )
+    
+    if no_grid
         a = fill(half_quant(first(ebm.fcns_qp[Symbol("1")].grid_range)), size(a)) |> device
         b = fill(half_quant(last(ebm.fcns_qp[Symbol("1")].grid_range)), size(b)) |> device
     end

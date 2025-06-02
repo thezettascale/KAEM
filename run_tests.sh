@@ -1,5 +1,7 @@
 #!/bin/bash
 
+conda activate T-KAM
+
 TEST_DIR="tests"
 test_files=$(ls "$TEST_DIR"/*.jl)
 LOG_FILE="test.log"

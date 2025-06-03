@@ -10,7 +10,7 @@ plt.rcParams.update({
 })
 
 num_param_updates = 8000  # Example value
-num_cycles = 1  # Example value
+num_cycles = 0  # Example value
 initial_p = 6  # Example value
 end_p = 4 # Example value
 

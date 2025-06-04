@@ -1,7 +1,7 @@
 """Warning: this script will not carry over optimizer state 
 or updated seed - only the current model and parameters/lux_state."""
 
-using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser
+using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser, Random
 
 # EDIT:
 dataset = "CIFAR10" 
@@ -38,7 +38,7 @@ ps = convert(ComponentArray, saved_data["params"]) |> hq |> device
 st = convert(NamedTuple, saved_data["state"]) |> hq |> device
 
 rng = Random.seed!(1)
-t = init_trainer(rng, conf, "$(dataset)_1")
+t = init_trainer(rng, conf, dataset)
 t.ps, t.st = ps, st
 
 train!(t)

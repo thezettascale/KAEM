@@ -1,4 +1,5 @@
 *.log
+*.out
 # logs/** 
 **/ckpt_*.jld2
 garbage/**

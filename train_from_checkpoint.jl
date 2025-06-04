@@ -30,7 +30,7 @@ commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 include("src/utils.jl")
 include("src/ML_pipeline/trainer.jl")
-using .Utils
+using .Utils: hq, device
 using .trainer
 
 saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")

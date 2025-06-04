@@ -4,18 +4,28 @@ or updated seed - only the current model and parameters/lux_state."""
 using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser
 
 # EDIT:
-file_loc = "logs/Thermodynamic/CIFAR10_1/"
+dataset = "CIFAR10" 
+file_loc = "logs/Vanilla/n_z=100/ULA/cnn=true/$(dataset)_1/"
 ckpt = 10
 
-conf = (occursin("MNIST", x)|| occursin("FMNIST", x)) ? ConfParse("config/nist_config.ini") : ConfParse("config/cnn_config.ini")
-conf = (occursin("PTB", x) || occursin("SMS_SPAM", x)) ? ConfParse("config/text_config.ini") : conf
+conf = Dict(
+    "MNIST" => ConfParse("config/nist_config.ini"),
+    "FMNIST" => ConfParse("config/nist_config.ini"),
+    "CIFAR10" => ConfParse("config/cifar_config.ini"),
+    "SVHN" => ConfParse("config/svhn_config.ini"),
+    "PTB" => ConfParse("config/text_config.ini"),
+    "SMS_SPAM" => ConfParse("config/text_config.ini"),
+    "DARCY_PERM" => ConfParse("config/darcy_perm_config.ini"),
+    "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
+)[dataset]
+parse_conf!(conf)
 
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 
 # EDIT:
-commit!(conf, "MALA", "use_langevin", "false")
+commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 include("src/utils.jl")
@@ -28,7 +38,7 @@ ps = convert(ComponentArray, saved_data["params"]) |> hq |> device
 st = convert(NamedTuple, saved_data["state"]) |> hq |> device
 
 rng = Random.seed!(1)
-t = init_trainer(rng, conf, "CIFAR10_1")
+t = init_trainer(rng, conf, "$(dataset)_1")
 t.ps, t.st = ps, st
 
 train!(t)

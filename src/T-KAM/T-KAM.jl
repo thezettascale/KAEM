@@ -223,7 +223,7 @@ function update_model_grid(
 
         z, _, seed = ((model.MALA || model.N_t > 1) ? 
             model.posterior_sample(model, x, temps, ps, st, seed) : 
-            model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed)
+            model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
             )
 
         P, Q = size(z)[1:2]
@@ -250,7 +250,7 @@ function update_model_grid(
 
     z, _, seed = ((model.MALA || model.N_t > 1) ? 
         model.posterior_sample(model, x, temps, ps, st, seed) : 
-        model.prior.sample_z(model.prior, model.grid_updates_samples, ps.ebm, st.ebm, seed))
+        model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed))
 
     z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims=2); dims=2)
 

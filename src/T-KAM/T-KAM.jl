@@ -226,7 +226,7 @@ function update_model_grid(
             model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
             )
 
-        P, Q = size(z)[1:2] 
+        P, Q = (model.MALA || model.N_t > 1) ? size(z)[1:2] : reverse(size(z)[1:2])
         z = reshape(z, P, Q, :)
         B = size(z, 3)
         z = reshape(z, P, Q*B)

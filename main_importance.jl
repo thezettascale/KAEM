@@ -34,19 +34,16 @@ prior_type = Dict(
 bases = Dict(
     5 => "RBF",
     6 => "FFT",
-    7 => "Cheby",
 )
 
 acts = Dict(
     5 => "silu",
     6 => "silu",
-    7 => "none",
 )
 
 grid_sizes = Dict(
     5 => "20",
     6 => "50",
-    7 => "1",
 )
 
 if dataset == "CIFAR10" || dataset == "SVHN" 
@@ -56,7 +53,7 @@ if dataset == "CIFAR10" || dataset == "SVHN"
 else
     for prior_idx in [4]
         commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
-        for base_idx in [5,6,7]
+        for base_idx in [5,6]
             commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
             commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])

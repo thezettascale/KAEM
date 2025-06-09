@@ -12,8 +12,8 @@ include("EBM_prior.jl")
 include("KAN_likelihood.jl")
 include("univariate_functions.jl")
 include("../utils.jl")
-include("posterior_sampling/autoMALA.jl")
-include("posterior_sampling/ULA.jl")
+include("sampling/autoMALA.jl")
+include("sampling/ULA.jl")
 using .ebm_ebm_prior
 using .KAN_likelihood
 using .autoMALA_sampling: autoMALA_sampler

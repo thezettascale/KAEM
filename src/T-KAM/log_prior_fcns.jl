@@ -7,7 +7,9 @@ using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
 include("../utils.jl")
+include("univariate_functions.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
+using .univariate_functions: fwd
 
 function prior_fwd(
     ebm, 
@@ -109,14 +111,13 @@ function log_prior_ula(
 end
 
 function log_prior_mix(
-    mix, 
-    z::AbstractArray{half_quant},
+    ebm, 
+    z::AbstractArray{T},
     ps, 
     st;
-    ε::full_quant=eps(full_quant),
+    ε::T=eps(half_quant),
     normalize::Bool=false,
-    agg::Bool=true
-    )
+    ) where {T<:half_quant}
     """
     Evaluate the unnormalized log-probability of the mixture ebm-prior.
     The likelihood of samples from each mixture model, z_q, is evaluated 
@@ -142,14 +143,14 @@ function log_prior_mix(
 
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
-    π0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
-    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
+    π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
+    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,1,b] + ε)
 
     # Energy functions of each component, q -> p
-    z, st = prior_fwd(mix, ps, st, dropdims(z; dims=2))
+    z, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
 
     log_Z = zeros(T, size(z)) |> device
-    if normalize && !ebm.ula
+    if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
         log_Z = reshape(log.(dropdims(sum(norm; dims=3); dims=3) .+ ε), ebm.q_size, 1, S) |> device
     end
@@ -157,8 +158,8 @@ function log_prior_mix(
     # Unnormalized or normalized log-probability
     logprob = z + log_απ
     logprob = logprob .- log_Z
-    l1_reg = ebm.λ * sum(abs.(ps[Symbol("α")])) |> fq # L1 regularization to encourage sparsity
-    return dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2)) .+ l1_reg, st
+    l1_reg = ebm.λ * sum(abs.(ps[Symbol("α")])) 
+    return dropdims(sum(logprob; dims=(1,2)); dims=(1,2)) .+ l1_reg, st
 end
 
 end

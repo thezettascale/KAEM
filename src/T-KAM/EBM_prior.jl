@@ -6,10 +6,14 @@ using CUDA, KernelAbstractions, Tullio, FastGaussQuadrature
 using ConfParser, Random, Distributions, Lux, Accessors, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays
 using ChainRules: @ignore_derivatives
 
+include("log_prior_fcns.jl")
 include("univariate_functions.jl")
+include("sampling/inverse_transform.jl")
 include("../utils.jl")
 using .univariate_functions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
+using .LogPriorFCNs
+using .InverseTransformSampling
 
 prior_pdf = Dict(
     "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
@@ -63,10 +67,13 @@ function trapezium_quadrature(
 
     # Energy function of each component
     f_grid, st = prior_fwd(ebm, ps, st, f_grid)
-    @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
-
+   
+    exp_fg = zeros(T, ebm.q_size, ebm.p_size, grid_size) |> device
     if component_mask !== nothing
+        @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[q, g])
         @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b] 
+    else
+        @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     end
 
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
@@ -102,7 +109,7 @@ function gausslegendre_quadrature(
     ps, 
     st; 
     ε::T=eps(half_quant),
-    component_mask::Union{AbstractArray{<:half_quant}, Nothing}=nothing
+    component_mask::Union{AbstractArray{T}, Nothing}=nothing
     ) where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
@@ -114,12 +121,14 @@ function gausslegendre_quadrature(
     nodes, st = prior_fwd(ebm, ps, st, nodes)
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
-    @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
     if component_mask !== nothing
-        @tullio trapz[q, b, g] = trapz[q, p, g] * component_mask[q, p, b] 
+        @tullio trapz[q, b, g] := (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b]) 
+        @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g] 
+        return trapz, nodes_cpu, st
+    else
+        @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
+        return trapz, nodes_cpu, st
     end
-
-    return trapz, nodes_cpu, st
 end
 
 function init_ebm_prior(
@@ -207,6 +216,7 @@ function init_ebm_prior(
 
     end
 
+    ula = length(widths) > 2 
     contrastive_div = parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EBM_PRIOR", "quadrature_method")
@@ -219,8 +229,6 @@ function init_ebm_prior(
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
-
-    ula = length(widths) > 2 
 
     lp_fcn = begin
         if mixture_model && !ula

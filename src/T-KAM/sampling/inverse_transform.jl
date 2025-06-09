@@ -9,15 +9,16 @@ using NNlib: softmax
 include("../../utils.jl")
 include("../log_prior_fcns.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-using .LogPriorFCNs: fwd
+using .LogPriorFCNs: prior_fwd
+using Flux: onehotbatch
 
 function choose_component(
-    α::AbstractArray{half_quant}, 
+    α::AbstractArray{T}, 
     num_samples::Int, 
     q_size::Int, 
     p_size::Int; 
     seed::Int=1
-    )
+    ) where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
 
@@ -36,11 +37,11 @@ function choose_component(
     α = cumsum(softmax(α .|> full_quant; dims=2); dims=2) |> cpu_device() 
 
     # Find the index of the first cdf value greater than the random value
-    mask = Array{half_quant}(undef, q_size, p_size, num_samples) 
+    mask = Array{T}(undef, q_size, p_size, num_samples) 
     Threads.@threads for q in 1:q_size
         i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
         replace!(i, p_size + 1 => p_size) # Edge case 
-        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> half_quant
+        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> T
     end
     
     return mask |> device, seed
@@ -114,7 +115,7 @@ function sample_mixture(
         z: The samples from the ebm-prior, (num_samples, q). 
         seed: The updated seed.
     """
-    mask = choose_component(
+    mask, seed = choose_component(
         ps[Symbol("α")],
         num_samples,
         ebm.q_size,
@@ -127,19 +128,19 @@ function sample_mixture(
     grid = grid .|> full_quant
 
     cdf = cat(
-        zeros(full_quant, ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
+        zeros(full_quant, ebm.q_size, num_samples, 1), # Add 0 to start of CDF
         cpu_device()(cumsum(cdf .|> full_quant; dims=3)), # Cumulative trapezium = CDF
         dims=3) 
 
     seed, rng = next_rng(seed)
-    rand_vals = rand(rng, full_quant, mix.q_size, num_samples) .* cdf[:, end, :] 
+    rand_vals = rand(rng, full_quant, ebm.q_size, num_samples) .* cdf[:, :, end] 
 
-    z = Array{full_quant}(undef, mix.q_size, 1, num_samples)
-    Threads.@threads for q in 1:mix.q_size
+    z = Array{full_quant}(undef, ebm.q_size, 1, num_samples)
+    Threads.@threads for q in 1:ebm.q_size
         for b in 1:num_samples
             # First trapezium where CDF >= rand_val
             rv = rand_vals[q, b]
-            idx = searchsortedfirst(cdf[q, :, b], rv) # Index of upper trapezium bound
+            idx = searchsortedfirst(cdf[q, b, :], rv) # Index of upper trapezium bound
 
             # Edge cases
             idx = idx == 1 ? 2 : idx
@@ -147,7 +148,7 @@ function sample_mixture(
 
             # Trapezium bounds
             z1, z2 = grid[q, idx-1], grid[q, idx] 
-            cd1, cd2 = cdf[q, idx-1, b], cdf[q, idx, b]
+            cd1, cd2 = cdf[q, b, idx-1], cdf[q, b, idx]
 
             # Linear interpolation
             z[q, 1, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))

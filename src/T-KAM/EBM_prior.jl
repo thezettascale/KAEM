@@ -40,6 +40,8 @@ struct ebm_prior{T<:half_quant} <: Lux.AbstractLuxLayer
     quad_type::AbstractString
     ula::Bool
     lp_fcn::Function
+    mixture_model::Bool
+    λ::half_quant
 end
 
 function prior_fwd(
@@ -64,9 +66,11 @@ function prior_fwd(
         st: The updated states of the ebm-prior.
     """
 
+    mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
+
     for i in 1:ebm.depth
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
-        z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), ebm.p_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
+        z = (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) : dropdims(sum(z, dims=1); dims=1)
 
         if ebm.layernorm && i < ebm.depth
             z, st_new = Lux.apply(ebm.fcns_qp[Symbol("ln_$i")], z, ps[Symbol("ln_$i")], st[Symbol("ln_$i")])
@@ -78,11 +82,47 @@ function prior_fwd(
     return z, st
 end
 
+function choose_component(
+    α::AbstractArray{half_quant}, 
+    num_samples::Int, 
+    q_size::Int, 
+    p_size::Int; 
+    seed::Int=1
+    )
+    """
+    Creates a one-hot mask for mixture model, q, to select one component, p.
+
+    Args:
+        alpha: The mixture proportions, (q, p).
+        num_samples: The number of samples to generate.
+        q_size: The number of mixture models.
+        seed: The seed for the random number generator.
+
+    Returns:
+        chosen_components: The one-hot mask for each mixture model, (num_samples, q, p).
+        seed: The updated seed.
+    """
+    seed, rng = next_rng(seed)
+    rand_vals = rand(rng, full_quant, q_size, num_samples) 
+    α = cumsum(softmax(α .|> full_quant; dims=2); dims=2) |> cpu_device() 
+
+    # Find the index of the first cdf value greater than the random value
+    mask = Array{half_quant}(undef, q_size, p_size, num_samples) 
+    Threads.@threads for q in 1:q_size
+        i = searchsortedfirst.(Ref(α[q, :]), rand_vals[q, :])
+        replace!(i, p_size + 1 => p_size) # Edge case 
+        mask[q, :, :] = onehotbatch(i, 1:p_size) .|> half_quant
+    end
+    
+    return mask |> device, seed
+end
+
 function trapezium_quadrature(
     ebm, 
     ps, 
     st; 
-    ε::T=eps(half_quant)
+    ε::T=eps(half_quant),
+    component_mask::Union{AbstractArray{<:half_quant}, Nothing}=nothing
     ) where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
 
@@ -98,7 +138,11 @@ function trapezium_quadrature(
     # Energy function of each component
     f_grid, st = prior_fwd(ebm, ps, st, f_grid)
     @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
-    
+
+    if component_mask !== nothing
+        @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b] 
+    end
+
     # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] 
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
@@ -127,7 +171,13 @@ function get_gausslegendre(ebm, ps, st)
     return nodes, weights, nodes_cpu
 end
 
-function gausslegendre_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:half_quant}
+function gausslegendre_quadrature(
+    ebm, 
+    ps, 
+    st; 
+    ε::T=eps(half_quant),
+    component_mask::Union{AbstractArray{<:half_quant}, Nothing}=nothing
+    ) where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
@@ -139,10 +189,14 @@ function gausslegendre_quadrature(ebm, ps, st; ε::T=eps(half_quant)) where {T<:
 
     # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
     @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
+    if component_mask !== nothing
+        @tullio trapz[q, b, g] = trapz[q, p, g] * component_mask[q, p, b] 
+    end
+
     return trapz, nodes_cpu, st
 end
 
-function sample_prior(
+function sample_univariate(
     ebm,
     num_samples::Int, 
     ps,
@@ -150,25 +204,11 @@ function sample_prior(
     seed::Int=1,
     ε::T=eps(T)
     ) where {T<:half_quant}
-    """
-    Component-wise inverse transform sampling for the ebm-prior.
-    p = components of model
-    q = number of models
 
-    Args:
-        prior: The ebm-prior.
-        ps: The parameters of the ebm-prior.
-        st: The states of the ebm-prior.
-
-    Returns:
-        z: The samples from the ebm-prior, (num_samples, q). 
-        seed: The updated seed.
-    """
-
-    cdf, grid, st = ebm.quad(ebm, ps, st)
+    cdf, grid, st = ebm.quad(ebm, ps, st, nothing)
     grid_size = size(grid, 2)
-
     grid = grid .|> full_quant
+
     cdf = cat(
         zeros(full_quant, ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
         cpu_device()(cumsum(cdf .|> full_quant; dims=3)), # Cumulative trapezium = CDF
@@ -196,6 +236,71 @@ function sample_prior(
                 # Linear interpolation
                 z[q, p, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
             end
+        end
+    end
+
+    return device(T.(z)), st, seed
+end
+
+function sample_mixture(
+    ebm,
+    num_samples::Int, 
+    ps,
+    st;
+    seed::Int=1,
+    ε::T=eps(T)
+    ) where {T<:half_quant}
+    """
+    Component-wise inverse transform sampling for the ebm-prior.
+    p = components of model
+    q = number of models
+
+    Args:
+        prior: The ebm-prior.
+        ps: The parameters of the ebm-prior.
+        st: The states of the ebm-prior.
+
+    Returns:
+        z: The samples from the ebm-prior, (num_samples, q). 
+        seed: The updated seed.
+    """
+    mask = choose_component(
+        ps[Symbol("α")],
+        num_samples,
+        ebm.q_size,
+        ebm.p_size;
+        seed=seed
+    )
+
+    cdf, grid, st = ebm.quad(ebm, ps, st, mask)
+    grid_size = size(grid, 2)
+    grid = grid .|> full_quant
+
+    cdf = cat(
+        zeros(full_quant, ebm.q_size, ebm.p_size, 1), # Add 0 to start of CDF
+        cpu_device()(cumsum(cdf .|> full_quant; dims=3)), # Cumulative trapezium = CDF
+        dims=3) 
+
+    seed, rng = next_rng(seed)
+    rand_vals = rand(rng, full_quant, mix.q_size, num_samples) .* cdf[:, end, :] 
+
+    z = Array{full_quant}(undef, mix.q_size, 1, num_samples)
+    Threads.@threads for q in 1:mix.q_size
+        for b in 1:num_samples
+            # First trapezium where CDF >= rand_val
+            rv = rand_vals[q, b]
+            idx = searchsortedfirst(cdf[q, :, b], rv) # Index of upper trapezium bound
+
+            # Edge cases
+            idx = idx == 1 ? 2 : idx
+            idx = idx > grid_size ? grid_size : idx
+
+            # Trapezium bounds
+            z1, z2 = grid[q, idx-1], grid[q, idx] 
+            cd1, cd2 = cdf[q, idx-1, b], cdf[q, idx, b]
+
+            # Linear interpolation
+            z[q, 1, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
         end
     end
 
@@ -263,6 +368,59 @@ function log_prior_ula(
     return dropdims(sum(f; dims=1) .+ log_π0; dims=1), st
 end
 
+function log_prior_mix(
+    mix, 
+    z::AbstractArray{half_quant},
+    ps, 
+    st;
+    ε::full_quant=eps(full_quant),
+    normalize::Bool=false,
+    agg::Bool=true
+    )
+    """
+    Evaluate the unnormalized log-probability of the mixture ebm-prior.
+    The likelihood of samples from each mixture model, z_q, is evaluated 
+    for all components of the mixture model it has been sampled from , M_q.
+
+    ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ]
+
+    
+    Args:
+        mix: The mixture ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
+        ps: The parameters of the mixture ebm-prior.
+        st: The states of the mixture ebm-prior.
+        normalize: Whether to normalize the log-probability.
+        ε: The small value to avoid log(0).
+
+    Returns:
+        The unnormalized log-probability of the mixture ebm-prior.
+        The updated states of the mixture ebm-prior.
+    """
+
+    S = size(z,2)
+
+    # Mixture proportions and prior
+    alpha = softmax(ps[Symbol("α")]; dims=2) 
+    π0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
+    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,b] + ε)
+
+    # Energy functions of each component, q -> p
+    z, st = prior_fwd(mix, ps, st, dropdims(z; dims=2))
+
+    log_Z = zeros(T, size(z)) |> device
+    if normalize && !ebm.ula
+        norm, _, st = ebm.quad(ebm, ps, st)
+        log_Z = reshape(log.(dropdims(sum(norm; dims=3); dims=3) .+ ε), ebm.q_size, 1, S) |> device
+    end
+
+    # Unnormalized or normalized log-probability
+    logprob = z + log_απ
+    logprob = logprob .- log_Z
+    l1_reg = ebm.λ * sum(abs.(ps[Symbol("α")])) |> fq # L1 regularization to encourage sparsity
+    return dropdims(sum(logprob |> fq; dims=(1,2)); dims=(1,2)) .+ l1_reg, st
+end
+
 function init_ebm_prior(
     conf::ConfParse;
     prior_seed::Int=1,
@@ -289,9 +447,14 @@ function init_ebm_prior(
     τ_trainable = parse(Bool, retrieve(conf, "EBM_PRIOR", "τ_trainable"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size")) 
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
+    reg = parse(full_quant, retrieve(conf, "EBM_PRIOR", "λ_reg"))
+
+    P, Q = first(widths), last(widths)
 
     grid_range = parse.(half_quant, retrieve(conf, "EBM_PRIOR", "grid_range"))
     prior_type = retrieve(conf, "EBM_PRIOR", "π_0")
+    mixture_model = parse(Bool, retrieve(conf, "EBM_PRIOR", "mixture_model"))
+    widths = mixture_model ? reverse(widths) : widths
 
     grid_range_first = Dict(
         "ebm" => grid_range,
@@ -303,10 +466,13 @@ function init_ebm_prior(
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
     
-    sample_function = (m, n, p, s, seed) -> @ignore_derivatives sample_prior(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
-    ula = length(widths) > 2
-
-    P, Q = first(widths), last(widths)
+    sample_function = (m, n, p, s, seed) -> begin
+        if mixture_model
+            @ignore_derivatives sample_mixture(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
+        else
+            @ignore_derivatives sample_univariate(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed=seed, ε=eps)
+        end
+    end    
 
     functions = NamedTuple()
     for i in eachindex(widths[1:end-1])
@@ -344,8 +510,8 @@ function init_ebm_prior(
 
     quad_type = retrieve(conf, "EBM_PRIOR", "quadrature_method")
     quadrature_method = Dict(
-        "gausslegendre" => (m, p, s) -> gausslegendre_quadrature(m, p, s; ε=eps),
-        "trapezium" => (m, p, s) -> trapezium_quadrature(m, p, s; ε=eps)
+        "gausslegendre" => (m, p, s, mask) -> gausslegendre_quadrature(m, p, s; ε=eps, component_mask=mask),
+        "trapezium" => (m, p, s, mask) -> trapezium_quadrature(m, p, s; ε=eps, component_mask=mask),
     )[quad_type]
 
     N_quad = parse(Int, retrieve(conf, "EBM_PRIOR", "GaussQuad_nodes"))
@@ -353,8 +519,18 @@ function init_ebm_prior(
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights)'
 
-    lp_fcn = ula ? log_prior_ula : log_prior
+    ula = length(widths) > 2 
 
+    lp_fcn = begin
+        if mixture_model && !ula
+            log_prior_mix
+        elseif ula
+            log_prior_ula
+        else
+            log_prior
+        end
+    end
+        
     return ebm_prior(
         functions, 
         layernorm, 
@@ -371,7 +547,9 @@ function init_ebm_prior(
         contrastive_div, 
         quad_type, 
         ula,
-        lp_fcn
+        lp_fcn,
+        mixture_model,
+        reg
         )
 end
 
@@ -388,6 +566,11 @@ function Lux.initialparameters(rng::AbstractRNG, prior::ebm_prior)
         @reset ps[Symbol("π_μ")] = zeros(half_quant, 1, prior.p_size)
         @reset ps[Symbol("π_σ")] = ones(half_quant, 1, prior.p_size)
     end
+
+    if prior.mixture_model
+        @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, prior.q_size, prior.p_size)
+    end
+    
     return ps 
 end
  

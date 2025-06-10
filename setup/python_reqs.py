@@ -13,6 +13,8 @@ packages = [
     "torch",
     "torch_fidelity",
     "scikit-learn",
+    "json"
+    "pillow"
 ]
 
 for package in packages:

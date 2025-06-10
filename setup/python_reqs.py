@@ -13,7 +13,7 @@ packages = [
     "torch",
     "torch_fidelity",
     "scikit-learn",
-    "json"
+    "json",
     "pillow"
 ]
 

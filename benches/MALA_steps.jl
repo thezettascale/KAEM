@@ -28,7 +28,7 @@ dataset, img_size = get_vision_dataset(
 )[1:2]
 
 function benchmark_MALA(N_l)
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp", "$(N_l)")
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_l)")
 
     model = init_T_KAM(dataset, conf, img_size)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
@@ -39,13 +39,13 @@ function benchmark_MALA(N_l)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
+display(@benchmark CUDA.@sync benchmark_MALA(1))
+display(@benchmark CUDA.@sync benchmark_MALA(2))
+display(@benchmark CUDA.@sync benchmark_MALA(3))
+display(@benchmark CUDA.@sync benchmark_MALA(4))
+display(@benchmark CUDA.@sync benchmark_MALA(5))
+display(@benchmark CUDA.@sync benchmark_MALA(6))
+display(@benchmark CUDA.@sync benchmark_MALA(7))
+display(@benchmark CUDA.@sync benchmark_MALA(8))
+display(@benchmark CUDA.@sync benchmark_MALA(9))
 display(@benchmark CUDA.@sync benchmark_MALA(10))
-display(@benchmark CUDA.@sync benchmark_MALA(20))
-display(@benchmark CUDA.@sync benchmark_MALA(30))
-display(@benchmark CUDA.@sync benchmark_MALA(40))
-display(@benchmark CUDA.@sync benchmark_MALA(50))
-display(@benchmark CUDA.@sync benchmark_MALA(60))
-display(@benchmark CUDA.@sync benchmark_MALA(70))
-display(@benchmark CUDA.@sync benchmark_MALA(80))
-display(@benchmark CUDA.@sync benchmark_MALA(90))
-display(@benchmark CUDA.@sync benchmark_MALA(100))

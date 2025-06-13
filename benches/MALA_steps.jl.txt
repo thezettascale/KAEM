@@ -1,101 +1,38 @@
 Resized dataset to (32, 32, 3)
 BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.913 s …    3.205 s  ┊ GC (min … max): 2.90% … 11.04%
- Time  (median):     3.059 s               ┊ GC (median):    7.17%
- Time  (mean ± σ):   3.059 s ± 206.339 ms  ┊ GC (mean ± σ):  7.17% ±  5.76%
+ Range (min … max):  2.868 s …    3.077 s  ┊ GC (min … max): 2.98% … 10.13%
+ Time  (median):     2.972 s               ┊ GC (median):    6.68%
+ Time  (mean ± σ):   2.972 s ± 148.238 ms  ┊ GC (mean ± σ):  6.68% ±  5.06%
 
   █                                                        █  
   █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.91 s         Histogram: frequency by time          3.2 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203085.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  3.021 s …   3.149 s  ┊ GC (min … max): 2.93% … 10.67%
- Time  (median):     3.085 s              ┊ GC (median):    6.88%
- Time  (mean ± σ):   3.085 s ± 90.105 ms  ┊ GC (mean ± σ):  6.88% ±  5.47%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  3.02 s         Histogram: frequency by time        3.15 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203073.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.982 s …    3.126 s  ┊ GC (min … max): 3.04% … 10.45%
- Time  (median):     3.054 s               ┊ GC (median):    6.84%
- Time  (mean ± σ):   3.054 s ± 101.857 ms  ┊ GC (mean ± σ):  6.84% ±  5.24%
-
-  █                                                        █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.98 s         Histogram: frequency by time         3.13 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203073.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  3.006 s …   3.119 s  ┊ GC (min … max): 2.89% … 10.23%
- Time  (median):     3.063 s              ┊ GC (median):    6.62%
- Time  (mean ± σ):   3.063 s ± 80.170 ms  ┊ GC (mean ± σ):  6.62% ±  5.19%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  3.01 s         Histogram: frequency by time        3.12 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203095.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  3.493 s …   3.556 s  ┊ GC (min … max): 3.23% … 11.92%
- Time  (median):     3.525 s              ┊ GC (median):    7.61%
- Time  (mean ± σ):   3.525 s ± 44.563 ms  ┊ GC (mean ± σ):  7.61% ±  6.14%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  3.49 s         Histogram: frequency by time        3.56 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203102.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.976 s …   3.110 s  ┊ GC (min … max): 2.82% … 10.21%
- Time  (median):     3.043 s              ┊ GC (median):    6.60%
- Time  (mean ± σ):   3.043 s ± 94.579 ms  ┊ GC (mean ± σ):  6.60% ±  5.23%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.98 s         Histogram: frequency by time        3.11 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203074.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  3.007 s …   3.136 s  ┊ GC (min … max): 2.93% … 10.19%
- Time  (median):     3.071 s              ┊ GC (median):    6.63%
- Time  (mean ± σ):   3.071 s ± 91.188 ms  ┊ GC (mean ± σ):  6.63% ±  5.13%
-
-  █                                                       █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  3.01 s         Histogram: frequency by time        3.14 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203073.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.978 s …    3.142 s  ┊ GC (min … max): 2.77% … 10.32%
- Time  (median):     3.060 s               ┊ GC (median):    6.64%
- Time  (mean ± σ):   3.060 s ± 116.216 ms  ┊ GC (mean ± σ):  6.64% ±  5.34%
-
-  █                                                        █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.98 s         Histogram: frequency by time         3.14 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203074.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.987 s …    3.175 s  ┊ GC (min … max): 2.61% … 10.46%
- Time  (median):     3.081 s               ┊ GC (median):    6.66%
- Time  (mean ± σ):   3.081 s ± 133.219 ms  ┊ GC (mean ± σ):  6.66% ±  5.55%
-
-  █                                                        █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.99 s         Histogram: frequency by time         3.17 s <
-
- Memory estimate: 1.66 GiB, allocs estimate: 1203073.
-BenchmarkTools.Trial: 2 samples with 1 evaluation per sample.
- Range (min … max):  2.983 s …    3.193 s  ┊ GC (min … max): 2.89% … 10.33%
- Time  (median):     3.088 s               ┊ GC (median):    6.73%
- Time  (mean ± σ):   3.088 s ± 148.558 ms  ┊ GC (mean ± σ):  6.73% ±  5.26%
-
-  █                                                        █  
-  █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-  2.98 s         Histogram: frequency by time         3.19 s <
+  2.87 s         Histogram: frequency by time         3.08 s <
 
  Memory estimate: 1.66 GiB, allocs estimate: 1203094.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 6.482 s (1.87% GC) to evaluate,
+ with a memory estimate of 2.25 GiB, over 2133663 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 10.111 s (1.81% GC) to evaluate,
+ with a memory estimate of 2.85 GiB, over 3061363 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 13.434 s (1.74% GC) to evaluate,
+ with a memory estimate of 3.45 GiB, over 3989154 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 17.672 s (7.69% GC) to evaluate,
+ with a memory estimate of 4.04 GiB, over 4916228 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 21.740 s (8.03% GC) to evaluate,
+ with a memory estimate of 4.64 GiB, over 5933549 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 25.657 s (8.50% GC) to evaluate,
+ with a memory estimate of 5.24 GiB, over 6962088 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 29.173 s (7.82% GC) to evaluate,
+ with a memory estimate of 5.84 GiB, over 7989669 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 33.484 s (8.96% GC) to evaluate,
+ with a memory estimate of 6.43 GiB, over 9018787 allocations.
+BenchmarkTools.Trial: 1 sample with 1 evaluation per sample.
+ Single result which took 37.126 s (8.29% GC) to evaluate,
+ with a memory estimate of 7.03 GiB, over 10046782 allocations.

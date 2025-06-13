@@ -11,24 +11,24 @@ plt.rcParams.update({
 })
 
 latent_dim = pd.DataFrame({
-    r"$n_z$" : [10, 20, 30, 40, 50],
-    "Time (s)" : [11.362, 28.634, 40.642, 53.538, 70.586],
-    "Memory Estimate (GiB)" : [0.848, 1.49, 2.19, 2.95, 3.79],  
-    "Garbage Collection (%)" : [1.23, 1.39, 1.66, 1.56, 1.47],
-    "Allocations" : [19991266, 40663043, 63074389, 87218636, 113099272],
+    r"$n_z$" : [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
+    "Time (s)" : [5.915, 13.075, 19.707, 25.572, 31.971, 39.648, 47.857, 56.762, 63.697, 71.476],
+    "Memory Estimate (GiB)" : [0.551, 0.870, 1.18, 1.52, 1.89, 2.26, 2.65, 3.05, 3.49, 3.93],
+    "Garbage Collection (%)" : [0.00, 1.24, 1.20, 1.52, 1.45, 1.65, 1.64, 1.60, 1.64, 1.62], 
+    "Allocations" : [11085826, 21500020, 32371238, 43698173, 55485415, 67724846, 80420074, 93571538, 107179137, 121242782],
 })
 
 mala_steps = pd.DataFrame({
-    r"$N_{\text{local}}$" : [10, 15, 20, 25, 30],
-    "Time (s)" : [26.007, 27.348, 26.451, 26.211, 26.410],
-    "Memory Estimate (GiB)" : [2.15, 2.15, 2.15, 2.15, 2.15],
-    "Garbage Collection (%)" : [10.91, 11.34, 10.76, 10.99, 11.52],
-    "Allocations" : [44411533, 44410609, 44414630, 44411737, 44411784],
+    r"$N_{t},\\(N_{\text{local}}=20)$" : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "Time (s)" : [2.972, 6.482, 10.111, 13.434, 17.672, 21.740, 25.657, 29.173, 33.484, 37.891],
+    "Memory Estimate (GiB)" : [1.66, 2.25, 2.85, 3.45, 4.04, 4.64, 5.24, 5.84, 6.43, 7.02],
+    "Garbage Collection (%)" : [6.68, 1.87, 1.81, 1.74, 7.69, 8.03, 8.50, 7.82, 8.96, 9.12],
+    "Allocations" : [1203094, 2133663, 3061363, 3989154, 4916228, 5933549, 6962088, 7989669, 9018787, 10047865],
 })
 
-keys = [r"$n_z$", r"$N_{\text{local}}$"]
+keys = [r"$n_z$", r"$N_{t},\\(N_{\text{local}}=20)$"]
 colours = ["autumn", "Wistia"]
-elevations = [0.4, 0.24]
+elevations = [0.545, 0.545]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:
@@ -41,7 +41,7 @@ def add_text_annotations(ax, round=False, elevation=0.45):
             bar.get_x() + bar.get_width() / 2, 
             elevation * ax.get_ylim()[1], 
             text, ha='center', va='bottom', color='blue', 
-            rotation=45
+            rotation=45, fontsize=7  
         )
 
 for (idx, df) in enumerate([latent_dim, mala_steps]):
@@ -99,6 +99,3 @@ for (idx, df) in enumerate([latent_dim, mala_steps]):
     
     plt.tight_layout()
     plt.savefig(f"figures/benchmark/plot_cost_{idx}.png", dpi=300, bbox_inches='tight')
-    
-    
-

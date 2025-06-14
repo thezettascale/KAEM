@@ -11,8 +11,7 @@ import json
 def load_images(file_path):
     with h5py.File(file_path, 'r') as f:
         images = np.array(f['samples'])
-    images = torch.tensor(images).repeat(1, 3, 1, 1)
-    return images
+    return torch.tensor(images)
 
 def save_images_to_directory(images, directory):
     os.makedirs(directory, exist_ok=True)

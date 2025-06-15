@@ -20,7 +20,7 @@ def save_images_to_directory(images, directory):
         img = img.astype(np.uint8)
         Image.fromarray(img).save(os.path.join(directory, f'image_{i}.png'))
 
-def calculate_infinity_metrics(gen_file_path, real_file_path, batch_sizes=[1000, 1400, 1800, 2200, 2600, 3000]):
+def calculate_infinity_metrics(gen_file_path, real_file_path, batch_sizes=[1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000]):
     real_images = load_images(real_file_path)
     gen_images = load_images(gen_file_path)
     

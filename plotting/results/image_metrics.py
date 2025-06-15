@@ -72,15 +72,14 @@ def process_file_pair(gen_file_path, real_file_path):
 
 # Example usage
 file_paths = [
-    ('logs/Vanilla/n_z=100/ULA_notdeepened/cnn=true/SVHN_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA_notdeepened/cnn=true/SVHN_1/real_images.h5'),
-    ('logs/Vanilla/n_z=100/ULA_notdeepened/cnn=true/CIFAR10_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA_notdeepened/cnn=true/CIFAR10_1/real_images.h5'),
+    ('logs/Vanilla/n_z=100/ULA_mixture/cnn=true/SVHN_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA_mixture/cnn=true/SVHN_1/real_images.h5'),
+    ('logs/Vanilla/n_z=100/ULA_mixture/cnn=true/CIFAR10_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA_mixture/cnn=true/CIFAR10_1/real_images.h5'),
     ('logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1/real_images.h5'),
     ('logs/Vanilla/n_z=100/ULA/cnn=true/CIFAR10_1/generated_images.h5', 'logs/Vanilla/n_z=100/ULA/cnn=true/CIFAR10_1/real_images.h5'),
     ('logs/Thermodynamic/n_z=100/SVHN_1/generated_images.h5', 'logs/Thermodynamic/n_z=100/SVHN_1/real_images.h5'),
     ('logs/Thermodynamic/n_z=100/CIFAR10_1/generated_images.h5', 'logs/Thermodynamic/n_z=100/CIFAR10_1/real_images.h5'),
-    ('logs/Thermodynamic_notdeepened/n_z=100/SVHN_1/generated_images.h5', 'logs/Thermodynamic_notdeepened/n_z=100/SVHN_1/real_images.h5'),
-    ('logs/Thermodynamic_notdeepened/n_z=100/CIFAR10_1/generated_images.h5', 'logs/Thermodynamic_notdeepened/n_z=100/CIFAR10_1/real_images.h5'),
-
+    ('logs/Thermodynamic_mixture/n_z=100/SVHN_1/generated_images.h5', 'logs/Thermodynamic_mixture/n_z=100/SVHN_1/real_images.h5'),
+    ('logs/Thermodynamic_mixture/n_z=100/CIFAR10_1/generated_images.h5', 'logs/Thermodynamic_mixture/n_z=100/CIFAR10_1/real_images.h5'),
 ]
 
 for gen_file_path, real_file_path in file_paths:

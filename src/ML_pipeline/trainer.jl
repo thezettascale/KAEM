@@ -70,7 +70,7 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
     mala = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")) ? "autoMALA" : "importance"
     
     if mala == "autoMALA" && !parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
-        mala = "ULA_notdeepened"
+        mala = "ULA_mixture"
     end
         
     n_z = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))

@@ -11,11 +11,11 @@ plt.rcParams.update({
 })
 
 save_name = "figures/results/svhn_mle_evol.png"
-file_path = "logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1"
+file_path = "logs/Thermodynamic/n_z=100/SVHN_1"
 
 epochs = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
-grid_size = (5, 5)
+grid_size = (3, 3)
 fig, axes = plt.subplots(grid_size[0], grid_size[1] * len(epochs), figsize=(6 * len(epochs), 6))
 
 for epoch_idx, epoch in enumerate(epochs):

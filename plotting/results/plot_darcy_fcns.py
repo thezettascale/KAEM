@@ -11,7 +11,7 @@ plt.rcParams.update({
 })
 
 PRIORS = ["uniform", "lognormal", "gaussian"]
-GRID_SIZES = [7, 13]
+GRID_SIZES = [10, 20]
 
 for prior in PRIORS:
     for grid_size in GRID_SIZES:

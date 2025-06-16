@@ -1,20 +1,6 @@
 # T-KAM 
 
-Official implementation of the Thermodynamic Kolmogov-Arnold Model - a novel generative model defined entirely by finite representations of continous functions.
-
-Go see our [website!](https://exalaboratories.com). We are more efficient and versatile than GPUs/TPUs!
-
-It's early stages and I'm planning to add more - for updates, please follow me on [LinkedIn](https://www.linkedin.com/in/prithvi-raj-eng/) or Twitter (@PritManGuy - link will be added soon).
-
-## What is T-KAM.
-
 T-KAM is a MLE model presented at ...
-
-It uses:
-
-- **The Kolmogorov-Arnold theorem** - any continous function can be represented in a finite manner.
-- **Empirical Bayes** - the prior is initialized and updated using observations from the data. It can also be recovered by visualizing its components.
-- **Thermodynamic Integration** - training is improved using another means of marginal likelihood estimation.
 
 ## Setup:
 
@@ -54,8 +40,6 @@ For main experiments run:
 ```bash
 tmux new-session -d -s T_KAM_main "bash run.sh"
 ```
-
-This starts a tmux session, you can then leave and come back later - touch grass, kiss wife, slap a baby, i dunno.
 
 For benchmarking run:
 

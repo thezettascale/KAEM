@@ -38,7 +38,7 @@ for prior in priors:
             
             axes[0, grid_size // 2].set_title("MLE / ULA", fontsize=40, pad=10)
             plt.subplots_adjust(wspace=0, hspace=0)
-            plt.savefig(f'figures/results/{dataset}{prior}_{grid_size}_mle.png')
+            plt.savefig(f'figures/results/{dataset}{prior}_mle_{grid_size}x{grid_size}.png')
             plt.close()
 
             # Plot SE/ULA grid
@@ -56,5 +56,5 @@ for prior in priors:
             
             axes[0, grid_size // 2].set_title("SE / ULA", fontsize=40, pad=10)
             plt.subplots_adjust(wspace=0, hspace=0)
-            plt.savefig(f'figures/results/{dataset}{prior}_{grid_size}x{grid_size}.png')
+            plt.savefig(f'figures/results/{dataset}{prior}_se_{grid_size}x{grid_size}.png')
             plt.close()

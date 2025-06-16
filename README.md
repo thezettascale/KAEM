@@ -1,6 +1,6 @@
 # T-KAM 
 
-T-KAM is a MLE model presented at ...
+T-KAM is a MLE model presented at [(link to be added at a later date).]()
 
 ## Setup:
 
@@ -56,3 +56,5 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The MIT license open-sources the code. The paper is licensed separately with arXiv.org license - also open with citation:
+
+Added later.

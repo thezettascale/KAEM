@@ -13,7 +13,7 @@ plt.rcParams.update({
 
 priors = ["_mixture", ""]
 datasets = ["SVHN", "CIFAR10"]
-GRID_SIZES = [10, 20]
+GRID_SIZES = [15]
 
 for prior in priors:
     for dataset in datasets:
@@ -54,7 +54,7 @@ for prior in priors:
                 ax.imshow(img)
                 ax.axis('off')
             
-            axes[0, grid_size // 2].set_title("SE / ULA", fontsize=40, pad=10)
+            # axes[0, grid_size // 2].set_title("SE / ULA", fontsize=40, pad=10)
             plt.subplots_adjust(wspace=0, hspace=0)
             plt.savefig(f'figures/results/{dataset}{prior}_se_{grid_size}x{grid_size}.png')
             plt.close()

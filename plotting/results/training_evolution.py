@@ -10,8 +10,8 @@ plt.rcParams.update({
     'text.latex.preamble': r'\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}'  
 })
 
-save_name = "figures/results/svhn_mle_evol.png"
-file_path = "logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1"
+save_name = "figures/results/svhn_mixture_se_evol.png"
+file_path = "logs/Thermodynamic_notdeepened/n_z=100/SVHN_1"
 
 epochs = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 

@@ -15,8 +15,8 @@ file_path = "logs/Vanilla/n_z=100/ULA/cnn=true/SVHN_1"
 
 epochs = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
-grid_size = (3, 3)
-fig, axes = plt.subplots(grid_size[0], grid_size[1] * len(epochs), figsize=(6 * len(epochs), 6))
+grid_size = (5, 1)
+fig, axes = plt.subplots(grid_size[0], grid_size[1] * len(epochs), figsize=(12, 6))
 
 for epoch_idx, epoch in enumerate(epochs):
     file = f"{file_path}/generated_images_epoch_{epoch}.h5"
@@ -32,7 +32,7 @@ for epoch_idx, epoch in enumerate(epochs):
             ax.imshow(img)
             ax.axis('off')
         
-        axes[0, epoch_idx * grid_size[0] + grid_size[0] // 2].set_title(f"Epoch {epoch}", fontsize=40, pad=10)
+        axes[0, epoch_idx].set_title(f"{epoch}", fontsize=40, pad=10)
 
 plt.subplots_adjust(wspace=0, hspace=0)
 plt.savefig(save_name)

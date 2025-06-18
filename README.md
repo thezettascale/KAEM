@@ -1,6 +1,6 @@
 # T-KAM 
 
-T-KAM is a MLE model presented at [(link to be added at a later date).]()
+T-KAM is a MLE model presented [here.](http://arxiv.org/abs/2506.14167)
 
 ## Setup:
 
@@ -57,4 +57,14 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 
 The MIT license open-sources the code. The paper is licensed separately with arXiv.org license - also open with citation:
 
-Added later.
+```bibtex
+@misc{raj2025structuredinformedprobabilisticmodeling,
+      title={Structured and Informed Probabilistic Modeling with the Thermodynamic Kolmogorov-Arnold Model}, 
+      author={Prithvi Raj},
+      year={2025},
+      eprint={2506.14167},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2506.14167}, 
+}
+```

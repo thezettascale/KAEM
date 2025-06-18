@@ -55,7 +55,7 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The MIT license open-sources the code. The paper is licensed separately with arXiv.org license - also open with citation:
+The MIT license open-sources the code. The paper is licensed separately with CC license - also open with citation:
 
 ```bibtex
 @misc{raj2025structuredinformedprobabilisticmodeling,

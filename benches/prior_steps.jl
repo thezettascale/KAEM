@@ -11,29 +11,31 @@ using .T_KAM_model
 using .DataUtils: get_vision_dataset
 using .Utils: device, half_quant
 
-conf = ConfParse("config/nist_config.ini")
+conf = ConfParse("benches/svhn_prior_config.ini")
 parse_conf!(conf)
-commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
-commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-commit!(conf, "CNN", "use_cnn_lkhood", "false")
+
+commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0") 
 commit!(conf, "TRAINING", "verbose", "false") 
+commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
+commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "1")
 
 dataset, img_size = get_vision_dataset(
-    "MNIST",
+    "SVHN",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
+    cnn=true
 )[1:2]
 
-function benchmark_dim(n_z)
+function benchmark_prior(N_l)
     CUDA.reclaim()  
     GC.gc()        
     
-    commit!(conf, "EBM_PRIOR", "layer_widths", "$(n_z), $(2*n_z+1)")
-    commit!(conf, "KAN_LIKELIHOOD", "widths", "$(2*n_z+1), $(4*n_z+2)")
-
+    commit!(conf, "PRIOR_LANGEVIN", "iters", "$(N_l)")
     model = init_T_KAM(dataset, conf, img_size)
+    
+
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
@@ -42,23 +44,24 @@ function benchmark_dim(n_z)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
-results = DataFrame(n_z=Int[], time_mean=Float64[], time_std=Float64[], memory_estimate=Float64[], allocations=Int[], gc_percent=Float64[])
 
-for n_z in [10, 20, 30, 40, 50]
-    println("Benchmarking n_z = $n_z...")
-    b = @benchmark benchmark_dim(data) setup=(data=$n_z)
+results = DataFrame(N_l=Int[], time_mean=Float64[], time_std=Float64[], memory_estimate=Float64[], allocations=Int[], gc_percent=Float64[])
+
+for N_l in [10, 20, 30, 40, 50]
+    println("Benchmarking N_l = $N_l...")
+    b = @benchmark benchmark_prior(data) setup=(data=$N_l)
     
     push!(results, (
-        n_z,
-        b.times[end] / 1e9,  # Convert to seconds (median time)
+        N_l,
+        b.times[end] / 1e9,  # Convert nanoseconds to seconds (median time)
         std(b.times) / 1e9,  # Standard deviation
-        b.memory / (1024^3),  # Convert to GiB
+        b.memory / (1024^3),  # Convert bytes to GiB
         b.allocs,
         b.gctimes[end] / b.times[end] * 100  # GC percentage
     ))
 end
 
-CSV.write("benches/results/latent_dim.csv", results)
-println("Results saved to latent_dim.csv")
+# Save results to CSV
+CSV.write("benches/results/prior_steps.csv", results)
+println("Results saved to prior_steps.csv")
 println(results)
-

@@ -26,10 +26,7 @@ dataset, img_size = get_vision_dataset(
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
 )[1:2]
 
-function benchmark_dim(n_z)
-    CUDA.reclaim()  
-    GC.gc()        
-    
+function setup_model(n_z)
     commit!(conf, "EBM_PRIOR", "layer_widths", "$(n_z), $(2*n_z+1)")
     commit!(conf, "KAN_LIKELIHOOD", "widths", "$(2*n_z+1), $(4*n_z+2)")
 
@@ -38,7 +35,11 @@ function benchmark_dim(n_z)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device 
+    
+    return model, ps, st, x_test
+end
 
+function benchmark_dim(model, ps, st, x_test)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
@@ -46,7 +47,13 @@ results = DataFrame(n_z=Int[], time_mean=Float64[], time_std=Float64[], memory_e
 
 for n_z in [10, 20, 30, 40, 50]
     println("Benchmarking n_z = $n_z...")
-    b = @benchmark benchmark_dim(data) setup=(data=$n_z)
+    
+    model, ps, st, x_test = setup_model(n_z)
+    
+    CUDA.reclaim()  
+    GC.gc()
+
+    b = @benchmark benchmark_dim($model, $ps, $st, $x_test)
     
     push!(results, (
         n_z,

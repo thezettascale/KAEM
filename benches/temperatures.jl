@@ -27,26 +27,33 @@ dataset, img_size = get_vision_dataset(
     cnn=true
 )[1:2]
 
-function benchmark_MALA(N_l)
-    CUDA.reclaim()  
-    GC.gc()        
-    
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_l)")
+function setup_model(N_t)
+    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_t)")
 
     model = init_T_KAM(dataset, conf, img_size)
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device 
+    
+    return model, ps, st, x_test
+end
 
+function benchmark_temp(model, ps, st, x_test)
     first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
 end
 
 results = DataFrame(N_t=Int[], time_mean=Float64[], time_std=Float64[], memory_estimate=Float64[], allocations=Int[], gc_percent=Float64[])
 
-for N_t in [2, 4, 6, 8, 10, 12]
+for N_t in [1, 2, 4, 6, 8, 10]
     println("Benchmarking N_t = $N_t...")
-    b = @benchmark benchmark_MALA(data) setup=(data=$N_t)
+    
+    model, ps, st, x_test = setup_model(N_t)
+    
+    CUDA.reclaim()  
+    GC.gc()
+    
+    b = @benchmark benchmark_temp($model, $ps, $st, $x_test)
     
     push!(results, (
         N_t,

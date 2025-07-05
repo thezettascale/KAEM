@@ -11,13 +11,11 @@ plt.rcParams.update({
     'text.latex.preamble': r'\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}'  
 })
 
-# Read data from CSV files
 latent_dim_df = pd.read_csv('benches/results/latent_dim.csv')
 temperatures_df = pd.read_csv('benches/results/temperatures.csv')
 prior_steps_df = pd.read_csv('benches/results/prior_steps.csv')
 its_single_df = pd.read_csv('benches/results/ITS_single.csv')
 
-# Extract reference values
 mala_steps_ref = {
     "Time (s)": its_single_df.iloc[0]['time_mean'],
     "Memory Estimate (GiB)": its_single_df.iloc[0]['memory_estimate'],
@@ -25,7 +23,6 @@ mala_steps_ref = {
     "Allocations": its_single_df.iloc[0]['allocations']
 }
 
-# Prepare data for plotting
 latent_dim = pd.DataFrame({
     r"$n_z$": latent_dim_df['n_z'],
     "Time (s)": latent_dim_df['time_mean'],
@@ -50,7 +47,6 @@ prior_steps = pd.DataFrame({
     "Allocations": prior_steps_df['allocations']
 })
 
-# Reference for prior_steps (from ITS_single)
 prior_steps_ref = {
     "Time (s)": its_single_df.iloc[0]['time_mean'],
     "Memory Estimate (GiB)": its_single_df.iloc[0]['memory_estimate'],

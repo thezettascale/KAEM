@@ -35,7 +35,7 @@ latent_dim = pd.DataFrame({
 })
 
 mala_steps = pd.DataFrame({
-    r"$N_{t},\\(N_{\text{local}}=20)$": temperatures_df['N_t'],
+    r"$N_{t}$": temperatures_df['N_t'],
     "Time (s)": temperatures_df['time_mean'],
     "Memory Estimate (GiB)": temperatures_df['memory_estimate'],
     "Garbage Collection (%)": temperatures_df['gc_percent'],
@@ -43,7 +43,7 @@ mala_steps = pd.DataFrame({
 })
 
 prior_steps = pd.DataFrame({
-    r"$N_{prior},(N_t=1)$": prior_steps_df['N_l'],
+    r"$N_{prior}$": prior_steps_df['N_l'],
     "Time (s)": prior_steps_df['time_mean'],
     "Memory Estimate (GiB)": prior_steps_df['memory_estimate'],
     "Garbage Collection (%)": prior_steps_df['gc_percent'],
@@ -58,12 +58,12 @@ prior_steps_ref = {
     "Allocations": its_single_df.iloc[0]['allocations']
 }
 
-keys = [r"$n_z$", r"$N_{t},\\(N_{\text{local}}=20)$", r"$N_{prior},(N_t=1)$"]
+keys = [r"$n_z$", r"$N_{t}$", r"$N_{prior}$"]
 colours = ["viridis", "cividis", "plasma"]
 elevations = [0.545, 0.6, 0.6]
 datasets = [latent_dim, mala_steps, prior_steps]
 references = [None, mala_steps_ref, prior_steps_ref]
-titles = ["Latent Dimension", "Power Posteriors", "Prior Steps"]
+titles = ["Latent Dimension", "Power Posteriors", "Prior ULA Steps"]
 
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:

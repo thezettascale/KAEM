@@ -1,9 +1,15 @@
 module GeneratorModel
 
-export GenModel, init_GenModel, generate_from_z, importance_resampler, log_likelihood_IS, log_likelihood_MALA
+export GenModel,
+    init_GenModel,
+    generate_from_z,
+    importance_resampler,
+    log_likelihood_IS,
+    log_likelihood_MALA
 
 using CUDA, KernelAbstractions
-using ConfParser, Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
+using ConfParser,
+    Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 using ChainRules: @ignore_derivatives
 using Zygote: Buffer
@@ -21,11 +27,8 @@ using .WeightResamplers
 using .GeneratorFCNs
 using .LogLikelihoods
 
-output_activation_mapping = Dict(
-    "tanh" => tanh_fast, 
-    "sigmoid" => sigmoid_fast,
-    "none" => identity,
-)
+output_activation_mapping =
+    Dict("tanh" => tanh_fast, "sigmoid" => sigmoid_fast, "none" => identity)
 
 resampler_map = Dict(
     "residual" => residual_resampler,
@@ -34,7 +37,7 @@ resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns
+    Φ_fcns::Any
     layernorm::Bool
     batchnorm::Bool
     depth::Int
@@ -49,14 +52,10 @@ struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     d_model::Int
 end
 
-function init_GenModel(
-    conf::ConfParse,
-    x_shape::Tuple{Vararg{Int}};
-    lkhood_seed::Int=1,
-    )
+function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed::Int = 1)
 
     prior_widths = (
-        try 
+        try
             parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
         catch
             parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
@@ -66,7 +65,7 @@ function init_GenModel(
     q_size = length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
 
     widths = (
-        try 
+        try
             parse.(Int, retrieve(conf, "GeneratorModel", "widths"))
         catch
             parse.(Int, split(retrieve(conf, "GeneratorModel", "widths"), ","))
@@ -76,17 +75,24 @@ function init_GenModel(
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
 
-    output_dim = CNN ? last(x_shape) : (sequence_length > 1 ? first(x_shape) : prod(x_shape))
+    output_dim =
+        CNN ? last(x_shape) : (sequence_length > 1 ? first(x_shape) : prod(x_shape))
 
     widths = (widths..., output_dim)
-    first(widths) !== q_size && (error("First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.", widths, " != ", q_size))
+    first(widths) !== q_size && (error(
+        "First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.",
+        widths,
+        " != ",
+        q_size,
+    ))
 
     spline_degree = parse(Int, retrieve(conf, "GeneratorModel", "spline_degree"))
     layernorm = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
     base_activation = retrieve(conf, "GeneratorModel", "base_activation")
     spline_function = retrieve(conf, "GeneratorModel", "spline_function")
     grid_size = parse(Int, retrieve(conf, "GeneratorModel", "grid_size"))
-    grid_update_ratio = parse(half_quant, retrieve(conf, "GeneratorModel", "grid_update_ratio"))
+    grid_update_ratio =
+        parse(half_quant, retrieve(conf, "GeneratorModel", "grid_update_ratio"))
     grid_range = parse.(half_quant, retrieve(conf, "GeneratorModel", "grid_range"))
     ε_scale = parse(half_quant, retrieve(conf, "GeneratorModel", "ε_scale"))
     μ_scale = parse(full_quant, retrieve(conf, "GeneratorModel", "μ_scale"))
@@ -96,36 +102,47 @@ function init_GenModel(
     τ_trainable = parse(Bool, retrieve(conf, "GeneratorModel", "τ_trainable"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     gen_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_variance"))
-    ESS_threshold = parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
+    ESS_threshold =
+        parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
     output_act = retrieve(conf, "GeneratorModel", "output_activation")
     resampler = retrieve(conf, "GeneratorModel", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = resampler_map[resampler]
     batchnorm = false
 
-    resample_fcn = (weights, seed) -> @ignore_derivatives importance_resampler(weights; seed=seed, ESS_threshold=ESS_threshold, resampler=resampler, verbose=verbose)
+    resample_fcn =
+        (weights, seed) -> @ignore_derivatives importance_resampler(
+            weights;
+            seed = seed,
+            ESS_threshold = ESS_threshold,
+            resampler = resampler,
+            verbose = verbose,
+        )
     generate_fcn = KAN_fwd
 
-    output_activation = sequence_length > 1 ? (x -> softmax(x, dims=1)) : get(output_activation_mapping, output_act, identity)
+    output_activation =
+        sequence_length > 1 ? (x -> softmax(x, dims = 1)) :
+        get(output_activation_mapping, output_act, identity)
 
-    Φ_functions = NamedTuple() 
+    Φ_functions = NamedTuple()
     depth = length(widths)-1
     d_model = 0
 
-    initialize_function = (in_dim, out_dim, base_scale) -> init_function(
+    initialize_function =
+        (in_dim, out_dim, base_scale) -> init_function(
             in_dim,
             out_dim;
-            spline_degree=spline_degree,
-            base_activation=base_activation,
-            spline_function=spline_function,
-            grid_size=grid_size,
-            grid_update_ratio=grid_update_ratio,
-            grid_range=Tuple(grid_range),
-            ε_scale=ε_scale,
-            σ_base=base_scale,
-            σ_spline=σ_spline,
-            init_τ=init_τ,
-            τ_trainable=τ_trainable,
+            spline_degree = spline_degree,
+            base_activation = base_activation,
+            spline_function = spline_function,
+            grid_size = grid_size,
+            grid_update_ratio = grid_update_ratio,
+            grid_range = Tuple(grid_range),
+            ε_scale = ε_scale,
+            σ_base = base_scale,
+            σ_spline = σ_spline,
+            init_τ = init_τ,
+            τ_trainable = τ_trainable,
         )
 
     if CNN
@@ -140,20 +157,36 @@ function init_GenModel(
         generate_fcn = CNN_fwd
         layernorm = false
 
-        length(strides) != length(hidden_c) && (error("Number of strides must be equal to the number of hidden layers + 1."))
-        length(k_size) != length(hidden_c) && (error("Number of kernel sizes must be equal to the number of hidden layers + 1."))
-        length(paddings) != length(hidden_c) && (error("Number of paddings must be equal to the number of hidden layers + 1."))
+        length(strides) != length(hidden_c) &&
+            (error("Number of strides must be equal to the number of hidden layers + 1."))
+        length(k_size) != length(hidden_c) && (error(
+            "Number of kernel sizes must be equal to the number of hidden layers + 1.",
+        ))
+        length(paddings) != length(hidden_c) &&
+            (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
-        for i in eachindex(hidden_c[1:end-1])
-            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose((k_size[i], k_size[i]), hidden_c[i] => hidden_c[i+1], identity; stride=strides[i], pad=paddings[i])
+        for i in eachindex(hidden_c[1:(end-1)])
+            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose(
+                (k_size[i], k_size[i]),
+                hidden_c[i] => hidden_c[i+1],
+                identity;
+                stride = strides[i],
+                pad = paddings[i],
+            )
             if batchnorm
                 @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
             end
         end
-        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose((k_size[end], k_size[end]), hidden_c[end] => output_dim, identity; stride=strides[end], pad=paddings[end])
+        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose(
+            (k_size[end], k_size[end]),
+            hidden_c[end] => output_dim,
+            identity;
+            stride = strides[end],
+            pad = paddings[end],
+        )
 
     elseif sequence_length > 1
-        
+
         act = gelu
         generate_fcn = SEQ_fwd
 
@@ -166,7 +199,7 @@ function init_GenModel(
 
         # Query, Key, Value
         @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model) 
+        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model)
         @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model)
 
         # Feed forward
@@ -177,11 +210,17 @@ function init_GenModel(
         @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim)
         depth = 3
     else
-        for i in eachindex(widths[1:end-1])
+        for i in eachindex(widths[1:(end-1)])
             lkhood_seed, rng = next_rng(lkhood_seed)
-            base_scale = (μ_scale * (one(full_quant) / √(full_quant(widths[i])))
-            .+ σ_base .* (randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .- one(full_quant)) .* (one(full_quant) / √(full_quant(widths[i]))))
-            @reset Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
+            base_scale = (
+                μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
+                σ_base .* (
+                    randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .-
+                    one(full_quant)
+                ) .* (one(full_quant) / √(full_quant(widths[i])))
+            )
+            @reset Φ_functions[Symbol("$i")] =
+                initialize_function(widths[i], widths[i+1], base_scale)
 
             if (layernorm && i < depth)
                 @reset Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
@@ -190,38 +229,44 @@ function init_GenModel(
     end
 
     return GenModel(
-        Φ_functions, 
-        layernorm, 
-        batchnorm, 
-        depth, 
-        output_dim, 
-        gen_var, 
-        output_activation, 
-        x_shape, 
-        resample_fcn, 
-        generate_fcn, 
-        CNN, 
-        sequence_length, 
+        Φ_functions,
+        layernorm,
+        batchnorm,
+        depth,
+        output_dim,
+        gen_var,
+        output_activation,
+        x_shape,
+        resample_fcn,
+        generate_fcn,
+        CNN,
+        sequence_length,
         d_model,
-        )
+    )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel)
 
-    ps = NamedTuple(Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for i in 1:lkhood.depth)
+    ps = NamedTuple(
+        Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for
+        i = 1:lkhood.depth
+    )
 
     if lkhood.CNN
-        @reset ps[Symbol("$(lkhood.depth+1)")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
+        @reset ps[Symbol("$(lkhood.depth+1)")] =
+            Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
         if lkhood.batchnorm
-            for i in 1:lkhood.depth
-                @reset ps[Symbol("bn_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
+            for i = 1:lkhood.depth
+                @reset ps[Symbol("bn_$i")] =
+                    Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
             end
         end
     end
 
-    if lkhood.layernorm 
-        for i in 1:lkhood.depth-1
-            @reset ps[Symbol("ln_$i")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) 
+    if lkhood.layernorm
+        for i = 1:(lkhood.depth-1)
+            @reset ps[Symbol("ln_$i")] =
+                Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("ln_$i")])
         end
     end
 
@@ -231,27 +276,33 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel)
         @reset ps[Symbol("V")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("V")])
     end
 
-    return ps 
+    return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel)
 
-    st = NamedTuple(Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) |> hq for i in 1:lkhood.depth)
+    st = NamedTuple(
+        Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) |> hq for
+        i = 1:lkhood.depth
+    )
 
     if lkhood.CNN
-        @reset st[Symbol("$(lkhood.depth+1)")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")]) |> hq
-        
+        @reset st[Symbol("$(lkhood.depth+1)")] =
+            Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")]) |> hq
+
         if lkhood.batchnorm
-            for i in 1:lkhood.depth
-                @reset st[Symbol("bn_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
+            for i = 1:lkhood.depth
+                @reset st[Symbol("bn_$i")] =
+                    Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
             end
         end
     end
 
     if lkhood.layernorm
-        for i in 1:lkhood.depth-1
-            @reset st[Symbol("ln_$i")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) |> hq
-        end 
+        for i = 1:(lkhood.depth-1)
+            @reset st[Symbol("ln_$i")] =
+                Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) |> hq
+        end
     end
 
     if lkhood.seq_length > 1
@@ -260,7 +311,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel)
         @reset st[Symbol("V")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("V")])
     end
 
-    return st 
+    return st
 end
 
 end

@@ -14,7 +14,7 @@ conf = Dict(
 )[dataset]
 parse_conf!(conf)
 
-ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
+ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 ENV["autoMALA"] = retrieve(conf, "POST_LANGEVIN", "use_autoMALA")
@@ -26,4 +26,4 @@ rng = Random.seed!(1)
 
 # Thermodynamic
 t = init_trainer(rng, conf, dataset)
-train!(t)  
+train!(t)

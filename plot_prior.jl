@@ -1,4 +1,16 @@
-using JLD2, CUDA, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser, LaTeXStrings, Makie, GLMakie, Tullio, Random, Accessors
+using JLD2,
+    CUDA,
+    Lux,
+    LuxCUDA,
+    CUDA,
+    ComponentArrays,
+    ConfParser,
+    LaTeXStrings,
+    Makie,
+    GLMakie,
+    Tullio,
+    Random,
+    Accessors
 
 ENV["GPU"] = "true"
 
@@ -40,31 +52,33 @@ for fcn_type in ["RBF", "FFT"]
             st = saved_data["state"] |> hq |> device
 
             rng = Random.seed!(1)
-            t = init_trainer(rng, conf, dataset_name; file_loc="garbage/")
+            t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/")
             prior = t.model.prior
 
             ps = ps.ebm
             st = st.ebm
             t = nothing
 
-            grid_range = Dict(
-                "uniform" => (0, 1),
-                "lognormal" => (0, 3),
-                "gaussian" => (-3, 3),
-            )[prior_type]
+            grid_range =
+                Dict("uniform" => (0, 1), "lognormal" => (0, 3), "gaussian" => (-3, 3))[prior_type]
 
-            a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
+            a, b = minimum(st[Symbol("1")].grid; dims = 2),
+            maximum(st[Symbol("1")].grid; dims = 2)
             if fcn_type == "FFT"
                 a = fill(half_quant(first(grid_range)), size(a)) |> device
                 b = fill(half_quant(last(grid_range)), size(b)) |> device
             end
 
             z = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(prior.nodes)
-            π_0 = prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) : prior.π_pdf(z)
+            π_0 =
+                prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) :
+                prior.π_pdf(z)
 
             f, st = prior_fwd(prior, ps, st, z)
-            f = exp.(f) .* permutedims(π_0[:,:,:], (3, 1, 2)) 
-            z, f, π_0 = z |> cpu_device(), softmax(f;dims=3) |> cpu_device(), softmax(π_0;dims=2) |> cpu_device()
+            f = exp.(f) .* permutedims(π_0[:, :, :], (3, 1, 2))
+            z, f, π_0 = z |> cpu_device(),
+            softmax(f; dims = 3) |> cpu_device(),
+            softmax(π_0; dims = 2) |> cpu_device()
 
             # Components to plot (q, p)
             plot_components = [(1, 1), (1, 2), (1, 3)]
@@ -73,40 +87,50 @@ for fcn_type in ["RBF", "FFT"]
             mkpath("figures/results/priors")
 
             for (i, (q, p)) in enumerate(plot_components)
-                fig = Makie.Figure(size=(1000, 1000),
-                                ffont="Computer Modern", 
-                                fontsize = 50,
-                                backgroundcolor = :white,
-                                show_axis = false,
-                                show_grid = false,
-                                show_axis_labels = false,
-                                show_legend = false,
-                                show_colorbar = false,
-                            )
-                ax = Makie.Axis(fig[1, 1], title=L"Prior component, ${\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$")
+                fig = Makie.Figure(
+                    size = (1000, 1000),
+                    ffont = "Computer Modern",
+                    fontsize = 50,
+                    backgroundcolor = :white,
+                    show_axis = false,
+                    show_grid = false,
+                    show_axis_labels = false,
+                    show_legend = false,
+                    show_colorbar = false,
+                )
+                ax = Makie.Axis(
+                    fig[1, 1],
+                    title = L"Prior component, ${\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)} \; / \; {\textbf{Z}_{%$q,%$p}}$",
+                )
 
-                band!(ax, z[p, :], 0 .* f[q, p, :], f[q, p, :], color=(colours[i], 0.3), label=L"{\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)}")
-                lines!(ax, z[p, :], f[q, p, :], color=colours[i])
-                band!(ax, z[p, :], 0 .* f[q, p, :], π_0[p,:], color=(:gray, 0.2), label=L"\pi_0(z)")
-                lines!(ax, z[p, :], π_0[p,:], color=(:gray, 0.8))
-                y_min = minimum([minimum(f[q, p, :]), minimum(π_0[p,:])])
+                band!(
+                    ax,
+                    z[p, :],
+                    0 .* f[q, p, :],
+                    f[q, p, :],
+                    color = (colours[i], 0.3),
+                    label = L"{\exp(f_{%$q,%$p}(z)) \cdot \pi_0(z)}",
+                )
+                lines!(ax, z[p, :], f[q, p, :], color = colours[i])
+                band!(
+                    ax,
+                    z[p, :],
+                    0 .* f[q, p, :],
+                    π_0[p, :],
+                    color = (:gray, 0.2),
+                    label = L"\pi_0(z)",
+                )
+                lines!(ax, z[p, :], π_0[p, :], color = (:gray, 0.8))
+                y_min = minimum([minimum(f[q, p, :]), minimum(π_0[p, :])])
                 ylims!(ax, y_min, nothing)
                 axislegend(ax)
                 hidedecorations!(ax)
                 hidespines!(ax)
-                    save("figures/results/priors/$(dataset_name)_$(prior_type)_$(fcn_type)_$(q)_$(p).png", fig)
+                save(
+                    "figures/results/priors/$(dataset_name)_$(prior_type)_$(fcn_type)_$(q)_$(p).png",
+                    fig,
+                )
             end
         end
     end
 end
-
-
-
-
-
-
-
-
-
-
-

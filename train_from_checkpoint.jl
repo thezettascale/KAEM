@@ -4,7 +4,7 @@ or updated seed - only the current model and parameters/lux_state."""
 using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser, Random
 
 # EDIT:
-dataset = "CIFAR10" 
+dataset = "CIFAR10"
 file_loc = "logs/Vanilla/n_z=100/ULA/cnn=true/$(dataset)_1/"
 ckpt = 10
 
@@ -20,7 +20,7 @@ conf = Dict(
 )[dataset]
 parse_conf!(conf)
 
-ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
+ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 
@@ -42,5 +42,3 @@ t = init_trainer(rng, conf, dataset)
 t.ps, t.st = ps, st
 
 train!(t)
-
-

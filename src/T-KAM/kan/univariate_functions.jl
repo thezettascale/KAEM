@@ -16,7 +16,7 @@ SplineBasis_mapping = Dict(
     "RSWAF" => RSWAF_basis,
     "FFT" => FFT_basis,
     "Cheby" => Cheby_basis,
-    "Gottlieb" => Gottlieb_basis
+    "Gottlieb" => Gottlieb_basis,
 )
 
 activation_mapping = Dict(
@@ -31,10 +31,10 @@ activation_mapping = Dict(
     "silu" => x -> x .* NNlib.sigmoid_fast(x),
     "elu" => NNlib.elu,
     "celu" => NNlib.celu,
-    "none" => x -> x .* zero(half_quant)
+    "none" => x -> x .* zero(half_quant),
 )
 
-struct univariate_function{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
+struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
     spline_degree::Int
@@ -44,7 +44,7 @@ struct univariate_function{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
     init_grid::AbstractArray{T}
     grid_size::Int
     grid_update_ratio::T
-    grid_range::Tuple{T, T}
+    grid_range::Tuple{T,T}
     ε_scale::T
     σ_base::AbstractArray{U}
     σ_spline::U
@@ -55,70 +55,100 @@ end
 function init_function(
     in_dim::Int,
     out_dim::Int;
-    spline_degree::Int=3,
-    base_activation::AbstractString="silu",
-    spline_function::AbstractString="B-spline",
-    grid_size::Int=5,
-    grid_update_ratio::T=half_quant(0.02),
-    grid_range::Tuple{T, T}=(zero(half_quant), one(half_quant)),
-    ε_scale::T=half_quant(0.1),
-    σ_base::AbstractArray{U}=[full_quant(NaN)],
-    σ_spline::U=one(full_quant),
-    init_τ::U=one(full_quant),
-    τ_trainable::Bool=true
-) where {T<:half_quant, U<:full_quant}
+    spline_degree::Int = 3,
+    base_activation::AbstractString = "silu",
+    spline_function::AbstractString = "B-spline",
+    grid_size::Int = 5,
+    grid_update_ratio::T = half_quant(0.02),
+    grid_range::Tuple{T,T} = (zero(half_quant), one(half_quant)),
+    ε_scale::T = half_quant(0.1),
+    σ_base::AbstractArray{U} = [full_quant(NaN)],
+    σ_spline::U = one(full_quant),
+    init_τ::U = one(full_quant),
+    τ_trainable::Bool = true,
+) where {T<:half_quant,U<:full_quant}
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid_size = (spline_function == "Cheby" || spline_function == "Gottlieb") ? 1 : grid_size
-    grid = spline_function == "FFT" ? collect(T, 0:grid_size) : range(grid_range[1], grid_range[2], length=grid_size + 1)
+    grid_size =
+        (spline_function == "Cheby" || spline_function == "Gottlieb") ? 1 : grid_size
+    grid =
+        spline_function == "FFT" ? collect(T, 0:grid_size) :
+        range(grid_range[1], grid_range[2], length = grid_size + 1)
     grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
-    grid = repeat(grid, in_dim, 1) 
-    grid = extend_grid(grid; k_extend=spline_degree) 
+    grid = repeat(grid, in_dim, 1)
+    grid = extend_grid(grid; k_extend = spline_degree)
     σ_base = any(isnan.(σ_base)) ? ones(U, in_dim, out_dim) : σ_base
-    base_activation = get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
-    
+    base_activation =
+        get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
+
     return univariate_function(
-        in_dim, 
-        out_dim, 
-        spline_degree, 
-        base_activation, 
-        get(SplineBasis_mapping, spline_function, B_spline_basis), 
+        in_dim,
+        out_dim,
+        spline_degree,
+        base_activation,
+        get(SplineBasis_mapping, spline_function, B_spline_basis),
         spline_function,
-        grid, grid_size, 
-        grid_update_ratio, 
-        grid_range, 
+        grid,
+        grid_size,
+        grid_update_ratio,
+        grid_range,
         ε_scale,
-        σ_base, 
-        σ_spline, 
-        [init_τ], 
-        τ_trainable
-        )
+        σ_base,
+        σ_spline,
+        [init_τ],
+        τ_trainable,
+    )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
-    
-    w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base 
+
+    w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
-    
+
     coef = nothing
-    if l.spline_string == "FFT" 
-        grid_norm_factor = collect(1:l.grid_size+1) .^ 2
-        coef = glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./ (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:,:,:,:], [2, 3, 4, 1])) 
+    if l.spline_string == "FFT"
+        grid_norm_factor = collect(1:(l.grid_size+1)) .^ 2
+        coef =
+            glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./
+            (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:, :, :, :], [2, 3, 4, 1]))
     elseif !(l.spline_string == "Cheby" || l.spline_string == "Gottlieb")
-        ε = ((rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .- half_quant(0.5)) .* l.ε_scale ./ l.grid_size) |> device  
-        coef = cpu_device()(curve2coef(l.init_grid[:, l.spline_degree+1:end-l.spline_degree], ε, l.init_grid; k=l.spline_degree, scale=device(half_quant.(l.init_τ)), basis_function=l.spline_function))
+        ε =
+            (
+                (
+                    rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .-
+                    half_quant(0.5)
+                ) .* l.ε_scale ./ l.grid_size
+            ) |> device
+        coef = cpu_device()(
+            curve2coef(
+                l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
+                ε,
+                l.init_grid;
+                k = l.spline_degree,
+                scale = device(half_quant.(l.init_τ)),
+                basis_function = l.spline_function,
+            ),
+        )
     end
 
     if (l.spline_string == "Cheby" || l.spline_string == "Gottlieb")
-        spline_degree = l.spline_string == "Gottlieb" ? l.spline_degree + 1 : l.spline_degree
-        return (coef=glorot_normal(rng, full_quant, l.in_dim, l.out_dim, spline_degree+1) .* (1 / (l.in_dim * (spline_degree + 1))), basis_τ=l.init_τ)
+        spline_degree =
+            l.spline_string == "Gottlieb" ? l.spline_degree + 1 : l.spline_degree
+        return (
+            coef = glorot_normal(rng, full_quant, l.in_dim, l.out_dim, spline_degree+1) .*
+                   (1 / (l.in_dim * (spline_degree + 1))),
+            basis_τ = l.init_τ,
+        )
     else
-        return l.τ_trainable ? (w_base=w_base, w_sp=w_sp, coef=coef, basis_τ=l.init_τ) : (w_base=w_base, w_sp=w_sp, coef=coef)
+        return l.τ_trainable ?
+               (w_base = w_base, w_sp = w_sp, coef = coef, basis_τ = l.init_τ) :
+               (w_base = w_base, w_sp = w_sp, coef = coef)
     end
 end
 
 function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
     mask = ones(half_quant, l.in_dim, l.out_dim)
-    return l.τ_trainable ? (mask=mask, grid=l.init_grid) : (mask=mask, grid=l.init_grid, basis_τ=half_quant.(l.init_τ))
+    return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
+           (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
 end
 
 function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
@@ -139,8 +169,15 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
     base = l.base_activation(x)
-    y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
-    
+    y = coef2curve(
+        x,
+        st.grid,
+        coef;
+        k = l.spline_degree,
+        scale = τ,
+        basis_function = l.spline_function,
+    )
+
     if l.spline_string == "Cheby" || l.spline_string == "Gottlieb"
         return y .* mask
     else

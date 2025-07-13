@@ -1,4 +1,5 @@
-using BenchmarkTools, ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays, CSV, DataFrames
+using BenchmarkTools,
+    ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays, CSV, DataFrames
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -15,8 +16,8 @@ conf = ConfParse("benches/svhn_prior_config.ini")
 parse_conf!(conf)
 
 commit!(conf, "CNN", "use_cnn_lkhood", "true")
-commit!(conf, "SEQ", "sequence_length", "0") 
-commit!(conf, "TRAINING", "verbose", "false") 
+commit!(conf, "SEQ", "sequence_length", "0")
+commit!(conf, "TRAINING", "verbose", "false")
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "1")
 
@@ -25,17 +26,17 @@ dataset, img_size = get_vision_dataset(
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
-    cnn=true
+    cnn = true,
 )[1:2]
 
 function setup_model(N_l)
     commit!(conf, "PRIOR_LANGEVIN", "iters", "$(N_l)")
     model = init_T_KAM(dataset, conf, img_size)
-    
+
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     model = move_to_hq(model)
-    ps, st = ComponentArray(ps) |> device, st |> device 
-    
+    ps, st = ComponentArray(ps) |> device, st |> device
+
     return model, ps, st
 end
 
@@ -44,26 +45,36 @@ function benchmark_prior(model, ps, st)
 end
 
 
-results = DataFrame(N_l=Int[], time_mean=Float64[], time_std=Float64[], memory_estimate=Float64[], allocations=Int[], gc_percent=Float64[])
+results = DataFrame(
+    N_l = Int[],
+    time_mean = Float64[],
+    time_std = Float64[],
+    memory_estimate = Float64[],
+    allocations = Int[],
+    gc_percent = Float64[],
+)
 
 for N_l in [10, 20, 30, 40, 50]
     println("Benchmarking N_l = $N_l...")
-    
+
     model, ps, st = setup_model(N_l)
-    
-    CUDA.reclaim()  
+
+    CUDA.reclaim()
     GC.gc()
-    
+
     b = @benchmark benchmark_prior($model, $ps, $st)
-    
-    push!(results, (
-        N_l,
-        b.times[end] / 1e9,  # Convert nanoseconds to seconds (median time)
-        std(b.times) / 1e9,  # Standard deviation
-        b.memory / (1024^3),  # Convert bytes to GiB
-        b.allocs,
-        b.gctimes[end] / b.times[end] * 100  # GC percentage
-    ))
+
+    push!(
+        results,
+        (
+            N_l,
+            b.times[end] / 1e9,  # Convert nanoseconds to seconds (median time)
+            std(b.times) / 1e9,  # Standard deviation
+            b.memory / (1024^3),  # Convert bytes to GiB
+            b.allocs,
+            b.gctimes[end] / b.times[end] * 100,  # GC percentage
+        ),
+    )
 end
 
 # Save results to CSV

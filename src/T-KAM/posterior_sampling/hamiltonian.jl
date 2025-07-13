@@ -5,7 +5,7 @@ export position_update, momentum_update, leapfrop_proposal
 using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA
 
 include("../../utils.jl")
-using .Utils: full_quant
+using .Utils: full_quant, half_quant
 
 function position_update(
     z::AbstractArray{U},

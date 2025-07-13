@@ -10,7 +10,7 @@ include("../../utils.jl")
 using .spline_functions
 using .Utils: device, half_quant, full_quant
 
-SplineBasis_mapping = Dict(
+const SplineBasis_mapping = Dict(
     "B-spline" => B_spline_basis,
     "RBF" => RBF_basis,
     "RSWAF" => RSWAF_basis,
@@ -19,7 +19,7 @@ SplineBasis_mapping = Dict(
     "Gottlieb" => Gottlieb_basis,
 )
 
-activation_mapping = Dict(
+const activation_mapping = Dict(
     "relu" => NNlib.relu,
     "leakyrelu" => NNlib.leakyrelu,
     "tanh" => NNlib.tanh_fast,

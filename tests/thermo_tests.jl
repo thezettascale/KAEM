@@ -2,7 +2,8 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP16"
+ENV["HALF_QUANT"] = "FP16"  
+ENV["AD_BACKEND"] = "ENZYME"
 ENV["autoMALA"] = "true"
 
 include("../src/T-KAM/T-KAM.jl")
@@ -35,7 +36,7 @@ function test_model_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    ∇ = gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps))
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

@@ -27,10 +27,10 @@ using .WeightResamplers
 using .GeneratorFCNs
 using .LogLikelihoods
 
-output_activation_mapping =
+const output_activation_mapping =
     Dict("tanh" => tanh_fast, "sigmoid" => sigmoid_fast, "none" => identity)
 
-resampler_map = Dict(
+const resampler_map = Dict(
     "residual" => residual_resampler,
     "systematic" => systematic_resampler,
     "stratified" => stratified_resampler,
@@ -107,7 +107,7 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
     output_act = retrieve(conf, "GeneratorModel", "output_activation")
     resampler = retrieve(conf, "GeneratorModel", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
-    resampler = resampler_map[resampler]
+    resampler = get(resampler_map, resampler, systematic_resampler)
     batchnorm = false
 
     resample_fcn =

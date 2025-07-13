@@ -3,6 +3,7 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, ComponentArrays
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/T-KAM/gen/gen_model.jl")
@@ -99,9 +100,7 @@ function test_derivative()
 
     x = randn(Float32, out_dim, out_dim, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = first(
-        gradient(z_i -> sum(first(log_likelihood_IS(lkhood, ps.gen, st.gen, x, z_i))), z),
-    )
+    ∇ = gradient(z_i -> sum(first(log_likelihood_IS(lkhood, ps.gen, st.gen, x, z_i))), AD_backend, z)
     @test size(∇) == size(z)
 end
 
@@ -117,7 +116,7 @@ function test_cnn_derivative()
 
     x = randn(Float32, 32, 32, out_dim, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = first(gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), ps.gen))
+    ∇ = gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), AD_backend, ps.gen)
     @test size(∇) == size(ps.gen)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -135,7 +134,7 @@ function test_seq_derivative()
 
     x = randn(Float32, lkhood.out_size, 8, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = first(gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), ps.gen))
+    ∇ = gradient(p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))), AD_backend, ps.gen)
     @test size(∇) == size(ps.gen)
 
     commit!(conf, "SEQ", "sequence_length", "1")

@@ -1,38 +1,41 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, KernelAbstractions
+using CUDA, LuxCUDA, KernelAbstractions, DifferentiationInterface, Zygote, Enzyme
 using ChainRules: @ignore_derivatives
 
 const pu =
     CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
-# Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
-const half_quant = Dict("BF16" => BFloat16, "FP16" => Float16, "FP32" => Float32)[get(
-    ENV,
-    "HALF_QUANT",
-    "FP32",
-)]
+# # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
+const QUANT_MAP = Dict(
+    "BF16" => BFloat16,
+    "FP16" => Float16,
+    "FP32" => Float32,
+    "FP64" => Float64,
+)
 
-const full_quant = Dict("FP16" => Float16, "FP32" => Float32, "FP64" => Float64)[get(
-    ENV,
-    "FULL_QUANT",
-    "FP32",
-)]
+const LUX_QUANT_MAP = Dict(
+    "BF16" => Lux.bf16,
+    "FP16" => Lux.f16,
+    "FP32" => Lux.f32,
+    "FP64" => Lux.f64,
+)
 
-const hq = Dict("BF16" => Lux.bf16, "FP16" => Lux.f16, "FP32" => Lux.f32)[get(
-    ENV,
-    "HALF_QUANT",
-    "FP32",
-)]
+const half_quant = get(QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Float32)
+const full_quant = get(QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Float32)
+const hq = get(LUX_QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Lux.f32)
+const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32)
 
-const fq = Dict("FP16" => Lux.f16, "FP32" => Lux.f32, "FP64" => Lux.f64)[get(
-    ENV,
-    "FULL_QUANT",
-    "FP32",
-)]
+# Automatic differentiation
+const AD_BACKEND_MAP = Dict(
+    "ZYGOTE" => AutoZygote(),
+    "ENZYME" => AutoEnzyme(),
+)
+
+const AD_backend = get(AD_BACKEND_MAP, uppercase(get(ENV, "AD_BACKEND", "ZYGOTE")), AutoZygote())
 
 function device(x)
     return pu(x)

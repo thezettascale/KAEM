@@ -3,46 +3,51 @@ using Test, Random, LinearAlgebra
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
 using .spline_functions
 using .Utils
+using DifferentiationInterface
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, one(half_quant)
 
 function test_extend_grid()
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     extended_grid = extend_grid(grid; k_extend = degree)
-
     @test size(extended_grid, 2) == size(grid, 2) + 2 * degree
 end
 
 function test_B_spline_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     extended_grid = extend_grid(grid; k_extend = degree)
     B = B_spline_basis(x_eval, extended_grid; degree = degree)
-
     @test size(B) == (i, g + degree - 1, b)
     @test !any(isnan.(B))
+end
+
+function test_B_spline_derivative()
+    Random.seed!(42)
+    x_eval = rand(half_quant, i, b) |> device
+    grid = rand(half_quant, i, g) |> device
+    extended_grid = extend_grid(grid; k_extend = degree)
+    f = x -> sum(B_spline_basis(x, extended_grid; degree = degree))
+    ∇ = gradient(f, AD_backend, x_eval)
+    @test size(∇) == size(x_eval)
+    @test !any(isnan.(∇))
 end
 
 function test_RBF_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     B_rbf = RBF_basis(x_eval, grid; σ = σ)
-
     @test size(B_rbf) == (i, g, b)
     @test !any(isnan.(B_rbf))
 end
@@ -50,12 +55,9 @@ end
 function test_RSWAF_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     B_rswaf = RSWAF_basis(x_eval, grid; σ = σ)
-
     @test size(B_rswaf) == (i, g, b)
     @test !any(isnan.(B_rswaf))
 end
@@ -63,12 +65,9 @@ end
 function test_FFT_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     B_fft, Bfft_2 = FFT_basis(x_eval, grid; σ = σ)
-
     @test size(B_fft) == (i, g, b)
     @test !any(isnan.(B_fft))
 end
@@ -76,12 +75,9 @@ end
 function test_Cheby_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     B_cheby = Cheby_basis(x_eval, grid; degree = degree, σ = σ)
-
     @test size(B_cheby) == (i, g, b)
     @test !any(isnan.(B_cheby))
 end
@@ -89,25 +85,19 @@ end
 function test_Gottlieb_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     B_gottlieb = Gottlieb_basis(x_eval, grid; degree = degree, σ = σ)
 end
 
 function test_coef2curve()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     Random.seed!(42)
     coef = rand(half_quant, i, o, g + degree - 1) |> device
-
     extended_grid = extend_grid(grid; k_extend = degree)
-
     y_eval = coef2curve(x_eval, extended_grid, coef; k = degree, scale = σ)
     @test size(y_eval) == (i, o, b)
 end
@@ -115,19 +105,14 @@ end
 function test_curve2coef()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-
     Random.seed!(42)
     coef = rand(half_quant, i, o, g + degree - 1) |> device
-
     extended_grid = extend_grid(grid; k_extend = degree)
-
     y_eval = coef2curve(x_eval, extended_grid, coef; k = degree, scale = σ)
     recovered_coef = curve2coef(x_eval, y_eval, extended_grid; k = degree, scale = σ)
     @test size(recovered_coef) == size(coef)
-
     y_reconstructed =
         coef2curve(x_eval, extended_grid, recovered_coef; k = degree, scale = σ)
     @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(2)
@@ -141,4 +126,5 @@ end
     test_FFT_basis()
     test_coef2curve()
     test_curve2coef()
+    test_B_spline_derivative()
 end

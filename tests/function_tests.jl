@@ -1,4 +1,5 @@
 using Test, Random, LinearAlgebra, Lux
+using DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -36,7 +37,20 @@ function test_grid_update()
     @test size(grid) == (5, 12)
 end
 
+function test_fwd_derivative()
+    Random.seed!(42)
+    x = rand(half_quant, 5, 3) |> device
+    f = init_function(5, 2)
+    ps, st = Lux.setup(Random.GLOBAL_RNG, f)
+    ps, st = ps |> device, st |> device
+    g = x -> sum(fwd(f, ps, st, x))
+    ∇ = gradient(g, AD_backend, x)
+    @test size(∇) == size(x)
+    @test !any(isnan.(∇))
+end
+
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
+    test_fwd_derivative()
 end

@@ -1,8 +1,9 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
+using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")
@@ -46,9 +47,7 @@ end
 
 function test_log_prior_derivative()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
-    ∇ = first(
-        gradient(x -> sum(first(wrap.prior.lp_fcn(wrap.prior, x, ps.ebm, st.ebm))), z_test),
-    )
+    ∇ = gradient(x -> sum(first(wrap.prior.lp_fcn(wrap.prior, x, ps.ebm, st.ebm))), AD_backend, z_test)
     @test size(∇) == size(z_test)
 end
 

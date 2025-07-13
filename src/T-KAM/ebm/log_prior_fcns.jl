@@ -19,8 +19,6 @@ function prior_fwd(
     ) where {T<:half_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
-
-    Cheap replacement to true deepening, as outlined in the paper. You don't want to use a deep prior.
     
     Args:
         ebm: The ebm-prior.
@@ -72,8 +70,7 @@ function log_prior_univar(
     normalize::Bool=false
     ) where {T<:half_quant}
     """
-    Evaluate the unnormalized log-probability of the ebm-prior.
-    The likelihood of samples from each model, z_qp, is evaluated .
+    The log-probability of the ebm-prior.
 
     ∑_q [ ∑_p f_{q,p}(z_qp) ]
     
@@ -119,9 +116,7 @@ function log_prior_mix(
     normalize::Bool=false,
     ) where {T<:half_quant}
     """
-    Evaluate the unnormalized log-probability of the mixture ebm-prior.
-    The likelihood of samples from each mixture model, z_q, is evaluated 
-    for all components of the mixture model it has been sampled from , M_q.
+    The log-probability of the mixture ebm-prior.
 
     ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ]
 

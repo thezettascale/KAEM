@@ -30,44 +30,10 @@ function check_reversibility(
     η_prime::AbstractArray{U};
     tol::U=full_quant(1e-6)
     ) where {U<:full_quant}
-    # Both checks are required to maintain detailed balance
+    # Both checks may be required to maintain detailed balance
     # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
     step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
     return step_diff
-end
-
-function leapfrop_proposal(
-    z::AbstractArray{U},
-    x::AbstractArray{T},
-    st,
-    logpos_z::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    momentum::AbstractArray{U},  # This is y = M^{-1/2}p
-    M::AbstractArray{U},         # This is M^{1/2}
-    η::AbstractArray{U},
-    logpos_withgrad::Function,
-    temps::AbstractArray{T}
-    ) where {T<:half_quant, U<:full_quant}
-    """
-    Implements preconditioned Hamiltonian dynamics with transformed momentum:
-    y*(x,y)   = y  + (eps/2)M^{-1/2}grad(log pi)(x)
-    x'(x,y*)  = x  + eps M^{-1/2}y*
-    y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
-    """
-    # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
-    p, ẑ = position_update(z, momentum, ∇z, M, η)
-
-    # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st, temps)
-
-    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    p = momentum_update(p, ∇ẑ, M, η)
-
-    # Hamiltonian difference for transformed momentum
-    # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
-    log_r = logpos_ẑ - logpos_z - dropdims(sum(p.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2
-
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st
 end
 
 function select_step_size(

@@ -1,6 +1,6 @@
 module HamiltonianDynamics
 
-export position_update, momentum_update
+export position_update, momentum_update, leapfrop_proposal
 
 using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA
 
@@ -27,6 +27,40 @@ function momentum_update(
     η::AbstractArray{U}
 ) where {U<:full_quant}
     return y .+ (reshape(η, 1, 1, size(η)...) ./ 2) .* ∇ẑ ./ M
+end
+
+function leapfrop_proposal(
+    z::AbstractArray{U},
+    x::AbstractArray{T},
+    st,
+    logpos_z::AbstractArray{U},
+    ∇z::AbstractArray{U},
+    momentum::AbstractArray{U},  # This is y = M^{-1/2}p
+    M::AbstractArray{U},         # This is M^{1/2}
+    η::AbstractArray{U},
+    logpos_withgrad::Function,
+    temps::AbstractArray{T}
+    ) where {T<:half_quant, U<:full_quant}
+    """
+    Implements preconditioned Hamiltonian dynamics with transformed momentum:
+    y*(x,y)   = y  + (eps/2)M^{-1/2}grad(log pi)(x)
+    x'(x,y*)  = x  + eps M^{-1/2}y*
+    y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
+    """
+    # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
+    p, ẑ = position_update(z, momentum, ∇z, M, η)
+
+    # Get gradient at new position
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st, temps)
+
+    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
+    p = momentum_update(p, ∇ẑ, M, η)
+
+    # Hamiltonian difference for transformed momentum
+    # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
+    log_r = logpos_ẑ - logpos_z - dropdims(sum(p.^2; dims=(1,2)) - sum(momentum.^2; dims=(1,2)); dims=(1,2)) ./ 2
+
+    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st
 end
 
 end 

@@ -63,9 +63,7 @@ function generate_batch(
         The generated data.
         The updated seed.
     """
-    # Reduce precision, 
     ps = ps .|> half_quant
-
     z, st_ebm, seed = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), seed)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
     @reset st.ebm = st_ebm

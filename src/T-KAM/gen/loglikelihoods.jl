@@ -61,7 +61,7 @@ function log_likelihood_IS(
     ε::T=eps(T),
     ) where {T<:half_quant}
     """
-    Evaluate the unnormalized log-likelihood of the KAN generator.
+    Conditional likelihood of the generator.
 
     Args:
         lkhood: The likelihood model.
@@ -99,7 +99,7 @@ function log_likelihood_MALA(
     ε::T=eps(T),
     ) where {T<:half_quant}
     """
-    Evaluate the unnormalized log-likelihood of the KAN generator.
+    Conditional likelihood of the generator sampled by Langevin.
 
     Args:
         lkhood: The likelihood model.

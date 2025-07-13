@@ -18,7 +18,7 @@ ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 
-include("src/ML_pipeline/trainer.jl")
+include("src/pipeline/trainer.jl")
 using .trainer
 
 # commit!(conf, "POST_LANGEVIN", "use_langevin", "false")

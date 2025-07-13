@@ -50,7 +50,6 @@ function KAN_fwd(
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
-# CNN generator
 function CNN_fwd(
     lkhood, 
     ps, 
@@ -59,6 +58,7 @@ function CNN_fwd(
     ) where {T<:half_quant}
     """
     Generate data from the CNN likelihood model.
+    
     Args:
         lkhood: The likelihood model.
         ps: The parameters of the likelihood model.

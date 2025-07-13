@@ -29,7 +29,7 @@ commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 include("src/utils.jl")
-include("src/ML_pipeline/trainer.jl")
+include("src/pipeline/trainer.jl")
 using .Utils: hq, device
 using .trainer
 

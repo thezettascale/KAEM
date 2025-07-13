@@ -34,6 +34,7 @@ function trapezium_quadrature(
     f_grid, st = prior_fwd(ebm, ps, st, f_grid)
     Q, P, G = size(f_grid)
    
+    # Choose component if mixture model else use all
     exp_fg = zeros(T, Q, P, G) |> device
     if component_mask !== nothing
         exp_fg = exp.(f_grid) .* reshape(π_grid, Q, 1, G)
@@ -43,7 +44,7 @@ function trapezium_quadrature(
         exp_fg = exp.(f_grid) .* reshape(π_grid, 1, P, G)
     end
 
-    # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
+    # CDF by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] 
     trapz = exp_fg .* reshape(Δg, 1, P, G-1) ./ 2
     return trapz, grid, st
@@ -88,7 +89,7 @@ function gausslegendre_quadrature(
     nodes, st = prior_fwd(ebm, ps, st, nodes)
     Q, P, G = size(nodes)
 
-    # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
+    # Choose component if mixture model else use all
     if component_mask !== nothing
         tmp = exp.(nodes) .* reshape(π_nodes, Q, 1, G)  # (Q, P, G)
         trapz = sum(

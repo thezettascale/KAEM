@@ -5,7 +5,7 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/T-KAM.jl")
-include("../src/ML_pipeline/data_utils.jl")
+include("../src/pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset

@@ -19,7 +19,7 @@ ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 ENV["autoMALA"] = retrieve(conf, "POST_LANGEVIN", "use_autoMALA")
 
-include("src/ML_pipeline/trainer.jl")
+include("src/pipeline/trainer.jl")
 using .trainer
 
 rng = Random.seed!(1)

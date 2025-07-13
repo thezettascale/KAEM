@@ -101,7 +101,8 @@ function update_model_grid(
             end
         end
     end
-         
+        
+    # Only update if KAN-type generator requires
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, T.(ps), st, seed
 
     z, _, seed = ((model.MALA || model.N_t > 1) ? 

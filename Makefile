@@ -148,7 +148,7 @@ logs:
 clear-logs:
 	@if [ -d "logs" ]; then \
 		echo "Removing all log files..."; \
-		rm -rf logs/*; \
+		rm -rf logs/*.log; \
 		echo "Logs cleared."; \
 	else \
 		echo "No logs directory found."; \

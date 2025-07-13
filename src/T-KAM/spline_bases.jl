@@ -3,7 +3,7 @@ module spline_functions
 export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Cheby_basis, Gottlieb_basis
 
 using CUDA, KernelAbstractions
-using Tullio, LinearAlgebra, NNlib
+using LinearAlgebra, NNlib
 
 include("../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
@@ -11,16 +11,6 @@ using .Utils: removeNaN, device, half_quant, full_quant
 method = get(ENV, "method", "B-spline") 
 
 function extend_grid(grid::AbstractArray{T}; k_extend::Int=0) where {T<:half_quant}
-    """
-    Extend the grid of knots to include boundary knots.
-
-    Args:
-        grid: A matrix of size (i, g) containing the grid of knots.
-        k_extend: The number of boundary knots to add to the grid.
-    
-    Returns:
-        A matrix of size (i, g + 2 * k_extend) containing the extended grid of knots.
-    """
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
     for i in 1:k_extend
@@ -37,19 +27,7 @@ function B_spline_basis(
     degree::Int=3, 
     σ::Union{T, AbstractArray{T}}=one(half_quant)
     ) where {T<:half_quant}
-    """
-    Compute the B-spline basis functions for a batch of points x and a grid of knots.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the B-spline basis functions.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        degree: The degree of the B-spline basis functions.
-
-    Returns:
-        A matrix of size (i, g, b) containing the B-spline basis functions evaluated at the points x.
-    """
-
-    in_size, sample_size, G = size(x)..., size(grid, 2)
+    I, S, G = size(x)..., size(grid, 2)
     
     # 0-th degree
     if degree == 0
@@ -57,19 +35,16 @@ function B_spline_basis(
         grid_2 = grid[:, 2:end] 
     
         # B0 is piecewise constant
-        @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
-        @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
-        term1 = T.(term1)
-        term2 = T.(term2)
-
-        B = term1 .* term2
+        term1 = reshape(x, I, 1, S) .>= reshape(grid_1, I, G-1, 1)
+        term2 = reshape(x, I, 1, S) .<  reshape(grid_2, I, G-1, 1)
+        B = T.(term1 .* term2)
 
     else
         # k-th degree
         k = degree
         B = B_spline_basis(x, grid; degree=k-1)
         
-        x = reshape(x, in_size, 1, sample_size)
+        x = reshape(x, I, 1, S)
 
         numer1 = x .- grid[:, 1:(end - k - 1)]
         denom1 = grid[:, (k + 1):end-1] .- grid[:, 1:(end - k - 1)]
@@ -90,19 +65,9 @@ function RBF_basis(
     degree::Int=3, 
     σ::Union{T, AbstractArray{T}}=one(half_quant)
     ) where {T<:half_quant}
-    """
-    Compute the RBF basis functions for a batch of points x and a grid of knots.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the RBF basis functions.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the RBF kernel.
-
-    Returns:
-        A matrix of size (i, g, b) containing the RBF basis functions evaluated at the points x.
-    """
+    I, S, G = size(x)..., size(grid, 2)
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     return exp.(-T(0.5) * (diff ./ σ).^2)  
 end
 
@@ -112,20 +77,8 @@ function RSWAF_basis(
     degree::Int=3, 
     σ::Union{T, AbstractArray{T}}=one(half_quant)
     ) where {T<:half_quant}
-    """
-    Compute the RSWAF basis functions for a batch of points x and a grid of knots.
-        Be careful of vanishing gradients when using this in a deep network.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the RSWAF basis functions.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the RSWAF kernel.
-
-    Returns:
-        A matrix of size (i, g, b) containing the RSWAF basis functions evaluated at the points x.
-    """
-    # Fast tanh may cause stability problems, but is faster. If problematic, use base tanh instead. 
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    I, S, G = size(x)..., size(grid, 2)
+    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     diff = NNlib.tanh_fast(diff ./ σ)     
     return 1 .- diff.^2
 end
@@ -136,50 +89,22 @@ function FFT_basis(
     degree::Int=3, 
     σ::Union{T, AbstractArray{T}}=one(half_quant)
     ) where {T<:half_quant}
-    """
-    Compute the FFT basis functions for a batch of points x and a grid of knots.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the FFT basis functions.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        σ: Tuning for the bandwidth (standard deviation) of the FFT kernel.
-
-    Returns:
-        A matrix of size (i, g, b) containing the FFT basis functions evaluated at the points x.
-    """
-    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
-    freq = T(2π) .* freq .* σ
-    return cos.(freq), sin.(freq)
+    I, S, G = size(x)..., size(grid, 2)
+    x = reshape(x, I, 1, S) .* reshape(grid, I, G, 1)
+    x = T(2π) .* x .* σ
+    return cos.(x), sin.(x)
 end
 
 function Cheby_basis(
     x::AbstractArray{T},
     grid_::AbstractArray{T};
     degree::Int=3, 
-    σ::Union{T, AbstractArray{T}}=half_quant(1.1)
+    σ::Union{T, AbstractArray{T}}=half_quant(1.1) # IMPORTANT; to make sure acos is well-defined, set σ > 1, e.g. 1.1
     ) where {T<:half_quant}
-    """
-    Compute the Chebyshev polynomial basis functions for a batch of points x and a grid of knots.
-    Be careful of vanishing gradients when using this in a deep network.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the Chebyshev basis functions.
-        grid: not used in this function, so set G to 1, when using.
-        σ: Tuning for the bandwidth (standard deviation) of the Chebyshev kernel.
-
-    Returns:
-        A matrix of size (i, k, b) containing the Chebyshev basis functions evaluated at the points x.
-    """
-    # IMPORTANT; to make sure acos is well-defined, set σ > 1, e.g. 1.1
     x = NNlib.tanh_fast(x) ./ σ 
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
     linspace = collect(0:degree) .|> T |> device
-    B = @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
-
-    # any(isnan.(B)) && error("NaN in B")
-    # any(isnan.(B)) && println("NaN in Chebyshev basis")
-
-    return B
+    return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
 end
 
 function Gottlieb_basis(
@@ -188,17 +113,6 @@ function Gottlieb_basis(
     degree::Int=3, 
     σ::Union{T, AbstractArray{T}}=one(half_quant)
     ) where {T<:half_quant}
-    """
-    Compute the Gottlieb polynomial basis functions for a batch of points x and a grid of knots.
-    
-    Args:
-        x: A matrix of size (i, b) containing the points at which to evaluate the Gottlieb basis functions.
-        grid: not used in this function, so set G to 1, when using.
-        σ: Tuning for the bandwidth (standard deviation) of the Gottlieb kernel.
-
-    Returns:
-        A matrix of size (b, i, k) containing the Gottlieb basis functions evaluated at the points x.
-    """
     x = NNlib.sigmoid_fast(x)
     x = reshape(x, size(x)..., 1)
     B = ones(T, size(x, 1), size(x, 2), 1) |> device   
@@ -207,9 +121,6 @@ function Gottlieb_basis(
         y = 2(σ .+ (i-2)) .* x .* B[:, :, i-1] .- (σ .+ (2i-4)) .* B[:, :, i-2]
         B = cat(B, y, dims=3)
     end
-    
-    # any(isnan.(B)) && error("NaN in B")
-    # any(isnan.(B)) && println("NaN in Gottlieb basis")
     return permutedims(B, [1, 3, 2])
 end
 
@@ -233,13 +144,18 @@ function coef2curve(
     Returns:
         A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
     """
+    spl = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
+    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
 
-    splines = isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree=k) : basis_function(x_eval, grid; degree=k, σ=scale)
-    !isa(splines, Tuple) && return @tullio y_eval[i, o, b] := splines[i, g, b] * coef[i, o, g]
-
-    even, odd = splines
-    even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
-    return @tullio y_eval[i, o, b] := (even[i, g, b] * even_coef[i, o, g]) + (odd[i, g, b] * odd_coef[i, o, g])
+    if !isa(spl, Tuple)
+        spl = reshape(spl, I, G, 1, S) 
+        coef = reshape(coef, I, G, O, 1)  
+        return dropdims(sum(spl .* coef, dims=2), dims=2)
+    else
+        even, odd = spl
+        even_coef, odd_coef = reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
+        return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims=2), dims=2)
+    end
 end
 
 function curve2coef(
@@ -264,16 +180,16 @@ function curve2coef(
     Returns:
         A matrix of size (i, o, g) containing the B-spline coefficients.
     """
-    in_size, sample_size, out_size = size(x)..., size(y, 2)
+    J, S, O = size(x)..., size(y, 2)
 
     B = basis_function(x, grid; degree=k, σ=scale) .|> full_quant
     G = size(B, 2)
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
-    coef = Array{U}(undef, in_size, out_size, G) |> device
-    for i in 1:in_size
-        for o in 1:out_size
+    coef = Array{U}(undef, J, O, G) |> device
+    for i in 1:J
+        for o in 1:O
             coef[i, o, :] .= (
                 (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
                 \ (B[i, :, :]' * y[i, o, :]) # Bty

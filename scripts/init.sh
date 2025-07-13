@@ -61,12 +61,19 @@ else
     pip install -e ".[dev]"
 fi
 
-echo -e "${GREEN}Installing Julia deps (Pkg.instantiate)...${NC}"
-julia --project=. -e "using Pkg; Pkg.instantiate()"
+echo -e "${GREEN}Installing Julia dependencies...${NC}"
+echo -e "${YELLOW}Note: This may take a while on first run${NC}"
+julia --project=. -e "
+using Pkg
+println(\"Installing packages from Project.toml...\")
+Pkg.Registry.update()
+Pkg.instantiate()
+println(\"✓ All Julia dependencies installed successfully!\")
+"
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Julia dependencies installed successfully!${NC}"
 else
-    echo -e "${RED}✗ Failed to install Julia deps${NC}"
+    echo -e "${RED}✗ Failed to install Julia dependencies${NC}"
     exit 1
 fi
 

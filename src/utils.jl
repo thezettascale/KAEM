@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions

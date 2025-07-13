@@ -4,6 +4,7 @@ using DifferentiationInterface
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")

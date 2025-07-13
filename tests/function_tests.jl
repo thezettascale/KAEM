@@ -7,7 +7,7 @@ ENV["HALF_QUANT"] = "FP32"
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")
 include("../src/utils.jl")
-using .univariate_functions
+using .UnivariateFunctions
 using .GridUpdating: update_fcn_grid
 using .Utils
 

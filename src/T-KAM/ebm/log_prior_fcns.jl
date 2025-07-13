@@ -9,7 +9,7 @@ using ChainRules: @ignore_derivatives
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-using .univariate_functions: fwd
+using .UnivariateFunctions: fwd
 
 function prior_fwd(
     ebm, 

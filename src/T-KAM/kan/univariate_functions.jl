@@ -1,4 +1,4 @@
-module univariate_functions
+module UnivariateFunctions
 
 export univariate_function, init_function, fwd, activation_mapping
 

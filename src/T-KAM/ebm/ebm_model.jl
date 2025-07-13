@@ -10,7 +10,7 @@ include("log_prior_fcns.jl")
 include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("../../utils.jl")
-using .univariate_functions
+using .UnivariateFunctions
 using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .LogPriorFCNs
 using .InverseTransformSampling

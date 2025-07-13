@@ -14,7 +14,7 @@ include("resamplers.jl")
 include("generator_fcns.jl")
 include("loglikelihoods.jl")
 include("../../utils.jl")
-using .univariate_functions
+using .UnivariateFunctions
 using .Utils: device, next_rng, half_quant, full_quant, hq, fq
 using .EBM_Model
 using .WeightResamplers

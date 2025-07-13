@@ -10,7 +10,7 @@ using ChainRules: @ignore_derivatives
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
 using .Utils: half_quant, full_quant, device
-using .univariate_functions: fwd
+using .UnivariateFunctions: fwd
 
 function KAN_fwd(
     lkhood, 

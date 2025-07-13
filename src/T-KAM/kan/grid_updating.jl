@@ -51,7 +51,7 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
 end
 
 function update_model_grid(
-    model::T_KAM,
+    model,
     x::AbstractArray{T},
     ps, 
     st; 

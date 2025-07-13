@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -9,7 +8,13 @@ plt.rcParams.update(
         "font.family": "serif",
         "font.serif": ["Compute Modern"],
         "axes.unicode_minus": False,
-        "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}",
+        "text.latex.preamble": (
+            r"\usepackage{amsmath} "
+            r"\usepackage{amsfonts} "
+            r"\usepackage{amssymb} "
+            r"\usepackage{bm} "
+            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
+        ),
     }
 )
 
@@ -175,7 +180,7 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
         axs[1, 0].legend()
 
     axs[1, 0].set_xlabel(keys[idx], fontsize=14)
-    axs[1, 0].set_ylabel("Garbage Collection (\%)", fontsize=14)
+    axs[1, 0].set_ylabel(r"Garbage Collection (\%)", fontsize=14)
     axs[1, 0].set_title(f"{title} - GC", fontsize=14)
 
     sns.barplot(

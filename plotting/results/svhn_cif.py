@@ -8,7 +8,13 @@ plt.rcParams.update(
         "font.family": "serif",
         "font.serif": ["Compute Modern"],
         "axes.unicode_minus": False,
-        "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}",
+        "text.latex.preamble": (
+            r"\usepackage{amsmath} "
+            r"\usepackage{amsfonts} "
+            r"\usepackage{amssymb} "
+            r"\usepackage{bm} "
+            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
+        ),
     }
 )
 
@@ -21,7 +27,10 @@ for prior in priors:
     for dataset in datasets:
         for grid_size in GRID_SIZES:
             # MLE/ULA images
-            mle_file_path = f"logs/Vanilla/n_z=100/ULA{prior}/cnn=true/{dataset}_1/generated_images.h5"
+            mle_file_path = (
+                f"logs/Vanilla/n_z=100/ULA{prior}/cnn=true/"
+                + f"{dataset}_1/generated_images.h5"
+            )
             # SE/ULA images
             se_file_path = (
                 f"logs/Thermodynamic{prior}/n_z=100/{dataset}_1/generated_images.h5"

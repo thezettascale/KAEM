@@ -7,7 +7,13 @@ plt.rcParams.update(
         "font.family": "serif",
         "font.serif": ["Compute Modern"],
         "axes.unicode_minus": False,
-        "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}",
+        "text.latex.preamble": (
+            r"\usepackage{amsmath} "
+            r"\usepackage{amsfonts} "
+            r"\usepackage{amssymb} "
+            r"\usepackage{bm} "
+            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
+        ),
     }
 )
 

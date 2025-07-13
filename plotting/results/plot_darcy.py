@@ -8,7 +8,13 @@ plt.rcParams.update(
         "font.family": "serif",
         "font.serif": ["Compute Modern"],
         "axes.unicode_minus": False,
-        "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amsfonts} \usepackage{amssymb} \usepackage{bm} \newcommand{\probP}{\text{I\kern-0.15em P}}",
+        "text.latex.preamble": (
+            r"\usepackage{amsmath} "
+            r"\usepackage{amsfonts} "
+            r"\usepackage{amssymb} "
+            r"\usepackage{bm} "
+            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
+        ),
     }
 )
 
@@ -89,4 +95,4 @@ for prior_idx, prior in enumerate(priors):
     )
 
 plt.subplots_adjust(wspace=0, hspace=0)
-plt.savefig(f"figures/results/darcy_3x3.png", dpi=300)
+plt.savefig("figures/results/darcy_3x3.png", dpi=300)

@@ -42,7 +42,10 @@ def calculate_infinity_metrics(
             with tempfile.TemporaryDirectory() as gen_images_dir:
                 save_images_to_directory(gen_images[indices], gen_images_dir)
                 metrics = calculate_metrics(
-                    input1=real_images_dir, input2=gen_images_dir, fid=True, kid=True
+                    input1=real_images_dir,
+                    input2=gen_images_dir,
+                    fid=True,
+                    kid=True,
                 )
                 fids.append(metrics["frechet_inception_distance"])
                 kids.append(metrics["kernel_inception_distance_mean"])

@@ -6,8 +6,8 @@ using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, 
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
-include("../utils.jl")
-include("univariate_functions.jl")
+include("../../utils.jl")
+include("../kan/univariate_functions.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .univariate_functions: fwd
 
@@ -47,6 +47,20 @@ function prior_fwd(
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
+end
+
+function log_prior_ula(
+    ebm, 
+    z::AbstractArray{T},
+    ps, 
+    st;
+    ε::T=eps(half_quant),
+    normalize::Bool=false
+    ) where {T<:half_quant}
+    log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
+    log_π0 = dropdims(sum(log_π0; dims=1);dims=1)
+    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
+    return dropdims(sum(f; dims=1) .+ log_π0; dims=1), st
 end
 
 function log_prior_univar(
@@ -96,20 +110,6 @@ function log_prior_univar(
     return log_p, st
 end
 
-function log_prior_ula(
-    ebm, 
-    z::AbstractArray{T},
-    ps, 
-    st;
-    ε::T=eps(half_quant),
-    normalize::Bool=false
-    ) where {T<:half_quant}
-    log_π0 = ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) : log.(ebm.π_pdf(z, ε) .+ ε)
-    log_π0 = dropdims(sum(log_π0; dims=1);dims=1)
-    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))
-    return dropdims(sum(f; dims=1) .+ log_π0; dims=1), st
-end
-
 function log_prior_mix(
     ebm, 
     z::AbstractArray{T},
@@ -144,7 +144,7 @@ function log_prior_mix(
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims=2) 
     π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
-    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,1,b] + ε)
+    log_απ = log.(reshape(alpha, size(alpha)..., 1) .* π_0 .+ ε)
 
     # Energy functions of each component, q -> p
     z, st = prior_fwd(ebm, ps, st, dropdims(z; dims=2))

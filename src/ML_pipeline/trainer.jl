@@ -73,10 +73,10 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         mala = "ULA_mixture"
     end
         
-    n_z = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
+    n_z = first(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
     model_type = N_t > 1 ? "Thermodynamic/n_z=$n_z" : "Vanilla/n_z=$n_z/$mala/cnn=$cnn"
-    spline_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
-    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW" || dataset_name == "MNIST" || dataset_name == "FMNIST") ? retrieve(conf, "EBM_PRIOR", "π_0") * "_" * spline_fcn : model_type
+    spline_fcn = retrieve(conf, "GeneratorModel", "spline_function")
+    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW" || dataset_name == "MNIST" || dataset_name == "FMNIST") ? retrieve(conf, "EbmModel", "π_0") * "_" * spline_fcn : model_type
     
     file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
     mkpath(file_loc)

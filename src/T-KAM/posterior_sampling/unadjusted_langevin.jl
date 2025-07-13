@@ -2,13 +2,13 @@ module ULA_sampling
 
 export ULA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
 
 include("../../utils.jl")
-include("../KAN_likelihood.jl")
+include("../gen/gen_model.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
-using .KAN_likelihood: log_likelihood_MALA
+using .GeneratorModel: log_likelihood_MALA
 
 π_dist = Dict(
   "uniform" => (p, b, rng) -> rand(rng, p, 1, b),

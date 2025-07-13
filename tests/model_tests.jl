@@ -11,12 +11,12 @@ using .Utils
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
-out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
+out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
 
 function test_ps_derivative()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
-    model = init_T_KAM(dataset, conf, (3,3,1))
+    dataset = randn(full_quant, 32, 32, 1, 50) 
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -29,8 +29,8 @@ end
 
 function test_grid_update()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
-    model = init_T_KAM(dataset, conf, (3,3,1))
+    dataset = randn(full_quant, 32, 32, 1, 50) 
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
@@ -44,9 +44,9 @@ end
 
 function test_mala_loss()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
+    dataset = randn(full_quant, 32, 32, 1, 50) 
     commit!(conf, "MALA", "use_langevin", "true")
-    model = init_T_KAM(dataset, conf, (3,3,1))
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device

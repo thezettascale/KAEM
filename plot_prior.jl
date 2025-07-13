@@ -4,12 +4,12 @@ ENV["GPU"] = "true"
 
 include("src/T-KAM/T-KAM.jl")
 include("src/ML_pipeline/trainer.jl")
-include("src/T-KAM/EBM_prior.jl")
+include("src/T-KAM/ebm/ebm_model.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .trainer
 using .Utils: device, half_quant, hq
-using .ebm_ebm_prior: prior_fwd
+using .EBM_Model: prior_fwd
 
 for fcn_type in ["RBF", "FFT"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
@@ -24,14 +24,14 @@ for fcn_type in ["RBF", "FFT"]
 
             conf = ConfParse(conf_loc)
             parse_conf!(conf)
-            commit!(conf, "EBM_PRIOR", "π_0", prior_type)
+            commit!(conf, "EbmModel", "π_0", prior_type)
 
             if fcn_type == "RBF"
-                commit!(conf, "EBM_PRIOR", "spline_function", "RBF")
-                commit!(conf, "EBM_PRIOR", "base_activation", "silu")
+                commit!(conf, "EbmModel", "spline_function", "RBF")
+                commit!(conf, "EbmModel", "base_activation", "silu")
             else
-                commit!(conf, "EBM_PRIOR", "spline_function", "FFT")
-                commit!(conf, "EBM_PRIOR", "base_activation", "none")
+                commit!(conf, "EbmModel", "spline_function", "FFT")
+                commit!(conf, "EbmModel", "base_activation", "none")
             end
 
             saved_data = load(file)

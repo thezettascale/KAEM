@@ -52,14 +52,14 @@ if dataset == "CIFAR10" || dataset == "SVHN"
     train!(t)
 else
     for prior_idx in [4]
-        commit!(conf, "EBM_PRIOR", "π_0", prior_type[prior_idx])
+        commit!(conf, "EbmModel", "π_0", prior_type[prior_idx])
         for base_idx in [5,6]
-            commit!(conf, "EBM_PRIOR", "spline_function", bases[base_idx])
-            commit!(conf, "KAN_LIKELIHOOD", "spline_function", bases[base_idx])
-            commit!(conf, "KAN_LIKELIHOOD", "base_activation", acts[base_idx])
-            commit!(conf, "EBM_PRIOR", "base_activation", acts[base_idx])
-            commit!(conf, "KAN_LIKELIHOOD", "grid_size", grid_sizes[base_idx])
-            commit!(conf, "EBM_PRIOR", "grid_size", grid_sizes[base_idx])
+            commit!(conf, "EbmModel", "spline_function", bases[base_idx])
+            commit!(conf, "GeneratorModel", "spline_function", bases[base_idx])
+            commit!(conf, "GeneratorModel", "base_activation", acts[base_idx])
+            commit!(conf, "EbmModel", "base_activation", acts[base_idx])
+            commit!(conf, "GeneratorModel", "grid_size", grid_sizes[base_idx])
+            commit!(conf, "EbmModel", "grid_size", grid_sizes[base_idx])
             rng = Random.seed!(1)
             t = init_trainer(rng, conf, dataset)
             train!(t)

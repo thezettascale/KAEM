@@ -2,11 +2,11 @@ module univariate_functions
 
 export univariate_function, init_function, fwd, update_fcn_grid, activation_mapping
 
-using CUDA, KernelAbstractions, Tullio, Accessors
+using CUDA, KernelAbstractions, Accessors
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 include("spline_bases.jl")
-include("../utils.jl")
+include("../../utils.jl")
 using .spline_functions
 using .Utils: device, half_quant, full_quant
 
@@ -142,10 +142,11 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     y = coef2curve(x, st.grid, coef; k=l.spline_degree, scale=τ, basis_function=l.spline_function)
     
     if l.spline_string == "Cheby" || l.spline_string == "Gottlieb"
-        return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
+        return y .* mask
     else
         w_base, w_sp = ps.w_base, ps.w_sp
-        return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
+        I, O, B = size(y)
+        return w_base .* reshape(base, I, 1, B) .+ w_sp .* y .* mask
     end
 end
 

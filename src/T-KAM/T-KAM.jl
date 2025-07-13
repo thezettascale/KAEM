@@ -2,28 +2,28 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
 using ChainRules: @ignore_derivatives
 
-include("EBM_prior.jl")
-include("KAN_likelihood.jl")
-include("univariate_functions.jl")
+include("ebm/ebm_model.jl")
+include("gen/gen_model.jl")
+include("kan/univariate_functions.jl")
 include("../utils.jl")
-include("sampling/autoMALA.jl")
-include("sampling/ULA.jl")
-using .ebm_ebm_prior
-using .KAN_likelihood
+include("posterior_sampling/autoMALA.jl")
+include("posterior_sampling/unadjusted_langevin.jl")
+using .EBM_Model
+using .GeneratorModel
 using .autoMALA_sampling: autoMALA_sampler
 using .ULA_sampling: ULA_sampler
 using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
-    prior::ebm_prior
-    lkhood::KAN_lkhood 
+    prior::EbmModel
+    lkhood::GenModel 
     train_loader::DataLoader
     test_loader::DataLoader
     update_prior_grid::Bool
@@ -100,8 +100,8 @@ function importance_loss(
     logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
-    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
-    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
+    loss_prior = sum(weights_resampled .* logprior_resampled', dims=2)
+    loss_llhood = sum(weights_resampled .* logllhood_resampled, dims=2)
 
     @ignore_derivatives begin 
         m.verbose && println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
@@ -305,16 +305,16 @@ function init_T_KAM(
         size(dataset, 1) * size(dataset, 2))
     )
 
-    prior_fcn = retrieve(conf, "EBM_PRIOR", "spline_function")
+    prior_fcn = retrieve(conf, "EbmModel", "spline_function")
     if prior_fcn == "FFT" 
         update_prior_grid = false
-        commit!(conf, "EBM_PRIOR", "layer_norm", "true")
+        commit!(conf, "EbmModel", "layer_norm", "true")
     end
 
-    lkhood_fcn = retrieve(conf, "KAN_LIKELIHOOD", "spline_function")
+    lkhood_fcn = retrieve(conf, "GeneratorModel", "spline_function")
     if lkhood_fcn == "FFT" 
         update_llhood_grid = false
-        commit!(conf, "KAN_LIKELIHOOD", "layer_norm", "true")
+        commit!(conf, "GeneratorModel", "layer_norm", "true")
     end
 
     if prior_fcn == "Cheby" || prior_fcn == "Gottlieb"
@@ -325,8 +325,8 @@ function init_T_KAM(
         update_llhood_grid = false
     end
     
-    prior_model = init_ebm_prior(conf; prior_seed=prior_seed)
-    lkhood_model = init_KAN_lkhood(conf, x_shape; lkhood_seed=lkhood_seed)
+    prior_model = init_EbmModel(conf; prior_seed=prior_seed)
+    lkhood_model = init_GenModel(conf, x_shape; lkhood_seed=lkhood_seed)
 
     if prior_model.ula
         loss_fcn = mala_loss
@@ -353,9 +353,9 @@ function init_T_KAM(
     # Importance sampling or MALA
     widths = (
         try 
-            parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths"))
+            parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
         catch
-            parse.(Int, split(retrieve(conf, "EBM_PRIOR", "layer_widths"), ","))
+            parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
         end
     )
     posterior_fcn = identity
@@ -419,9 +419,7 @@ function init_from_file(
     file_loc::AbstractString,
     ckpt::Int
     )
-    """
-    Load a model from a checkpoint file.
-    """
+    """Load a model from a checkpoint file."""
     saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
     model = saved_data["model"] |> deepcopy
     ps = convert(ComponentArray, saved_data["params"])

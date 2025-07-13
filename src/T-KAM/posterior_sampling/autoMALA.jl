@@ -1,18 +1,18 @@
 module autoMALA_sampling
 
-export autoMALA_sampler, cross_entropy, l2
+export autoMALA_sampler
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Distributions, Accessors, Statistics
 using Zygote: gradient
 
 include("../../utils.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
-include("../KAN_likelihood.jl")
+include("../gen/gen_model.jl")
 using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
-using .KAN_likelihood: log_likelihood_MALA
+using .GeneratorModel: log_likelihood_MALA
 
 function safe_step_size_update(
     η::AbstractArray{U}, 
@@ -55,12 +55,13 @@ function leapfrop_proposal(
     y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
     """
     # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
-    p, ẑ = ndims(z) == 4 ? position_update_4d(z, momentum, ∇z, M, η) : position_update_3d(z, momentum, ∇z, M, η)
+    p, ẑ = position_update(z, momentum, ∇z, M, η)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, x, st, temps)
 
-    p = ndims(z) == 4 ? momentum_update_4d(p, ∇ẑ, M, η) : momentum_update_3d(p, ∇ẑ, M, η)
+    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
+    p = momentum_update(p, ∇ẑ, M, η)
 
     # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)

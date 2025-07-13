@@ -1,16 +1,108 @@
 
 module InverseTransformSampling
 
-export sample_univariate, sample_mixture
+export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
 
-using CUDA, KernelAbstractions, Tullio, LinearAlgebra, Random, Lux, LuxCUDA
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA
 using NNlib: softmax
+using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
-include("../log_prior_fcns.jl")
+include("log_prior_fcns.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .LogPriorFCNs: prior_fwd
 using Flux: onehotbatch
+
+function trapezium_quadrature(
+    ebm, 
+    ps, 
+    st; 
+    ε::T=eps(half_quant),
+    component_mask::Union{AbstractArray{<:half_quant}, Nothing}=nothing
+    ) where {T<:half_quant}
+    """Trapezoidal rule for numerical integration"""
+
+    # Evaluate prior on grid [0,1]
+    f_grid = st[Symbol("1")].grid
+    grid = f_grid |> cpu_device() 
+    Δg = f_grid[:, 2:end] - f_grid[:, 1:end-1] 
+    
+    π_grid = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(f_grid', ps, ε) : ebm.π_pdf(f_grid, ε)
+    π_grid = ebm.prior_type == "learnable_gaussian" ? π_grid' : π_grid
+
+    # Energy function of each component
+    f_grid, st = prior_fwd(ebm, ps, st, f_grid)
+    Q, P, G = size(f_grid)
+   
+    exp_fg = zeros(T, Q, P, G) |> device
+    if component_mask !== nothing
+        exp_fg = exp.(f_grid) .* reshape(π_grid, Q, 1, G)
+        exp_fg = sum(reshape(exp_fg, Q, P, 1, G) .* reshape(component_mask, Q, P, B, 1), dims=2)
+        exp_fg = dropdims(exp_fg, dims=2)
+    else
+        exp_fg = exp.(f_grid) .* reshape(π_grid, 1, P, G)
+    end
+
+    # CDF evaluated by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
+    exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:end-1] 
+    trapz = exp_fg .* reshape(Δg, 1, P, G-1) ./ 2
+    return trapz, grid, st
+end
+
+function get_gausslegendre(ebm, ps, st)
+    """Get Gauss-Legendre nodes and weights for prior's domain"""
+    
+    a, b = minimum(st[Symbol("1")].grid; dims=2), maximum(st[Symbol("1")].grid; dims=2)
+    
+    no_grid = (ebm.fcns_qp[Symbol("1")].spline_string == "FFT" || 
+        ebm.fcns_qp[Symbol("1")].spline_string == "Cheby" ||
+        ebm.fcns_qp[Symbol("1")].spline_string == "Gottlieb"
+    )
+    
+    if no_grid
+        a = fill(half_quant(first(ebm.fcns_qp[Symbol("1")].grid_range)), size(a)) |> device
+        b = fill(half_quant(last(ebm.fcns_qp[Symbol("1")].grid_range)), size(b)) |> device
+    end
+    
+    nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
+    weights = (b - a) ./ 2 .* device(ebm.weights)
+    nodes_cpu = cpu_device()(nodes)
+    
+    return nodes, weights, nodes_cpu
+end
+
+function gausslegendre_quadrature(
+    ebm, 
+    ps, 
+    st; 
+    ε::T=eps(half_quant),
+    component_mask::Union{AbstractArray{T}, Nothing}=nothing
+    ) where {T<:half_quant}
+    """Gauss-Legendre quadrature for numerical integration"""
+
+    nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
+    π_nodes = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(nodes', ps, ε) : ebm.π_pdf(nodes, ε)
+    π_nodes = ebm.prior_type == "learnable_gaussian" ? π_nodes' : π_nodes
+
+    # Energy function of each component
+    nodes, st = prior_fwd(ebm, ps, st, nodes)
+    Q, P, G = size(nodes)
+
+    # CDF evaluated by trapezium rule for integration; w_i * u(z_i)
+    if component_mask !== nothing
+        tmp = exp.(nodes) .* reshape(π_nodes, Q, 1, G)  # (Q, P, G)
+        trapz = sum(
+            reshape(tmp, Q, P, 1, G) .* reshape(component_mask, Q, P, size(component_mask, 3), 1),
+            dims=2
+        )
+        trapz = dropdims(trapz, dims=2)  # (Q, B, G)
+        trapz = trapz .* reshape(weights, Q, 1, G)  # (Q, B, G)
+        return trapz, nodes_cpu, st
+    else
+        trapz = exp.(nodes) .* reshape(π_nodes, 1, P, G) .* reshape(weights, 1, P, G)  # (Q, P, G)
+        return trapz, nodes_cpu, st
+    end
+end
 
 function choose_component(
     α::AbstractArray{T}, 

@@ -1,11 +1,11 @@
 module WeightResamplers
 
-export residual_resampler, systematic_resampler, stratified_resampler
+export residual_resampler, systematic_resampler, stratified_resampler, importance_resampler
 
 using Random, Distributions, LinearAlgebra
 using NNlib: softmax
 
-include("../utils.jl")
+include("../../utils.jl")
 using .Utils: next_rng, full_quant
 
 function residual_resampler(
@@ -131,6 +131,41 @@ function stratified_resampler(
     end
     replace!(idxs, N+1 => N)
     return idxs, seed
+end
+
+function importance_resampler(
+    weights::AbstractArray{U};
+    seed::Int=1,
+    ESS_threshold::U=full_quant(0.5),
+    resampler::Function=systematic_sampler,
+    verbose::Bool=false,
+) where {U<:full_quant}
+    """
+    Filter the latent variable for a index of the Steppingstone sum using residual resampling.
+
+    Args:
+        logllhood: A matrix of log-likelihood values.
+        weights: The weights of the population.
+        t_resample: The temperature at which the last resample occurred.
+        t2: The temperature at which to update the weights.
+        seed: Random seed for reproducibility.
+        ESS_threshold: The threshold for the effective sample size.
+        resampler: The resampling function.
+
+    Returns:
+        - The resampled indices.
+        - The updated seed.
+    """
+    B, N = size(weights)
+
+    # Check effective sample size
+    ESS = dropdims(1 ./ sum(weights.^2, dims=2); dims=2)
+    ESS_bool = ESS .< ESS_threshold*N
+    
+    # Only resample when needed 
+    verbose && (any(ESS_bool) && println("Resampling!"))
+    any(ESS_bool) && return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed=seed)
+    return repeat(collect(1:N)', B, 1), seed
 end
 
 end

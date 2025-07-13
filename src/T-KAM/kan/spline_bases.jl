@@ -5,7 +5,7 @@ export extend_grid, coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_bas
 using CUDA, KernelAbstractions
 using LinearAlgebra, NNlib
 
-include("../utils.jl")
+include("../../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
 
 method = get(ENV, "method", "B-spline") 

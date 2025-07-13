@@ -6,3 +6,4 @@
 garbage/**
 generated_images_epoch_*.h5
 *.egg-info
+condaenv*

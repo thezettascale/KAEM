@@ -43,8 +43,8 @@ vim config/nist_config.ini
 For main experiments run:
 
 ```bash
-make train-vanilla
-make train-thermo
+make train-vanilla DATASET=MNIST
+make train-thermo DATASET=SVHN
 ```
 
 For benchmarking run:

@@ -1,5 +1,6 @@
 *.log
 *.out
+*.pyc
 # logs/** 
 **/ckpt_*.jld2
 garbage/**

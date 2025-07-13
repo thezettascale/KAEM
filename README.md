@@ -53,6 +53,12 @@ For benchmarking run:
 make bench
 ```
 
+For developing, I recommend:
+```
+make dev
+tmux attach-session -t tkam_dev
+```
+
 ## Personal preferences
 
 In this project, implicit types/quantization are never used. Quantization is explicitly declared in function headers using `half_quant` and `full_quant`, defined in [utils.jl](src/utils.jl). Model parameterization is also explicit.

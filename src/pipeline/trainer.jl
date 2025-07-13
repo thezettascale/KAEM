@@ -75,12 +75,23 @@ function init_trainer(rng::AbstractRNG, conf::ConfParse, dataset_name;
         mala = "ULA_mixture"
     end
         
-    n_z = first(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
-    model_type = N_t > 1 ? "Thermodynamic/n_z=$n_z" : "Vanilla/n_z=$n_z/$mala/cnn=$cnn"
-    spline_fcn = retrieve(conf, "GeneratorModel", "spline_function")
-    model_type = (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW" || dataset_name == "MNIST" || dataset_name == "FMNIST") ? retrieve(conf, "EbmModel", "π_0") * "_" * spline_fcn : model_type
     
-    file_loc = isnothing(file_loc) ? "logs/$(model_type)/$(dataset_name)_$(seed)/" : file_loc
+    model_type = N_t > 1 ? "thermo/$(dataset_name)" : "vanilla/$(dataset_name)"
+    
+    prior_spline_fcn = "importance" * "_" * retrieve(conf, "EbmModel", "π_0") * "_" * retrieve(conf, "EbmModel", "spline_function")
+    if dataset_name in ["DARCY_PERM", "DARCY_FLOW", "MNIST", "FMNIST"]
+        model_type = model_type * "/" * prior_spline_fcn
+    end
+    
+    if length(parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))) > 2
+        model_type = model_type * "/deep"
+    elseif parse(Bool, retrieve(conf, "EbmModel", "mixture_model"))
+        model_type = model_type * "/mixture"
+    else
+        model_type = model_type * "/univariate"
+    end
+    
+    file_loc = isnothing(file_loc) ? "logs/$(model_type)/" : file_loc
     mkpath(file_loc)
 
     # Initialize model

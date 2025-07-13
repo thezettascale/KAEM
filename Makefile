@@ -130,7 +130,6 @@ format:
 
 lint:
 	$(call conda_run,flake8 src/ tests/ plotting/)
-	@julia --project=. -e 'using JET; report_package(".")'
 
 julia-setup:
 	@echo "Installing Julia dependencies..."

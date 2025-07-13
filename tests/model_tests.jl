@@ -5,8 +5,10 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP16"
 
 include("../src/T-KAM/T-KAM.jl")
+include("../src/T-KAM/kan/grid_updating.jl")
 include("../src/utils.jl")
 using .T_KAM_model
+using .GridUpdating: update_model_grid
 using .Utils
 
 conf = ConfParse("tests/test_conf.ini")

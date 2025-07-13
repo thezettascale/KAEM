@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, update_model_grid, move_to_hq
+export T_KAM, init_T_KAM, generate_batch, move_to_hq
 
 using CUDA, KernelAbstractions
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -10,7 +10,6 @@ using ChainRules: @ignore_derivatives
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
-include("kan/univariate_functions.jl")
 include("../utils.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
@@ -18,7 +17,6 @@ using .EBM_Model
 using .GeneratorModel
 using .autoMALA_sampling: autoMALA_sampler
 using .ULA_sampling: ULA_sampler
-using .univariate_functions: update_fcn_grid, fwd
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant, U<:full_quant} <: Lux.AbstractLuxLayer
@@ -192,83 +190,6 @@ function thermo_loss(
     end
 
     return loss * m.loss_scaling, st, seed
-end
-
-function update_model_grid(
-    model::T_KAM,
-    x::AbstractArray{T},
-    ps, 
-    st; 
-    seed::Int=1
-    )  where {T<:half_quant}
-    """
-    Update the grid of the likelihood model using samples from the prior.
-
-    Args:
-        model: The model.
-        x: Data samples.
-        ps: The parameters of the model.
-        st: The states of the model.
-
-    Returns:
-        The updated model.
-        The updated params.
-        The updated seed.
-    """
-    ps = ps .|> T
-
-    temps = model.N_t > 1 ? collect(T, [(k / model.N_t)^model.p[st.train_idx] for k in 0:model.N_t])[2:end] |> device : 0
-
-    if model.update_prior_grid
-
-        z, _, seed = ((model.MALA || model.N_t > 1) ? 
-            model.posterior_sample(model, x, temps, ps, st, seed) : 
-            model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
-            )
-
-        P, Q = (model.MALA || model.N_t > 1) ? size(z)[1:2] : reverse(size(z)[1:2])
-        z = reshape(z, P, Q, :)
-        B = size(z, 3)
-        z = reshape(z, P, Q*B)
-
-        for i in 1:model.prior.depth
-            new_grid, new_coef = update_fcn_grid(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            @reset ps.ebm[Symbol("$i")].coef = new_coef
-            @reset st.ebm[Symbol("$i")].grid = new_grid
-
-            z = fwd(model.prior.fcns_qp[Symbol("$i")], ps.ebm[Symbol("$i")], st.ebm[Symbol("$i")], z)
-            z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims=1); dims=1)
-
-            if model.prior.layernorm && i < model.prior.depth
-                z, st_ebm = Lux.apply(model.prior.fcns_qp[Symbol("ln_$i")], z, ps.ebm[Symbol("ln_$i")], st.ebm[Symbol("ln_$i")])
-                @reset st.ebm[Symbol("ln_$i")] = st_ebm
-            end
-        end
-    end
-         
-    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) && return model, T.(ps), st, seed
-
-    z, _, seed = ((model.MALA || model.N_t > 1) ? 
-        model.posterior_sample(model, x, temps, ps, st, seed) : 
-        model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed))
-
-    z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims=2); dims=2)
-
-    for i in 1:model.lkhood.depth
-        new_grid, new_coef = update_fcn_grid(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
-        @reset ps.gen[Symbol("$i")].coef = new_coef
-        @reset st.gen[Symbol("$i")].grid = new_grid
-
-        z = fwd(model.lkhood.Φ_fcns[Symbol("$i")], ps.gen[Symbol("$i")], st.gen[Symbol("$i")], z)
-        z = dropdims(sum(z, dims=1); dims=1)
-
-        if model.lkhood.layernorm && i < model.lkhood.depth
-            z, st_gen = Lux.apply(model.lkhood.Φ_fcns[Symbol("ln_$i")], z, ps.gen[Symbol("ln_$i")], st.gen[Symbol("ln_$i")])
-            @reset st.gen[Symbol("ln_$i")] = st_gen
-        end
-    end
-
-    return model, T.(ps), st, seed
 end
 
 function init_T_KAM(

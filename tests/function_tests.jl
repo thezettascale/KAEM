@@ -5,8 +5,10 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/kan/univariate_functions.jl")
+include("../src/T-KAM/kan/grid_updating.jl")
 include("../src/utils.jl")
 using .univariate_functions
+using .GridUpdating: update_fcn_grid
 using .Utils
 
 function test_fwd()

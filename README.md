@@ -11,23 +11,28 @@ bash <conda-installer-name>-latest-Linux-x86_64.sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
-The [shell script](setup/setup.sh) will install all requirements auto-magically. Python dependencies will be installed into a conda environment called "T-KAM", (including [tmux](https://github.com/tmux/tmux/wiki) from conda forge). Just need to run:
+Then install
 
 ```bash
-bash setup/setup.sh
+make install
 ```
 
 [Optional;] Test all Julia scripts:
 
 ```bash
-tmux new-session -d -s T_KAM_tests "bash run_tests.sh"
+make test
 ```
 
 ### Note for windows users:
 
 This repo uses shell scripts solely for convenience, you can run everything without them too. If you want to use the shell scripts, [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) is recommended.
 
-## To run experiments:
+## Main experiments:
+
+List commands:
+```
+make help
+```
 
 Edit the config files:
 
@@ -38,13 +43,14 @@ vim config/nist_config.ini
 For main experiments run:
 
 ```bash
-tmux new-session -d -s T_KAM_main "bash run.sh"
+make train-vanilla
+make train-thermo
 ```
 
 For benchmarking run:
 
 ```bash
-tmux new-session -d -s T_KAM_benchmark "bash benches/run_benchmarks.sh"
+make bench
 ```
 
 ## Personal preferences

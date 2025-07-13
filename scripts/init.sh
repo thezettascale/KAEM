@@ -7,7 +7,7 @@ NC='\033[0m'
 
 set -e
 
-echo -e "${GREEN}Setting up T-KAM development environment...${NC}"
+echo -e "${GREEN}Setting up T-KAM dev environment...${NC}"
 
 if ! command -v conda &> /dev/null; then
     echo -e "${RED}Error: conda is not installed or not in PATH${NC}"
@@ -61,12 +61,12 @@ else
     pip install -e ".[dev]"
 fi
 
-echo -e "${GREEN}Installing Julia dependencies (Pkg.instantiate)...${NC}"
+echo -e "${GREEN}Installing Julia deps (Pkg.instantiate)...${NC}"
 julia --project=. -e "using Pkg; Pkg.instantiate()"
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Julia dependencies installed successfully!${NC}"
 else
-    echo -e "${RED}✗ Failed to install Julia dependencies${NC}"
+    echo -e "${RED}✗ Failed to install Julia deps${NC}"
     exit 1
 fi
 

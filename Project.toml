@@ -4,9 +4,9 @@ version = "0.1.0"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-cuDNN = "62a44307-9d75-4741-a466-1fa87afb612a"
-KernelAbstractions = "63c18a36-062a-401e-8410-4b3b4b5b3b3b"
-NNlib = "872c559b-1158-4e2f-a6a0-4f65d8f5bb55"
+cuDNN = "876f654a-8a11-5788-9b5d-4c8b4981d7b8"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce15"
+NNlib = "872c559c-5c5c-5109-bc1e-7b4e3d7e1b09"
 Tullio = "bc48ee85-29a4-5162-bea1-747c5af4b79a"
 Lux = "b2108857-7c20-44ae-8f51-6a0e2024f120"
 LuxCUDA = "d491faf4-3d78-11e9-2517-99fb8caf5fe5"
@@ -35,6 +35,8 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 GLMakie = "e9467ef8-e4e7-5192-a6bf-d47bc6a7fbe0"
 BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+JuliaFormatter = "98e50ef6-62b3-5b8e-86f7-9ac08970e6a3"
+JET = "e0c7a4f8-438c-4a28-bd86-8c8b1d7c1a6e"
 
 [compat]
 julia = "1.11"

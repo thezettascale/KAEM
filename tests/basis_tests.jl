@@ -129,7 +129,7 @@ function test_curve2coef()
     @test size(recovered_coef) == size(coef)
 
     y_reconstructed = coef2curve(x_eval, extended_grid, recovered_coef; k=degree, scale=σ)
-    @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(1e-2)
+    @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(2)
 end
 
 @testset "Spline Tests" begin

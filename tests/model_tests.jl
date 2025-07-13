@@ -35,10 +35,10 @@ function test_grid_update()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    size_grid = size(st.gen[Symbol("1")].grid)
+    size_grid = size(st.ebm[Symbol("1")].grid)
     x = first(model.train_loader) |> device
     model, ps, st, seed = update_model_grid(model, x, ps, Lux.testmode(st))
-    @test all(size(st.gen[Symbol("1")].grid) .== size_grid)
+    @test all(size(st.ebm[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
 end
 

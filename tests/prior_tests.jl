@@ -3,7 +3,7 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, DifferentiationInter
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
+ENV["AD_BACKEND"] = "ZYGOTE"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")

@@ -40,13 +40,13 @@ end
 
 function test_fwd_derivative()
     Random.seed!(42)
-    x = rand(half_quant, 5, 3) |> device
+    x_eval = rand(half_quant, 5, 3) |> device
     f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ps |> device, st |> device
     g = x -> sum(fwd(f, ps, st, x))
-    ∇ = gradient(g, AD_backend, x)
-    @test size(∇) == size(x)
+    ∇ = gradient(g, AD_backend, x_eval)
+    @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end
 

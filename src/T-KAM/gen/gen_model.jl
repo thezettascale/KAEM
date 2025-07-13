@@ -12,7 +12,6 @@ using ConfParser,
     Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 using ChainRules: @ignore_derivatives
-using Zygote: Buffer
 
 include("../kan/univariate_functions.jl")
 include("../ebm/ebm_model.jl")

@@ -10,12 +10,12 @@ using CUDA,
     LuxCUDA,
     Distributions,
     Accessors,
-    Statistics
-using Zygote: gradient
+    Statistics,
+    DifferentiationInterface
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq
+using .Utils: device, next_rng, half_quant, full_quant, fq, AD_backend
 using .GeneratorModel: log_likelihood_MALA
 
 π_dist = Dict(
@@ -121,7 +121,7 @@ function ULA_sampler(
             logpos_z, st_ebm, st_gen =
                 CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
             ∇z = CUDA.@fastmath first(
-                gradient(z_j -> sum(first(log_posterior(z_j, Lux.testmode(st)))), T.(z_i)),
+                gradient(z_j -> sum(first(log_posterior(z_j, Lux.testmode(st)))), AD_backend, T.(z_i)),
             )
             @reset st.ebm = st_ebm
             @reset st.gen = st_gen

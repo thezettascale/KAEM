@@ -10,14 +10,14 @@ include("data_utils.jl")
 using .T_KAM_model
 using .GridUpdating: update_model_grid
 using .optimization
-using .Utils: device, half_quant, full_quant, hq, fq
+using .Utils: device, half_quant, full_quant, hq, fq, AD_backend
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
 
 using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
-using Zygote: withgradient
+using DifferentiationInterface
 
 mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     model::Any
@@ -227,7 +227,7 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        result = CUDA.@fastmath withgradient(
+        result = CUDA.@fastmath value_and_gradient(
             pars -> t.model.loss_fcn(
                 t.model,
                 pars,
@@ -235,6 +235,7 @@ function train!(t::T_KAM_trainer)
                 t.x;
                 seed = t.seed,
             ),
+            AD_backend,
             half_quant.(t.ps),
         )
         loss, t.st, t.seed, grads = result.val..., first(result.grad)

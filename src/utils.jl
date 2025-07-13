@@ -1,9 +1,9 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend
+export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, KernelAbstractions, DifferentiationInterface, Zygote, Enzyme
+using CUDA, LuxCUDA, KernelAbstractions
 using ChainRules: @ignore_derivatives
 
 const pu =

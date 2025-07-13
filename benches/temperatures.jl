@@ -1,5 +1,5 @@
 using BenchmarkTools,
-    ConfParser, Lux, Zygote, Random, CUDA, ComponentArrays, CSV, DataFrames
+    ConfParser, Lux, DifferentiationInterface, Random, CUDA, ComponentArrays, CSV, DataFrames
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -11,7 +11,7 @@ include("../src/pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: device, half_quant
+using .Utils: device, half_quant, AD_backend
 
 conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
@@ -42,7 +42,7 @@ function setup_model(N_t)
 end
 
 function benchmark_temp(model, ps, st, x_test)
-    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
+    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps)))
 end
 
 results = DataFrame(

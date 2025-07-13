@@ -10,14 +10,14 @@ using CUDA,
     LuxCUDA,
     Distributions,
     Accessors,
-    Statistics
-using Zygote: gradient
+    Statistics,
+    DifferentiationInterface
 
 include("../../utils.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
 include("../gen/gen_model.jl")
-using .Utils: device, next_rng, half_quant, full_quant
+using .Utils: device, next_rng, half_quant, full_quant, AD_backend
 using .Preconditioning
 using .HamiltonianDynamics
 using .GeneratorModel: log_likelihood_MALA
@@ -300,6 +300,7 @@ function autoMALA_sampler(
             ∇z = CUDA.@fastmath first(
                 gradient(
                     z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))),
+                    AD_backend,
                     T.(z_i),
                 ),
             )

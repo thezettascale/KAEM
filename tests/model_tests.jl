@@ -76,7 +76,7 @@ function test_cnn_loss()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
-function test_SEQ_loss()
+function test_seq_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 50, 10, 100)
     commit!(conf, "SEQ", "sequence_length", "10")
@@ -97,5 +97,5 @@ end
     test_grid_update()
     test_mala_loss()
     test_cnn_loss()
-    test_SEQ_loss()
+    test_seq_loss()
 end

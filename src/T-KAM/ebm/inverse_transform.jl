@@ -3,7 +3,7 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
 
-using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
@@ -39,19 +39,15 @@ function trapezium_quadrature(
     # Choose component if mixture model else use all
     exp_fg = zeros(T, Q, P, G) |> device
     if component_mask !== nothing
-        exp_fg = exp.(f_grid) .* reshape(π_grid, Q, 1, G)
-        exp_fg = sum(
-            reshape(exp_fg, Q, P, 1, G) .* reshape(component_mask, Q, P, B, 1),
-            dims = 2,
-        )
-        exp_fg = dropdims(exp_fg, dims = 2)
+        @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[q, g])
+        @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b] 
     else
-        exp_fg = exp.(f_grid) .* reshape(π_grid, 1, P, G)
+        @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     end
 
     # CDF by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
-    trapz = exp_fg .* reshape(Δg, 1, P, G-1) ./ 2
+    @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
     return trapz, grid, st
 end
 
@@ -99,17 +95,11 @@ function gausslegendre_quadrature(
 
     # Choose component if mixture model else use all
     if component_mask !== nothing
-        tmp = exp.(nodes) .* reshape(π_nodes, Q, 1, G)  # (Q, P, G)
-        trapz = sum(
-            reshape(tmp, Q, P, 1, G) .*
-            reshape(component_mask, Q, P, size(component_mask, 3), 1),
-            dims = 2,
-        )
-        trapz = dropdims(trapz, dims = 2)  # (Q, B, G)
-        trapz = trapz .* reshape(weights, Q, 1, G)  # (Q, B, G)
+        @tullio trapz[q, b, g] := (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b]) 
+        @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g] 
         return trapz, nodes_cpu, st
     else
-        trapz = exp.(nodes) .* reshape(π_nodes, 1, P, G) .* reshape(weights, 1, P, G)  # (Q, P, G)
+        @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
         return trapz, nodes_cpu, st
     end
 end

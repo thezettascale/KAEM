@@ -2,7 +2,7 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM, generate_batch, move_to_hq
 
-using CUDA, KernelAbstractions
+using CUDA, KernelAbstractions, Tullio
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
@@ -103,8 +103,8 @@ function importance_loss(
         reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
 
     # Expected posterior
-    loss_prior = sum(weights_resampled .* logprior_resampled', dims = 2)
-    loss_llhood = sum(weights_resampled .* logllhood_resampled, dims = 2)
+    @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
+    @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
     @ignore_derivatives begin
         m.verbose &&

@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, DifferentiationInterface
+using Test, Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"

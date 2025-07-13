@@ -102,37 +102,37 @@ if [ $? -eq 0 ]; then
     
     echo -e "${GREEN}Testing installation...${NC}"
     python -c "
-        import matplotlib
-        import numpy as np
-        import pandas as pd
-        import seaborn as sns
-        import h5py
-        import torch
-        import torch_fidelity
-        import sklearn
-        from PIL import Image
-        print('✓ All Python imports successful!')
-        print(f'✓ PyTorch version: {torch.__version__}')
-        print(f'✓ NumPy version: {np.__version__}')
-        if torch.cuda.is_available():
-            print(f'✓ CUDA available: {torch.cuda.get_device_name(0)}')
-        else:
-            print('✓ Using CPU (CUDA not available)')
-    "
+import matplotlib
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import h5py
+import torch
+import torch_fidelity
+import sklearn
+from PIL import Image
+print('✓ All Python imports successful!')
+print(f'✓ PyTorch version: {torch.__version__}')
+print(f'✓ NumPy version: {np.__version__}')
+if torch.cuda.is_available():
+    print(f'✓ CUDA available: {torch.cuda.get_device_name(0)}')
+else:
+    print('✓ Using CPU (CUDA not available)')
+"
 
     julia --project=. -e "
-    using Pkg
-    using CUDA
-    using Lux
-    using Flux
-    using Distributions
-    using Plots
-    using cuDNN
-    using KernelAbstractions
-    using NNlib
-    using Tullio
-    println(\"✓ All Julia imports successful!\")
-    println(\"✓ CUDA available: \", CUDA.functional())
+using Pkg
+using CUDA
+using Lux
+using Flux
+using Distributions
+using Plots
+using cuDNN
+using KernelAbstractions
+using NNlib
+using Tullio
+println(\"✓ All Julia imports successful!\")
+println(\"✓ CUDA available: \", CUDA.functional())
     "
     
     echo -e "${GREEN}✓ Setup completed successfully!${NC}"

@@ -2,7 +2,8 @@ module LogPriorFCNs
 
 export prior_fwd, log_prior_univar, log_prior_ula, log_prior_mix
 
-using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
+using CUDA,
+    KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 

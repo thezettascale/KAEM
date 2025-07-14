@@ -1,13 +1,7 @@
 module spline_functions
 
 export extend_grid,
-    coef2curve,
-    curve2coef,
-    B_spline_basis,
-    RBF_basis,
-    RSWAF_basis,
-    FFT_basis,
-    Cheby_basis
+    coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Cheby_basis
 
 using CUDA, KernelAbstractions, Tullio
 using LinearAlgebra, NNlib
@@ -71,7 +65,7 @@ function RBF_basis(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3
+    degree::Int = 3,
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
@@ -83,7 +77,7 @@ function RSWAF_basis(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3
+    degree::Int = 3,
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     @tullio diff[i, g, b] := x[i, b] - grid[i, g]
@@ -95,7 +89,7 @@ function FFT_basis(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3
+    degree::Int = 3,
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
@@ -107,7 +101,7 @@ function Cheby_basis(
     x::AbstractArray{T},
     grid_::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3
+    degree::Int = 3,
 ) where {T<:half_quant}
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)

@@ -104,11 +104,8 @@ function importance_loss(
         log_likelihood_IS(m.lkhood, ps.gen, st.gen, x, z; seed = seed, ε = m.ε)
 
     # Weights and resampling
-    weights_resampled, resampled_idxs, seed = @ignore_derivatives grep_weights(
-        m.lkhood,
-        logllhood,
-        seed,
-    )
+    weights_resampled, resampled_idxs, seed =
+        @ignore_derivatives grep_weights(m.lkhood, logllhood, seed)
     logprior_resampled =
         reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled =
@@ -118,12 +115,10 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    # @ignore_derivatives begin
-    #     m.verbose &&
-    #         println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
-    # end
-
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st_ebm, st_gen, seed
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling,
+    st_ebm,
+    st_gen,
+    seed
 end
 
 function mala_loss(
@@ -171,12 +166,6 @@ function mala_loss(
         )
         contrastive_div -= mean(logprior)
     end
-
-    # Expected posterior
-    # @ignore_derivatives begin
-    #     m.verbose &&
-    #         println("Prior loss: ", contrastive_div, " LLhood loss: ", mean(logllhood))
-    # end
 
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen, seed
 end
@@ -250,18 +239,7 @@ function thermo_loss(
     )
     log_ss += mean(logllhood .* Δt[1])
 
-    loss = -(log_ss + contrastive_div)
-
-    @ignore_derivatives begin
-        m.verbose && println(
-            "Steppingstone estimate of log p(x): ",
-            log_ss,
-            " Constrastive div: ",
-            contrastive_div,
-        )
-    end
-
-    return loss * m.loss_scaling, st_ebm, st_gen, seed
+    return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function init_T_KAM(

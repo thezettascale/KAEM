@@ -24,7 +24,9 @@ using .LogPriorFCNs
 using .InverseTransformSampling
 
 const prior_pdf = Dict(
-    "uniform" => (z, ε) -> half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
+    "uniform" =>
+        (z, ε) ->
+            half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
     "gaussian" => (z, ε) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
     "lognormal" =>
         (z, ε) -> exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
@@ -37,10 +39,8 @@ const prior_pdf = Dict(
         ),
 )
 
-const quad_map = Dict(
-    "gausslegendre" => gausslegendre_quadrature,
-    "trapezium" => trapezium_quadrature,
-)
+const quad_map =
+    Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple

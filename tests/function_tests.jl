@@ -1,7 +1,7 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays
 using DifferentiationInterface
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 ENV["AD_BACKEND"] = "ENZYME"

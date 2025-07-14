@@ -25,7 +25,10 @@ const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32
 # Automatic differentiation
 const AD_BACKEND_MAP = Dict(
     "ZYGOTE" => AutoZygote(),
-    "ENZYME" => AutoEnzyme(; function_annotation = Enzyme.Duplicated), # Not working
+    "ENZYME" => AutoEnzyme(;
+        function_annotation = Enzyme.Duplicated,
+        mode = Enzyme.set_runtime_activity(Enzyme.Reverse),
+    ),
 )
 
 const AD_backend =

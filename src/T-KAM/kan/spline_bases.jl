@@ -35,33 +35,36 @@ function B_spline_basis(
     degree::Int = 3,
     σ::Union{T,AbstractArray{T}} = one(half_quant),
 ) where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
+    I, S, G = size(x, 1), size(x, 2), size(grid, 2)
 
-    # 0-th degree
-    if degree == 0
-        grid_1 = grid[:, 1:(end-1)]
-        grid_2 = grid[:, 2:end]
+    # Initialize degree 0, piecewise const
+    grid_1 = grid[:, 1:(end-1)]
+    grid_2 = grid[:, 2:end]
+    @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
+    @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
+    B = T.(term1 .* term2)
 
-        # B0 is piecewise constant
-        @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
-        @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
-        B = T.(term1 .* term2)
+    # Iteratively build up to degree k
+    for d = 1:degree
+        gmax = G - d - 1
+        B1 = B[:, 1:gmax, :]
+        B2 = B[:, 2:(gmax+1), :]
+        grid_1 = grid[:, 1:gmax]
+        grid_2 = grid[:, 2:(gmax+1)]
+        grid_3 = grid[:, (d+1):(d+gmax)]
+        grid_4 = grid[:, (d+2):(d+gmax+1)]
 
-    else
-        # k-th degree
-        k = degree
-        B = B_spline_basis(x, grid; degree = k-1)
+        @tullio numer1[i, g, b] := x[i, b] - grid_1[i, g]
+        @tullio denom1[i, g] := grid_3[i, g] - grid_1[i, g]
+        @tullio numer2[i, g, b] := grid_4[i, g] - x[i, b]
+        @tullio denom2[i, g] := grid_4[i, g] - grid_2[i, g]
 
-        x = reshape(x, I, 1, S)
+        mask1 = denom1 .!= 0 |> device
+        mask2 = denom2 .!= 0 |> device
+        term1 = ((numer1 ./ denom1) .* B1) .* mask1
+        term2 = ((numer2 ./ denom2) .* B2) .* mask2
 
-        numer1 = x .- grid[:, 1:(end-k-1)]
-        denom1 = grid[:, (k+1):(end-1)] .- grid[:, 1:(end-k-1)]
-        numer2 = grid[:, (k+2):end] .- x
-        denom2 = grid[:, (k+2):end] .- grid[:, 2:(end-k)]
-        B_i1 = B[:, 1:(end-1), :]
-        B_i2 = B[:, 2:end, :]
-
-        B = (numer1 ./ denom1) .* B_i1 .+ (numer2 ./ denom2) .* B_i2
+        B = term1 + term2
     end
 
     return B

@@ -3,7 +3,7 @@ module Utils
 export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, KernelAbstractions, Zygote, Enzyme
+using CUDA, LuxCUDA, KernelAbstractions, Zygote, Enzyme, Enzyme.EnzymeRules
 using ChainRules: @ignore_derivatives
 
 const pu =
@@ -32,7 +32,7 @@ const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32
 # Automatic differentiation
 const AD_BACKEND_MAP = Dict(
     "ZYGOTE" => AutoZygote(),
-    "ENZYME" => AutoEnzyme(),
+    "ENZYME" => AutoEnzyme(; function_annotation=Enzyme.Duplicated), # Not working
 )
 
 const AD_backend = get(AD_BACKEND_MAP, uppercase(get(ENV, "AD_BACKEND", "ZYGOTE")), AutoZygote())
@@ -57,5 +57,8 @@ function next_rng(seed)
     rng = @ignore_derivatives Random.seed!(seed)
     return seed + 1, rng
 end
+
+EnzymeRules.inactive(::typeof(device), args...) = nothing
+EnzymeRules.inactive(::typeof(next_rng), args...) = nothing
 
 end

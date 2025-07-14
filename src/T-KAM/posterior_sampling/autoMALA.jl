@@ -12,6 +12,7 @@ using CUDA,
     Accessors,
     Statistics,
     DifferentiationInterface
+using Enzyme.EnzymeRules: inactive
 
 include("../../utils.jl")
 include("preconditioner.jl")
@@ -416,6 +417,6 @@ function autoMALA_sampler(
     return T.(z), st, seed
 end
 
-EnzymeRules.inactive(::typeof(autoMALA_sampler), args...) = nothing
+inactive(::typeof(autoMALA_sampler), args...) = nothing
 
 end

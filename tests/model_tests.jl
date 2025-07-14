@@ -53,7 +53,7 @@ end
 function test_mala_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
-    commit!(conf, "MALA", "use_langevin", "true")
+    commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)

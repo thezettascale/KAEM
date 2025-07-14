@@ -122,13 +122,12 @@ function ULA_sampler(
         (z_i) -> begin
             logpos_z, st_ebm, st_gen =
                 CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
-            ∇z = CUDA.@fastmath first(
-                DifferentiationInterface.gradient(
-                    z_j -> sum(first(log_posterior(z_j, Lux.testmode(st)))),
-                    AD_backend,
-                    T.(z_i),
-                ),
-            )
+            ∇z = CUDA.@fastmath DifferentiationInterface.gradient(
+                z_j -> sum(first(log_posterior(z_j, Lux.testmode(st)))),
+                AD_backend,
+                T.(z_i)
+                )
+
             @reset st.ebm = st_ebm
             @reset st.gen = st_gen
             return U.(∇z) ./ loss_scaling

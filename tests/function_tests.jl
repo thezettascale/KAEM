@@ -43,7 +43,7 @@ function test_fwd_derivative()
     x_eval = rand(half_quant, 5, 3) |> device
     f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> device, st |> device
+    ps, st = ComponentArray(ps) |> device, st |> device
     g = p -> sum(fwd(f, p, st, x_eval))
     ∇ = gradient(g, AD_backend, ps)
     @test size(∇) == size(ps)

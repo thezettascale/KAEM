@@ -3,13 +3,12 @@ using Test,
     LinearAlgebra,
     Lux,
     ConfParser,
-    DifferentiationInterface,
     DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ZYGOTE"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")

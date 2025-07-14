@@ -2,7 +2,7 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM, generate_batch, move_to_hq
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions, Tullio, Enzyme.EnzymeRules
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader, mse
 using NNlib: sigmoid_fast
@@ -60,10 +60,24 @@ function generate_batch(model::T_KAM, ps, st, num_samples::Int; seed::Int = 1)
     ps = ps .|> half_quant
     z, st_ebm, seed = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), seed)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    @reset st.ebm = st_ebm
-    @reset st.gen = st_gen
-    return model.lkhood.output_activation(x̂), st, seed
+    return model.lkhood.output_activation(x̂), st_ebm, st_gen, seed
 end
+
+function grep_weights(
+    lkhood,
+    logllhood::AbstractArray{T},
+    seed::Int = 1,
+) where {T<:half_quant}
+    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims = 2)
+    resampled_idxs, seed = lkhood.resample_z(weights, seed)
+    weights_resampled = @ignore_derivatives softmax(
+        reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
+        dims = 2,
+    ) .|> T
+    return weights_resampled, resampled_idxs, seed
+end
+
+EnzymeRules.inactive(::typeof(grep_weights), args...) = nothing
 
 function importance_loss(
     m::T_KAM,
@@ -75,14 +89,13 @@ function importance_loss(
     """MLE loss with importance sampling."""
 
     z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
-    @ignore_derivatives @reset st.ebm = st_ebm
 
     # Log-dists
     logprior, st_ebm = m.prior.lp_fcn(
         m.prior,
         z,
         ps.ebm,
-        st.ebm;
+        st_ebm;
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
@@ -91,12 +104,11 @@ function importance_loss(
         log_likelihood_IS(m.lkhood, ps.gen, st.gen, x, z; seed = seed, ε = m.ε)
 
     # Weights and resampling
-    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims = 2)
-    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives softmax(
-        reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
-        dims = 2,
-    ) .|> T
+    weights_resampled, resampled_idxs, seed = @ignore_derivatives grep_weights(
+        m.lkhood,
+        logllhood,
+        seed,
+    )
     logprior_resampled =
         reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
     logllhood_resampled =
@@ -106,14 +118,12 @@ function importance_loss(
     @tullio loss_prior[b] := weights_resampled[b, s] * logprior_resampled[s, b]
     @tullio loss_llhood[b] := weights_resampled[b, s] * logllhood_resampled[b, s]
 
-    @ignore_derivatives begin
-        m.verbose &&
-            println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
-    end
+    # @ignore_derivatives begin
+    #     m.verbose &&
+    #         println("Prior loss: ", -mean(loss_prior), " llhood loss: ", -mean(loss_llhood))
+    # end
 
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st, seed
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function mala_loss(
@@ -127,20 +137,21 @@ function mala_loss(
 
     # MALA sampling
     z, st, seed = m.posterior_sample(m, x, 0, ps, st, seed)
+    st_ebm, st_gen = st.ebm, st.gen
 
     # Log-dists
     logprior_pos, st_ebm = m.prior.lp_fcn(
         m.prior,
         z[:, :, :, 1],
         ps.ebm,
-        st.ebm;
+        st_ebm;
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
     logllhood, st_gen, seed = log_likelihood_MALA(
         m.lkhood,
         ps.gen,
-        st.gen,
+        st_gen,
         x,
         z[:, :, :, 1];
         seed = seed,
@@ -154,7 +165,7 @@ function mala_loss(
             m.prior,
             z,
             ps.ebm,
-            st.ebm;
+            st_ebm;
             ε = m.ε,
             normalize = !m.prior.contrastive_div,
         )
@@ -162,14 +173,12 @@ function mala_loss(
     end
 
     # Expected posterior
-    @ignore_derivatives begin
-        m.verbose &&
-            println("Prior loss: ", contrastive_div, " LLhood loss: ", mean(logllhood))
-        @reset st.ebm = st_ebm
-        @reset st.gen = st_gen
-    end
+    # @ignore_derivatives begin
+    #     m.verbose &&
+    #         println("Prior loss: ", contrastive_div, " LLhood loss: ", mean(logllhood))
+    # end
 
-    return -(contrastive_div + mean(logllhood))*m.loss_scaling, st, seed
+    return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function thermo_loss(
@@ -189,20 +198,21 @@ function thermo_loss(
     Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
 
     log_ss = zero(T)
+    st_ebm = st.ebm
+    st_gen = st.gen
 
     # Steppingstone estimator
     for k = 1:(T_length-2)
         logllhood, st_gen, seed = log_likelihood_MALA(
             m.lkhood,
             ps.gen,
-            st.gen,
+            st_gen,
             x,
             z[:, :, :, k];
             seed = seed,
             ε = m.ε,
         )
         log_ss += mean(logllhood .* Δt[k+1])
-        @ignore_derivatives @reset st.gen = st_gen
     end
 
     # MLE estimator
@@ -210,7 +220,7 @@ function thermo_loss(
         m.prior,
         z[:, :, :, T_length-1],
         ps.ebm,
-        st.ebm;
+        st_ebm;
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
@@ -222,7 +232,7 @@ function thermo_loss(
             m.prior,
             z,
             ps.ebm,
-            st.ebm;
+            st_ebm;
             ε = m.ε,
             normalize = !m.prior.contrastive_div,
         )
@@ -232,14 +242,13 @@ function thermo_loss(
     logllhood, st_gen, seed = log_likelihood_MALA(
         m.lkhood,
         ps.gen,
-        st.gen,
+        st_gen,
         x,
         z[:, :, :, 1];
         seed = seed,
         ε = m.ε,
     )
     log_ss += mean(logllhood .* Δt[1])
-    @ignore_derivatives @reset st.gen = st_gen
 
     loss = -(log_ss + contrastive_div)
 
@@ -250,10 +259,9 @@ function thermo_loss(
             " Constrastive div: ",
             contrastive_div,
         )
-        @reset st.ebm = st_ebm
     end
 
-    return loss * m.loss_scaling, st, seed
+    return loss * m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function init_T_KAM(
@@ -308,11 +316,11 @@ function init_T_KAM(
         commit!(conf, "GeneratorModel", "layer_norm", "true")
     end
 
-    if prior_fcn == "Cheby" || prior_fcn == "Gottlieb"
+    if prior_fcn == "Cheby"
         update_prior_grid = false
     end
 
-    if lkhood_fcn == "Cheby" || lkhood_fcn == "Gottlieb" || cnn
+    if lkhood_fcn == "Cheby" || cnn
         update_llhood_grid = false
     end
 

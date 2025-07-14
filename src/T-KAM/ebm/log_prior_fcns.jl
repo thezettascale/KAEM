@@ -2,14 +2,13 @@ module LogPriorFCNs
 
 export prior_fwd, log_prior_univar, log_prior_ula, log_prior_mix
 
-using CUDA,
-    KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
+using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq
+using .Utils: device, next_rng, half_quant, full_quant, fq, set_state
 using .UnivariateFunctions: fwd
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
@@ -28,6 +27,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
 
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
+    new_st = Dict()
 
     for i = 1:ebm.depth
         z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
@@ -42,10 +42,11 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("ln_$i")],
                 st[Symbol("ln_$i")],
             )
-            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            @ignore_derivatives new_st[Symbol("ln_$i")] = st_new
         end
     end
 
+    st = @ignore_derivatives set_state(st, new_st)
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end

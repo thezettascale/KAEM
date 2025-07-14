@@ -16,7 +16,6 @@ const SplineBasis_mapping = Dict(
     "RSWAF" => RSWAF_basis,
     "FFT" => FFT_basis,
     "Cheby" => Cheby_basis,
-    "Gottlieb" => Gottlieb_basis,
 )
 
 const activation_mapping = Dict(
@@ -68,8 +67,7 @@ function init_function(
     τ_trainable::Bool = true,
 ) where {T<:half_quant,U<:full_quant}
     spline_degree = spline_function == "B-spline" ? spline_degree : 0
-    grid_size =
-        (spline_function == "Cheby" || spline_function == "Gottlieb") ? 1 : grid_size
+    grid_size = spline_function == "Cheby" ? 1 : grid_size
     grid =
         spline_function == "FFT" ? collect(T, 0:grid_size) :
         range(grid_range[1], grid_range[2], length = grid_size + 1)
@@ -110,7 +108,7 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
         coef =
             glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./
             (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:, :, :, :], [2, 3, 4, 1]))
-    elseif !(l.spline_string == "Cheby" || l.spline_string == "Gottlieb")
+    elseif !(l.spline_string == "Cheby")
         ε =
             (
                 (
@@ -122,20 +120,18 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
             curve2coef(
                 l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
                 ε,
-                l.init_grid;
+                l.init_grid,
+                device(half_quant.(l.init_τ));
                 k = l.spline_degree,
-                scale = device(half_quant.(l.init_τ)),
                 basis_function = l.spline_function,
             ),
         )
     end
 
-    if (l.spline_string == "Cheby" || l.spline_string == "Gottlieb")
-        spline_degree =
-            l.spline_string == "Gottlieb" ? l.spline_degree + 1 : l.spline_degree
+    if l.spline_string == "Cheby"
         return (
-            coef = glorot_normal(rng, full_quant, l.in_dim, l.out_dim, spline_degree+1) .*
-                   (1 / (l.in_dim * (spline_degree + 1))),
+            coef = glorot_normal(rng, full_quant, l.in_dim, l.out_dim, l.spline_degree) .*
+                   (1 / (l.in_dim * (l.spline_degree + 1))),
             basis_τ = l.init_τ,
         )
     else
@@ -171,13 +167,13 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     y = coef2curve(
         x,
         st.grid,
-        coef;
+        coef,
+        τ;
         k = l.spline_degree,
-        scale = τ,
         basis_function = l.spline_function,
     )
 
-    if l.spline_string == "Cheby" || l.spline_string == "Gottlieb"
+    if l.spline_string == "Cheby"
         return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
     else
         w_base, w_sp = ps.w_base, ps.w_sp

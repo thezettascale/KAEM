@@ -23,8 +23,8 @@ using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, h
 using .LogPriorFCNs
 using .InverseTransformSampling
 
-prior_pdf = Dict(
-    "uniform" => (z, ε) -> half_quant.(0 .<= z .<= 1) |> device,
+const prior_pdf = Dict(
+    "uniform" => (z, ε) -> half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
     "gaussian" => (z, ε) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
     "lognormal" =>
         (z, ε) -> exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
@@ -35,6 +35,11 @@ prior_pdf = Dict(
                 -(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε),
             )
         ),
+)
+
+const quad_map = Dict(
+    "gausslegendre" => gausslegendre_quadrature,
+    "trapezium" => trapezium_quadrature,
 )
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
@@ -165,14 +170,8 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
         parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
-    quadrature_method = Dict(
-        "gausslegendre" =>
-            (m, p, s, mask) ->
-                gausslegendre_quadrature(m, p, s; ε = eps, component_mask = mask),
-        "trapezium" =>
-            (m, p, s, mask) ->
-                trapezium_quadrature(m, p, s; ε = eps, component_mask = mask),
-    )[quad_type]
+    quad_fcn = get(quad_map, quad_type, gausslegendre_quadrature)
+    quadrature_method = (m, p, s, mask) -> quad_fcn(m, p, s; ε = eps, component_mask = mask)
 
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
@@ -194,7 +193,7 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
         layernorm,
         length(widths)-1,
         prior_type,
-        prior_pdf[prior_type],
+        get(prior_pdf, prior_type, (z, ε) -> ones(half_quant, size(z))),
         sample_function,
         P,
         Q,

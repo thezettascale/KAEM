@@ -55,7 +55,14 @@ function next_rng(seed)
     return seed + 1, rng
 end
 
-EnzymeRules.inactive(::typeof(device), args...) = nothing
+function set_state(st, dict)
+    for (k, v) in dict
+        @reset st[k] = v
+    end
+    return st
+end
+
 EnzymeRules.inactive(::typeof(next_rng), args...) = nothing
+EnzymeRules.inactive(::typeof(set_state), args...) = nothing
 
 end

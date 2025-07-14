@@ -7,16 +7,13 @@ export extend_grid,
     RBF_basis,
     RSWAF_basis,
     FFT_basis,
-    Cheby_basis,
-    Gottlieb_basis
+    Cheby_basis
 
 using CUDA, KernelAbstractions, Tullio
 using LinearAlgebra, NNlib
 
 include("../../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
-
-method = get(ENV, "method", "B-spline")
 
 function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
@@ -31,9 +28,9 @@ end
 
 function B_spline_basis(
     x::AbstractArray{T},
-    grid::AbstractArray{T};
+    grid::AbstractArray{T},
+    σ::AbstractArray{T};
     degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = one(half_quant),
 ) where {T<:half_quant}
     I, S, G = size(x, 1), size(x, 2), size(grid, 2)
 
@@ -59,8 +56,8 @@ function B_spline_basis(
         @tullio numer2[i, g, b] := grid_4[i, g] - x[i, b]
         @tullio denom2[i, g] := grid_4[i, g] - grid_2[i, g]
 
-        mask1 = denom1 .!= 0 |> device
-        mask2 = denom2 .!= 0 |> device
+        mask1 = T.(denom1 .!= 0) |> device
+        mask2 = T.(denom2 .!= 0) |> device
         term1 = ((numer1 ./ denom1) .* B1) .* mask1
         term2 = ((numer2 ./ denom2) .* B2) .* mask2
 
@@ -72,21 +69,21 @@ end
 
 function RBF_basis(
     x::AbstractArray{T},
-    grid::AbstractArray{T};
-    degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = one(half_quant),
+    grid::AbstractArray{T},
+    σ::AbstractArray{T};
+    degree::Int = 3
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
+    σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
     @tullio diff[i, g, b] := x[i, b] - grid[i, g]
-    return exp.(-T(0.5) * (diff ./ σ) .^ 2)
+    return exp.(-T(0.5) .* (diff ./ σ) .^ 2)
 end
 
 function RSWAF_basis(
     x::AbstractArray{T},
-    grid::AbstractArray{T};
-    degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = one(half_quant),
+    grid::AbstractArray{T},
+    σ::AbstractArray{T};
+    degree::Int = 3
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     @tullio diff[i, g, b] := x[i, b] - grid[i, g]
@@ -96,9 +93,9 @@ end
 
 function FFT_basis(
     x::AbstractArray{T},
-    grid::AbstractArray{T};
-    degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = one(half_quant),
+    grid::AbstractArray{T},
+    σ::AbstractArray{T};
+    degree::Int = 3
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     @tullio freq[i, g, b] := x[i, b] * grid[i, g]
@@ -108,9 +105,9 @@ end
 
 function Cheby_basis(
     x::AbstractArray{T},
-    grid_::AbstractArray{T};
-    degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = half_quant(1.1), # IMPORTANT; to make sure acos is well-defined, set σ > 1, e.g. 1.1
+    grid_::AbstractArray{T},
+    σ::AbstractArray{T};
+    degree::Int = 3
 ) where {T<:half_quant}
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
@@ -118,29 +115,12 @@ function Cheby_basis(
     return @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
 end
 
-function Gottlieb_basis(
-    x::AbstractArray{T},
-    grid_::AbstractArray{T};
-    degree::Int = 3,
-    σ::Union{T,AbstractArray{T}} = one(half_quant),
-) where {T<:half_quant}
-    x = NNlib.sigmoid_fast(x)
-    x = reshape(x, size(x)..., 1)
-    B = ones(T, size(x, 1), size(x, 2), 1) |> device
-    B = cat(B, 2σ .* x, dims = 3)
-    for i = 3:(degree+1)
-        y = 2(σ .+ (i-2)) .* x .* B[:, :, i-1] .- (σ .+ (2i-4)) .* B[:, :, i-2]
-        B = cat(B, y, dims = 3)
-    end
-    return permutedims(B, [1, 3, 2])
-end
-
 function coef2curve(
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
-    coef::AbstractArray{T};
+    coef::AbstractArray{T},
+    σ::AbstractArray{T};
     k::Int = 3,
-    scale::Union{T,AbstractArray{T}} = one(half_quant),
     basis_function::Function = B_spline_basis,
 ) where {T<:half_quant}
     """
@@ -156,8 +136,8 @@ function coef2curve(
         A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
     """
     spl =
-        isnothing(basis_function) ? B_spline_basis(x_eval, grid; degree = k) :
-        basis_function(x_eval, grid; degree = k, σ = scale)
+        isnothing(basis_function) ? B_spline_basis(x_eval, grid, σ; degree = k) :
+        basis_function(x_eval, grid, σ; degree = k)
 
     !isa(spl, Tuple) && return @tullio y_eval[i, o, b] := spl[i, g, b] * coef[i, o, g]
 
@@ -170,9 +150,9 @@ end
 function curve2coef(
     x::AbstractArray{T},
     y::AbstractArray{T},
-    grid::AbstractArray{T};
+    grid::AbstractArray{T},
+    σ::AbstractArray{T};
     k::Int = 3,
-    scale::Union{T,AbstractArray{T}} = one(half_quant),
     ε::U = full_quant(1.0f-4),
     basis_function::Function = B_spline_basis,
 ) where {T<:half_quant,U<:full_quant}
@@ -191,7 +171,7 @@ function curve2coef(
     """
     J, S, O = size(x)..., size(y, 2)
 
-    B = basis_function(x, grid; degree = k, σ = scale) .|> full_quant
+    B = basis_function(x, grid, σ; degree = k) .|> full_quant
     G = size(B, 2)
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid

@@ -251,13 +251,15 @@ function train!(t::T_KAM_trainer)
     function opt_loss(u, args...)
         t.ps = u
 
-        loss, t.st, t.seed = CUDA.@fastmath t.model.loss_fcn(
+        loss, st_ebm, st_gen, t.seed = CUDA.@fastmath t.model.loss_fcn(
             t.model,
             half_quant(t.ps),
             Lux.testmode(t.st),
             t.x;
             seed = t.seed,
         )
+        @reset t.st.ebm = st_ebm
+        @reset t.st.gen = st_gen
         loss = full_quant(loss) / loss_scaling
         train_loss += loss
 
@@ -266,13 +268,15 @@ function train!(t::T_KAM_trainer)
 
             test_loss = 0
             for x in t.model.test_loader
-                x_gen, t.st, t.seed = CUDA.@fastmath generate_batch(
+                x_gen, st_ebm, st_gen, t.seed = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
                     Lux.testmode(t.st),
                     size(x)[end];
                     seed = t.seed,
                 )
+                @reset t.st.ebm = st_ebm
+                @reset t.st.gen = st_gen
                 x_gen = x_gen .|> full_quant
 
                 # MSE loss between pixels for images, and max index for logits
@@ -313,13 +317,15 @@ function train!(t::T_KAM_trainer)
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
             for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-                batch, t.st, t.seed = CUDA.@fastmath generate_batch(
+                batch, st_ebm, st_gen, t.seed = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
                     Lux.testmode(t.st),
                     t.batch_size_for_gen;
                     seed = t.seed,
                 )
+                @reset t.st.ebm = st_ebm
+                @reset t.st.gen = st_gen
                 gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
             end
 

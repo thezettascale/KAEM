@@ -32,9 +32,9 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
         coef2curve(
             x_sort,
             st.grid,
-            coef;
+            coef,
+            τ;
             k = l.spline_degree,
-            scale = τ,
             basis_function = l.spline_function,
         ) .|> half_quant
 
@@ -56,9 +56,9 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     new_coef = curve2coef(
         x_sort,
         y,
-        new_grid;
+        new_grid,
+        τ;
         k = l.spline_degree,
-        scale = τ,
         basis_function = l.spline_function,
     )
 

@@ -59,8 +59,7 @@ function get_gausslegendre(ebm, ps, st)
 
     no_grid = (
         ebm.fcns_qp[Symbol("1")].spline_string == "FFT" ||
-        ebm.fcns_qp[Symbol("1")].spline_string == "Cheby" ||
-        ebm.fcns_qp[Symbol("1")].spline_string == "Gottlieb"
+        ebm.fcns_qp[Symbol("1")].spline_string == "Cheby"
     )
 
     if no_grid

@@ -1,10 +1,10 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays
 using DifferentiationInterface
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ZYGOTE"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")

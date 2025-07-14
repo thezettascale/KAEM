@@ -9,7 +9,7 @@ using ChainRules: @ignore_derivatives
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device
+using .Utils: half_quant, full_quant, device, set_state
 using .UnivariateFunctions: fwd
 
 function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
@@ -30,6 +30,7 @@ function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     """
     num_samples = size(z)[end]
     z = dropdims(sum(z, dims = 2), dims = 2)
+    new_st = Dict()
 
     # KAN functions
     for i = 1:lkhood.depth
@@ -43,10 +44,11 @@ function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("ln_$i")],
                 st[Symbol("ln_$i")],
             )
-            @ignore_derivatives @reset st[Symbol("ln_$i")] = st_new
+            @ignore_derivatives new_st[Symbol("ln_$i")] = st_new
         end
     end
 
+    st = @ignore_derivatives set_state(st, new_st)
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
@@ -66,11 +68,12 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         The updated seed.
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
+    new_st = Dict()
 
     for i = 1:lkhood.depth
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
-        @ignore_derivatives @reset st[Symbol("$i")] = st_new
+        @ignore_derivatives new_st[Symbol("$i")] = st_new
 
         if lkhood.batchnorm
             z, st_new = Lux.apply(
@@ -79,7 +82,7 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("bn_$i")],
                 st[Symbol("bn_$i")],
             )
-            @ignore_derivatives @reset st[Symbol("bn_$i")] = st_new
+            @ignore_derivatives new_st[Symbol("bn_$i")] = st_new
         end
     end
 
@@ -89,8 +92,9 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         ps[Symbol("$(lkhood.depth+1)")],
         st[Symbol("$(lkhood.depth+1)")],
     )
-    @ignore_derivatives @reset st[Symbol("$(lkhood.depth+1)")] = st_new
+    @ignore_derivatives new_st[Symbol("$(lkhood.depth+1)")] = st_new
 
+    st = @ignore_derivatives set_state(st, new_st)
     return z, st
 end
 
@@ -122,13 +126,14 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         The updated seed.
     """
     z = sum(z, dims = 2)
+    new_st = Dict()
 
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
-    @ignore_derivatives @reset st[Symbol("1")] = st_new
+    @ignore_derivatives new_st[Symbol("1")] = st_new
     z, st_new =
         Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    @ignore_derivatives @reset st[Symbol("ln_1")] = st_new
+    @ignore_derivatives new_st[Symbol("ln_1")] = st_new
 
     z_prev = z
     for t = 2:lkhood.seq_length
@@ -136,13 +141,13 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         # Self-attention
         Q, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("Q")], z, ps[Symbol("Q")], st[Symbol("Q")])
-        @ignore_derivatives @reset st[Symbol("Q")] = st_new
+        @ignore_derivatives new_st[Symbol("Q")] = st_new
         K, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("K")], z, ps[Symbol("K")], st[Symbol("K")])
-        @ignore_derivatives @reset st[Symbol("K")] = st_new
+        @ignore_derivatives new_st[Symbol("K")] = st_new
         V, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("V")], z, ps[Symbol("V")], st[Symbol("V")])
-        @ignore_derivatives @reset st[Symbol("V")] = st_new
+        @ignore_derivatives new_st[Symbol("V")] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z .+ attn
@@ -150,14 +155,14 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         # Feed forward
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-        @ignore_derivatives @reset st[Symbol("2")] = st_new
+        @ignore_derivatives new_st[Symbol("2")] = st_new
         z, st_new = Lux.apply(
             lkhood.Φ_fcns[Symbol("ln_2")],
             z[:, end:end, :],
             ps[Symbol("ln_2")],
             st[Symbol("ln_2")],
         )
-        @ignore_derivatives @reset st[Symbol("ln_2")] = st_new
+        @ignore_derivatives new_st[Symbol("ln_2")] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
@@ -165,8 +170,9 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
 
     # Output layer
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
-    @ignore_derivatives @reset st[Symbol("3")] = st_new
+    @ignore_derivatives new_st[Symbol("3")] = st_new
 
+    st = @ignore_derivatives set_state(st, new_st)
     return z, st
 end
 

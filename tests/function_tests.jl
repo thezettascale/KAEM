@@ -1,5 +1,5 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays
-using DifferentiationInterface
+using DifferentiationInterface, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"

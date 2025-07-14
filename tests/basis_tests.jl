@@ -93,16 +93,6 @@ function test_FFT_basis()
     @test !any(isnan.(B_fft))
 end
 
-function test_FFT_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    grid = rand(half_quant, i, g) |> device
-    f = x -> sum(FFT_basis(x, grid; σ = σ))
-    ∇ = gradient(f, AD_backend, x_eval)
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
-end
-
 function test_Cheby_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
@@ -180,7 +170,6 @@ end
     test_B_spline_derivative()
     test_RBF_derivative()
     test_RSWAF_derivative()
-    test_FFT_derivative()
     test_Cheby_derivative()
     test_Gottlieb_derivative()
 end

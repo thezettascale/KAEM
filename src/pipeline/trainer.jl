@@ -36,7 +36,6 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     last_grid_update::Int
     save_model::Bool
     gen_type::AbstractString
-    loss::U
     checkpoint_every::Int
 end
 
@@ -174,7 +173,6 @@ function init_trainer(
         1,
         save_model,
         gen_type,
-        zero(full_quant),
         checkpoint_every,
     )
 end
@@ -227,7 +225,7 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        result = CUDA.@fastmath value_and_gradient(
+        grads = CUDA.@fastmath gradient(
             pars -> t.model.loss_fcn(
                 t.model,
                 pars,
@@ -238,8 +236,6 @@ function train!(t::T_KAM_trainer)
             AD_backend,
             half_quant.(t.ps),
         )
-        loss, t.st, t.seed, grads = result.val..., first(result.grad)
-        t.loss = full_quant(loss) / loss_scaling # This may be inf for mixed precision training, but gradient matters more
         grads = full_quant.(grads) ./ loss_scaling
 
         isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
@@ -255,8 +251,15 @@ function train!(t::T_KAM_trainer)
     function opt_loss(u, args...)
         t.ps = u
 
-        train_loss += t.loss
-        t.model.verbose && println("Iter: $(t.st.train_idx), Loss: $(t.loss)")
+        loss, t.st, t.seed = CUDA.@fastmath t.model.loss_fcn(
+            t.model,
+            half_quant(t.ps),
+            Lux.testmode(t.st),
+            t.x;
+            seed = t.seed,
+        )
+        loss = full_quant(loss) / loss_scaling
+        train_loss += loss
 
         # After one epoch, calculate test loss and log to CSV
         if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1
@@ -287,6 +290,10 @@ function train!(t::T_KAM_trainer)
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
             epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
+
+            m.verbose && println(
+                "Epoch: $(epoch), Train Loss: $(train_loss), Test Loss: $(test_loss)",
+            )
 
             open(loss_file, "a") do file
                 write(file, "$now_time,$(epoch),$train_loss,$test_loss,$grid_updated\n")
@@ -340,7 +347,7 @@ function train!(t::T_KAM_trainer)
             (t.st.train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
-        return t.loss
+        return loss
     end
 
     start_time = time()

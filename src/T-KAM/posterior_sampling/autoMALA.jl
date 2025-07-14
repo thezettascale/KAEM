@@ -302,8 +302,8 @@ function autoMALA_sampler(
             ∇z = CUDA.@fastmath DifferentiationInterface.gradient(
                 z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))),
                 AD_backend,
-                T.(z_i)
-                )
+                T.(z_i),
+            )
 
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen

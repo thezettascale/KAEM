@@ -19,7 +19,7 @@ out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
 
 function test_ps_derivative()
     Random.seed!(42)
-    dataset = randn(half_quant, 32, 32, 1, 50)
+    dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
@@ -37,7 +37,7 @@ end
 
 function test_grid_update()
     Random.seed!(42)
-    dataset = randn(half_quant, 32, 32, 1, 50)
+    dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
@@ -52,7 +52,7 @@ end
 
 function test_mala_loss()
     Random.seed!(42)
-    dataset = randn(half_quant, 32, 32, 1, 50)
+    dataset = randn(full_quant, 32, 32, 1, 50)
     commit!(conf, "MALA", "use_langevin", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
@@ -71,7 +71,7 @@ end
 
 function test_cnn_loss()
     Random.seed!(42)
-    dataset = randn(half_quant, 32, 32, 3, 50)
+    dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> device
@@ -91,7 +91,7 @@ end
 
 function test_seq_loss()
     Random.seed!(42)
-    dataset = randn(half_quant, 50, 10, 100)
+    dataset = randn(full_quant, 50, 10, 100)
     commit!(conf, "SEQ", "sequence_length", "10")
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf, (50, 10))

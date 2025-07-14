@@ -11,8 +11,9 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    DifferentiationInterface
-using Enzyme.EnzymeRules: inactive
+    DifferentiationInterface,
+    Enzyme,
+    Enzyme.EnzymeRules
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -122,7 +123,7 @@ function ULA_sampler(
             logpos_z, st_ebm, st_gen =
                 CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
             ∇z = CUDA.@fastmath first(
-                gradient(
+                DifferentiationInterface.gradient(
                     z_j -> sum(first(log_posterior(z_j, Lux.testmode(st)))),
                     AD_backend,
                     T.(z_i),
@@ -174,6 +175,6 @@ function ULA_sampler(
     return T.(z), st, seed
 end
 
-inactive(::typeof(ULA_sampler), args...) = nothing
+EnzymeRules.inactive(::typeof(ULA_sampler), args...) = nothing
 
 end

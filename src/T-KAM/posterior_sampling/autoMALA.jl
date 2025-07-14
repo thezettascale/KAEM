@@ -11,8 +11,9 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    DifferentiationInterface
-using Enzyme.EnzymeRules: inactive
+    DifferentiationInterface,
+    Enzyme,
+    Enzyme.EnzymeRules
 
 include("../../utils.jl")
 include("preconditioner.jl")
@@ -299,7 +300,7 @@ function autoMALA_sampler(
             logpos_z, st_ebm, st_gen =
                 CUDA.@fastmath log_posterior(T.(z_i), x_i, Lux.testmode(st_i), t_k)
             ∇z = CUDA.@fastmath first(
-                gradient(
+                DifferentiationInterface.gradient(
                     z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))),
                     AD_backend,
                     T.(z_i),
@@ -417,6 +418,6 @@ function autoMALA_sampler(
     return T.(z), st, seed
 end
 
-inactive(::typeof(autoMALA_sampler), args...) = nothing
+EnzymeRules.inactive(::typeof(autoMALA_sampler), args...) = nothing
 
 end

@@ -12,7 +12,7 @@ include("log_prior_fcns.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .LogPriorFCNs: prior_fwd
 using Flux: onehotbatch
-usign Enzyme.EnzymeRules: inactive
+using Enzyme, Enzyme.EnzymeRules
 
 function trapezium_quadrature(
     ebm,
@@ -249,7 +249,7 @@ function sample_mixture(
     return device(T.(z)), st, seed
 end
 
-inactive(::typeof(sample_univariate), args...) = nothing
-inactive(::typeof(sample_mixture), args...) = nothing
+EnzymeRules.inactive(::typeof(sample_univariate), args...) = nothing
+EnzymeRules.inactive(::typeof(sample_mixture), args...) = nothing
 
 end

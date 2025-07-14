@@ -2,7 +2,7 @@ module WeightResamplers
 
 export residual_resampler, systematic_resampler, stratified_resampler, importance_resampler
 
-using Random, Distributions, LinearAlgebra, Enzyme
+using Random, Distributions, LinearAlgebra, Enzyme, Enzyme.EnzymeRules
 using NNlib: softmax
 
 include("../../utils.jl")

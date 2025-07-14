@@ -27,9 +27,9 @@ for dataset in DATASETS:
         for fnc in FNCS:
             # File paths to HDF5 files
             file_paths = [
-                f"logs/uniform_{fnc}/{dataset}_1/generated_images.h5",
-                f"logs/lognormal_{fnc}/{dataset}_1/generated_images.h5",
-                f"logs/gaussian_{fnc}/{dataset}_1/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/generated_images.h5",
             ]
 
             # titles = ['Gaussian', 'Lognormal', 'Uniform']

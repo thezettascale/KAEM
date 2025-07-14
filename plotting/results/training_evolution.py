@@ -19,7 +19,7 @@ plt.rcParams.update(
 )
 
 save_name = "figures/results/svhn_mixture_se_evol.png"
-file_path = "logs/Thermodynamic_notdeepened/n_z=100/SVHN_1"
+file_path = "logs/Thermodynamic/SVHN/mixture"
 
 epochs = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 

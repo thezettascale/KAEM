@@ -4,8 +4,8 @@ import numpy as np
 
 # File paths to HDF5 files
 file_paths = [
-    "logs/gaussian_RBF/MNIST_1/generated_images.h5",
-    "logs/gaussian_RBF/FMNIST_1/generated_images.h5",
+    "logs/Vanilla/MNIST/importance_gaussian_RBF/generated_images.h5",
+    "logs/Vanilla/FMNIST/importance_gaussian_RBF/generated_images.h5",
 ]
 
 images = []

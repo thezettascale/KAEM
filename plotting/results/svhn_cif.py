@@ -19,7 +19,7 @@ plt.rcParams.update(
 )
 
 
-priors = ["_mixture", ""]
+priors = ["mixture", "deep"]
 datasets = ["SVHN", "CIFAR10"]
 GRID_SIZES = [15]
 
@@ -28,12 +28,11 @@ for prior in priors:
         for grid_size in GRID_SIZES:
             # MLE/ULA images
             mle_file_path = (
-                f"logs/Vanilla/n_z=100/ULA{prior}/cnn=true/"
-                + f"{dataset}_1/generated_images.h5"
+                f"logs/Vanilla/{dataset}/{prior}/generated_images.h5"
             )
             # SE/ULA images
             se_file_path = (
-                f"logs/Thermodynamic{prior}/n_z=100/{dataset}_1/generated_images.h5"
+                f"logs/Thermodynamic/{dataset}/{prior}/generated_images.h5"
             )
 
             # Plot MLE/ULA grid

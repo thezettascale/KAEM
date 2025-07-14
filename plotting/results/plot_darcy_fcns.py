@@ -25,9 +25,9 @@ for prior in PRIORS:
     for grid_size in GRID_SIZES:
         # File paths to HDF5 files
         file_paths = [
-            f"logs/{prior}_RBF/DARCY_FLOW_1/real_images.h5",
-            f"logs/{prior}_RBF/DARCY_FLOW_1/generated_images.h5",
-            f"logs/{prior}_FFT/DARCY_FLOW_1/generated_images.h5",
+            f"logs/Vanilla/DARCY_FLOW/importance_{prior}_RBF/real_images.h5",
+            f"logs/Vanilla/DARCY_FLOW/importance_{prior}_RBF/generated_images.h5",
+            f"logs/Vanilla/DARCY_FLOW/importance_{prior}_FFT/generated_images.h5",
         ]
 
         titles = ["True Sample", "RBF", "FFT"]

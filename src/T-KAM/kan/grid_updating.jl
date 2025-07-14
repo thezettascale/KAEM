@@ -90,8 +90,8 @@ function update_model_grid(
 
     temps =
         model.N_t > 1 ?
-        collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end] |> device :
-        0
+        collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end] :
+        [one(T)]
 
     if model.update_prior_grid
 

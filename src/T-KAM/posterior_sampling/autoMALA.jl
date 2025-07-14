@@ -198,7 +198,7 @@ function autoMALA_sampler(
     ps,
     st,
     x::AbstractArray{T};
-    temps::AbstractArray{T} = device([one(half_quant)]),
+    temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
     N_unadjusted::Int = 1,
     Δη::U = full_quant(2),

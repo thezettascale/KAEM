@@ -168,7 +168,6 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     coef, mask = ps.coef, st.mask
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
-    base = l.base_activation(x)
     y = coef2curve(
         x,
         st.grid,
@@ -182,6 +181,7 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
         return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
     else
         w_base, w_sp = ps.w_base, ps.w_sp
+        base = l.base_activation(x)
         return @tullio out[i, o, b] :=
             (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
     end

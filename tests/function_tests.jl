@@ -50,7 +50,7 @@ function test_fwd_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ComponentArray(ps) |> device, st |> device
     g = p -> sum(fwd(f, p, st, x_eval))
-    ∇ = gradient(g, test_backend, ps)
+    ∇ = DifferentiationInterface.gradient(g, test_backend, ps)
     @test size(∇) == size(ps)
     @test !any(isnan.(∇))
 end

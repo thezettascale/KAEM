@@ -3,7 +3,7 @@ using Test, Random, LinearAlgebra
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
+ENV["AD_backend"] = "ENZYME"
 
 include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
@@ -12,6 +12,10 @@ using .Utils
 using DifferentiationInterface
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, device([one(half_quant)])
+test_backend = AutoEnzyme(;
+    function_annotation = Enzyme.Duplicated,
+    mode = Enzyme.set_runtime_activity(Enzyme.Reverse),
+)
 
 function test_extend_grid()
     Random.seed!(42)
@@ -38,7 +42,7 @@ function test_B_spline_derivative()
     grid = rand(half_quant, i, g) |> device
     extended_grid = extend_grid(grid; k_extend = degree)
     f = x -> sum(B_spline_basis(x, extended_grid, σ; degree = degree))
-    ∇ = gradient(f, AD_backend, x_eval)
+    ∇ = gradient(f, test_backend, x_eval)
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end
@@ -58,7 +62,7 @@ function test_RBF_derivative()
     x_eval = rand(half_quant, i, b) |> device
     grid = rand(half_quant, i, g) |> device
     f = x -> sum(RBF_basis(x, grid, σ; degree = degree))
-    ∇ = gradient(f, AD_backend, x_eval)
+    ∇ = gradient(f, test_backend, x_eval)
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end
@@ -78,7 +82,7 @@ function test_RSWAF_derivative()
     x_eval = rand(half_quant, i, b) |> device
     grid = rand(half_quant, i, g) |> device
     f = x -> sum(RSWAF_basis(x, grid, σ; degree = degree))
-    ∇ = gradient(f, AD_backend, x_eval)
+    ∇ = gradient(f, test_backend, x_eval)
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end
@@ -98,7 +102,7 @@ function test_FFT_derivative()
     x_eval = rand(half_quant, i, b) |> device
     grid = rand(half_quant, i, g) |> device
     f = x -> sum(first(FFT_basis(x, grid, σ; degree = degree)))
-    ∇ = gradient(f, AD_backend, x_eval)
+    ∇ = gradient(f, test_backend, x_eval)
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end
@@ -118,7 +122,7 @@ function test_Cheby_derivative()
     x_eval = rand(half_quant, i, b) |> device
     grid = rand(half_quant, i, g) |> device
     f = x -> sum(Cheby_basis(x, grid, σ; degree = degree))
-    ∇ = gradient(f, AD_backend, x_eval)
+    ∇ = gradient(f, test_backend, x_eval)
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
 end

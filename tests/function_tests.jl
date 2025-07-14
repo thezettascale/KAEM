@@ -13,6 +13,11 @@ using .UnivariateFunctions
 using .GridUpdating: update_fcn_grid
 using .Utils
 
+test_backend = AutoEnzyme(;
+    function_annotation = Enzyme.Duplicated,
+    mode = Enzyme.set_runtime_activity(Enzyme.Reverse),
+)
+
 function test_fwd()
     Random.seed!(42)
     x = rand(half_quant, 5, 3) |> device
@@ -45,7 +50,7 @@ function test_fwd_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
     ps, st = ComponentArray(ps) |> device, st |> device
     g = p -> sum(fwd(f, p, st, x_eval))
-    ∇ = gradient(g, AD_backend, ps)
+    ∇ = gradient(g, test_backend, ps)
     @test size(∇) == size(ps)
     @test !any(isnan.(∇))
 end

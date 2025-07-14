@@ -27,7 +27,7 @@ function test_ps_derivative()
     model = move_to_hq(model)
 
     ∇ = gradient(
-        p -> first(model.loss_fcn(model, p, st, x_test)),
+        p -> first(model.loss_fcn(p, st, model, x_test)),
         AD_backend,
         half_quant.(ps),
     )
@@ -61,7 +61,7 @@ function test_mala_loss()
     model = move_to_hq(model)
 
     ∇ = gradient(
-        p -> first(model.loss_fcn(model, p, st, x_test)),
+        p -> first(model.loss_fcn(p, st, model, x_test)),
         AD_backend,
         half_quant.(ps),
     )
@@ -80,7 +80,7 @@ function test_cnn_loss()
     model = move_to_hq(model)
 
     ∇ = gradient(
-        p -> first(model.loss_fcn(model, p, st, x_test)),
+        p -> first(model.loss_fcn(p, st, model, x_test)),
         AD_backend,
         half_quant.(ps),
     )
@@ -101,7 +101,7 @@ function test_seq_loss()
     model = move_to_hq(model)
 
     ∇ = gradient(
-        p -> first(model.loss_fcn(model, p, st, x_test)),
+        p -> first(model.loss_fcn(p, st, model, x_test)),
         AD_backend,
         half_quant.(ps),
     )

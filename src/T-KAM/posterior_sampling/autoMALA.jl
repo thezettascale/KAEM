@@ -256,11 +256,11 @@ function autoMALA_sampler(
     log_llhood_fcn =
         (z_i, x_i, st_gen, t_i) -> begin
             logllhood, st_gen, seed = log_likelihood_MALA(
+                z_i,
+                x_i,
                 m.lkhood,
                 ps.gen,
-                st_gen,
-                x_i,
-                z_i;
+                st_gen;
                 seed = seed,
                 ε = m.ε,
             )
@@ -279,13 +279,13 @@ function autoMALA_sampler(
             for k = 1:T_length
                 x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
                 logprior, st_ebm =
-                    m.prior.lp_fcn(m.prior, z_i[:, :, :, k], ps.ebm, st_ebm; ε = m.ε)
+                    m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
                 logllhood, st_gen = log_llhood_fcn(z_i[:, :, :, k], x_k, st_gen, t[:, k])
                 logpos = hcat(logpos, logprior + logllhood)
             end
             return logpos .* m.loss_scaling, st_ebm, st_gen
         else
-            logprior, st_ebm = m.prior.lp_fcn(m.prior, z_i, ps.ebm, st_ebm; ε = m.ε)
+            logprior, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
             logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_gen, t)
             return (logprior + logllhood) .* m.loss_scaling, st_ebm, st_gen
         end

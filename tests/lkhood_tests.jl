@@ -87,7 +87,7 @@ function test_logllhood()
 
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    logllhood, _, _ = log_likelihood_IS(lkhood, ps.gen, st.gen, x, z)
+    logllhood, _, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen)
     @test size(logllhood) == (b_size, b_size)
 end
 
@@ -102,7 +102,7 @@ function test_derivative()
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
     ∇ = gradient(
-        z_i -> sum(first(log_likelihood_IS(lkhood, ps.gen, st.gen, x, z_i))),
+        z_i -> sum(first(log_likelihood_IS(z_i, x, lkhood, ps.gen, st.gen))),
         AD_backend,
         z,
     )
@@ -122,7 +122,7 @@ function test_cnn_derivative()
     x = randn(half_quant, 32, 32, out_dim, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
     ∇ = gradient(
-        p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))),
+        p -> sum(first(log_likelihood_IS(z, x, lkhood, p, st.gen))),
         AD_backend,
         ps.gen,
     )
@@ -144,7 +144,7 @@ function test_seq_derivative()
     x = randn(half_quant, lkhood.out_size, 8, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
     ∇ = gradient(
-        p -> sum(first(log_likelihood_IS(lkhood, p, st.gen, x, z))),
+        p -> sum(first(log_likelihood_IS(z, x, lkhood, p, st.gen))),
         AD_backend,
         ps.gen,
     )

@@ -80,9 +80,9 @@ end
 EnzymeRules.inactive(::typeof(grep_weights), args...) = nothing
 
 function importance_loss(
-    m::T_KAM,
     ps,
     st,
+    m::T_KAM,
     x::AbstractArray{T};
     seed::Int = 1,
 ) where {T<:half_quant}
@@ -92,8 +92,8 @@ function importance_loss(
 
     # Log-dists
     logprior, st_ebm = m.prior.lp_fcn(
-        m.prior,
         z,
+        m.prior,
         ps.ebm,
         st_ebm;
         ε = m.ε,
@@ -101,7 +101,7 @@ function importance_loss(
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen, seed =
-        log_likelihood_IS(m.lkhood, ps.gen, st.gen, x, z; seed = seed, ε = m.ε)
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
 
     # Weights and resampling
     weights_resampled, resampled_idxs, seed =
@@ -122,9 +122,9 @@ function importance_loss(
 end
 
 function mala_loss(
-    m::T_KAM,
     ps,
     st,
+    m::T_KAM,
     x::AbstractArray{T};
     seed::Int = 1,
 ) where {T<:half_quant}
@@ -136,19 +136,19 @@ function mala_loss(
 
     # Log-dists
     logprior_pos, st_ebm = m.prior.lp_fcn(
-        m.prior,
         z[:, :, :, 1],
+        m.prior,
         ps.ebm,
         st_ebm;
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
     logllhood, st_gen, seed = log_likelihood_MALA(
+        z[:, :, :, 1],
+        x,
         m.lkhood,
         ps.gen,
-        st_gen,
-        x,
-        z[:, :, :, 1];
+        st_gen;
         seed = seed,
         ε = m.ε,
     )
@@ -157,8 +157,8 @@ function mala_loss(
     if m.prior.contrastive_div
         z, st_ebm, seed = m.prior.sample_z(m, size(x)[end], ps, st, seed)
         logprior, st_ebm = m.prior.lp_fcn(
-            m.prior,
             z,
+            m.prior,
             ps.ebm,
             st_ebm;
             ε = m.ε,
@@ -171,9 +171,9 @@ function mala_loss(
 end
 
 function thermo_loss(
-    m::T_KAM,
     ps,
     st,
+    m::T_KAM,
     x::AbstractArray{T};
     seed::Int = 1,
 ) where {T<:half_quant}
@@ -193,11 +193,11 @@ function thermo_loss(
     # Steppingstone estimator
     for k = 1:(T_length-2)
         logllhood, st_gen, seed = log_likelihood_MALA(
+            z[:, :, :, k],
+            x,
             m.lkhood,
             ps.gen,
-            st_gen,
-            x,
-            z[:, :, :, k];
+            st_gen;
             seed = seed,
             ε = m.ε,
         )
@@ -206,8 +206,8 @@ function thermo_loss(
 
     # MLE estimator
     logprior, st_ebm = m.prior.lp_fcn(
-        m.prior,
         z[:, :, :, T_length-1],
+        m.prior,
         ps.ebm,
         st_ebm;
         ε = m.ε,
@@ -218,8 +218,8 @@ function thermo_loss(
     z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
     if m.prior.contrastive_div
         logprior, st_ebm = m.prior.lp_fcn(
-            m.prior,
             z,
+            m.prior,
             ps.ebm,
             st_ebm;
             ε = m.ε,

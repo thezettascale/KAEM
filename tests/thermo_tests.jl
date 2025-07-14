@@ -25,7 +25,7 @@ function test_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    loss = first(model.loss_fcn(model, half_quant.(ps), st, x_test))
+    loss = first(model.loss_fcn(half_quant.(ps), st, model, x_test))
     @test !isnan(loss)
 end
 
@@ -38,7 +38,7 @@ function test_model_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
 
     ∇ = gradient(
-        p -> first(model.loss_fcn(model, p, st, x_test)),
+        p -> first(model.loss_fcn(p, st, model, x_test)),
         AD_backend,
         half_quant.(ps),
     )

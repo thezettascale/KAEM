@@ -227,9 +227,9 @@ function train!(t::T_KAM_trainer)
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
         grads = CUDA.@fastmath gradient(
             pars -> t.model.loss_fcn(
-                t.model,
                 pars,
                 Lux.trainmode(t.st),
+                t.model,
                 t.x;
                 seed = t.seed,
             ),
@@ -252,9 +252,9 @@ function train!(t::T_KAM_trainer)
         t.ps = u
 
         loss, st_ebm, st_gen, t.seed = CUDA.@fastmath t.model.loss_fcn(
-            t.model,
             half_quant(t.ps),
             Lux.testmode(t.st),
+            t.model,
             t.x;
             seed = t.seed,
         )

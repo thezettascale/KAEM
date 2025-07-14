@@ -51,13 +51,12 @@ function l2_MALA(
 end
 
 ## Log-likelihood functions ##
-
 function log_likelihood_IS(
+    z::AbstractArray{T},
+    x::AbstractArray{T},
     lkhood,
     ps,
-    st,
-    x::AbstractArray{T},
-    z::AbstractArray{T};
+    st;
     seed::Int = 1,
     ε::T = eps(T),
 ) where {T<:half_quant}
@@ -91,11 +90,11 @@ function log_likelihood_IS(
 end
 
 function log_likelihood_MALA(
+    z::AbstractArray{T},
+    x::AbstractArray{T},
     lkhood,
     ps,
-    st,
-    x::AbstractArray{T},
-    z::AbstractArray{T};
+    st;
     seed::Int = 1,
     ε::T = eps(T),
 ) where {T<:half_quant}

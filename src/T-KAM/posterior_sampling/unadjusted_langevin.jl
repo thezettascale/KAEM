@@ -93,11 +93,11 @@ function ULA_sampler(
     log_llhood_fcn =
         (z_i, st_gen, t_i) -> begin
             ll, st_gen, seed = log_likelihood_MALA(
+                z_i,
+                x,
                 m.lkhood,
                 ps.gen,
-                st_gen,
-                x,
-                z_i;
+                st_gen;
                 seed = seed,
                 ε = m.ε,
             )
@@ -111,7 +111,7 @@ function ULA_sampler(
         logpos_tot = zero(T)
         st_ebm, st_gen = st_i.ebm, st_i.gen
         for k = 1:T_length
-            lp, st_ebm = m.prior.lp_fcn(m.prior, z_i[:, :, :, k], ps.ebm, st_ebm; ε = m.ε)
+            lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
             ll, st_gen = log_llhood_fcn(z_i[:, :, :, k], st_gen, temps[k])
             logpos_tot += sum(lp) + sum(ll)
         end

@@ -53,8 +53,8 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
 end
 
 function log_prior_ula(
-    ebm,
     z::AbstractArray{T},
+    ebm,
     ps,
     st;
     ε::T = eps(half_quant),
@@ -69,8 +69,8 @@ function log_prior_ula(
 end
 
 function log_prior_univar(
-    ebm,
     z::AbstractArray{T},
+    ebm,
     ps,
     st;
     ε::T = eps(half_quant),
@@ -117,8 +117,8 @@ function log_prior_univar(
 end
 
 function log_prior_mix(
-    ebm,
     z::AbstractArray{T},
+    ebm,
     ps,
     st;
     ε::T = eps(half_quant),

@@ -51,7 +51,7 @@ end
 function benchmark_dim(model, ps, st, x_test)
     first(
         gradient(
-            p -> first(model.loss_fcn(model, p, st, x_test)),
+            p -> first(model.loss_fcn(p, st, model, x_test)),
             AD_backend,
             half_quant.(ps),
         ),

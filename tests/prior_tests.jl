@@ -41,14 +41,14 @@ end
 
 function test_log_prior()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
-    log_p = first(wrap.prior.lp_fcn(wrap.prior, z_test, ps.ebm, st.ebm))
+    log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st.ebm))
     @test size(log_p) == (b_size,)
 end
 
 function test_log_prior_derivative()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
     ∇ = gradient(
-        x -> sum(first(wrap.prior.lp_fcn(wrap.prior, x, ps.ebm, st.ebm))),
+        x -> sum(first(wrap.prior.lp_fcn(x, wrap.prior, ps.ebm, st.ebm))),
         AD_backend,
         z_test,
     )

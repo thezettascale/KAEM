@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux
+using Test, Random, LinearAlgebra, Lux, ComponentArrays
 using DifferentiationInterface
 
 ENV["GPU"] = true

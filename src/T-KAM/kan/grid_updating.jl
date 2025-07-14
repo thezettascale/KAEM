@@ -101,8 +101,8 @@ function update_model_grid(
             model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
         )
 
-        Q, P = ((model.prior.ula || model.prior.mixture_model) ?
-            reverse(size(z)[1:2]) :
+        Q, P = (
+            (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
             size(z)[1:2]
         )
         z = reshape(z, P, Q, :)

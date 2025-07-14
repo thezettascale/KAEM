@@ -51,5 +51,9 @@ for p, color in zip(reduced_p, reduced_temps):
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.tight_layout()
-    plt.savefig("figures/visual/temperature_schedule_{}.png".format(p))
+    plt.savefig(
+        "figures/visual/tempered_integral.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
     # plt.show()

@@ -30,7 +30,9 @@ bases = ["RBF", "FFT"]
 
 grid_size = (3, 3)
 fig, axes = plt.subplots(
-    grid_size[0] * 3, grid_size[1] * 3, figsize=(30, 30)
+    grid_size[0] * 3,
+    grid_size[1] * 3,
+    figsize=(30, 30),
 )  # Changed to 3 columns
 
 for prior_idx, prior in enumerate(priors):

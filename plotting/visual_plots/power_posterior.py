@@ -60,4 +60,8 @@ axes[0].set_ylabel(
 plt.ylim(0, 1)
 plt.subplots_adjust(hspace=0)
 plt.tight_layout()
-plt.savefig("figures/visual/power_posterior.png", dpi=300)
+plt.savefig(
+    "figures/visual/power_posterior.png",
+    dpi=300,
+    bbox_inches="tight",
+)

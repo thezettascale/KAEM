@@ -75,7 +75,7 @@ function RBF_basis(
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) * σ
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
     return exp.(-T(0.5) * (diff ./ σ) .^ 2)
 end
 
@@ -86,7 +86,7 @@ function RSWAF_basis(
     σ::Union{T,AbstractArray{T}} = one(half_quant),
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g] 
+    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
     diff = NNlib.tanh_fast(diff ./ σ)
     return 1 .- diff .^ 2
 end
@@ -160,7 +160,8 @@ function coef2curve(
 
     even, odd = spl
     even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
-    return @tullio y_eval[i, o, b] := (even[i, g, b] * even_coef[i, o, g]) + (odd[i, g, b] * odd_coef[i, o, g])
+    return @tullio y_eval[i, o, b] :=
+        (even[i, g, b] * even_coef[i, o, g]) + (odd[i, g, b] * odd_coef[i, o, g])
 end
 
 function curve2coef(

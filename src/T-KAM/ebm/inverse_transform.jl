@@ -40,7 +40,7 @@ function trapezium_quadrature(
     exp_fg = zeros(T, Q, P, G) |> device
     if component_mask !== nothing
         @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[q, g])
-        @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b] 
+        @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b]
     else
         @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[p, g])
     end
@@ -95,8 +95,9 @@ function gausslegendre_quadrature(
 
     # Choose component if mixture model else use all
     if component_mask !== nothing
-        @tullio trapz[q, b, g] := (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b]) 
-        @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g] 
+        @tullio trapz[q, b, g] :=
+            (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b])
+        @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g]
         return trapz, nodes_cpu, st
     else
         @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]

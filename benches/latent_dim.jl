@@ -1,5 +1,12 @@
 using BenchmarkTools,
-    ConfParser, Lux, Random, CUDA, ComponentArrays, CSV, DataFrames, DifferentiationInterface
+    ConfParser,
+    Lux,
+    Random,
+    CUDA,
+    ComponentArrays,
+    CSV,
+    DataFrames,
+    DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -42,7 +49,13 @@ function setup_model(n_z)
 end
 
 function benchmark_dim(model, ps, st, x_test)
-    first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps)))
+    first(
+        gradient(
+            p -> first(model.loss_fcn(model, p, st, x_test)),
+            AD_backend,
+            half_quant.(ps),
+        ),
+    )
 end
 
 results = DataFrame(

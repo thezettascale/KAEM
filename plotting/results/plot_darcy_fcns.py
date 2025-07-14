@@ -57,8 +57,9 @@ for prior in PRIORS:
 
                 ax.axis("off")
 
-            axes[0, dataset_idx * grid_size + grid_size // 2].set_title(
-                titles[dataset_idx], fontsize=40, pad=10
+            axes[0, grid_size + grid_size // 2].set_title("RBF", fontsize=44, pad=20)
+            axes[0, 2 * grid_size + grid_size // 2].set_title(
+                "Fourier", fontsize=44, pad=20
             )
 
         plt.subplots_adjust(wspace=0, hspace=0)

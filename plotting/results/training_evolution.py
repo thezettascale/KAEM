@@ -43,6 +43,10 @@ for epoch_idx, epoch in enumerate(epochs):
         axes[0, epoch_idx].set_title(f"{epoch}", fontsize=40, pad=10)
 
 plt.subplots_adjust(wspace=0, hspace=0)
-plt.savefig(save_name)
+plt.savefig(
+    "figures/results/training_evolution.png",
+    dpi=300,
+    bbox_inches="tight",
+)
 # plt.show()
 plt.close()

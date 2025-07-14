@@ -2,7 +2,8 @@ module LogPriorFCNs
 
 export prior_fwd, log_prior_univar, log_prior_ula, log_prior_mix
 
-using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
+using CUDA,
+    KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
@@ -145,7 +146,7 @@ function log_prior_mix(
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims = 2)
     π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
-    @tullio log_απ[q,p,b] := log(alpha[q,p] * π_0[q,1,b] + ε)
+    @tullio log_απ[q, p, b] := log(alpha[q, p] * π_0[q, 1, b] + ε)
 
     # Energy functions of each component, q -> p
     z, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))

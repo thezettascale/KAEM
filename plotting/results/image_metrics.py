@@ -124,6 +124,6 @@ file_paths = [
 for gen_file_path, real_file_path in file_paths:
     metrics = process_file_pair(gen_file_path, real_file_path)
     print(f"Processed {gen_file_path}")
-    print(f"FID∞: {metrics['fid_infinity']:.2f}")
-    print(f"KID∞: {metrics['kid_infinity']:.2f}")
+    print(f"FID  : {metrics['fid_infinity']:.2f}")
+    print(f"KID  : {metrics['kid_infinity']:.2f}")
     print("---")

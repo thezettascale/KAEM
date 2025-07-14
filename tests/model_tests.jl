@@ -1,4 +1,5 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, ComponentArrays
+using Test,
+    Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -25,7 +26,11 @@ function test_ps_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    ∇ = gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps))
+    ∇ = gradient(
+        p -> first(model.loss_fcn(model, p, st, x_test)),
+        AD_backend,
+        half_quant.(ps),
+    )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -55,7 +60,11 @@ function test_mala_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    ∇ = gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps))
+    ∇ = gradient(
+        p -> first(model.loss_fcn(model, p, st, x_test)),
+        AD_backend,
+        half_quant.(ps),
+    )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -70,7 +79,11 @@ function test_cnn_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    ∇ = gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps))
+    ∇ = gradient(
+        p -> first(model.loss_fcn(model, p, st, x_test)),
+        AD_backend,
+        half_quant.(ps),
+    )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -87,7 +100,11 @@ function test_seq_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    ∇ = gradient(p -> first(model.loss_fcn(model, p, st, x_test)), AD_backend, half_quant.(ps))
+    ∇ = gradient(
+        p -> first(model.loss_fcn(model, p, st, x_test)),
+        AD_backend,
+        half_quant.(ps),
+    )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

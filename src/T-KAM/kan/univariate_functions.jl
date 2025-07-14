@@ -182,7 +182,8 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
         return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
     else
         w_base, w_sp = ps.w_base, ps.w_sp
-        return @tullio out[i, o, b] := (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
+        return @tullio out[i, o, b] :=
+            (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
     end
 end
 

@@ -1,4 +1,10 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, DifferentiationInterface
+using Test,
+    Random,
+    LinearAlgebra,
+    Lux,
+    ConfParser,
+    DifferentiationInterface,
+    DifferentiationInterface
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -47,7 +53,11 @@ end
 
 function test_log_prior_derivative()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
-    ∇ = gradient(x -> sum(first(wrap.prior.lp_fcn(wrap.prior, x, ps.ebm, st.ebm))), AD_backend, z_test)
+    ∇ = gradient(
+        x -> sum(first(wrap.prior.lp_fcn(wrap.prior, x, ps.ebm, st.ebm))),
+        AD_backend,
+        z_test,
+    )
     @test size(∇) == size(z_test)
 end
 

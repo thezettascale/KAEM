@@ -27,9 +27,14 @@ for dataset in DATASETS:
         for fnc in FNCS:
             # File paths to HDF5 files
             file_paths = [
-                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/generated_images.h5",
+                "logs/Vanilla/NIST/importance_ebm_FFT/generated_images.h5",
+                "logs/Vanilla/NIST/importance_ebm_RBF/generated_images.h5",
+                "logs/Vanilla/NIST/importance_gaussian_FFT/generated_images.h5",
+                "logs/Vanilla/NIST/importance_gaussian_RBF/generated_images.h5",
+                "logs/Vanilla/NIST/importance_lognormal_FFT/generated_images.h5",
+                "logs/Vanilla/NIST/importance_lognormal_RBF/generated_images.h5",
+                "logs/Vanilla/NIST/importance_uniform_FFT/generated_images.h5",
+                "logs/Vanilla/NIST/importance_uniform_RBF/generated_images.h5",
             ]
 
             # titles = ['Gaussian', 'Lognormal', 'Uniform']
@@ -64,11 +69,18 @@ for dataset in DATASETS:
 
                     ax.axis("off")
 
-                axes[0, dataset_idx * grid_size + grid_size // 2].set_title(
-                    titles[dataset_idx], fontsize=40, pad=10
-                )
+                axes[0, 0].set_title("EBM-FFT", fontsize=24)
+                axes[0, 1].set_title("EBM-RBF", fontsize=24)
+                axes[0, 2].set_title("Gaussian-FFT", fontsize=24)
+                axes[0, 3].set_title("Gaussian-RBF", fontsize=24)
+                axes[0, 4].set_title("Lognormal-FFT", fontsize=24)
+                axes[0, 5].set_title("Lognormal-RBF", fontsize=24)
+                axes[0, 6].set_title("Uniform-FFT", fontsize=24)
+                axes[0, 7].set_title("Uniform-RBF", fontsize=24)
 
             plt.subplots_adjust(wspace=0, hspace=0)
             plt.savefig(
-                f"figures/results/{dataset}_priors_{fnc}_{grid_size}x{grid_size}.png"
+                "figures/results/nist.png",
+                dpi=300,
+                bbox_inches="tight",
             )

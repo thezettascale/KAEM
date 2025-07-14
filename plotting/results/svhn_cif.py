@@ -27,13 +27,9 @@ for prior in priors:
     for dataset in datasets:
         for grid_size in GRID_SIZES:
             # MLE/ULA images
-            mle_file_path = (
-                f"logs/Vanilla/{dataset}/{prior}/generated_images.h5"
-            )
+            mle_file_path = f"logs/Vanilla/{dataset}/{prior}/generated_images.h5"
             # SE/ULA images
-            se_file_path = (
-                f"logs/Thermodynamic/{dataset}/{prior}/generated_images.h5"
-            )
+            se_file_path = f"logs/Thermodynamic/{dataset}/{prior}/generated_images.h5"
 
             # Plot MLE/ULA grid
             with h5py.File(mle_file_path, "r") as h5_file:

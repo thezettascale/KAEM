@@ -108,14 +108,18 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 y=ref["Time (s)"],
                 color="red",
                 linestyle="--",
-                label="Reference MLE criterion\nwith single posterior\nULA sampling",
+                label=(
+                    "Reference MLE criterion\n"
+                    + "with single posterior\n"
+                    + "ULA sampling"
+                ),
             )
         else:
             axs[0, 0].axhline(
                 y=ref["Time (s)"],
                 color="red",
                 linestyle="--",
-                label="Reference ITS\nwith Mixture Prior",
+                label=("Reference ITS\n" + "with Mixture Prior"),
             )
         axs[0, 0].legend()
 
@@ -138,14 +142,18 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 y=ref["Memory Estimate (GiB)"],
                 color="red",
                 linestyle="--",
-                label="Reference MLE criterion\nwith single posterior\nULA sampling",
+                label=(
+                    "Reference MLE criterion\n"
+                    + "with single posterior\n"
+                    + "ULA sampling"
+                ),
             )
         else:
             axs[0, 1].axhline(
                 y=ref["Memory Estimate (GiB)"],
                 color="red",
                 linestyle="--",
-                label="Reference ITS\nwith Mixture Prior",
+                label=("Reference ITS\n" + "with Mixture Prior"),
             )
         axs[0, 1].legend()
 
@@ -168,14 +176,18 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 y=ref["Garbage Collection (%)"],
                 color="red",
                 linestyle="--",
-                label="Reference MLE criterion\nwith single posterior\nULA sampling",
+                label=(
+                    "Reference MLE criterion\n"
+                    + "with single posterior\n"
+                    + "ULA sampling"
+                ),
             )
         else:
             axs[1, 0].axhline(
                 y=ref["Garbage Collection (%)"],
                 color="red",
                 linestyle="--",
-                label="Reference ITS\nwith Mixture Prior",
+                label=("Reference ITS\n" + "with Mixture Prior"),
             )
         axs[1, 0].legend()
 
@@ -197,14 +209,14 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 y=ref["Allocations"],
                 color="red",
                 linestyle="--",
-                label="Reference MLE criterion\nwith single posterior\nULA sampling",
+                label=("Reference ITS\n" + "with Mixture Prior"),
             )
         else:
             axs[1, 1].axhline(
                 y=ref["Allocations"],
                 color="red",
                 linestyle="--",
-                label="Reference ITS\nwith Mixture Prior",
+                label=("Reference ITS\n" + "with Mixture Prior"),
             )
         axs[1, 1].legend()
 
@@ -213,5 +225,9 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
     axs[1, 1].set_title(f"{title} - Allocations", fontsize=14)
 
     plt.tight_layout()
-    plt.savefig(f"figures/benchmark/plot_cost_{idx}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        f"figures/benchmark/plot_cost_{idx}.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
     plt.close()

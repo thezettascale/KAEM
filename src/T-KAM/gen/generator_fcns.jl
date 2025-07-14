@@ -103,7 +103,7 @@ function scaled_dot_product_attention(
     scale = sqrt(eltype(Q)(d_model))
 
     @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b] / scale
-    QK = softmax(QK, dims=2)
+    QK = softmax(QK, dims = 2)
     return @tullio out[d, t, b] := QK[t, i, b] * V[d, i, b]
 end
 

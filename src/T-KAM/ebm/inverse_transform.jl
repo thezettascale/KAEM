@@ -3,7 +3,7 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
 
-using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio, Enzyme
 using NNlib: softmax
 using ChainRules: @ignore_derivatives
 
@@ -247,5 +247,8 @@ function sample_mixture(
 
     return device(T.(z)), st, seed
 end
+
+EnzymeRules.inactive(::typeof(sample_univariate), args...) = nothing
+EnzymeRules.inactive(::typeof(sample_mixture), args...) = nothing
 
 end

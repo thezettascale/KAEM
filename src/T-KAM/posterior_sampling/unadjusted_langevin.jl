@@ -173,4 +173,6 @@ function ULA_sampler(
     return T.(z), st, seed
 end
 
+EnzymeRules.inactive(::typeof(ULA_sampler), args...) = nothing
+
 end

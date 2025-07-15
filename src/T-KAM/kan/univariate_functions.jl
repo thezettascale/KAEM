@@ -99,7 +99,8 @@ function init_function(
         (x, g, c, σ) ->
             coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
     curve2coef =
-        basis_fcn == (x, g, y, σ) -> curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
+        (x, g, y, σ) ->
+            curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
 
     return univariate_function(
         in_dim,
@@ -118,7 +119,7 @@ function init_function(
         τ_trainable,
         basis_mul,
         coef2curve,
-        curve2coef
+        curve2coef,
     )
 end
 

@@ -91,13 +91,7 @@ function importance_loss(
     seed
 end
 
-function langevin_loss(
-    ps,
-    st,
-    m,
-    x::AbstractArray{T};
-    seed::Int = 1,
-) where {T<:half_quant}
+function langevin_loss(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     z, st_new, seed = sample_langevin(ps, st, m, x; seed = seed)
@@ -138,13 +132,7 @@ function langevin_loss(
 
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen, seed
 end
-function thermo_loss(
-    ps,
-    st,
-    m,
-    x::AbstractArray{T};
-    seed::Int = 1,
-) where {T<:half_quant}
+function thermo_loss(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:half_quant}
     """Thermodynamic integration loss."""
 
     # Schedule temperatures

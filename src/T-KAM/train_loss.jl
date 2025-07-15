@@ -94,7 +94,7 @@ end
 function langevin_loss(
     ps,
     st,
-    m::T_KAM,
+    m,
     x::AbstractArray{T};
     seed::Int = 1,
 ) where {T<:half_quant}
@@ -141,7 +141,7 @@ end
 function thermo_loss(
     ps,
     st,
-    m::T_KAM,
+    m,
     x::AbstractArray{T};
     seed::Int = 1,
 ) where {T<:half_quant}

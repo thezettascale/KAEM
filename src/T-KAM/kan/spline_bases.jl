@@ -141,6 +141,7 @@ function coef2curve_Spline(
     basis_function::Function = FFT_basis,
 ) where {T<:half_quant}
     spl = basis_function(x_eval, grid, σ; degree = k)
+    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     spl = reshape(spl, I, G, 1, S)
     coef = reshape(coef, I, G, O, 1)
     return dropdims(sum(spl .* coef, dims = 2), dims = 2)

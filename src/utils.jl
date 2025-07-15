@@ -1,7 +1,7 @@
 module Utils
 
 export removeNaN,
-    device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend
+    device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend, set_state!
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions, Zygote, Enzyme, Enzyme.EnzymeRules
@@ -55,14 +55,13 @@ function next_rng(seed)
     return seed + 1, rng
 end
 
-function set_state(st, dict)
+function set_state!(st, dict)
     for (k, v) in dict
         @reset st[k] = v
     end
-    return st
 end
 
 EnzymeRules.inactive(::typeof(next_rng), args...) = nothing
-EnzymeRules.inactive(::typeof(set_state), args...) = nothing
+EnzymeRules.inactive(::typeof(set_state!), args...) = nothing
 
 end

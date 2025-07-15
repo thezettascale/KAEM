@@ -9,7 +9,7 @@ using ChainRules: @ignore_derivatives
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device, set_state
+using .Utils: half_quant, full_quant, device, set_state!
 using .UnivariateFunctions: fwd
 
 function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
@@ -48,7 +48,7 @@ function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         end
     end
 
-    st = @ignore_derivatives set_state(st, new_st)
+    @ignore_derivatives set_state!(st, new_st)
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
@@ -94,7 +94,7 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     )
     @ignore_derivatives new_st[Symbol("$(lkhood.depth+1)")] = st_new
 
-    st = @ignore_derivatives set_state(st, new_st)
+    @ignore_derivatives set_state!(st, new_st)
     return z, st
 end
 
@@ -172,7 +172,7 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
     @ignore_derivatives new_st[Symbol("3")] = st_new
 
-    st = @ignore_derivatives set_state(st, new_st)
+    @ignore_derivatives set_state!(st, new_st)
     return z, st
 end
 

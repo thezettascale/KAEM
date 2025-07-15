@@ -9,7 +9,7 @@ using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq, set_state
+using .Utils: device, next_rng, half_quant, full_quant, fq, set_state!
 using .UnivariateFunctions: fwd
 
 function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
@@ -47,7 +47,7 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         end
     end
 
-    st = @ignore_derivatives set_state(st, new_st)
+    @ignore_derivatives set_state!(st, new_st)
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end
@@ -151,7 +151,7 @@ function log_prior_mix(
     @tullio log_απ[q, p, b] := log(alpha[q, p] * π_0[q, 1, b] + ε)
 
     # Energy functions of each component, q -> p
-    z, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
+    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
 
     log_Z = zeros(T, size(z)) |> device
     if normalize
@@ -162,7 +162,7 @@ function log_prior_mix(
     end
 
     # Unnormalized or normalized log-probability
-    logprob = z + log_απ
+    logprob = f + log_απ
     logprob = logprob .- log_Z
     l1_reg = ebm.λ * sum(abs.(ps[Symbol("α")]))
     return dropdims(sum(logprob; dims = (1, 2)); dims = (1, 2)) .+ l1_reg, st

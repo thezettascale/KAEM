@@ -36,7 +36,7 @@ const resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::Any
+    Φ_fcns::Dict{Any, Any}
     layernorm::Bool
     batchnorm::Bool
     depth::Int
@@ -123,7 +123,7 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
         sequence_length > 1 ? (x -> softmax(x, dims = 1)) :
         get(output_activation_mapping, output_act, identity)
 
-    Φ_functions = NamedTuple()
+    Φ_functions = Dict()
     depth = length(widths)-1
     d_model = 0
 
@@ -165,7 +165,7 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
             (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
         for i in eachindex(hidden_c[1:(end-1)])
-            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose(
+            Φ_functions[Symbol("$i")] = Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
                 hidden_c[i] => hidden_c[i+1],
                 identity;
@@ -173,10 +173,10 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
                 pad = paddings[i],
             )
             if batchnorm
-                @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
+                Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
             end
         end
-        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose(
+        Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose(
             (k_size[end], k_size[end]),
             hidden_c[end] => output_dim,
             identity;
@@ -193,20 +193,20 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
         d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
         # Projection
-        @reset Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model)
-        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, 1), gelu)
+        Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model)
+        Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, 1), gelu)
 
         # Query, Key, Value
-        @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model)
+        Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model)
+        Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model)
+        Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model)
 
         # Feed forward
-        @reset Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, 1), gelu)
+        Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model)
+        Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, 1), gelu)
 
         # Output layer
-        @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim)
+        Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim)
         depth = 3
     else
         for i in eachindex(widths[1:(end-1)])
@@ -218,11 +218,10 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
                     one(full_quant)
                 ) .* (one(full_quant) / √(full_quant(widths[i])))
             )
-            @reset Φ_functions[Symbol("$i")] =
-                initialize_function(widths[i], widths[i+1], base_scale)
+            Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
 
             if (layernorm && i < depth)
-                @reset Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+                Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
             end
         end
     end

@@ -43,7 +43,7 @@ const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::NamedTuple
+    fcns_qp::Dict{Any, Any}
     layernorm::Bool
     depth::Int
     prior_type::AbstractString
@@ -128,7 +128,7 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
             end
         end
 
-    functions = NamedTuple()
+    functions = Dict()
     for i in eachindex(widths[1:(end-1)])
         prior_seed, rng = next_rng(prior_seed)
         base_scale = (
@@ -157,10 +157,10 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
             τ_trainable = τ_trainable,
         )
 
-        @reset functions[Symbol("$i")] = func
+        functions[Symbol("$i")] = func
 
         if (layernorm && i < length(widths)-1)
-            @reset functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+            functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
         end
 
     end

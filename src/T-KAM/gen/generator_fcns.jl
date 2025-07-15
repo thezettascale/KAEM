@@ -105,10 +105,28 @@ function scaled_dot_product_attention(
     d_model::Int,
 ) where {T<:half_quant}
     scale = sqrt(eltype(Q)(d_model))
+    D, L, B = size(Q)
+    _, I, _ = size(K)
 
-    @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b] / scale
-    QK = softmax(QK, dims = 2)
-    return @tullio out[d, t, b] := QK[t, i, b] * V[d, i, b]
+    # 1. Compute QK: (T, I, B)
+    Qt = permutedims(Q, (2, 1, 3))
+    Kt = permutedims(K, (2, 1, 3))
+    Qt_ = reshape(Qt, L, 1, D, B)
+    Kt_ = reshape(Kt, 1, I, D, B)
+    QK = sum(Qt_ .* Kt_, dims = 3)
+    QK = dropdims(QK, dims = 3) ./ scale
+
+    # 2. Softmax over I (keys) dimension
+    QK_max = maximum(QK, dims = 2)
+    QK_exp = exp.(QK .- QK_max)
+    QK_softmax = QK_exp ./ sum(QK_exp, dims = 2)
+
+    # 3. Weighted sum: out[d, t, b] = sum_i QK_softmax[t, i, b] * V[d, i, b]
+    QK_broad = reshape(QK_softmax, 1, L, I, B)
+    V_broad = reshape(V, D, 1, I, B)
+    out = sum(QK_broad .* V_broad, dims = 3)
+    out = dropdims(out, dims = 3)
+    return out
 end
 
 function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}

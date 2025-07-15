@@ -2,7 +2,7 @@ module UnivariateFunctions
 
 export univariate_function, init_function, fwd, activation_mapping
 
-using CUDA, KernelAbstractions, Accessors, Tullio
+using CUDA, KernelAbstractions, Accessors
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 include("spline_bases.jl")
@@ -174,12 +174,11 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     )
 
     if l.spline_string == "Cheby"
-        return @tullio out[i, o, b] := y[i, o, b] * mask[i, o]
+        return y .* mask
     else
         w_base, w_sp = ps.w_base, ps.w_sp
-        base = l.base_activation(x)
-        return @tullio out[i, o, b] :=
-            (w_base[i, o] * base[i, b] + w_sp[i, o] * y[i, o, b]) * mask[i, o]
+        I, O, B = size(y)
+        return w_base .* reshape(base, I, 1, B) .+ w_sp .* y .* mask
     end
 end
 

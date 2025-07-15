@@ -148,7 +148,7 @@ function log_prior_mix(
     # Mixture proportions and prior
     alpha = softmax(ps[Symbol("α")]; dims = 2)
     π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
-    @tullio log_απ[q, p, b] := log(alpha[q, p] * π_0[q, 1, b] + ε)
+    log_απ = log.(reshape(alpha, size(alpha)..., 1) .* π_0 .+ ε)
 
     # Energy functions of each component, q -> p
     f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))

@@ -31,8 +31,8 @@ function B_spline_basis(
     # Initialize degree 0, piecewise const
     grid_1 = grid[:, 1:(end-1)]
     grid_2 = grid[:, 2:end]
-    @tullio term1[i, g, b] := x[i, b] >= grid_1[i, g]
-    @tullio term2[i, g, b] := x[i, b] < grid_2[i, g]
+    term1 = reshape(x, I, 1, S) .>= grid_1
+    term2 = reshape(x, I, 1, S) .< grid_2
     B = T.(term1 .* term2)
 
     # Iteratively build up to degree k
@@ -45,10 +45,10 @@ function B_spline_basis(
         grid_3 = grid[:, (d+1):(d+gmax)]
         grid_4 = grid[:, (d+2):(d+gmax+1)]
 
-        @tullio numer1[i, g, b] := x[i, b] - grid_1[i, g]
-        @tullio denom1[i, g] := grid_3[i, g] - grid_1[i, g]
-        @tullio numer2[i, g, b] := grid_4[i, g] - x[i, b]
-        @tullio denom2[i, g] := grid_4[i, g] - grid_2[i, g]
+        numer1 = reshape(x, I, 1, S) .- grid_1
+        denom1 = grid_3 .- grid_1
+        numer2 = grid_4 .- reshape(x, I, 1, S)
+        denom2 = grid_4 .- grid_2
 
         mask1 = T.(denom1 .!= 0) |> device
         mask2 = T.(denom2 .!= 0) |> device
@@ -69,7 +69,7 @@ function RBF_basis(
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
+    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     return exp.(-T(0.5) .* (diff ./ σ) .^ 2)
 end
 
@@ -80,7 +80,7 @@ function RSWAF_basis(
     degree::Int = 3,
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio diff[i, g, b] := x[i, b] - grid[i, g]
+    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     diff = NNlib.tanh_fast(diff ./ σ)
     return 1 .- diff .^ 2
 end
@@ -92,7 +92,7 @@ function FFT_basis(
     degree::Int = 3,
 ) where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio freq[i, g, b] := x[i, b] * grid[i, g]
+    freq = reshape(x, I, 1, S) .* grid
     freq = T(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
 end
@@ -106,7 +106,7 @@ function Cheby_basis(
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
     linspace = collect(0:degree) .|> T |> device
-    return @tullio out[i, l, b] := cos(linspace[l] * acos(x[i, b, l]))
+    return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
 end
 
 function coef2curve(
@@ -132,13 +132,18 @@ function coef2curve(
     spl =
         isnothing(basis_function) ? B_spline_basis(x_eval, grid, σ; degree = k) :
         basis_function(x_eval, grid, σ; degree = k)
+    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
 
-    !isa(spl, Tuple) && return @tullio y_eval[i, o, b] := spl[i, g, b] * coef[i, o, g]
-
-    even, odd = spl
-    even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
-    return @tullio y_eval[i, o, b] :=
-        (even[i, g, b] * even_coef[i, o, g]) + (odd[i, g, b] * odd_coef[i, o, g])
+    if !isa(spl, Tuple)
+        spl = reshape(spl, I, G, 1, S)
+        coef = reshape(coef, I, G, O, 1)
+        return dropdims(sum(spl .* coef, dims = 2), dims = 2)
+    else
+        even, odd = spl
+        even_coef, odd_coef =
+            reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
+        return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
+    end
 end
 
 function curve2coef(

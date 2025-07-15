@@ -42,18 +42,9 @@ function setup_model(n_z)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device
+    ∇ = zero(half_quant.(ps))
 
-    return model, ps, st, x_test
-end
-
-function benchmark_dim(model, ps, st, x_test)
-    first(
-        gradient(
-            p -> first(model.loss_fcn(p, st, model, x_test)),
-            AD_backend,
-            half_quant.(ps),
-        ),
-    )
+    return model, half_quant.(ps), ∇, st, x_test
 end
 
 results = DataFrame(
@@ -68,12 +59,12 @@ results = DataFrame(
 for n_z in [10, 20, 30, 40, 50]
     println("Benchmarking n_z = $n_z...")
 
-    model, ps, st, x_test = setup_model(n_z)
+    model, ps, ∇, st, x_test = setup_model(n_z)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark benchmark_dim($model, $ps, $st, $x_test)
+    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
 
     push!(
         results,

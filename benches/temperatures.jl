@@ -42,17 +42,9 @@ function setup_model(N_t)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device
+    ∇ = zero(half_quant.(ps))
 
-    return model, ps, st, x_test
-end
-
-function benchmark_temp(model, ps, st, x_test)
-    first(
-        gradient(
-            p -> first(model.loss_fcn(p, st, model, x_test)),
-            half_quant.(ps),
-        ),
-    )
+    return model, half_quant.(ps), ∇, st, x_test
 end
 
 results = DataFrame(
@@ -67,12 +59,12 @@ results = DataFrame(
 for N_t in [1, 2, 4, 6, 8, 10]
     println("Benchmarking N_t = $N_t...")
 
-    model, ps, st, x_test = setup_model(N_t)
+    model, ps, ∇, st, x_test = setup_model(N_t)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark benchmark_temp($model, $ps, $st, $x_test)
+    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
 
     push!(
         results,

@@ -22,18 +22,16 @@ function test_ps_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
-    ∇ = zero(ps)
+    ∇ = zero(half_quant.(ps))
     model = move_to_hq(model)
 
-    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(half_quant.(ps), ∇),
-        Enzyme.Const(st),
-        Enzyme.Const(model),
-        Enzyme.Const(x_test),
+    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
+        half_quant.(ps),
+        ∇,
+        st,
+        model,
+        x_test;
+        seed = 1,
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -63,17 +61,15 @@ function test_mala_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
-    ∇ = zero(ps)
+    ∇ = zero(half_quant.(ps))
 
-    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(half_quant.(ps), ∇),
-        Enzyme.Const(st),
-        Enzyme.Const(model),
-        Enzyme.Const(x_test),
+    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
+        half_quant.(ps),
+        ∇,
+        st,
+        model,
+        x_test;
+        seed = 1,
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -88,17 +84,15 @@ function test_cnn_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
+    ∇ = zero(half_quant.(ps))
 
-    ∇ = zero(ps)
-    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(half_quant.(ps), ∇),
-        Enzyme.Const(st),
-        Enzyme.Const(model),
-        Enzyme.Const(x_test),
+    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
+        half_quant.(ps),
+        ∇,
+        st,
+        model,
+        x_test;
+        seed = 1,
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -115,17 +109,15 @@ function test_seq_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
-    ∇ = zero(ps)
+    ∇ = zero(half_quant.(ps))
 
-    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(half_quant.(ps), ∇),
-        Enzyme.Const(st),
-        Enzyme.Const(model),
-        Enzyme.Const(x_test),
+    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
+        half_quant.(ps),
+        ∇,
+        st,
+        model,
+        x_test;
+        seed = 1,
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)

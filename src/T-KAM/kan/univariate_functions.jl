@@ -54,7 +54,7 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
 end
 
 function ChebyMUL(
-    l::univariate_function{T,U},
+    l::Any,
     ps::ComponentVector{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -64,7 +64,7 @@ function ChebyMUL(
 end
 
 function SplineMUL(
-    l::univariate_function{T,U},
+    l::Any,
     ps::ComponentVector{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -136,7 +136,7 @@ end
 
 function Lux.initialparameters(
     rng::AbstractRNG,
-    l::univariate_function{T,U},
+    l::Any,
 ) where {T<:half_quant,U<:full_quant}
 
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
@@ -181,7 +181,7 @@ end
 
 function Lux.initialstates(
     rng::AbstractRNG,
-    l::univariate_function{T,U},
+    l::Any,
 ) where {T<:half_quant,U<:full_quant}
     mask = ones(half_quant, l.in_dim, l.out_dim)
     return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
@@ -189,7 +189,7 @@ function Lux.initialstates(
 end
 
 function fwd(
-    l::univariate_function{T,U},
+    l::Any,
     ps::ComponentVector{T},
     st::NamedTuple,
     x::AbstractArray{T},

@@ -2,7 +2,7 @@ module WeightResamplers
 
 export residual_resampler, systematic_resampler, stratified_resampler, importance_resampler
 
-using Random, Distributions, LinearAlgebra, Enzyme, Enzyme.EnzymeRules
+using Random, Distributions, LinearAlgebra
 using NNlib: softmax
 
 include("../../utils.jl")
@@ -171,7 +171,5 @@ function importance_resampler(
         return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed = seed)
     return repeat(collect(1:N)', B, 1), seed
 end
-
-EnzymeRules.inactive(::typeof(importance_resampler), args...) = nothing
 
 end

@@ -18,7 +18,7 @@ using .UnivariateFunctions: fwd, extend_grid, univariate_function
 using .Utils: half_quant, full_quant, device, next_rng
 
 function update_fcn_grid(
-    l::univariate_function{T,U},
+    l::Any,
     ps::ComponentVector{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -64,17 +64,12 @@ function update_fcn_grid(
 end
 
 function update_model_grid(
-    model::LuxAbstractLayer,
+    model::Any,
     x::AbstractArray{T},
     ps::ComponentArray{T},
     st::NamedTuple,
     seed::Int = 1,
-)::Tuple{
-    LuxAbstractLayer,
-    ComponentArray{T},
-    NamedTuple,
-    Int,
-} where {T<:half_quant,U<:full_quant}
+)::Tuple{Any,ComponentArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 

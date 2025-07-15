@@ -19,7 +19,7 @@ function test_fwd()
 
     Random.seed!(42)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> device, st |> device
+    ps, st = ps |> ComponentArray |> device, st |> device
 
     y = fwd(f, ps, st, x)
     @test size(y) == (5, 2, 3)
@@ -30,7 +30,7 @@ function test_grid_update()
     x = rand(half_quant, 5, 3) |> device
     f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> device, st |> device
+    ps, st = ps |> ComponentArray |> device, st |> device
 
     y = fwd(f, ps, st, x)
     grid, coef = update_fcn_grid(f, ps, st, x)

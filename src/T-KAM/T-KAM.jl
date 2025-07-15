@@ -8,13 +8,17 @@ using Flux: DataLoader
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
-include("train_loss.jl")
+include("loss_fcns/langevin_mle.jl")
+include("loss_fcns/importance_sampling.jl")
+include("loss_fcns/thermodynamic.jl")
 include("../utils.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
 using .EBM_Model
 using .GeneratorModel
-using .MarginalLikelihood
+using .LangevinMLE
+using .ImportanceSampling
+using .ThermodynamicIntegration
 using .autoMALA_sampling: autoMALA_sampler
 using .ULA_sampling: ULA_sampler
 using .Utils: device, next_rng, half_quant, full_quant, hq

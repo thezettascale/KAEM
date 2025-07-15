@@ -37,6 +37,7 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     save_model::Bool
     gen_type::AbstractString
     checkpoint_every::Int
+    loss::full_quant
 end
 
 function init_trainer(
@@ -174,6 +175,7 @@ function init_trainer(
         save_model,
         gen_type,
         checkpoint_every,
+        zero(full_quant),
     )
 end
 
@@ -226,16 +228,15 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        CUDA.@fastmath Enzyme.autodiff(
-            set_runtime_activity(Reverse),
-            t.model.loss_fcn,
-            Enzyme.Active,
-            Enzyme.Duplicated(half_quant.(t.ps), grads),
-            Enzyme.Const(Lux.trainmode(t.st)),
-            Enzyme.Const(t.model),
-            Enzyme.Const(t.x),
-            Enzyme.Const(t.seed),
+        loss, grads, st_ebm, st_gen, t.seed = t.model.loss_fcn(
+            half_quant(t.ps),
+            grads,
+            Lux.trainmode(t.st),
+            t.model,
+            t.x;
+            seed = t.seed,
         )
+        t.loss = full_quant(loss) / loss_scaling
         copy!(G, full_quant.(grads) ./ loss_scaling)
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
@@ -248,18 +249,7 @@ function train!(t::T_KAM_trainer)
     # Train and test loss with logging
     function opt_loss(u, args...)
         t.ps = u
-
-        loss, st_ebm, st_gen, t.seed = CUDA.@fastmath t.model.loss_fcn(
-            half_quant(t.ps),
-            Lux.testmode(t.st),
-            t.model,
-            t.x;
-            seed = t.seed,
-        )
-        @reset t.st.ebm = st_ebm
-        @reset t.st.gen = st_gen
-        loss = full_quant(loss) / loss_scaling
-        train_loss += loss
+        train_loss += t.loss
 
         # After one epoch, calculate test loss and log to CSV
         if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1

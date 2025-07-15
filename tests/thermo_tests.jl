@@ -1,10 +1,9 @@
 using Test,
-    Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, ComponentArrays
+    Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
 ENV["autoMALA"] = "true"
 
 include("../src/T-KAM/T-KAM.jl")
@@ -36,11 +35,17 @@ function test_model_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
-
-    ∇ = gradient(
-        p -> first(model.loss_fcn(p, st, model, x_test)),
-        AD_backend,
-        half_quant.(ps),
+    ∇ = zero(ps)
+    
+    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(model),
+        Enzyme.Const(x_test),
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)

@@ -1,10 +1,9 @@
 using Test,
-    Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, ComponentArrays
+    Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ZYGOTE"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/T-KAM/kan/grid_updating.jl")
@@ -24,12 +23,18 @@ function test_ps_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    ∇ = zero(ps)
     model = move_to_hq(model)
 
-    ∇ = gradient(
-        p -> first(model.loss_fcn(p, st, model, x_test)),
-        AD_backend,
-        half_quant.(ps),
+    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(model),
+        Enzyme.Const(x_test),
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -59,11 +64,17 @@ function test_mala_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
+    ∇ = zero(ps)
 
-    ∇ = gradient(
-        p -> first(model.loss_fcn(p, st, model, x_test)),
-        AD_backend,
-        half_quant.(ps),
+    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(model),
+        Enzyme.Const(x_test),
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -79,10 +90,16 @@ function test_cnn_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
-    ∇ = gradient(
-        p -> first(model.loss_fcn(p, st, model, x_test)),
-        AD_backend,
-        half_quant.(ps),
+    ∇ = zero(ps)
+    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(model),
+        Enzyme.Const(x_test),
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)
@@ -99,11 +116,17 @@ function test_seq_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
-
-    ∇ = gradient(
-        p -> first(model.loss_fcn(p, st, model, x_test)),
-        AD_backend,
-        half_quant.(ps),
+    ∇ = zero(ps)
+    
+    f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(model),
+        Enzyme.Const(x_test),
     )
     @test norm(∇) > 0
     @test !any(isnan, ∇)

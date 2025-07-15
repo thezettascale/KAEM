@@ -1,10 +1,9 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays
-using DifferentiationInterface
+using Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")
@@ -44,10 +43,20 @@ function test_fwd_derivative()
     fcn = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, fcn)
     ps, st = ps |> ComponentArray |> device, st |> device
+    ∇ = zero(ps)
 
-    f = x -> sum(fwd(fcn, ps, st, x))
-    ∇ = gradient(f, AD_backend, x_eval)
+    f = (p, st, x, layer) -> sum(fwd(layer, p, st, x))
 
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+        Enzyme.Const(x_eval),
+        Enzyme.Const(fcn),
+    )
+    
     @test size(∇) == size(ps)
     @test !any(isnan.(∇))
 end

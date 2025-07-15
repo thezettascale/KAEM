@@ -1,5 +1,11 @@
 module LogPosteriors
 
+using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra
+
+include("../../utils.jl")
+include("../gen/gen_model.jl")
+using .Utils: device, next_rng, half_quant, full_quant
+using .GeneratorModel: log_likelihood_MALA
 
 ### ULA ### 
 function unadjusted_logpos(

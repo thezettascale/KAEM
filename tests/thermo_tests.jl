@@ -36,14 +36,8 @@ function test_model_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
-    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
-        half_quant.(ps),
-        ∇,
-        st,
-        model,
-        x_test;
-        seed = 1,
-    )
+    loss, ∇, st_ebm, st_gen, seed =
+        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

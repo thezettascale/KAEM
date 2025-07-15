@@ -11,17 +11,16 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    Enzyme
+    Enzyme,
+    ComponentArrays
 
 include("../../utils.jl")
-include("../gen/gen_model.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
 include("log_posteriors.jl")
 using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
-using .GeneratorModel: log_likelihood_MALA
 using .LogPosteriors: autoMALA_logpos_4D, autoMALA_logpos
 
 function safe_step_size_update(

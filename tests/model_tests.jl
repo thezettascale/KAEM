@@ -25,14 +25,8 @@ function test_ps_derivative()
     ∇ = zero(half_quant.(ps))
     model = move_to_hq(model)
 
-    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
-        half_quant.(ps),
-        ∇,
-        st,
-        model,
-        x_test;
-        seed = 1,
-    )
+    loss, ∇, st_ebm, st_gen, seed =
+        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -63,14 +57,8 @@ function test_mala_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
-        half_quant.(ps),
-        ∇,
-        st,
-        model,
-        x_test;
-        seed = 1,
-    )
+    loss, ∇, st_ebm, st_gen, seed =
+        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -86,14 +74,8 @@ function test_cnn_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
-        half_quant.(ps),
-        ∇,
-        st,
-        model,
-        x_test;
-        seed = 1,
-    )
+    loss, ∇, st_ebm, st_gen, seed =
+        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -111,14 +93,8 @@ function test_seq_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss, ∇, st_ebm, st_gen, seed = model.loss_fcn(
-        half_quant.(ps),
-        ∇,
-        st,
-        model,
-        x_test;
-        seed = 1,
-    )
+    loss, ∇, st_ebm, st_gen, seed =
+        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

@@ -12,7 +12,8 @@ using CUDA,
     Accessors,
     Statistics,
     DifferentiationInterface,
-    Enzyme
+    Enzyme,
+    ComponentArrays
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")

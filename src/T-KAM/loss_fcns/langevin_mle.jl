@@ -2,7 +2,7 @@ module LangevinMLE
 
 export langevin_loss
 
-using CUDA, KernelAbstractions, Enzyme
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays
 using Statistics, Lux, LuxCUDA
 
 include("../utils.jl")

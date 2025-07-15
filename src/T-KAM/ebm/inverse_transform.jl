@@ -3,7 +3,7 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
 
-using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio, ComponentArrays
 using NNlib: softmax
 
 include("../../utils.jl")

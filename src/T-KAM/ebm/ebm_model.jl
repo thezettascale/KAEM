@@ -24,16 +24,16 @@ using .InverseTransformSampling
 
 const prior_pdf = Dict(
     "uniform" =>
-        (z::AbstractArray{T}, ε::T) ->
+        (z::AbstractArray{full_quant}, ε::full_quant) ->
             half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
     "gaussian" =>
-        (z::AbstractArray{T}, ε::T) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
+        (z::AbstractArray{full_quant}, ε::full_quant) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
     "lognormal" =>
-        (z::AbstractArray{T}, ε::T) ->
+        (z::AbstractArray{full_quant}, ε::full_quant) ->
             exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "ebm" => (z::AbstractArray{T}, ε::T) -> ones(half_quant, size(z)) .- ε |> device,
+    "ebm" => (z::AbstractArray{full_quant}, ε::full_quant) -> ones(half_quant, size(z)) .- ε |> device,
     "learnable_gaussian" =>
-        (z::AbstractArray{T}, ps::ComponentArray{T}, ε::T) -> (
+        (z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant) -> (
             one(half_quant) ./ (abs.(ps[Symbol("π_σ")]) .* half_quant(sqrt(2π)) .+ ε) .* exp.(
                 -(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε),
             )

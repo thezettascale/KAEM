@@ -55,21 +55,21 @@ end
 
 function ChebyMUL(
     l::Any,
-    ps::ComponentVector{T},
+    ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
     y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+)::AbstractArray{T} where {T<:half_quant}
     return y .* st.mask
 end
 
 function SplineMUL(
     l::Any,
-    ps::ComponentVector{T},
+    ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
     y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, O, B = size(y)
     base = l.base_activation(x)
     return ps.w_base .* reshape(base, I, 1, B) .+ ps.w_sp .* y .* st.mask
@@ -134,10 +134,7 @@ function init_function(
     )
 end
 
-function Lux.initialparameters(
-    rng::AbstractRNG,
-    l::Any,
-) where {T<:half_quant,U<:full_quant}
+function Lux.initialparameters(rng::AbstractRNG, l::univariate_function{T,U}) where {T<:half_quant,U<:full_quant}
 
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
@@ -179,10 +176,7 @@ function Lux.initialparameters(
     end
 end
 
-function Lux.initialstates(
-    rng::AbstractRNG,
-    l::Any,
-) where {T<:half_quant,U<:full_quant}
+function Lux.initialstates(rng::AbstractRNG, l::univariate_function{T,U}) where {T<:half_quant,U<:full_quant}
     mask = ones(half_quant, l.in_dim, l.out_dim)
     return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
            (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
@@ -190,10 +184,10 @@ end
 
 function fwd(
     l::Any,
-    ps::ComponentVector{T},
+    ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+)::AbstractArray{T} where {T<:half_quant}
     """
     Forward pass for the univariate function.
 

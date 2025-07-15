@@ -19,7 +19,7 @@ using .Utils: half_quant, full_quant, device, next_rng
 
 function update_fcn_grid(
     l::Any,
-    ps::ComponentVector{T},
+    ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{U}} where {T<:half_quant,U<:full_quant}
@@ -69,7 +69,7 @@ function update_model_grid(
     ps::ComponentArray{T},
     st::NamedTuple,
     seed::Int = 1,
-)::Tuple{Any,ComponentArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
+)::Tuple{Any,ComponentArray{T},NamedTuple,Int} where {T<:half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 

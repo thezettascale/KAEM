@@ -45,7 +45,7 @@ function test_fwd_derivative()
     ps, st = ps |> ComponentArray |> device, st |> device
     ∇ = zero(ps)
 
-    f = (p, st, x, layer) -> sum(fwd(layer, p, st, x))
+    f = (p, s, x, layer) -> sum(fwd(layer, p, s, x))
 
     Enzyme.autodiff(
         set_runtime_activity(Reverse),

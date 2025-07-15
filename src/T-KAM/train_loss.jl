@@ -100,8 +100,8 @@ function langevin_loss(
 ) where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
-    z, st, seed = sample_langevin(ps, st, m, x; seed = seed)
-    st_ebm, st_gen = st.ebm, st.gen
+    z, st_new, seed = sample_langevin(ps, st, m, x; seed = seed)
+    st_ebm, st_gen = st_new.ebm, st_new.gen
 
     # Log-dists
     logprior_pos, st_ebm = m.prior.lp_fcn(
@@ -148,12 +148,11 @@ function thermo_loss(
     """Thermodynamic integration loss."""
 
     # Schedule temperatures
-    z, temps, st, seed = sample_thermo(ps, st, m, x; seed = seed)
+    z, temps, st_new, seed = sample_thermo(ps, st, m, x; seed = seed)
     Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
 
     log_ss = zero(T)
-    st_ebm = st.ebm
-    st_gen = st.gen
+    st_ebm, st_gen = st_new.ebm, st_new.gen
 
     # Steppingstone estimator
     for k = 1:(T_length-2)

@@ -4,7 +4,6 @@ using BenchmarkTools,
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/pipeline/data_utils.jl")

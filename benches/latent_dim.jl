@@ -5,20 +5,18 @@ using BenchmarkTools,
     CUDA,
     ComponentArrays,
     CSV,
-    DataFrames,
-    DifferentiationInterface
+    DataFrames
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: device, half_quant, AD_backend
+using .Utils: device, half_quant
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)

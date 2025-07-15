@@ -11,7 +11,6 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    DifferentiationInterface,
     Enzyme,
     ComponentArrays
 

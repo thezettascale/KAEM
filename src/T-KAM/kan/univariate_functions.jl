@@ -120,6 +120,7 @@ function init_function(
         τ_trainable,
         basis_mul,
         coef2curve,
+        curve2coef
     )
 end
 

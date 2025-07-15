@@ -99,9 +99,7 @@ function init_function(
         (x, g, c, σ) ->
             coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
     curve2coef =
-        basis_fcn == FFT_basis ? (x, g, y, σ) -> curve2coef(x, g, y, σ; k = spline_degree) :
-        (x, g, y, σ) ->
-            curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
+        basis_fcn == (x, g, y, σ) -> curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
 
     return univariate_function(
         in_dim,

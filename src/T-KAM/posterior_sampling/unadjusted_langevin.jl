@@ -17,7 +17,7 @@ using CUDA,
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq, AD_backend
+using .Utils: device, next_rng, half_quant, full_quant, fq
 using .GeneratorModel: log_likelihood_MALA
 
 π_dist = Dict(

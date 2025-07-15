@@ -1,10 +1,9 @@
 using Test,
-    Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface, ComponentArrays
+    Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/T-KAM/gen/gen_model.jl")
@@ -101,12 +100,24 @@ function test_derivative()
 
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = gradient(
-        z_i -> sum(first(log_likelihood_IS(z_i, x, lkhood, ps.gen, st.gen))),
-        AD_backend,
-        z,
+    ∇ = z .* zero(half_quant)
+
+
+    f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
+
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(z, ∇),
+        Enzyme.Const(x),
+        Enzyme.Const(lkhood),
+        Enzyme.Const(ps.gen),
+        Enzyme.Const(st.gen),
     )
+
     @test size(∇) == size(z)
+    @test !any(isnan, ∇)
 end
 
 function test_cnn_derivative()
@@ -121,12 +132,23 @@ function test_cnn_derivative()
 
     x = randn(half_quant, 32, 32, out_dim, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = gradient(
-        p -> sum(first(log_likelihood_IS(z, x, lkhood, p, st.gen))),
-        AD_backend,
-        ps.gen,
+    ∇ = z .* zero(half_quant)
+
+    f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
+
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(z, ∇),
+        Enzyme.Const(x),
+        Enzyme.Const(lkhood),
+        Enzyme.Const(ps.gen),
+        Enzyme.Const(st.gen),
     )
-    @test size(∇) == size(ps.gen)
+
+    @test size(∇) == size(z)
+    @test !any(isnan, ∇)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
@@ -143,13 +165,23 @@ function test_seq_derivative()
 
     x = randn(half_quant, lkhood.out_size, 8, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
-    ∇ = gradient(
-        p -> sum(first(log_likelihood_IS(z, x, lkhood, p, st.gen))),
-        AD_backend,
-        ps.gen,
-    )
-    @test size(∇) == size(ps.gen)
+    ∇ = z .* zero(half_quant)
 
+    f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
+
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse),
+        f,
+        Enzyme.Active,
+        Enzyme.Duplicated(z, ∇),
+        Enzyme.Const(x),
+        Enzyme.Const(lkhood),
+        Enzyme.Const(ps.gen),
+        Enzyme.Const(st.gen),
+    )
+
+    @test size(∇) == size(z)
+    @test !any(isnan, ∇)
     commit!(conf, "SEQ", "sequence_length", "1")
 end
 

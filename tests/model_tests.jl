@@ -4,7 +4,7 @@ using Test,
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-ENV["AD_BACKEND"] = "ENZYME"
+ENV["AD_BACKEND"] = "ZYGOTE"
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/T-KAM/kan/grid_updating.jl")

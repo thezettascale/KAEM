@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme
+using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -25,7 +25,7 @@ end
 
 wrap = PriorWrapper(EBM)
 
-ps = (ebm = ps, gen = ps) |> device
+ps = (ebm = ps, gen = ps) |> ComponentArray |> device
 st = (ebm = st, gen = st) |> device
 
 function test_shapes()

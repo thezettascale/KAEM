@@ -22,7 +22,7 @@ function update_fcn_grid(
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
-)::Tuple{AbstractArray{T},AbstractArray{U}} where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},AbstractArray{full_quant}} where {T<:half_quant}
     """
     Adapt the function's grid to the distribution of the input data.
 

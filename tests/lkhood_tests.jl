@@ -34,7 +34,7 @@ function test_generate()
     lkhood = init_GenModel(conf, (32, 32, 1); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = (ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
@@ -48,7 +48,7 @@ function test_cnn_generate()
     lkhood = init_GenModel(conf, (32, 32, out_dim); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = (ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
@@ -65,7 +65,7 @@ function test_seq_generate()
     lkhood = init_GenModel(conf, (out_dim, 8); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = (ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, 1))
@@ -80,7 +80,7 @@ function test_logllhood()
     lkhood = init_GenModel(conf, (out_dim, out_dim, 1); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = (ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device
@@ -126,7 +126,7 @@ function test_cnn_derivative()
     lkhood = init_GenModel(conf, (32, 32, out_dim); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = ComponentArray(ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     x = randn(half_quant, 32, 32, out_dim, b_size) |> device
@@ -159,7 +159,7 @@ function test_seq_derivative()
     lkhood = init_GenModel(conf, (out_dim, 8); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = ComponentArray(ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     x = randn(half_quant, lkhood.out_size, 8, b_size) |> device

@@ -93,13 +93,13 @@ function init_function(
 
     basis_fcn = get(SplineBasis_mapping, spline_function, B_spline_basis)
     basis_mul = spline_function == "Cheby" ? ChebyMUL : SplineMUL
-    coef2curve =
+    coef2curve_fcn =
         basis_fcn == FFT_basis ?
         (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ; k = spline_degree) :
         (x, g, c, σ) ->
             coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
-    curve2coef =
-        (x, g, y, σ) ->
+    curve2coef_fcn =
+        (x, y, g, σ) ->
             curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
 
     return univariate_function(
@@ -118,8 +118,8 @@ function init_function(
         [init_τ],
         τ_trainable,
         basis_mul,
-        coef2curve,
-        curve2coef,
+        coef2curve_fcn,
+        curve2coef_fcn,
     )
 end
 

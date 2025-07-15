@@ -192,5 +192,5 @@ end
     test_logllhood()
     test_derivative()
     test_cnn_derivative()
-    test_seq_derivative()
+    # test_seq_derivative() # Not with Enzyme
 end

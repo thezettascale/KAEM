@@ -65,6 +65,8 @@ In this project, implicit types/quantization are never used. Quantization is exp
 
 Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.
 
+Autodifferentiation was switched from [Zygote](https://github.com/FluxML/Zygote.jl) to [Enzyme](https://enzyme.mit.edu/julia/stable/). First-time compilation is painfully slow since T-KAM is complex to lower to LLVM. but it heavily speeds up repeated calls, (shaving off training time significantly).
+
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The MIT license open-sources the code. The paper is licensed separately with CC license - also open with citation:

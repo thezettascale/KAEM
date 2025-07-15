@@ -5,7 +5,6 @@ export cross_entropy_IS,
 
 using CUDA, KernelAbstractions
 using NNlib: softmax
-using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
 using .Utils: half_quant, full_quant, device, next_rng

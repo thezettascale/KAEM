@@ -3,16 +3,14 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
 
-using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio, Enzyme
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, Tullio
 using NNlib: softmax
-using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
 include("log_prior_fcns.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .LogPriorFCNs: prior_fwd
 using Flux: onehotbatch
-using Enzyme, Enzyme.EnzymeRules
 
 function trapezium_quadrature(
     ebm,
@@ -83,7 +81,7 @@ function gausslegendre_quadrature(
 ) where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
-    nodes, weights, nodes_cpu = @ignore_derivatives get_gausslegendre(ebm, ps, st)
+    nodes, weights, nodes_cpu = get_gausslegendre(ebm, ps, st)
     π_nodes =
         ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(nodes', ps, ε) :
         ebm.π_pdf(nodes, ε)
@@ -247,8 +245,5 @@ function sample_mixture(
 
     return device(T.(z)), st, seed
 end
-
-EnzymeRules.inactive(::typeof(sample_univariate), args...) = nothing
-EnzymeRules.inactive(::typeof(sample_mixture), args...) = nothing
 
 end

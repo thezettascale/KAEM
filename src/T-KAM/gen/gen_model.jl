@@ -11,7 +11,6 @@ using CUDA, KernelAbstractions
 using ConfParser,
     Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
-using ChainRules: @ignore_derivatives
 
 include("../kan/univariate_functions.jl")
 include("../ebm/ebm_model.jl")
@@ -110,7 +109,7 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
     batchnorm = false
 
     resample_fcn =
-        (weights, seed) -> @ignore_derivatives importance_resampler(
+        (weights, seed) -> importance_resampler(
             weights;
             seed = seed,
             ESS_threshold = ESS_threshold,

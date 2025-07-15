@@ -5,7 +5,6 @@ export prior_fwd, log_prior_univar, log_prior_ula, log_prior_mix
 using CUDA,
     KernelAbstractions, Tullio, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, Tullio
 using NNlib: softmax
-using ChainRules: @ignore_derivatives
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
@@ -43,11 +42,11 @@ function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("ln_$i")],
                 st[Symbol("ln_$i")],
             )
-            @ignore_derivatives new_st[Symbol("ln_$i")] = st_new
+            new_st[Symbol("ln_$i")] = st_new
         end
     end
 
-    @ignore_derivatives set_state!(st, new_st)
+    set_state!(st, new_st)
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end

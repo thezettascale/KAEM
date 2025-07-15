@@ -40,7 +40,7 @@ end
 function test_fwd_derivative()
     Random.seed!(42)
     x_eval = rand(half_quant, 5, 3) |> device
-    fcn = init_function(5, 2; spline_function="RBF")
+    fcn = init_function(5, 2; spline_function = "RBF")
     ps, st = Lux.setup(Random.GLOBAL_RNG, fcn)
     ps, st = ps |> ComponentArray |> device, st |> device
     ∇ = zero(ps)

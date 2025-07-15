@@ -12,8 +12,7 @@ using CUDA,
     Accessors,
     Statistics,
     DifferentiationInterface,
-    Enzyme,
-    Enzyme.EnzymeRules
+    Enzyme
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -177,7 +176,5 @@ function ULA_sampler(
 
     return T.(z), st, seed
 end
-
-EnzymeRules.inactive(::typeof(ULA_sampler), args...) = nothing
 
 end

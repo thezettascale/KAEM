@@ -5,7 +5,6 @@ export KAN_fwd, CNN_fwd, SEQ_fwd
 using CUDA, KernelAbstractions, Accessors, Tullio
 using Lux, LuxCUDA
 using NNlib: softmax, batched_mul
-using ChainRules: @ignore_derivatives
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
@@ -44,11 +43,11 @@ function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("ln_$i")],
                 st[Symbol("ln_$i")],
             )
-            @ignore_derivatives new_st[Symbol("ln_$i")] = st_new
+            new_st[Symbol("ln_$i")] = st_new
         end
     end
 
-    @ignore_derivatives set_state!(st, new_st)
+    set_state!(st, new_st)
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
@@ -73,7 +72,7 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     for i = 1:lkhood.depth
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("$i")], z, ps[Symbol("$i")], st[Symbol("$i")])
-        @ignore_derivatives new_st[Symbol("$i")] = st_new
+        new_st[Symbol("$i")] = st_new
 
         if lkhood.batchnorm
             z, st_new = Lux.apply(
@@ -82,7 +81,7 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
                 ps[Symbol("bn_$i")],
                 st[Symbol("bn_$i")],
             )
-            @ignore_derivatives new_st[Symbol("bn_$i")] = st_new
+            new_st[Symbol("bn_$i")] = st_new
         end
     end
 
@@ -92,9 +91,9 @@ function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         ps[Symbol("$(lkhood.depth+1)")],
         st[Symbol("$(lkhood.depth+1)")],
     )
-    @ignore_derivatives new_st[Symbol("$(lkhood.depth+1)")] = st_new
+    new_st[Symbol("$(lkhood.depth+1)")] = st_new
 
-    @ignore_derivatives set_state!(st, new_st)
+    set_state!(st, new_st)
     return z, st
 end
 
@@ -148,10 +147,10 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
 
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("1")], z, ps[Symbol("1")], st[Symbol("1")])
-    @ignore_derivatives new_st[Symbol("1")] = st_new
+    new_st[Symbol("1")] = st_new
     z, st_new =
         Lux.apply(lkhood.Φ_fcns[Symbol("ln_1")], z, ps[Symbol("ln_1")], st[Symbol("ln_1")])
-    @ignore_derivatives new_st[Symbol("ln_1")] = st_new
+    new_st[Symbol("ln_1")] = st_new
 
     z_prev = z
     for t = 2:lkhood.seq_length
@@ -159,13 +158,13 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         # Self-attention
         Q, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("Q")], z, ps[Symbol("Q")], st[Symbol("Q")])
-        @ignore_derivatives new_st[Symbol("Q")] = st_new
+        new_st[Symbol("Q")] = st_new
         K, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("K")], z, ps[Symbol("K")], st[Symbol("K")])
-        @ignore_derivatives new_st[Symbol("K")] = st_new
+        new_st[Symbol("K")] = st_new
         V, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("V")], z, ps[Symbol("V")], st[Symbol("V")])
-        @ignore_derivatives new_st[Symbol("V")] = st_new
+        new_st[Symbol("V")] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z .+ attn
@@ -173,14 +172,14 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
         # Feed forward
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[Symbol("2")], z, ps[Symbol("2")], st[Symbol("2")])
-        @ignore_derivatives new_st[Symbol("2")] = st_new
+        new_st[Symbol("2")] = st_new
         z, st_new = Lux.apply(
             lkhood.Φ_fcns[Symbol("ln_2")],
             z[:, end:end, :],
             ps[Symbol("ln_2")],
             st[Symbol("ln_2")],
         )
-        @ignore_derivatives new_st[Symbol("ln_2")] = st_new
+        new_st[Symbol("ln_2")] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
@@ -188,9 +187,9 @@ function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
 
     # Output layer
     z, st_new = Lux.apply(lkhood.Φ_fcns[Symbol("3")], z, ps[Symbol("3")], st[Symbol("3")])
-    @ignore_derivatives new_st[Symbol("3")] = st_new
+    new_st[Symbol("3")] = st_new
 
-    @ignore_derivatives set_state!(st, new_st)
+    set_state!(st, new_st)
     return z, st
 end
 

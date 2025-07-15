@@ -11,8 +11,7 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    Enzyme,
-    Enzyme.EnzymeRules
+    Enzyme
 
 include("../../utils.jl")
 include("preconditioner.jl")
@@ -423,7 +422,5 @@ function autoMALA_sampler(
     any(isnan.(z)) && error("NaN in z")
     return T.(z), st, seed
 end
-
-EnzymeRules.inactive(::typeof(autoMALA_sampler), args...) = nothing
 
 end

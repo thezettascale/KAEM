@@ -4,17 +4,17 @@ export T_KAM, init_T_KAM, generate_batch, move_to_hq
 
 using CUDA, KernelAbstractions, Enzyme.EnzymeRules
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
-using Flux: DataLoader, mse
-using NNlib: sigmoid_fast
-using ChainRules: @ignore_derivatives
+using Flux: DataLoader
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
+include("train_loss.jl")
 include("../utils.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
 using .EBM_Model
 using .GeneratorModel
+using .MarginalLikelihood
 using .autoMALA_sampling: autoMALA_sampler
 using .ULA_sampling: ULA_sampler
 using .Utils: device, next_rng, half_quant, full_quant, hq
@@ -61,185 +61,6 @@ function generate_batch(model::T_KAM, ps, st, num_samples::Int; seed::Int = 1)
     z, st_ebm, seed = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), seed)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
     return model.lkhood.output_activation(x̂), st_ebm, st_gen, seed
-end
-
-function grep_weights(
-    lkhood,
-    logllhood::AbstractArray{T},
-    seed::Int = 1,
-) where {T<:half_quant}
-    weights = @ignore_derivatives softmax(full_quant.(logllhood), dims = 2)
-    resampled_idxs, seed = lkhood.resample_z(weights, seed)
-    weights_resampled = @ignore_derivatives softmax(
-        reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
-        dims = 2,
-    ) .|> T
-    return weights_resampled, resampled_idxs, seed
-end
-
-EnzymeRules.inactive(::typeof(grep_weights), args...) = nothing
-
-function importance_loss(
-    ps,
-    st,
-    m::T_KAM,
-    x::AbstractArray{T};
-    seed::Int = 1,
-) where {T<:half_quant}
-    """MLE loss with importance sampling."""
-
-    z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
-
-    # Log-dists
-    logprior, st_ebm = m.prior.lp_fcn(
-        z,
-        m.prior,
-        ps.ebm,
-        st_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
-    )
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen, seed =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
-
-    # Weights and resampling
-    weights_resampled, resampled_idxs, seed =
-        @ignore_derivatives grep_weights(m.lkhood, logllhood, seed)
-    logprior_resampled =
-        reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
-    logllhood_resampled =
-        reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
-
-    # Expected posterior
-    loss_prior = sum(weights_resampled .* logprior_resampled', dims = 2)
-    loss_llhood = sum(weights_resampled .* logllhood_resampled, dims = 2)
-
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling,
-    st_ebm,
-    st_gen,
-    seed
-end
-
-function mala_loss(
-    ps,
-    st,
-    m::T_KAM,
-    x::AbstractArray{T};
-    seed::Int = 1,
-) where {T<:half_quant}
-    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
-
-    # MALA sampling
-    z, st, seed = m.posterior_sample(m, x, 0, ps, st, seed)
-    st_ebm, st_gen = st.ebm, st.gen
-
-    # Log-dists
-    logprior_pos, st_ebm = m.prior.lp_fcn(
-        z[:, :, :, 1],
-        m.prior,
-        ps.ebm,
-        st_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
-    )
-    logllhood, st_gen, seed = log_likelihood_MALA(
-        z[:, :, :, 1],
-        x,
-        m.lkhood,
-        ps.gen,
-        st_gen;
-        seed = seed,
-        ε = m.ε,
-    )
-    contrastive_div = mean(logprior_pos)
-
-    if m.prior.contrastive_div
-        z, st_ebm, seed = m.prior.sample_z(m, size(x)[end], ps, st, seed)
-        logprior, st_ebm = m.prior.lp_fcn(
-            z,
-            m.prior,
-            ps.ebm,
-            st_ebm;
-            ε = m.ε,
-            normalize = !m.prior.contrastive_div,
-        )
-        contrastive_div -= mean(logprior)
-    end
-
-    return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen, seed
-end
-
-function thermo_loss(
-    ps,
-    st,
-    m::T_KAM,
-    x::AbstractArray{T};
-    seed::Int = 1,
-) where {T<:half_quant}
-    """Annealed importance sampling (AIS) loss."""
-
-    @ignore_derivatives m.verbose && println("--------------------------------") # To separate logs
-
-    # Schedule temperatures
-    temps = @ignore_derivatives collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed)
-    Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
-
-    log_ss = zero(T)
-    st_ebm = st.ebm
-    st_gen = st.gen
-
-    # Steppingstone estimator
-    for k = 1:(T_length-2)
-        logllhood, st_gen, seed = log_likelihood_MALA(
-            z[:, :, :, k],
-            x,
-            m.lkhood,
-            ps.gen,
-            st_gen;
-            seed = seed,
-            ε = m.ε,
-        )
-        log_ss += mean(logllhood .* Δt[k+1])
-    end
-
-    # MLE estimator
-    logprior, st_ebm = m.prior.lp_fcn(
-        z[:, :, :, T_length-1],
-        m.prior,
-        ps.ebm,
-        st_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
-    )
-    contrastive_div = mean(logprior)
-
-    z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
-    if m.prior.contrastive_div
-        logprior, st_ebm = m.prior.lp_fcn(
-            z,
-            m.prior,
-            ps.ebm,
-            st_ebm;
-            ε = m.ε,
-            normalize = !m.prior.contrastive_div,
-        )
-        contrastive_div -= mean(logprior)
-    end
-
-    logllhood, st_gen, seed = log_likelihood_MALA(
-        m.lkhood,
-        ps.gen,
-        st_gen,
-        x,
-        z[:, :, :, 1];
-        seed = seed,
-        ε = m.ε,
-    )
-    log_ss += mean(logllhood .* Δt[1])
-
-    return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function init_T_KAM(
@@ -306,12 +127,12 @@ function init_T_KAM(
     lkhood_model = init_GenModel(conf, x_shape; lkhood_seed = lkhood_seed)
 
     if prior_model.ula
-        loss_fcn = mala_loss
+        loss_fcn = langevin_loss
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
         x_ = zeros(half_quant, 1, batch_size) |> device
         @reset prior_model.sample_z =
-            (m, n, p, s, seed_prior) -> @ignore_derivatives ULA_sampler(
+            (m, n, p, s, seed_prior) -> ULA_sampler(
                 m,
                 p,
                 Lux.testmode(s),
@@ -352,19 +173,13 @@ function init_T_KAM(
     posterior_fcn = identity
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
     if (use_MALA && !(N_t > 1)) || (length(widths) > 2)
-        loss_fcn = mala_loss
+        loss_fcn = langevin_loss
         posterior_fcn =
-            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(
-                m,
-                ps,
-                Lux.testmode(st),
-                x;
-                N = num_steps,
-                seed = seed,
-            )
+            (m, x, t, ps, st, seed) ->
+                ULA_sampler(m, ps, Lux.testmode(st), x; N = num_steps, seed = seed)
         if autoMALA_bool
             posterior_fcn =
-                (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(
+                (m, x, t, ps, st, seed) -> autoMALA_sampler(
                     m,
                     ps,
                     Lux.testmode(st),
@@ -390,7 +205,7 @@ function init_T_KAM(
 
         loss_fcn = thermo_loss
         posterior_fcn =
-            (m, x, t, ps, st, seed) -> @ignore_derivatives ULA_sampler(
+            (m, x, t, ps, st, seed) -> ULA_sampler(
                 m,
                 ps,
                 Lux.testmode(st),
@@ -402,7 +217,7 @@ function init_T_KAM(
             )
         if autoMALA_bool
             posterior_fcn =
-                (m, x, t, ps, st, seed) -> @ignore_derivatives autoMALA_sampler(
+                (m, x, t, ps, st, seed) -> autoMALA_sampler(
                     m,
                     ps,
                     Lux.testmode(st),

@@ -12,7 +12,6 @@ using ConfParser,
     Statistics,
     LinearAlgebra,
     ComponentArrays
-using ChainRules: @ignore_derivatives
 
 include("log_prior_fcns.jl")
 include("../kan/univariate_functions.jl")
@@ -108,23 +107,9 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
     sample_function =
         (m, n, p, s, seed) -> begin
             if mixture_model
-                @ignore_derivatives sample_mixture(
-                    m.prior,
-                    n,
-                    p.ebm,
-                    Lux.testmode(s.ebm);
-                    seed = seed,
-                    ε = eps,
-                )
+                sample_mixture(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed = seed, ε = eps)
             else
-                @ignore_derivatives sample_univariate(
-                    m.prior,
-                    n,
-                    p.ebm,
-                    Lux.testmode(s.ebm);
-                    seed = seed,
-                    ε = eps,
-                )
+                sample_univariate(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed = seed, ε = eps)
             end
         end
 

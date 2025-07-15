@@ -5,7 +5,6 @@ export removeNaN,
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions, Zygote, Enzyme, Enzyme.EnzymeRules
-using ChainRules: @ignore_derivatives
 
 const pu =
     CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
@@ -39,7 +38,7 @@ function removeNeg(x; ε = half_quant(1e-4))
 end
 
 function next_rng(seed)
-    rng = @ignore_derivatives Random.seed!(seed)
+    rng = Random.seed!(seed)
     return seed + 1, rng
 end
 

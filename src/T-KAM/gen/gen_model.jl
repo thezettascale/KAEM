@@ -243,7 +243,7 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel)
+function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
 
     ps = NamedTuple(
         Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for
@@ -277,7 +277,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel)
     return ps
 end
 
-function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel)
+function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
 
     st = NamedTuple(
         Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) |> hq for

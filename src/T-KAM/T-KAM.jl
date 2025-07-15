@@ -42,7 +42,13 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     max_samples::Int
 end
 
-function generate_batch(model::T_KAM, ps, st, num_samples::Int; seed::Int = 1)
+function generate_batch(
+    model::T_KAM,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    num_samples::Int;
+    seed::Int = 1,
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """
     Inference pass to generate a batch of data from the model.
     This is the same for both the standard and thermodynamic models.
@@ -71,7 +77,7 @@ function init_T_KAM(
     prior_seed::Int = 1,
     lkhood_seed::Int = 1,
     data_seed::Int = 1,
-)
+)::T_KAM where {T<:half_quant,U<:full_quant}
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     IS_samples = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))
@@ -271,7 +277,10 @@ function init_T_KAM(
     )
 end
 
-function init_from_file(file_loc::AbstractString, ckpt::Int)
+function init_from_file(
+    file_loc::AbstractString,
+    ckpt::Int,
+)::Tuple{T_KAM{T,U},ComponentArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """Load a model from a checkpoint file."""
     saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
     model = saved_data["model"] |> deepcopy
@@ -281,14 +290,20 @@ function init_from_file(file_loc::AbstractString, ckpt::Int)
 end
 
 
-function Lux.initialparameters(rng::AbstractRNG, model::T_KAM)
+function Lux.initialparameters(
+    rng::AbstractRNG,
+    model::T_KAM{T,U},
+) where {T<:half_quant,U<:full_quant}
     return ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior),
         gen = Lux.initialparameters(rng, model.lkhood),
     )
 end
 
-function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
+function Lux.initialstates(
+    rng::AbstractRNG,
+    model::T_KAM{T,U},
+) where {T<:half_quant,U<:full_quant}
     return (
         ebm = Lux.initialstates(rng, model.prior),
         gen = Lux.initialstates(rng, model.lkhood),
@@ -298,7 +313,7 @@ function Lux.initialstates(rng::AbstractRNG, model::T_KAM)
     )
 end
 
-function move_to_hq(model::T_KAM)
+function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""
 
     if model.prior.layernorm

@@ -2,7 +2,7 @@ module UnivariateFunctions
 
 export univariate_function, init_function, fwd, activation_mapping
 
-using CUDA, KernelAbstractions, Accessors
+using CUDA, KernelAbstractions, Accessors, ComponentArrays
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 include("spline_bases.jl")
@@ -53,17 +53,23 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     curve2coef::Function
 end
 
-function ChebyMUL(l, ps, st, x::AbstractArray{T}, y::AbstractArray{T}) where {T<:half_quant}
+function ChebyMUL(
+    l::univariate_function{T,U},
+    ps::ComponentVector{T},
+    st::NamedTuple,
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
     return y .* st.mask
 end
 
 function SplineMUL(
-    l,
-    ps,
-    st,
+    l::univariate_function{T,U},
+    ps::ComponentVector{T},
+    st::NamedTuple,
     x::AbstractArray{T},
     y::AbstractArray{T},
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
     I, O, B = size(y)
     base = l.base_activation(x)
     return ps.w_base .* reshape(base, I, 1, B) .+ ps.w_sp .* y .* st.mask
@@ -128,7 +134,10 @@ function init_function(
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
+function Lux.initialparameters(
+    rng::AbstractRNG,
+    l::univariate_function{T,U},
+) where {T<:half_quant,U<:full_quant}
 
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
@@ -170,13 +179,21 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
     end
 end
 
-function Lux.initialstates(rng::AbstractRNG, l::univariate_function)
+function Lux.initialstates(
+    rng::AbstractRNG,
+    l::univariate_function{T,U},
+) where {T<:half_quant,U<:full_quant}
     mask = ones(half_quant, l.in_dim, l.out_dim)
     return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
            (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
 end
 
-function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+function fwd(
+    l::univariate_function{T,U},
+    ps::ComponentVector{T},
+    st::NamedTuple,
+    x::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
     """
     Forward pass for the univariate function.
 

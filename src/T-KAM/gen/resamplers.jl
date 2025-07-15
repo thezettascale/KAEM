@@ -14,7 +14,7 @@ function residual_resampler(
     B::Int,
     N::Int;
     seed::Int = 1,
-) where {U<:full_quant}
+)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Residual resampling for weight filtering.
 
@@ -72,7 +72,7 @@ function systematic_resampler(
     B::Int,
     N::Int;
     seed::Int = 1,
-) where {U<:full_quant}
+)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -107,7 +107,7 @@ function stratified_resampler(
     B::Int,
     N::Int;
     seed::Int = 1,
-) where {U<:full_quant}
+)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -142,7 +142,7 @@ function importance_resampler(
     ESS_threshold::U = full_quant(0.5),
     resampler::Function = systematic_sampler,
     verbose::Bool = false,
-) where {U<:full_quant}
+)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 

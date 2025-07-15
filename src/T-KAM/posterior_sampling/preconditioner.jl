@@ -30,7 +30,7 @@ function build_preconditioner!(
     ::IdentityPreconditioner,
     std_devs::AbstractArray{T};
     seed::Int = 1,
-) where {T}
+)::AbstractArray{T} where {T}
     fill!(dest, one(T))
     return dest
 end
@@ -41,7 +41,7 @@ function build_preconditioner!(
     ::DiagonalPreconditioner,
     std_devs::AbstractArray{T};
     seed::Int = 1,
-) where {T}
+)::AbstractArray{T} where {T}
     @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
     return dest
 end
@@ -52,7 +52,7 @@ function build_preconditioner!(
     prec::MixDiagonalPreconditioner,
     std_devs::AbstractArray{T};
     seed::Int = 1,
-) where {T}
+)::AbstractArray{T} where {T}
     seed, rng = next_rng(seed)
     u = rand(rng, T)
 
@@ -89,7 +89,7 @@ function sample_momentum(
     M::AbstractArray{U};
     seed::Int = 1,
     preconditioner::Preconditioner = MixDiagonalPreconditioner(),
-) where {U<:full_quant}
+)::Tuple{AbstractArray{U},AbstractArray{U},Int} where {U<:full_quant}
     Q, P, S = size(z)
 
     # Compute M^{1/2}

@@ -13,7 +13,7 @@ function position_update(
     ∇z::AbstractArray{U},
     M::AbstractArray{U},
     η::AbstractArray{U},
-) where {U<:full_quant}
+)::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     η = reshape(η, 1, 1, size(η)...)
     y = momentum .+ (η ./ 2) .* ∇z ./ M
     ẑ = z .+ η .* y ./ M
@@ -25,7 +25,7 @@ function momentum_update(
     ∇ẑ::AbstractArray{U},
     M::AbstractArray{U},
     η::AbstractArray{U},
-) where {U<:full_quant}
+)::AbstractArray{U} where {U<:full_quant}
     return y .+ (reshape(η, 1, 1, size(η)...) ./ 2) .* ∇ẑ ./ M
 end
 
@@ -40,7 +40,14 @@ function leapfrop_proposal(
     η::AbstractArray{U},
     logpos_withgrad::Function,
     temps::AbstractArray{T},
-) where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
     """
     Implements preconditioned Hamiltonian dynamics with transformed momentum:
     y*(x,y)   = y  + (eps/2)M^{-1/2}grad(log pi)(x)

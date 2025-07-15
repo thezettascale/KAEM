@@ -2,7 +2,7 @@ module GeneratorFCNs
 
 export KAN_fwd, CNN_fwd, SEQ_fwd
 
-using CUDA, KernelAbstractions, Accessors, Tullio
+using CUDA, KernelAbstractions, Accessors, Tullio, ComponentArrays
 using Lux, LuxCUDA
 using NNlib: softmax, batched_mul
 
@@ -11,7 +11,12 @@ include("../../utils.jl")
 using .Utils: half_quant, full_quant, device, set_state!
 using .UnivariateFunctions: fwd
 
-function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
+function KAN_fwd(
+    lkhood::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    z::AbstractArray{T},
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Generate data from the KAN likelihood model.
 
@@ -51,7 +56,12 @@ function KAN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
-function CNN_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
+function CNN_fwd(
+    lkhood::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    z::AbstractArray{T},
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Generate data from the CNN likelihood model.
 
@@ -128,7 +138,12 @@ function scaled_dot_product_attention(
     return out
 end
 
-function SEQ_fwd(lkhood, ps, st, z::AbstractArray{T}) where {T<:half_quant}
+function SEQ_fwd(
+    lkhood::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    z::AbstractArray{T},
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Generate data from the Transformer decoder.
 

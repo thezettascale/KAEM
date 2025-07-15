@@ -32,7 +32,7 @@ function B_spline_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x, 1), size(x, 2), size(grid, 2)
 
     # Initialize degree 0, piecewise const
@@ -73,7 +73,7 @@ function RBF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     σ = ((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
     diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
@@ -85,7 +85,7 @@ function RSWAF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     diff = NNlib.tanh_fast(diff ./ σ)
@@ -97,7 +97,7 @@ function FFT_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     freq = reshape(x, I, 1, S) .* grid
     freq = T(2π) .* freq .* σ
@@ -109,7 +109,7 @@ function Cheby_basis(
     grid_::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
     linspace = collect(0:degree) .|> T |> device
@@ -123,7 +123,7 @@ function coef2curve_FFT(
     σ::AbstractArray{T};
     k::Int = 3,
     basis_function::Function = FFT_basis,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     spl = basis_function(x_eval, grid, σ; degree = k)
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     even, odd = spl
@@ -139,7 +139,7 @@ function coef2curve_Spline(
     σ::AbstractArray{T};
     k::Int = 3,
     basis_function::Function = FFT_basis,
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     spl = basis_function(x_eval, grid, σ; degree = k)
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     spl = reshape(spl, I, G, 1, S)
@@ -155,7 +155,7 @@ function curve2coef(
     k::Int = 3,
     ε::U = full_quant(1.0f-4),
     basis_function::Function = B_spline_basis,
-) where {T<:half_quant,U<:full_quant}
+)::AbstractArray{U} where {T<:half_quant,U<:full_quant}
     """
     Convert B-spline curves to B-spline coefficients using least squares.
     This will not work for poly-KANs. CuSolver works best for higher precisions.

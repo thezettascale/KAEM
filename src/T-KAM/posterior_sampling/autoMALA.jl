@@ -14,13 +14,15 @@ using CUDA,
     Enzyme
 
 include("../../utils.jl")
+include("../gen/gen_model.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
-include("../gen/gen_model.jl")
+include("log_posteriors.jl")
 using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
 using .GeneratorModel: log_likelihood_MALA
+using .LogPosteriors: autoMALA_logpos_4D, autoMALA_logpos
 
 function safe_step_size_update(
     η::AbstractArray{U},
@@ -50,7 +52,7 @@ function select_step_size(
     z::AbstractArray{U},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    st,
+    st::NamedTuple,
     logpos_z::AbstractArray{U},
     ∇z::AbstractArray{U},
     momentum::AbstractArray{U},
@@ -61,7 +63,14 @@ function select_step_size(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     seq::Bool = false,
-) where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
 
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(
         z,
@@ -135,7 +144,7 @@ function autoMALA_step(
     z::AbstractArray{U},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    st,
+    st::NamedTuple,
     logpos_z::AbstractArray{U},
     ∇z::AbstractArray{U},
     momentum::AbstractArray{U},
@@ -147,7 +156,14 @@ function autoMALA_step(
     η_max::U = one(full_quant),
     ε::U = eps(full_quant),
     seq::Bool = false,
-) where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    AbstractArray{U},
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
 
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
         log_a,
@@ -192,9 +208,9 @@ function autoMALA_step(
 end
 
 function autoMALA_sampler(
-    m,
-    ps,
-    st,
+    model::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
@@ -204,7 +220,7 @@ function autoMALA_sampler(
     η_max::U = one(full_quant),
     RE_frequency::Int = 10,
     seed::Int = 1,
-) where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 
@@ -224,93 +240,76 @@ function autoMALA_sampler(
     """
 
     # Initialize from prior (already in bounded space)
-    z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
+    z, st_ebm, seed = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
     z = z .|> U
-    loss_scaling = m.loss_scaling |> U
+    loss_scaling = model.loss_scaling |> U
 
-    T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    z = reshape(z, Q, P, S, T_length)
+    num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
+    z = reshape(z, Q, P, S, num_temps)
 
-    t_expanded = repeat(reshape(temps, 1, T_length), S, 1) |> device
-    seq = m.lkhood.seq_length > 1
-    x_t = seq ? repeat(x, 1, 1, 1, T_length) : repeat(x, 1, 1, 1, 1, T_length)
+    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
+    seq = model.lkhood.seq_length > 1
+    x_t = seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
-    M = zeros(U, Q, P, 1, T_length)
+    M = zeros(U, Q, P, 1, num_temps)
     z_cpu = cpu_device()(z)
-    for k = 1:T_length
+    for k = 1:num_temps
         M[:, :, 1, k], seed = init_mass_matrix(view(z_cpu,:,:,:,k), seed)
     end
     @reset st.η_init = device(st.η_init)
 
-    # Avoid looped stochasticity
+    # Pre-allocate noise
     seed, rng = next_rng(seed)
-    log_u = log.(rand(rng, U, S, T_length, N)) |> device
+    log_u = log.(rand(rng, U, S, num_temps, N)) |> device
     seed, rng = next_rng(seed)
-    ratio_bounds = log.(rand(rng, Uniform(0, 1), S, T_length, 2, N)) .|> U |> device
+    ratio_bounds = log.(rand(rng, Uniform(0, 1), S, num_temps, 2, N)) .|> U |> device
     seed, rng = next_rng(seed)
-    log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
+    log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
-    log_llhood_fcn =
-        (z_i, x_i, st_gen, t_i) -> begin
-            logllhood, st_gen, seed = log_likelihood_MALA(
-                z_i,
-                x_i,
-                m.lkhood,
-                ps.gen,
-                st_gen;
-                seed = seed,
-                ε = m.ε,
-            )
-            return t_i .* logllhood, st_gen
-        end
 
-    function log_posterior(
-        z_i::AbstractArray{T},
-        x_i::AbstractArray{T},
-        st_i,
-        t::AbstractArray{T},
-    )
-        st_ebm, st_gen = st_i.ebm, st_i.gen
-        if ndims(z_i) == 4
-            logpos = zeros(T, S, 0) |> device
-            for k = 1:T_length
-                x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-                logprior, st_ebm =
-                    m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-                logllhood, st_gen = log_llhood_fcn(z_i[:, :, :, k], x_k, st_gen, t[:, k])
-                logpos = hcat(logpos, logprior + logllhood)
-            end
-            return logpos .* m.loss_scaling, st_ebm, st_gen
-        else
-            logprior, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
-            logllhood, st_gen = log_llhood_fcn(z_i, x_i, st_gen, t)
-            return (logprior + logllhood) .* m.loss_scaling, st_ebm, st_gen
-        end
-    end
-
-    num_acceptances = zeros(Int, S, T_length) |> device
-    mean_η = zeros(U, S, T_length) |> device
+    num_acceptances = zeros(Int, S, num_temps) |> device
+    mean_η = zeros(U, S, num_temps) |> device
     momentum = similar(z) |> cpu_device()
+
+    logpos_4D_fcn =
+        (z_i, x_i, t_k, s, m, p, seed) -> begin
+            first(
+                autoMALA_logpos_4D(
+                    z_i,
+                    x_i,
+                    t_k,
+                    s,
+                    m,
+                    p;
+                    seed = seed,
+                    num_temps = num_temps,
+                ),
+            )
+        end
+    logpos_2D_fcn =
+        (z_i, x_i, t_k, s, m, p, seed) -> begin
+            first(autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps))
+        end
 
     logpos_withgrad =
         (z_i, x_i, st_i, t_k) -> begin
+            fcn = ndims(z_i) == 4 ? logpos_4D_fcn : logpos_2D_fcn
             ∇z = zeros(T, size(z_i)) |> device
-            logpos_z, st_ebm, st_gen =
-                CUDA.@fastmath log_posterior(T.(z_i), x_i, Lux.testmode(st_i), t_k)
-            f =
-                (z_j, x_j, st_j, t_j) ->
-                    sum(first(log_posterior(z_j, x_j, Lux.testmode(st_j), t_j)))
             CUDA.@fastmath Enzyme.autodiff(
                 set_runtime_activity(Reverse),
-                f,
+                fcn,
                 Enzyme.Active,
                 Enzyme.Duplicated(T.(z_i), ∇z),
                 Enzyme.Const(x_i),
-                Enzyme.Const(st_i),
+                Enzyme.Const(Lux.testmode(st_i)),
                 Enzyme.Const(t_k),
+                Enzyme.Const(m),
+                Enzyme.Const(ps),
+                Enzyme.Const(seed),
             )
-
+            logpos_z, st_ebm, st_gen, seed =
+                CUDA.@fastmath fcn(T.(z_i), x_i, t_k, Lux.testmode(st_i), m, p, seed)
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
             return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
@@ -324,7 +323,7 @@ function autoMALA_sampler(
                        loss_scaling
     for i = 1:N
         z_cpu = cpu_device()(z)
-        for k = 1:T_length
+        for k = 1:num_temps
             momentum[:, :, :, k], M[:, :, 1, k], seed =
                 sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k]; seed = seed)
         end
@@ -364,21 +363,21 @@ function autoMALA_sampler(
                 logpos_withgrad;
                 η_min = η_min,
                 η_max = η_max,
-                ε = U(m.ε),
+                ε = U(model.ε),
                 seq = seq,
             )
 
             accept = (log_u[:, :, i] .< log_r) .* reversible
             z =
-                ẑ .* reshape(accept, 1, 1, S, T_length) +
-                z .* reshape(1 .- accept, 1, 1, S, T_length)
+                ẑ .* reshape(accept, 1, 1, S, num_temps) +
+                z .* reshape(1 .- accept, 1, 1, S, num_temps)
             mean_η .= mean_η .+ η_prop .* accept
             η .= η_prop .* accept .+ η .* (1 .- accept)
             num_acceptances .= num_acceptances .+ accept
 
             # Replica exchange Monte Carlo
-            if i % RE_frequency == 0 && T_length > 1
-                for t = 1:(T_length-1)
+            if i % RE_frequency == 0 && num_temps > 1
+                for t = 1:(num_temps-1)
 
                     # Global swap criterion
                     z_hq = T.(z)
@@ -405,19 +404,19 @@ function autoMALA_sampler(
     pos_after =
         CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), t_expanded)) ./
                        loss_scaling
-    m.verbose && println(
-        "Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))",
-    )
+    # model.verbose && println(
+    #     "Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))",
+    # )
 
     mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
     mean_η = ifelse.(isnan.(mean_η), st.η_init, mean_η) |> device
     @reset st.η_init = mean_η
 
-    m.verbose && println(
-        "Acceptance rates: ",
-        dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims = 1); dims = 1),
-    )
-    m.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims = 1); dims = 1))
+    # model.verbose && println(
+    #     "Acceptance rates: ",
+    #     dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims = 1); dims = 1),
+    # )
+    # model.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims = 1); dims = 1))
 
     any(isnan.(z)) && error("NaN in z")
     return T.(z), st, seed

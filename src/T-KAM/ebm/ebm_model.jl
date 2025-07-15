@@ -24,14 +24,16 @@ using .InverseTransformSampling
 
 const prior_pdf = Dict(
     "uniform" =>
-        (z, ε) ->
+        (z::AbstractArray{T}, ε::T) ->
             half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
-    "gaussian" => (z, ε) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
+    "gaussian" =>
+        (z::AbstractArray{T}, ε::T) -> half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
     "lognormal" =>
-        (z, ε) -> exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "ebm" => (z, ε) -> ones(half_quant, size(z)) .- ε |> device,
+        (z::AbstractArray{T}, ε::T) ->
+            exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
+    "ebm" => (z::AbstractArray{T}, ε::T) -> ones(half_quant, size(z)) .- ε |> device,
     "learnable_gaussian" =>
-        (z, ps, ε) -> (
+        (z::AbstractArray{T}, ps::ComponentArray{T}, ε::T) -> (
             one(half_quant) ./ (abs.(ps[Symbol("π_σ")]) .* half_quant(sqrt(2π)) .+ ε) .* exp.(
                 -(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε),
             )
@@ -195,7 +197,7 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel)
+function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     ps = NamedTuple(
         Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for
         i = 1:prior.depth
@@ -220,7 +222,7 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel)
     return ps
 end
 
-function Lux.initialstates(rng::AbstractRNG, prior::EbmModel)
+function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     st = NamedTuple(
         Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for
         i = 1:prior.depth

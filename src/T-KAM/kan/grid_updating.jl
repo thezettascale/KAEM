@@ -2,14 +2,27 @@ module GridUpdating
 
 export update_model_grid
 
-using CUDA, KernelAbstractions, Accessors, Lux, NNlib, LinearAlgebra, Random, LuxCUDA
+using CUDA,
+    KernelAbstractions,
+    Accessors,
+    ComponentArrays,
+    Lux,
+    NNlib,
+    LinearAlgebra,
+    Random,
+    LuxCUDA
 
 include("univariate_functions.jl")
 include("../../utils.jl")
-using .UnivariateFunctions: fwd, extend_grid
-using .Utils: half_quant, device, next_rng
+using .UnivariateFunctions: fwd, extend_grid, univariate_function
+using .Utils: half_quant, full_quant, device, next_rng
 
-function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+function update_fcn_grid(
+    l::univariate_function{T,U},
+    ps::ComponentVector{T},
+    st::NamedTuple,
+    x::AbstractArray{T},
+)::Tuple{AbstractArray{T},AbstractArray{U}} where {T<:half_quant,U<:full_quant}
     """
     Adapt the function's grid to the distribution of the input data.
 
@@ -51,12 +64,17 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
 end
 
 function update_model_grid(
-    model,
+    model::LuxAbstractLayer,
     x::AbstractArray{T},
-    ps,
-    st;
+    ps::ComponentArray{T},
+    st::NamedTuple,
     seed::Int = 1,
-) where {T<:half_quant}
+)::Tuple{
+    LuxAbstractLayer,
+    ComponentArray{T},
+    NamedTuple,
+    Int,
+} where {T<:half_quant,U<:full_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 

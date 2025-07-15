@@ -14,7 +14,7 @@ function cross_entropy_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     log_x̂ = log.(x̂ .+ ε)
     ll = permutedims(log_x̂, [1, 2, 4, 3]) .* x
     ll = dropdims(sum(ll, dims = (1, 2)), dims = (1, 2)) # One-hot encoded cross-entropy
@@ -25,7 +25,7 @@ function l2_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     ll = (x .- permutedims(x̂, [1, 2, 3, 5, 4])) .^ 2
     return -dropdims(sum(ll, dims = (1, 2, 3)); dims = (1, 2, 3))
 end
@@ -35,7 +35,7 @@ function cross_entropy_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(half_quant),
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
     return dropdims(sum(ll; dims = (1, 2)); dims = (1, 2))
 end
@@ -44,7 +44,7 @@ function l2_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(half_quant),
-) where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     ll = (x - x̂) .^ 2
     return -dropdims(sum(ll; dims = (1, 2, 3)); dims = (1, 2, 3))
 end
@@ -53,12 +53,12 @@ end
 function log_likelihood_IS(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood,
-    ps,
-    st;
+    lkhood::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     seed::Int = 1,
     ε::T = eps(T),
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
     """
     Conditional likelihood of the generator.
 
@@ -91,12 +91,12 @@ end
 function log_likelihood_MALA(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood,
-    ps,
-    st;
+    lkhood::::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     seed::Int = 1,
     ε::T = eps(T),
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
     """
     Conditional likelihood of the generator sampled by Langevin.
 

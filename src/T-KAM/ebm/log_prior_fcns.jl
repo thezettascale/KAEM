@@ -11,7 +11,12 @@ include("../kan/univariate_functions.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq, set_state!
 using .UnivariateFunctions: fwd
 
-function prior_fwd(ebm, ps, st, z::AbstractArray{T}) where {T<:half_quant}
+function prior_fwd(
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    z::AbstractArray{T},
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
 
@@ -53,12 +58,12 @@ end
 
 function log_prior_ula(
     z::AbstractArray{T},
-    ebm,
-    ps,
-    st;
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     ε::T = eps(half_quant),
     normalize::Bool = false,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     log_π0 =
         ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) :
         log.(ebm.π_pdf(z, ε) .+ ε)
@@ -69,12 +74,12 @@ end
 
 function log_prior_univar(
     z::AbstractArray{T},
-    ebm,
-    ps,
-    st;
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     ε::T = eps(half_quant),
     normalize::Bool = false,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the ebm-prior.
 
@@ -117,12 +122,12 @@ end
 
 function log_prior_mix(
     z::AbstractArray{T},
-    ebm,
-    ps,
-    st;
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     ε::T = eps(half_quant),
     normalize::Bool = false,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the mixture ebm-prior.
 

@@ -16,8 +16,10 @@ using CUDA,
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
+include("log_posteriors.jl")
 using .Utils: device, next_rng, half_quant, full_quant, fq
 using .GeneratorModel: log_likelihood_MALA
+using .LogPosteriors: unadjusted_logpos
 
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -27,18 +29,18 @@ using .GeneratorModel: log_likelihood_MALA
 )
 
 function ULA_sampler(
-    m,
-    ps,
-    st,
+    model::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
     seed::Int = 1,
     RE_frequency::Int = 10,
-    ULA_prior::Bool = false,
+    prior_sampling_bool::Bool = false,
     prior_η::U = full_quant(1e-3),
     num_samples::Int = 100,
-) where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
 
@@ -63,74 +65,68 @@ function ULA_sampler(
     """
     # Initialize from prior
     z = begin
-        if m.prior.ula && ULA_prior
+        if model.prior.ula && prior_sampling_bool
             seed, rng = next_rng(seed)
             z =
-                π_dist[m.prior.prior_type](m.prior.p_size, num_samples, rng) .|> U |> device
+                π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng) .|>
+                U |>
+                device
         else
-            z, st_ebm, seed = m.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
+            z, st_ebm, seed =
+                model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm
             z .|> U
         end
     end
 
-    loss_scaling = m.loss_scaling |> U
+    loss_scaling = model.loss_scaling |> U
 
-    η = ULA_prior ? prior_η : mean(st.η_init)
-    seq = m.lkhood.seq_length > 1
+    η = prior_sampling_bool ? prior_η : mean(st.η_init)
+    seq = model.lkhood.seq_length > 1
 
-    T_length, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    S = ULA_prior ? size(z)[end] : S
-    z = reshape(z, Q, P, S, T_length)
+    num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
+    S = prior_sampling_bool ? size(z)[end] : S
+    z = reshape(z, Q, P, S, num_temps)
+    ∇z = zeros(T, size(z)) |> device
 
-    # Avoid looped stochasticity
-    seed, rng = next_rng(seed)
-    noise = randn(rng, U, Q, P, S, T_length, N)
-    seed, rng = next_rng(seed)
-    log_u_swap = log.(rand(rng, U, S, T_length, N)) |> device
-
-    log_llhood_fcn =
-        (z_i, st_gen, t_i) -> begin
-            ll, st_gen, seed = log_likelihood_MALA(
-                z_i,
-                x,
-                m.lkhood,
-                ps.gen,
-                st_gen;
-                seed = seed,
-                ε = m.ε,
+    logpos_fcn =
+        (z_i, x_i, t_i, m, p, s, seed) -> begin
+            first(
+                unadjusted_logpos(
+                    z_i,
+                    x_i,
+                    t_i,
+                    m,
+                    p,
+                    s,
+                    seed;
+                    prior_sampling_bool = prior_sampling_bool,
+                ),
             )
-            return t_i .* ll, st_gen
         end
 
-    log_llhood_fcn =
-        ULA_prior ? (z_i, st_gen, t_i) -> (zeros(T, 1) |> device, st_gen) : log_llhood_fcn
-
-    function log_posterior(z_i::AbstractArray{T}, st_i)
-        logpos_tot = zero(T)
-        st_ebm, st_gen = st_i.ebm, st_i.gen
-        for k = 1:T_length
-            lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-            ll, st_gen = log_llhood_fcn(z_i[:, :, :, k], st_gen, temps[k])
-            logpos_tot += sum(lp) + sum(ll)
-        end
-        return logpos_tot * m.loss_scaling, st_ebm, st_gen
-    end
+    # Pre-allocate noise
+    seed, rng = next_rng(seed)
+    noise = randn(rng, U, Q, P, S, num_temps, N)
+    seed, rng = next_rng(seed)
+    log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
     logpos_grad =
         (z_i) -> begin
-            ∇z = zeros(T, size(z_i)) |> device
-            logpos_z, st_ebm, st_gen =
-                CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
-            f = (z_j, st_j) -> sum(first(log_posterior(z_j, Lux.testmode(st_j))))
             CUDA.@fastmath Enzyme.autodiff(
                 set_runtime_activity(Reverse),
-                f,
+                logpos_fcn,
                 Enzyme.Active,
                 Enzyme.Duplicated(T.(z_i), ∇z),
+                Enzyme.Const(x),
+                Enzyme.Const(m),
+                Enzyme.Const(ps),
                 Enzyme.Const(st),
+                Enzyme.Const(seed),
             )
 
+            _, st_ebm, st_gen, seed =
+                CUDA.@fastmath logpos_fcn(T.(z_i), x, temps, m, ps, st, seed)
             @reset st.ebm = st_ebm
             @reset st.gen = st_gen
             return U.(∇z) ./ loss_scaling
@@ -142,9 +138,9 @@ function ULA_sampler(
         ξ = device(noise[:, :, :, :, i])
         z += η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
 
-        if i % RE_frequency == 0 && T_length > 1 && !ULA_prior
+        if i % RE_frequency == 0 && num_temps > 1 && !prior_sampling_bool
             z_hq = T.(z)
-            for t = 1:(T_length-1)
+            for t = 1:(num_temps-1)
                 ll_t, st_gen = log_llhood_fcn(z_hq[:, :, :, t], st.gen, temps[end])
                 ll_t1, st_gen = log_llhood_fcn(z_hq[:, :, :, t+1], st_gen, temps[end])
                 log_swap_ratio = dropdims(
@@ -166,10 +162,10 @@ function ULA_sampler(
     end
 
     pos_after = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
-    dist = ULA_prior ? "Prior" : "Posterior"
-    m.verbose && println("$(dist) change: $(pos_after - pos_before)")
+    dist = prior_sampling_bool ? "Prior" : "Posterior"
+    model.verbose && println("$(dist) change: $(pos_after - pos_before)")
 
-    if ULA_prior
+    if prior_sampling_bool
         st = st.ebm
         z = dropdims(z; dims = 4)
     end

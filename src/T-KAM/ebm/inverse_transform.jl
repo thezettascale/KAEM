@@ -13,12 +13,12 @@ using .LogPriorFCNs: prior_fwd
 using Flux: onehotbatch
 
 function trapezium_quadrature(
-    ebm,
-    ps,
-    st;
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{<:half_quant},Nothing} = nothing,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
@@ -50,7 +50,11 @@ function trapezium_quadrature(
     return trapz, grid, st
 end
 
-function get_gausslegendre(ebm, ps, st)
+function get_gausslegendre(
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+)::Tuple{AbstractArray{T},AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     """Get Gauss-Legendre nodes and weights for prior's domain"""
 
     a, b = minimum(st[Symbol("1")].grid; dims = 2), maximum(st[Symbol("1")].grid; dims = 2)
@@ -73,12 +77,12 @@ function get_gausslegendre(ebm, ps, st)
 end
 
 function gausslegendre_quadrature(
-    ebm,
-    ps,
-    st;
+    ebm::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple;
     ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{T},Nothing} = nothing,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights, nodes_cpu = get_gausslegendre(ebm, ps, st)
@@ -109,7 +113,7 @@ function choose_component(
     q_size::Int,
     p_size::Int;
     seed::Int = 1,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},Int} where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
 
@@ -139,13 +143,13 @@ function choose_component(
 end
 
 function sample_univariate(
-    ebm,
+    ebm::Any,
     num_samples::Int,
-    ps,
-    st;
+    ps::ComponentArray{T},
+    st::NamedTuple;
     seed::Int = 1,
     ε::T = eps(T),
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
 
     cdf, grid, st = ebm.quad(ebm, ps, st, nothing)
     grid_size = size(grid, 2)
@@ -186,13 +190,13 @@ function sample_univariate(
 end
 
 function sample_mixture(
-    ebm,
+    ebm::Any,
     num_samples::Int,
-    ps,
-    st;
+    ps::ComponentArray{T},
+    st::NamedTuple;
     seed::Int = 1,
     ε::T = eps(T),
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
     """
     Component-wise inverse transform sampling for the ebm-prior.
     p = components of model

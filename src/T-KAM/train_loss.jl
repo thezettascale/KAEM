@@ -10,12 +10,18 @@ include("../utils.jl")
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 function sample_importance(
-    ps,
-    st,
-    m,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-) where {T<:half_quant}
+)::Tuple{
+    AbstractArray{T},
+    NamedTuple,
+    NamedTuple,
+    AbstractArray{Int},
+    Int,
+} where {T<:half_quant}
     z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
     logllhood, st_gen, seed =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
@@ -30,17 +36,23 @@ function sample_importance(
 end
 
 function sample_langevin(
-    ps,
-    st,
-    m,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
     z, st_ebm, seed = m.posterior_sample(m, x, 0, ps, st, seed)
     return z, st_ebm, seed
 end
 
-function sample_thermo(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:half_quant}
+function sample_thermo(
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
+    x::AbstractArray{T};
+    seed::Int = 1,
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
     temps = collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
     z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed)
     return z, temps, st, seed
@@ -51,12 +63,12 @@ EnzymeRules.inactive(::typeof(sample_langevin), args...) = nothing
 EnzymeRules.inactive(::typeof(sample_thermo), args...) = nothing
 
 function importance_loss(
-    ps,
-    st,
-    m,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """MLE loss with importance sampling."""
 
     z, st_ebm, st_gen, weights_resampled, resampled_idxs, seed =
@@ -91,7 +103,13 @@ function importance_loss(
     seed
 end
 
-function langevin_loss(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:half_quant}
+function langevin_loss(
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
+    x::AbstractArray{T};
+    seed::Int = 1,
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     z, st_new, seed = sample_langevin(ps, st, m, x; seed = seed)
@@ -132,7 +150,13 @@ function langevin_loss(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:
 
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen, seed
 end
-function thermo_loss(ps, st, m, x::AbstractArray{T}; seed::Int = 1) where {T<:half_quant}
+function thermo_loss(
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    m::Any,
+    x::AbstractArray{T};
+    seed::Int = 1,
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """Thermodynamic integration loss."""
 
     # Schedule temperatures

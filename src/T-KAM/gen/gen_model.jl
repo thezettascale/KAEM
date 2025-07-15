@@ -36,7 +36,7 @@ const resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::Dict{Any, Any}
+    Φ_fcns::Dict{Any,Any}
     layernorm::Bool
     batchnorm::Bool
     depth::Int
@@ -218,7 +218,8 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
                     one(full_quant)
                 ) .* (one(full_quant) / √(full_quant(widths[i])))
             )
-            Φ_functions[Symbol("$i")] = initialize_function(widths[i], widths[i+1], base_scale)
+            Φ_functions[Symbol("$i")] =
+                initialize_function(widths[i], widths[i+1], base_scale)
 
             if (layernorm && i < depth)
                 Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])

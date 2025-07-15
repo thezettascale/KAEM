@@ -175,7 +175,14 @@ function test_coef2curve()
     Random.seed!(42)
     coef = rand(half_quant, i, o, g + degree - 1) |> device
     extended_grid = extend_grid(grid; k_extend = degree)
-    y_eval = coef2curve(x_eval, extended_grid, coef, σ; k = degree)
+    y_eval = coef2curve_Spline(
+        x_eval,
+        extended_grid,
+        coef,
+        σ;
+        k = degree,
+        basis_function = B_spline_basis,
+    )
     @test size(y_eval) == (i, o, b)
 end
 
@@ -187,10 +194,31 @@ function test_curve2coef()
     Random.seed!(42)
     coef = rand(half_quant, i, o, g + degree - 1) |> device
     extended_grid = extend_grid(grid; k_extend = degree)
-    y_eval = coef2curve(x_eval, extended_grid, coef, σ; k = degree)
-    recovered_coef = curve2coef(x_eval, y_eval, extended_grid, σ; k = degree)
+    y_eval = coef2curve_Spline(
+        x_eval,
+        extended_grid,
+        coef,
+        σ;
+        k = degree,
+        basis_function = B_spline_basis,
+    )
+    recovered_coef = curve2coef(
+        x_eval,
+        y_eval,
+        extended_grid,
+        σ;
+        k = degree,
+        basis_function = B_spline_basis,
+    )
     @test size(recovered_coef) == size(coef)
-    y_reconstructed = coef2curve(x_eval, extended_grid, recovered_coef, σ; k = degree)
+    y_reconstructed = coef2curve_Spline(
+        x_eval,
+        extended_grid,
+        recovered_coef,
+        σ;
+        k = degree,
+        basis_function = B_spline_basis,
+    )
     @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(2)
 end
 

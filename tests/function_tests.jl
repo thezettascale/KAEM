@@ -56,7 +56,7 @@ function test_fwd_derivative()
         Enzyme.Const(x_eval),
         Enzyme.Const(fcn),
     )
-    
+
     @test size(∇) == size(ps)
     @test !any(isnan.(∇))
 end

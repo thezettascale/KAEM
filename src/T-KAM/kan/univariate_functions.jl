@@ -38,7 +38,6 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     out_dim::Int
     spline_degree::Int
     base_activation::Function
-    spline_function::Function
     spline_string::String
     init_grid::AbstractArray{T}
     grid_size::Int
@@ -49,6 +48,20 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     σ_spline::U
     init_τ::AbstractArray{U}
     τ_trainable::Bool
+    basis_mul::Function
+    coef2curve::Function
+    curve2coef::Function
+end
+
+function ChebyMUL(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+    return y .* mask
+end
+
+function SplineMUL(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+    I, O, B = size(y)
+    w_base, w_sp = ps.w_base, ps.w_sp
+    base = l.base_activation(x)
+    return w_base .* reshape(base, I, 1, B) .+ w_sp .* y .* mask
 end
 
 function init_function(
@@ -78,12 +91,23 @@ function init_function(
     base_activation =
         get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
 
+    basis_fcn = get(SplineBasis_mapping, spline_function, B_spline_basis)
+    basis_mul = spline_function == "Cheby" ? ChebyMUL : SplineMUL
+    coef2curve =
+        basis_fcn == FFT_basis ?
+        (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ; k = spline_degree) :
+        (x, g, c, σ) ->
+            coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
+    curve2coef =
+        basis_fcn == FFT_basis ? (x, g, y, σ) -> curve2coef(x, g, y, σ; k = spline_degree) :
+        (x, g, y, σ) ->
+            curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
+
     return univariate_function(
         in_dim,
         out_dim,
         spline_degree,
         base_activation,
-        get(SplineBasis_mapping, spline_function, B_spline_basis),
         spline_function,
         grid,
         grid_size,
@@ -94,6 +118,8 @@ function init_function(
         σ_spline,
         [init_τ],
         τ_trainable,
+        basis_mul,
+        coef2curve,
     )
 end
 
@@ -117,13 +143,11 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function)
                 ) .* l.ε_scale ./ l.grid_size
             ) |> device
         coef = cpu_device()(
-            curve2coef(
+            l.curve2coef(
                 l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
                 ε,
                 l.init_grid,
-                device(half_quant.(l.init_τ));
-                k = l.spline_degree,
-                basis_function = l.spline_function,
+                device(half_quant.(l.init_τ)),
             ),
         )
     end
@@ -164,23 +188,9 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     coef, mask = ps.coef, st.mask
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
-    y = coef2curve(
-        x,
-        st.grid,
-        coef,
-        τ;
-        k = l.spline_degree,
-        basis_function = l.spline_function,
-    )
+    y = l.coef2curve(x, st.grid, coef, τ)
 
-    if l.spline_string == "Cheby"
-        return y .* mask
-    else
-        I, O, B = size(y)
-        w_base, w_sp = ps.w_base, ps.w_sp
-        base = l.base_activation(x)
-        return w_base .* reshape(base, I, 1, B) .+ w_sp .* y .* mask
-    end
+    return l.basis_mul(l, ps, st, y)
 end
 
 end

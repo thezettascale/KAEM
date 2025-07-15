@@ -1,5 +1,4 @@
-using Test,
-    Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -36,7 +35,7 @@ function test_model_derivative()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(ps)
-    
+
     f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
     Enzyme.autodiff(
         set_runtime_activity(Reverse),

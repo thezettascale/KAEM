@@ -1,7 +1,14 @@
 module spline_functions
 
 export extend_grid,
-    coef2curve, curve2coef, B_spline_basis, RBF_basis, RSWAF_basis, FFT_basis, Cheby_basis
+    coef2curve_FFT,
+    coef2curve_Spline,
+    curve2coef,
+    B_spline_basis,
+    RBF_basis,
+    RSWAF_basis,
+    FFT_basis,
+    Cheby_basis
 
 using CUDA, KernelAbstractions, Tullio
 using LinearAlgebra, NNlib
@@ -109,41 +116,32 @@ function Cheby_basis(
     return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
 end
 
-function coef2curve(
+function coef2curve_FFT(
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},
     σ::AbstractArray{T};
     k::Int = 3,
-    basis_function::Function = B_spline_basis,
+    basis_function::Function = FFT_basis,
 ) where {T<:half_quant}
-    """
-    Compute the B-spline curves from the B-spline coefficients.
-
-    Args:
-        x_eval: A matrix of size (i, b) containing the points at which to evaluate the B-spline curves.
-        grid: A matrix of size (g, b) containing the grid of knots.
-        coef: A matrix of size (i, o, g) containing the B-spline coefficients.
-        k: The degree of the B-spline basis functions.
-
-    Returns:
-        A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
-    """
-    spl =
-        isnothing(basis_function) ? B_spline_basis(x_eval, grid, σ; degree = k) :
-        basis_function(x_eval, grid, σ; degree = k)
+    spl = basis_function(x_eval, grid, σ; degree = k)
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
+    even, odd = spl
+    even_coef, odd_coef =
+        reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
+    return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
+end
 
-    if !isa(spl, Tuple)
-        spl = reshape(spl, I, G, 1, S)
-        coef = reshape(coef, I, G, O, 1)
-        return dropdims(sum(spl .* coef, dims = 2), dims = 2)
-    else
-        even, odd = spl
-        even_coef, odd_coef =
-            reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
-        return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
-    end
+function coef2curve_Spline(
+    x_eval::AbstractArray{T},
+    grid::AbstractArray{T},
+    coef::AbstractArray{T},
+    σ::AbstractArray{T};
+    k::Int = 3,
+    basis_function::Function = FFT_basis,
+) where {T<:half_quant}
+    spl = basis_function(x_eval, grid, σ; degree = k)
+    return dropdims(sum(spl .* coef, dims = 2), dims = 2)
 end
 
 function curve2coef(

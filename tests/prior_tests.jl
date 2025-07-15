@@ -56,7 +56,7 @@ function test_log_prior_derivative()
         Enzyme.Duplicated(z_test, ∇),
         Enzyme.Const(ps.ebm),
         Enzyme.Const(st.ebm),
-        Enzyme.Const(wrap.prior)
+        Enzyme.Const(wrap.prior),
     )
 
     @test size(∇) == size(z_test)

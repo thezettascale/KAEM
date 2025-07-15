@@ -43,7 +43,7 @@ const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Dict{Any, Any}
+    fcns_qp::Dict{Any,Any}
     layernorm::Bool
     depth::Int
     prior_type::AbstractString

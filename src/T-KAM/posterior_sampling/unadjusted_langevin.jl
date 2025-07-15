@@ -121,7 +121,8 @@ function ULA_sampler(
     logpos_grad =
         (z_i) -> begin
             ∇z = zeros(T, size(z_i)) |> device
-            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
+            logpos_z, st_ebm, st_gen =
+                CUDA.@fastmath log_posterior(T.(z_i), Lux.testmode(st))
             f = (z_j, st_j) -> sum(first(log_posterior(z_j, Lux.testmode(st_j))))
             CUDA.@fastmath Enzyme.autodiff(
                 set_runtime_activity(Reverse),

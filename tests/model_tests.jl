@@ -1,5 +1,4 @@
-using Test,
-    Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -117,7 +116,7 @@ function test_seq_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     ∇ = zero(ps)
-    
+
     f = (p, s, m, x) -> first(model.loss_fcn(p, s, m, x))
     Enzyme.autodiff(
         set_runtime_activity(Reverse),

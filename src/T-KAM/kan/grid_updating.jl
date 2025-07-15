@@ -6,7 +6,7 @@ using CUDA, KernelAbstractions, Accessors, Lux, NNlib, LinearAlgebra, Random, Lu
 
 include("univariate_functions.jl")
 include("../../utils.jl")
-using .UnivariateFunctions: fwd, coef2curve, curve2coef, extend_grid
+using .UnivariateFunctions: fwd, extend_grid
 using .Utils: half_quant, device, next_rng
 
 function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
@@ -28,15 +28,7 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
     x_sort = sort(x, dims = 2)
-    y =
-        coef2curve(
-            x_sort,
-            st.grid,
-            coef,
-            τ;
-            k = l.spline_degree,
-            basis_function = l.spline_function,
-        ) .|> half_quant
+    y = l.coef2curve(x_sort, st.grid, coef, τ) .|> half_quant
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(st.grid, 2) - 2*l.spline_degree - 1
@@ -53,14 +45,7 @@ function update_fcn_grid(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     # Grid is a convex combination of the uniform and adaptive grid
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend = l.spline_degree)
-    new_coef = curve2coef(
-        x_sort,
-        y,
-        new_grid,
-        τ;
-        k = l.spline_degree,
-        basis_function = l.spline_function,
-    )
+    new_coef = l.curve2coef(x_sort, y, new_grid, τ)
 
     return new_grid, new_coef
 end

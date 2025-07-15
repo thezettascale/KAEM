@@ -234,7 +234,7 @@ function train!(t::T_KAM_trainer)
             Enzyme.Const(Lux.trainmode(t.st)),
             Enzyme.Const(t.model),
             Enzyme.Const(t.x),
-            Enzyme.Const(t.seed)
+            Enzyme.Const(t.seed),
         )
         copy!(G, full_quant.(grads) ./ loss_scaling)
 

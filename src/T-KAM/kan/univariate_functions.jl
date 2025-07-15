@@ -53,11 +53,17 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     curve2coef::Function
 end
 
-function ChebyMUL(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+function ChebyMUL(l, ps, st, x::AbstractArray{T}, y::AbstractArray{T}) where {T<:half_quant}
     return y .* mask
 end
 
-function SplineMUL(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
+function SplineMUL(
+    l,
+    ps,
+    st,
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+) where {T<:half_quant}
     I, O, B = size(y)
     w_base, w_sp = ps.w_base, ps.w_sp
     base = l.base_activation(x)
@@ -187,10 +193,8 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
 
     coef, mask = ps.coef, st.mask
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
-
     y = l.coef2curve(x, st.grid, coef, τ)
-
-    return l.basis_mul(l, ps, st, y)
+    return l.basis_mul(l, ps, st, x, y)
 end
 
 end

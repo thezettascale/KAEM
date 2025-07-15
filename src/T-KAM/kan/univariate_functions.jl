@@ -176,8 +176,9 @@ function fwd(l, ps, st, x::AbstractArray{T}) where {T<:half_quant}
     if l.spline_string == "Cheby"
         return y .* mask
     else
-        w_base, w_sp = ps.w_base, ps.w_sp
         I, O, B = size(y)
+        w_base, w_sp = ps.w_base, ps.w_sp
+        base = l.base_activation(x)
         return w_base .* reshape(base, I, 1, B) .+ w_sp .* y .* mask
     end
 end

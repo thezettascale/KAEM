@@ -120,21 +120,19 @@ function ULA_sampler(
                 Enzyme.Active,
                 Enzyme.Duplicated(T.(z_i), ∇z),
                 Enzyme.Const(x),
-                Enzyme.Const(m),
+                Enzyme.Const(model),
                 Enzyme.Const(ps),
                 Enzyme.Const(st),
                 Enzyme.Const(seed),
             )
 
             _, st_ebm, st_gen, seed =
-                CUDA.@fastmath logpos_fcn(T.(z_i), x, temps, m, ps, st, seed)
+                CUDA.@fastmath logpos_fcn(T.(z_i), x, temps, model, ps, st, seed)
             @reset st.ebm = st_ebm
             @reset st.gen = st_gen
             return U.(∇z) ./ loss_scaling
         end
 
-    pos_before =
-        CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
     for i = 1:N
         ξ = device(noise[:, :, :, :, i])
         z += η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
@@ -142,8 +140,8 @@ function ULA_sampler(
         if i % RE_frequency == 0 && num_temps > 1 && !prior_sampling_bool
             z_hq = T.(z)
             for t = 1:(num_temps-1)
-                ll_t, st_gen = log_llhood_fcn(z_hq[:, :, :, t], st.gen, temps[end])
-                ll_t1, st_gen = log_llhood_fcn(z_hq[:, :, :, t+1], st_gen, temps[end])
+                ll_t, st_gen, seed = log_likelihood_MALA(z_hq[:, :, :, t], x, model.lkhood, ps.gen, st.gen; seed = seed, ε = model.ε)
+                ll_t1, st_gen, seed = log_likelihood_MALA(z_hq[:, :, :, t+1], x, model.lkhood, ps.gen, st_gen; seed = seed, ε = model.ε)
                 log_swap_ratio = dropdims(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,
@@ -161,10 +159,6 @@ function ULA_sampler(
             end
         end
     end
-
-    pos_after = CUDA.@fastmath first(log_posterior(T.(z), Lux.testmode(st))) ./ loss_scaling
-    dist = prior_sampling_bool ? "Prior" : "Posterior"
-    model.verbose && println("$(dist) change: $(pos_after - pos_before)")
 
     if prior_sampling_bool
         st = st.ebm

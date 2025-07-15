@@ -305,12 +305,12 @@ function autoMALA_sampler(
                 Enzyme.Const(x_i),
                 Enzyme.Const(Lux.testmode(st_i)),
                 Enzyme.Const(t_k),
-                Enzyme.Const(m),
+                Enzyme.Const(model),
                 Enzyme.Const(ps),
                 Enzyme.Const(seed),
             )
             logpos_z, st_ebm, st_gen, seed =
-                CUDA.@fastmath fcn(T.(z_i), x_i, t_k, Lux.testmode(st_i), m, p, seed)
+                CUDA.@fastmath fcn(T.(z_i), x_i, t_k, Lux.testmode(st_i), model, ps, seed)
             @reset st_i.ebm = st_ebm
             @reset st_i.gen = st_gen
             return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i

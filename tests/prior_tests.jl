@@ -1,8 +1,9 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme
+using Test, Random, LinearAlgebra, Lux, ConfParser, DifferentiationInterface
 
 ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")
@@ -46,18 +47,9 @@ end
 
 function test_log_prior_derivative()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
-    ∇ = zeros(half_quant, size(z_test)) |> device
 
-    f = (x, p, s, ebm) -> sum(first(wrap.prior.lp_fcn(x, ebm, p, s)))
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(z_test, ∇),
-        Enzyme.Const(ps.ebm),
-        Enzyme.Const(st.ebm),
-        Enzyme.Const(wrap.prior)
-    )
+    f = x -> sum(first(wrap.prior.lp_fcn(x, wrap.prior, ps.ebm, st.ebm)))
+    ∇ = gradient(f, AD_backend, z_test)
 
     @test size(∇) == size(z_test)
 end

@@ -3,12 +3,13 @@ using Test, Random, LinearAlgebra
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+ENV["AD_BACKEND"] = "ENZYME"
 
 include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
 using .spline_functions
 using .Utils
-using Enzyme
+using DifferentiationInterface
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, device([one(half_quant)])
 
@@ -34,18 +35,11 @@ end
 function test_B_spline_derivative()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
-    ∇ = x_eval .* zero(half_quant)
     grid = rand(half_quant, i, g) |> device
     extended_grid = extend_grid(grid; k_extend = degree)
 
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        (z, g, sig) -> sum(B_spline_basis(z, g, sig; degree = degree)),
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(extended_grid),
-        Enzyme.Const(σ),
-    )
+    f = x -> sum(B_spline_basis(x, extended_grid, σ; degree = degree))
+    ∇ = gradient(f, AD_backend, x_eval)
 
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
@@ -67,14 +61,8 @@ function test_RBF_derivative()
     ∇ = x_eval .* zero(half_quant)
     grid = rand(half_quant, i, g) |> device
 
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        (z, g, sig) -> sum(RBF_basis(z, g, sig; degree = degree)),
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
+    f = x -> sum(RBF_basis(x, grid, σ; degree = degree))
+    ∇ = gradient(f, AD_backend, x_eval)
 
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
@@ -96,14 +84,8 @@ function test_RSWAF_derivative()
     ∇ = x_eval .* zero(half_quant)
     grid = rand(half_quant, i, g) |> device
 
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        (z, g, sig) -> sum(RSWAF_basis(z, g, sig; degree = degree)),
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
+    f = x -> sum(RSWAF_basis(x, grid, σ; degree = degree))
+    ∇ = gradient(f, AD_backend, x_eval)
 
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
@@ -125,14 +107,8 @@ function test_FFT_derivative()
     ∇ = x_eval .* zero(half_quant)
     grid = rand(half_quant, i, g) |> device
 
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        (z, g, sig) -> sum(first(FFT_basis(z, g, sig; degree = degree))),
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
+    f = x -> sum(first(FFT_basis(x, grid, σ; degree = degree)))
+    ∇ = gradient(f, AD_backend, x_eval)
 
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))
@@ -154,14 +130,8 @@ function test_Cheby_derivative()
     ∇ = x_eval .* zero(half_quant)
     grid = rand(half_quant, i, g) |> device
 
-    Enzyme.autodiff(
-        set_runtime_activity(Reverse),
-        (z, g, sig) -> sum(Cheby_basis(z, g, sig; degree = degree)),
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
+    f = x -> sum(Cheby_basis(x, grid, σ; degree = degree))
+    ∇ = gradient(f, AD_backend, x_eval)
 
     @test size(∇) == size(x_eval)
     @test !any(isnan.(∇))

@@ -5,7 +5,7 @@ export langevin_loss
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays
 using Statistics, Lux, LuxCUDA
 
-include("../utils.jl")
+include("../../utils.jl")
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 function sample_langevin(

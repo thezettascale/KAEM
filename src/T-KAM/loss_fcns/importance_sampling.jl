@@ -6,7 +6,7 @@ using NNlib: softmax
 
 export importance_loss
 
-include("../utils.jl")
+include("../../utils.jl")
 using .Utils: device, next_rng, half_quant, full_quant, hq
 
 function sample_importance(

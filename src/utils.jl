@@ -1,7 +1,7 @@
 module Utils
 
 export removeNaN,
-    device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, AD_backend, set_state!
+    device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, set_state!
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions, Zygote, Enzyme, Enzyme.EnzymeRules
@@ -21,18 +21,6 @@ const half_quant = get(QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Flo
 const full_quant = get(QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Float32)
 const hq = get(LUX_QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Lux.f32)
 const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32)
-
-# Automatic differentiation
-const AD_BACKEND_MAP = Dict(
-    "ZYGOTE" => AutoZygote(),
-    "ENZYME" => AutoEnzyme(;
-        function_annotation = Enzyme.Duplicated,
-        mode = Enzyme.set_runtime_activity(Enzyme.Reverse),
-    )
-)
-
-const AD_backend =
-    get(AD_BACKEND_MAP, uppercase(get(ENV, "AD_BACKEND", "ZYGOTE")), AutoZygote())
 
 function device(x)
     return pu(x)

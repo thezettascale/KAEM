@@ -10,14 +10,14 @@ include("data_utils.jl")
 using .T_KAM_model
 using .GridUpdating: update_model_grid
 using .optimization
-using .Utils: device, half_quant, full_quant, hq, fq, AD_backend
+using .Utils: device, half_quant, full_quant, hq, fq
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
 
 using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
-using DifferentiationInterface
+using Enzyme
 
 mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     model::Any
@@ -187,6 +187,7 @@ function train!(t::T_KAM_trainer)
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
+    grads = half_quant.(zero(t.ps))
 
     loss_file = t.model.file_loc * "loss.csv"
 
@@ -225,23 +226,20 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        grads = CUDA.@fastmath gradient(
-            pars -> t.model.loss_fcn(
-                pars,
-                Lux.trainmode(t.st),
-                t.model,
-                t.x;
-                seed = t.seed,
-            ),
-            AD_backend,
-            half_quant.(t.ps),
+        CUDA.@fastmath Enzyme.autodiff(
+            set_runtime_activity(Reverse),
+            t.model.loss_fcn,
+            Enzyme.Active,
+            Enzyme.Duplicated(half_quant.(t.ps), grads),
+            Enzyme.Const(Lux.trainmode(t.st)),
+            Enzyme.Const(t.model),
+            Enzyme.Const(t.x),
+            Enzyme.Const(t.seed)
         )
-        grads = full_quant.(grads) ./ loss_scaling
+        copy!(G, full_quant.(grads) ./ loss_scaling)
 
-        isnan(norm(grads)) || isinf(norm(grads)) && find_nan(grads)
-        t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(grads))")
-
-        copy!(G, grads)
+        isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
+        t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(G))")
         return G
     end
 

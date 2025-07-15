@@ -11,7 +11,6 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    DifferentiationInterface,
     Enzyme,
     Enzyme.EnzymeRules
 
@@ -19,7 +18,7 @@ include("../../utils.jl")
 include("preconditioner.jl")
 include("hamiltonian.jl")
 include("../gen/gen_model.jl")
-using .Utils: device, next_rng, half_quant, full_quant, AD_backend
+using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
 using .GeneratorModel: log_likelihood_MALA
@@ -297,12 +296,17 @@ function autoMALA_sampler(
 
     logpos_withgrad =
         (z_i, x_i, st_i, t_k) -> begin
-            logpos_z, st_ebm, st_gen =
-                CUDA.@fastmath log_posterior(T.(z_i), x_i, Lux.testmode(st_i), t_k)
-            ∇z = CUDA.@fastmath DifferentiationInterface.gradient(
-                z_j -> sum(first(log_posterior(z_j, x_i, Lux.testmode(st_i), t_k))),
-                AD_backend,
-                T.(z_i),
+            ∇z = zeros(T, size(z_i)) |> device
+            logpos_z, st_ebm, st_gen = CUDA.@fastmath log_posterior(T.(z_i), x_i, Lux.testmode(st_i), t_k)
+            f = (z_j, x_j, st_j, t_j) -> sum(first(log_posterior(z_j, x_j, Lux.testmode(st_j), t_j)))
+            CUDA.@fastmath Enzyme.autodiff(
+                set_runtime_activity(Reverse),
+                f,
+                Enzyme.Active,
+                Enzyme.Duplicated(T.(z_i), ∇z),
+                Enzyme.Const(x_i),
+                Enzyme.Const(st_i),
+                Enzyme.Const(t_k),
             )
 
             @reset st_i.ebm = st_ebm

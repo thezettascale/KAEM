@@ -94,7 +94,7 @@ function test_derivative()
     lkhood = init_GenModel(conf, (out_dim, out_dim, 1); lkhood_seed = 1)
     gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
 
-    ps = (ebm = ebm_ps, gen = gen_ps) |> device
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
     st = (ebm = ebm_st, gen = gen_st) |> device
 
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device

@@ -16,12 +16,14 @@ using CUDA,
 
 include("../../utils.jl")
 include("preconditioner.jl")
+include("../gen/gen_model.jl")
 include("hamiltonian.jl")
 include("log_posteriors.jl")
 using .Utils: device, next_rng, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
 using .LogPosteriors: autoMALA_logpos_4D, autoMALA_logpos
+using .GeneratorModel: log_likelihood_MALA
 
 function safe_step_size_update(
     η::AbstractArray{U},
@@ -239,7 +241,7 @@ function autoMALA_sampler(
     """
 
     # Initialize from prior (already in bounded space)
-    z, st_ebm, seed = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
+    z, st_ebm, seed = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, seed)
     z = z .|> U
     loss_scaling = model.loss_scaling |> U
 
@@ -317,9 +319,6 @@ function autoMALA_sampler(
     burn_in = 0
     η = st.η_init
 
-    pos_before =
-        CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), t_expanded)) ./
-                       loss_scaling
     for i = 1:N
         z_cpu = cpu_device()(z)
         for k = 1:num_temps
@@ -380,8 +379,24 @@ function autoMALA_sampler(
 
                     # Global swap criterion
                     z_hq = T.(z)
-                    ll_t, st_gen = log_llhood_fcn(z_hq[:, :, :, t], x, st.gen, one(T))
-                    ll_t1, st_gen = log_llhood_fcn(z_hq[:, :, :, t+1], x, st_gen, one(T))
+                    ll_t, st_gen, seed = log_likelihood_MALA(
+                        z_hq[:, :, :, t],
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st.gen;
+                        seed = seed,
+                        ε = model.ε,
+                    )
+                    ll_t1, st_gen, seed = log_likelihood_MALA(
+                        z_hq[:, :, :, t+1],
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st_gen;
+                        seed = seed,
+                        ε = model.ε,
+                    )
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
                     swap = log_u_swap[:, t, i] .< log_swap_ratio
@@ -400,22 +415,10 @@ function autoMALA_sampler(
 
 
     end
-    pos_after =
-        CUDA.@fastmath first(log_posterior(T.(z), x_t, Lux.testmode(st), t_expanded)) ./
-                       loss_scaling
-    # model.verbose && println(
-    #     "Posterior change: $(dropdims(mean(pos_after - pos_before; dims=1); dims=1))",
-    # )
 
     mean_η = clamp.(mean_η ./ num_acceptances, η_min, η_max)
     mean_η = ifelse.(isnan.(mean_η), st.η_init, mean_η) |> device
     @reset st.η_init = mean_η
-
-    # model.verbose && println(
-    #     "Acceptance rates: ",
-    #     dropdims(mean(num_acceptances ./ (N - N_unadjusted); dims = 1); dims = 1),
-    # )
-    # model.verbose && println("Mean step sizes: ", dropdims(mean(mean_η; dims = 1); dims = 1))
 
     any(isnan.(z)) && error("NaN in z")
     return T.(z), st, seed

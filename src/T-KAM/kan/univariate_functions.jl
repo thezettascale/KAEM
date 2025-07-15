@@ -134,7 +134,10 @@ function init_function(
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, l::univariate_function{T,U}) where {T<:half_quant,U<:full_quant}
+function Lux.initialparameters(
+    rng::AbstractRNG,
+    l::univariate_function{T,U},
+) where {T<:half_quant,U<:full_quant}
 
     w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
@@ -176,7 +179,10 @@ function Lux.initialparameters(rng::AbstractRNG, l::univariate_function{T,U}) wh
     end
 end
 
-function Lux.initialstates(rng::AbstractRNG, l::univariate_function{T,U}) where {T<:half_quant,U<:full_quant}
+function Lux.initialstates(
+    rng::AbstractRNG,
+    l::univariate_function{T,U},
+) where {T<:half_quant,U<:full_quant}
     mask = ones(half_quant, l.in_dim, l.out_dim)
     return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
            (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))

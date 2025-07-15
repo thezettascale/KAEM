@@ -81,7 +81,7 @@ function init_T_KAM(
     prior_seed::Int = 1,
     lkhood_seed::Int = 1,
     data_seed::Int = 1,
-)::T_KAM where {T<:half_quant,U<:full_quant}
+)::T_KAM
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     IS_samples = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))
@@ -281,10 +281,7 @@ function init_T_KAM(
     )
 end
 
-function init_from_file(
-    file_loc::AbstractString,
-    ckpt::Int,
-)::Tuple{T_KAM{T,U},ComponentArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
+function init_from_file(file_loc::AbstractString, ckpt::Int)
     """Load a model from a checkpoint file."""
     saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
     model = saved_data["model"] |> deepcopy

@@ -102,7 +102,7 @@ function thermo_loss(
         end
 
     CUDA.@fastmath Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

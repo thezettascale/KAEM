@@ -39,7 +39,7 @@ function test_B_spline_derivative()
     extended_grid = extend_grid(grid; k_extend = degree)
 
     Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         (z, g, sig) -> sum(B_spline_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
@@ -68,7 +68,7 @@ function test_RBF_derivative()
     grid = rand(half_quant, i, g) |> device
 
     Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         (z, g, sig) -> sum(RBF_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
@@ -97,7 +97,7 @@ function test_RSWAF_derivative()
     grid = rand(half_quant, i, g) |> device
 
     Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         (z, g, sig) -> sum(RSWAF_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
@@ -126,7 +126,7 @@ function test_FFT_derivative()
     grid = rand(half_quant, i, g) |> device
 
     Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         (z, g, sig) -> sum(first(FFT_basis(z, g, sig; degree = degree))),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
@@ -155,7 +155,7 @@ function test_Cheby_derivative()
     grid = rand(half_quant, i, g) |> device
 
     Enzyme.autodiff(
-        set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         (z, g, sig) -> sum(Cheby_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),

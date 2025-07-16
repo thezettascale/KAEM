@@ -273,16 +273,36 @@ function autoMALA_sampler(
     mean_η = zeros(U, S, num_temps) |> device
     momentum = similar(z) |> cpu_device()
 
-    logpos_4D_fcn =
-        (
-            z_i::AbstractArray{T},
-            x_i::AbstractArray{T},
-            t_k::AbstractArray{T},
-            s::NamedTuple,
-            m::Any,
-            p::ComponentArray{T},
-            seed::Int,
-        )::T -> begin
+    # logpos_4D_fcn =
+    #     (z_i, x_i, t_k, s, m, p, seed) -> begin
+    #         first(
+    #             autoMALA_logpos_4D(
+    #                 z_i,
+    #                 x_i,
+    #                 t_k,
+    #                 s,
+    #                 m,
+    #                 p;
+    #                 seed = seed,
+    #                 num_temps = num_temps,
+    #             ),
+    #         )
+    #     end
+    # logpos_2D_fcn =
+    #     (z_i, x_i, t_k, s, m, p, seed) -> begin
+    #         first(autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps))
+    #     end
+
+    function logpos_4D(
+        z_i::AbstractArray{T},
+        x_i::AbstractArray{T},
+        t_k::AbstractArray{T},
+        s::NamedTuple,
+        m::Any,
+        p::ComponentArray{T},
+        seed::Int,
+    )::T
+        sum(
             first(
                 autoMALA_logpos_4D(
                     z_i,
@@ -294,55 +314,51 @@ function autoMALA_sampler(
                     seed = seed,
                     num_temps = num_temps,
                 ),
-            )
-        end
-    logpos_2D_fcn =
-        (
-            z_i::AbstractArray{T},
-            x_i::AbstractArray{T},
-            t_k::AbstractArray{T},
-            s::NamedTuple,
-            m::Any,
-            p::ComponentArray{T},
-            seed::Int,
-        )::T -> begin
-            first(autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps))
-        end
+            ),
+        )
+    end
+    function logpos_2D(
+        z_i::AbstractArray{T},
+        x_i::AbstractArray{T},
+        t_k::AbstractArray{T},
+        s::NamedTuple,
+        m::Any,
+        p::ComponentArray{T},
+        seed::Int,
+    )::T
+        sum(
+            first(
+                autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps),
+            ),
+        )
+    end
 
-    logpos_withgrad =
-        (
-            z_i::AbstractArray{T},
-            x_i::AbstractArray{T},
-            st_i::NamedTuple,
-            t_k::AbstractArray{T},
-        )::Tuple{U,AbstractArray{U},NamedTuple} -> begin
-            fcn = ndims(z_i) == 4 ? logpos_4D_fcn : logpos_2D_fcn
-            ∇z = zeros(T, size(z_i)) |> device
-            CUDA.@fastmath Enzyme.autodiff(
-                Enzyme.set_runtime_activity(Enzyme.Reverse),
-                fcn,
-                Enzyme.Active,
-                Enzyme.Duplicated(T.(z_i), ∇z),
-                Enzyme.Const(x_i),
-                Enzyme.Const(Lux.testmode(st_i)),
-                Enzyme.Const(t_k),
-                Enzyme.Const(model),
-                Enzyme.Const(ps),
-                Enzyme.Const(seed),
-            )
-            logpos_z, st_ebm, st_gen, seed = CUDA.@fastmath fcn(
-                T.(z_i),
-                x_i,
-                t_k,
-                Lux.testmode(st_i),
-                model,
-                ps,
-                seed,
-            )
-            @reset st_i.ebm = st_ebm
-            @reset st_i.gen = st_gen
-            return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
-        end
+    function logpos_withgrad(
+        z_i::AbstractArray{T},
+        x_i::AbstractArray{T},
+        st_i::NamedTuple,
+        t_k::AbstractArray{T},
+    )::Tuple{U,AbstractArray{U},NamedTuple}
+        fcn = ndims(z_i) == 4 ? logpos_4D : logpos_2D
+        ∇z = zeros(T, size(z_i)) |> device
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            fcn,
+            Enzyme.Active,
+            Enzyme.Duplicated(T.(z_i), ∇z),
+            Enzyme.Const(x_i),
+            Enzyme.Const(Lux.testmode(st_i)),
+            Enzyme.Const(t_k),
+            Enzyme.Const(model),
+            Enzyme.Const(ps),
+            Enzyme.Const(seed),
+        )
+        logpos_z, st_ebm, st_gen, seed =
+            CUDA.@fastmath fcn(T.(z_i), x_i, t_k, st_i, model, ps, seed)
+        @reset st_i.ebm = st_ebm
+        @reset st_i.gen = st_gen
+        return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
+    end
 
     burn_in = 0
     η = st.η_init

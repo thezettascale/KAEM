@@ -89,16 +89,16 @@ function ULA_sampler(
     z = reshape(z, Q, P, S, num_temps)
     ∇z = zeros(T, size(z)) |> device
 
-    logpos_fcn =
-        (
-            z_i::AbstractArray{T},
-            x_i::AbstractArray{T},
-            t_i::AbstractArray{T},
-            m::Any,
-            p::ComponentArray{T},
-            s::NamedTuple,
-            seed::Int,
-        )::T -> begin
+    function logpos_fcn(
+        z_i::AbstractArray{T},
+        x_i::AbstractArray{T},
+        t_i::AbstractArray{T},
+        m::Any,
+        p::ComponentArray{T},
+        s::NamedTuple,
+        seed::Int,
+    )::T
+        sum(
             first(
                 unadjusted_logpos(
                     z_i,
@@ -110,8 +110,9 @@ function ULA_sampler(
                     seed;
                     prior_sampling_bool = prior_sampling_bool,
                 ),
-            )
-        end
+            ),
+        )
+    end
 
     # Pre-allocate noise
     seed, rng = next_rng(seed)
@@ -119,26 +120,20 @@ function ULA_sampler(
     seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
-    logpos_grad =
-        (z_i::AbstractArray{T})::AbstractArray{T} -> begin
-            CUDA.@fastmath Enzyme.autodiff(
-                Enzyme.set_runtime_activity(Enzyme.Reverse),
-                logpos_fcn,
-                Enzyme.Active,
-                Enzyme.Duplicated(T.(z_i), ∇z),
-                Enzyme.Const(x),
-                Enzyme.Const(model),
-                Enzyme.Const(ps),
-                Enzyme.Const(st),
-                Enzyme.Const(seed),
-            )
-
-            _, st_ebm, st_gen, seed =
-                CUDA.@fastmath logpos_fcn(T.(z_i), x, temps, model, ps, st, seed)
-            @reset st.ebm = st_ebm
-            @reset st.gen = st_gen
-            return U.(∇z) ./ loss_scaling
-        end
+    function logpos_grad(z_i::AbstractArray{T})::AbstractArray{U}
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            logpos_fcn,
+            Enzyme.Active,
+            Enzyme.Duplicated(T.(z_i), ∇z),
+            Enzyme.Const(x),
+            Enzyme.Const(model),
+            Enzyme.Const(ps),
+            Enzyme.Const(st),
+            Enzyme.Const(seed),
+        )
+        return U.(∇z) ./ loss_scaling
+    end
 
     for i = 1:N
         ξ = device(noise[:, :, :, :, i])

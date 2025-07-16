@@ -76,7 +76,7 @@ function RBF_basis(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
-    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
+    diff = reshape(x, I, 1, S) .- grid
     return exp.(-(diff ./ scale .* σ) .^ 2 / 2)
 end
 
@@ -87,7 +87,7 @@ function RSWAF_basis(
     degree::Int = 3,
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
+    diff = reshape(x, I, 1, S) .- grid
     diff = NNlib.tanh_fast(diff ./ σ)
     return 1 .- diff .^ 2
 end

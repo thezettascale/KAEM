@@ -75,7 +75,7 @@ function RBF_basis(
     degree::Int = 3,
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    σ = T.((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
+    σ = T((maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)) .* σ
     diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
     return exp.(-T(0.5) .* (diff ./ σ) .^ 2)
 end

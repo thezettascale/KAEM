@@ -44,13 +44,13 @@ function test_fwd_derivative()
     ps, st = ps |> ComponentArray |> device, st |> device
     ∇ = Enzyme.make_zero(ps)
 
-    function fcn(p::ComponentArray{T}, s::NamedTuple, x::AbstractArray{T}, layer::Any)::T
+    function f(p::ComponentArray{T}, s::NamedTuple, x::AbstractArray{T}, layer::Any)::T where {T<:half_quant}
         sum(fwd(layer, p, s, x))
     end
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
+        f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(st),

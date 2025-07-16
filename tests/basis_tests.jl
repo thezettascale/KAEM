@@ -38,7 +38,7 @@ function test_B_spline_derivative()
     grid = rand(half_quant, i, g) |> device
     extended_grid = extend_grid(grid; k_extend = degree)
 
-    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T
+    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T where {T<:half_quant}
         sum(B_spline_basis(z, g, sig; degree = degree))
     end
 
@@ -71,7 +71,7 @@ function test_RBF_derivative()
     ∇ = Enzyme.make_zero(x_eval)
     grid = rand(half_quant, i, g) |> device
 
-    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T
+    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T where {T<:half_quant}
         sum(RBF_basis(z, g, sig; degree = degree))
     end
 
@@ -104,7 +104,7 @@ function test_RSWAF_derivative()
     ∇ = Enzyme.make_zero(x_eval)
     grid = rand(half_quant, i, g) |> device
 
-    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T
+    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T where {T<:half_quant}
         sum(RSWAF_basis(z, g, sig; degree = degree))
     end
 
@@ -137,7 +137,7 @@ function test_FFT_derivative()
     ∇ = Enzyme.make_zero(x_eval)
     grid = rand(half_quant, i, g) |> device
 
-    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T
+    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T where {T<:half_quant}
         sum(FFT_basis(z, g, sig; degree = degree))
     end
 
@@ -170,7 +170,7 @@ function test_Cheby_derivative()
     ∇ = Enzyme.make_zero(x_eval)
     grid = rand(half_quant, i, g) |> device
 
-    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T
+    function fcn(z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T where {T<:half_quant}
         sum(Cheby_basis(z, g, sig; degree = degree))
     end
 

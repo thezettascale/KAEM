@@ -12,7 +12,8 @@ using CUDA,
     Accessors,
     Statistics,
     Enzyme,
-    ComponentArrays
+    ComponentArrays,
+    Reactant
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -132,9 +133,11 @@ function ULA_sampler(
             return U.(∇z) ./ loss_scaling
         end
 
+    logpos_grad_compiled = Reactant.@compile logpos_grad(z)
+
     for i = 1:N
         ξ = device(noise[:, :, :, :, i])
-        z += η .* logpos_grad(z) .+ sqrt(2 * η) .* ξ
+        z += η .* logpos_grad_compiled(z) .+ sqrt(2 * η) .* ξ
 
         if i % RE_frequency == 0 && num_temps > 1 && !prior_sampling_bool
             z_hq = T.(z)

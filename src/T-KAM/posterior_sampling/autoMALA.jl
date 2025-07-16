@@ -12,7 +12,8 @@ using CUDA,
     Accessors,
     Statistics,
     Enzyme,
-    ComponentArrays
+    ComponentArrays,
+    Reactant
 
 include("../../utils.jl")
 include("preconditioner.jl")
@@ -316,6 +317,8 @@ function autoMALA_sampler(
             return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
         end
 
+    logpos_withgrad_compiled = Reactant.@compile logpos_withgrad(z, x_t, st, t_expanded)
+
     burn_in = 0
     η = st.η_init
 
@@ -328,7 +331,7 @@ function autoMALA_sampler(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t_expanded)
+        logpos_z, ∇z, st = logpos_withgrad_compiled(z, x_t, st, t_expanded)
 
         if burn_in < N_unadjusted
             burn_in += 1

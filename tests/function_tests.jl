@@ -1,5 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays
-using Enzyme
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Reactant, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -43,7 +42,7 @@ function test_fwd_derivative()
     fcn = init_function(5, 2; spline_function = "RBF")
     ps, st = Lux.setup(Random.GLOBAL_RNG, fcn)
     ps, st = ps |> ComponentArray |> device, st |> device
-    ∇ = zero(ps)
+    ∇ = Enzyme.make_zero(ps)
 
     f = (p, s, x, layer) -> sum(fwd(layer, p, s, x))
 
@@ -61,8 +60,10 @@ function test_fwd_derivative()
     @test !any(isnan.(∇))
 end
 
+fwd_derivative = Reactant.@compile test_fwd_derivative()
+
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
-    test_fwd_derivative()
+    fwd_derivative()
 end

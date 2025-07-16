@@ -114,7 +114,7 @@ function ULA_sampler(
     logpos_grad =
         (z_i) -> begin
             CUDA.@fastmath Enzyme.autodiff(
-                set_runtime_activity(Reverse),
+                set_runtime_activity(Enzyme.Reverse),
                 logpos_fcn,
                 Enzyme.Active,
                 Enzyme.Duplicated(T.(z_i), ∇z),

@@ -298,7 +298,7 @@ function autoMALA_sampler(
             fcn = ndims(z_i) == 4 ? logpos_4D_fcn : logpos_2D_fcn
             ∇z = zeros(T, size(z_i)) |> device
             CUDA.@fastmath Enzyme.autodiff(
-                set_runtime_activity(Reverse),
+                set_runtime_activity(Enzyme.Reverse),
                 fcn,
                 Enzyme.Active,
                 Enzyme.Duplicated(T.(z_i), ∇z),

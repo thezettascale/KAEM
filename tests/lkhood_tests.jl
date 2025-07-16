@@ -105,7 +105,7 @@ function test_derivative()
     f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
 
     Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇),
@@ -136,7 +136,7 @@ function test_cnn_derivative()
     f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
 
     Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇),
@@ -169,7 +169,7 @@ function test_seq_derivative()
     f = (z_i, x_i, ll, p, s) -> sum(first(log_likelihood_IS(z_i, x_i, ll, p, s)))
 
     Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇),

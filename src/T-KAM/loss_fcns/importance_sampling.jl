@@ -93,7 +93,7 @@ function importance_loss(
         end
 
     CUDA.@fastmath Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

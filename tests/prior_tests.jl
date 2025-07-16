@@ -50,7 +50,7 @@ function test_log_prior_derivative()
 
     f = (x, p, s, ebm) -> sum(first(wrap.prior.lp_fcn(x, ebm, p, s)))
     Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(z_test, ∇),

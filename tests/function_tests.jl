@@ -48,7 +48,7 @@ function test_fwd_derivative()
     f = (p, s, x, layer) -> sum(fwd(layer, p, s, x))
 
     Enzyme.autodiff(
-        set_runtime_activity(Reverse),
+        set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

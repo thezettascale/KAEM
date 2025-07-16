@@ -48,6 +48,7 @@ function set_state!(st, dict)
     end
 end
 
+
 EnzymeRules.inactive(::typeof(next_rng), args...) = nothing
 EnzymeRules.inactive(::typeof(set_state!), args...) = nothing
 

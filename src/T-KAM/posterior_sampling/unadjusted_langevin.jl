@@ -90,7 +90,15 @@ function ULA_sampler(
     ∇z = zeros(T, size(z)) |> device
 
     logpos_fcn =
-        (z_i, x_i, t_i, m, p, s, seed) -> begin
+        (
+            z_i::AbstractArray{T},
+            x_i::AbstractArray{T},
+            t_i::AbstractArray{T},
+            m::Any,
+            p::ComponentArray{T},
+            s::NamedTuple,
+            seed::Int,
+        )::T -> begin
             first(
                 unadjusted_logpos(
                     z_i,
@@ -112,7 +120,7 @@ function ULA_sampler(
     log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
     logpos_grad =
-        (z_i) -> begin
+        (z_i::AbstractArray{T})::AbstractArray{T} -> begin
             CUDA.@fastmath Enzyme.autodiff(
                 Enzyme.set_runtime_activity(Enzyme.Reverse),
                 logpos_fcn,
@@ -139,8 +147,24 @@ function ULA_sampler(
         if i % RE_frequency == 0 && num_temps > 1 && !prior_sampling_bool
             z_hq = T.(z)
             for t = 1:(num_temps-1)
-                ll_t, st_gen, seed = log_likelihood_MALA(z_hq[:, :, :, t], x, model.lkhood, ps.gen, st.gen; seed = seed, ε = model.ε)
-                ll_t1, st_gen, seed = log_likelihood_MALA(z_hq[:, :, :, t+1], x, model.lkhood, ps.gen, st_gen; seed = seed, ε = model.ε)
+                ll_t, st_gen, seed = log_likelihood_MALA(
+                    z_hq[:, :, :, t],
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st.gen;
+                    seed = seed,
+                    ε = model.ε,
+                )
+                ll_t1, st_gen, seed = log_likelihood_MALA(
+                    z_hq[:, :, :, t+1],
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st_gen;
+                    seed = seed,
+                    ε = model.ε,
+                )
                 log_swap_ratio = dropdims(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,

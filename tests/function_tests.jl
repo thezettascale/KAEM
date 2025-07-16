@@ -44,10 +44,14 @@ function test_fwd_derivative()
     ps, st = ps |> ComponentArray |> device, st |> device
     ∇ = Enzyme.make_zero(ps)
 
-    f = (p, s, x, layer) -> sum(fwd(layer, p, s, x))
+    f =
+        (p::ComponentArray{T}, s::NamedTuple, x::AbstractArray{T}, layer::Any)::T ->
+            sum(fwd(layer, p, s, x))
 
     Enzyme.autodiff(
-   set_runtime_activity(Reverse)tivity(Reverse)    Enzyme.Active,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        f,
+        Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(st),
         Enzyme.Const(x_eval),
@@ -61,5 +65,5 @@ end
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
-    fwd_derivative()
+    test_fwd_derivative()
 end

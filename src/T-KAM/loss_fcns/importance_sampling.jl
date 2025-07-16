@@ -45,7 +45,7 @@ function marginal_llhood(
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
     logprior, st_ebm = m.prior.lp_fcn(
         z,
         m.prior,
@@ -81,7 +81,7 @@ function importance_loss(
     model::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """MLE loss with importance sampling."""
 
     z, st_ebm, st_gen, weights_resampled, resampled_idxs, seed =

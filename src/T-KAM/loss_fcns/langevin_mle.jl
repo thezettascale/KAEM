@@ -27,7 +27,7 @@ function marginal_llhood(
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
 
     logprior_pos, st_ebm = m.prior.lp_fcn(
         z[:, :, :, 1],
@@ -71,7 +71,7 @@ function langevin_loss(
     model::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
     z, st_new, seed = sample_langevin(ps, st, model, x; seed = seed)

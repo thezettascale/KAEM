@@ -29,7 +29,7 @@ function marginal_llhood(
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
     log_ss = zero(T)
     st_ebm, st_gen = st_new.ebm, st_new.gen
 
@@ -92,7 +92,7 @@ function thermo_loss(
     model::Any,
     x::AbstractArray{T};
     seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
     z, temps, st, seed = sample_thermo(ps, st, model, x; seed = seed)
     Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
 

@@ -40,7 +40,8 @@ function test_B_spline_derivative()
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        (z, g, sig) -> sum(B_spline_basis(z, g, sig; degree = degree)),
+        (z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T ->
+            sum(B_spline_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
         Enzyme.Const(extended_grid),
@@ -69,7 +70,8 @@ function test_RBF_derivative()
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        (z, g, sig) -> sum(RBF_basis(z, g, sig; degree = degree)),
+        (z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T ->
+            sum(RBF_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
         Enzyme.Const(grid),
@@ -98,7 +100,8 @@ function test_RSWAF_derivative()
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        (z, g, sig) -> sum(RSWAF_basis(z, g, sig; degree = degree)),
+        (z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T ->
+            sum(RSWAF_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
         Enzyme.Const(grid),
@@ -127,7 +130,8 @@ function test_FFT_derivative()
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        (z, g, sig) -> sum(first(FFT_basis(z, g, sig; degree = degree))),
+        (z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T ->
+            sum(first(FFT_basis(z, g, sig; degree = degree))),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
         Enzyme.Const(grid),
@@ -156,7 +160,8 @@ function test_Cheby_derivative()
 
     Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        (z, g, sig) -> sum(Cheby_basis(z, g, sig; degree = degree)),
+        (z::AbstractArray{T}, g::AbstractArray{T}, sig::AbstractArray{T})::T ->
+            sum(Cheby_basis(z, g, sig; degree = degree)),
         Enzyme.Active,
         Enzyme.Duplicated(x_eval, ∇),
         Enzyme.Const(grid),

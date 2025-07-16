@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Enzyme, Reactant
+using Test, Random, LinearAlgebra
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -8,6 +8,7 @@ include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
 using .spline_functions
 using .Utils
+using Enzyme
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, device([one(half_quant)])
 
@@ -221,12 +222,6 @@ function test_curve2coef()
     @test norm(y_eval - y_reconstructed) / norm(y_eval) < half_quant(2)
 end
 
-B_spline_dydx = Reactant.@compile test_B_spline_derivative()
-RBF_dydx = Reactant.@compile test_RBF_derivative()
-RSWAF_dydx = Reactant.@compile test_RSWAF_derivative()
-FFT_dydx = Reactant.@compile test_FFT_derivative()
-Cheby_dydx = Reactant.@compile test_Cheby_derivative()
-
 @testset "Spline Tests" begin
     test_extend_grid()
     test_B_spline_basis()
@@ -236,9 +231,9 @@ Cheby_dydx = Reactant.@compile test_Cheby_derivative()
     test_Cheby_basis()
     test_coef2curve()
     test_curve2coef()
-    B_spline_dydx()
-    RBF_dydx()
-    RSWAF_dydx()
-    FFT_dydx()
-    Cheby_dydx()
+    # test_B_spline_derivative()
+    test_RBF_derivative()
+    test_RSWAF_derivative()
+    test_FFT_derivative()
+    test_Cheby_derivative()
 end

@@ -14,7 +14,7 @@ using .Utils: device, half_quant, full_quant, hq, fq
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
 
-using CUDA, KernelAbstractions, Tullio, Reactant
+using CUDA, KernelAbstractions, Tullio
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme
@@ -192,7 +192,6 @@ function train!(t::T_KAM_trainer)
     grads = half_quant.(zero(t.ps))
 
     loss_file = t.model.file_loc * "loss.csv"
-    loss_compiled = Reactant.@compile t.model.loss_fcn(t.ps, grads, Lux.trainmode(t.st), t.model, t.x; seed = t.seed)
 
     function find_nan(grads)
         for k in keys(grads)
@@ -229,7 +228,7 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        loss, grads, st_ebm, st_gen, t.seed = loss_compiled(
+        loss, grads, st_ebm, st_gen, t.seed = t.model.loss_fcn(
             half_quant(t.ps),
             grads,
             Lux.trainmode(t.st),

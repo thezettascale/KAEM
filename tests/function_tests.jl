@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays, Reactant, Enzyme
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -47,9 +47,7 @@ function test_fwd_derivative()
     f = (p, s, x, layer) -> sum(fwd(layer, p, s, x))
 
     Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        f,
-        Enzyme.Active,
+   set_runtime_activity(Reverse)tivity(Reverse)    Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(st),
         Enzyme.Const(x_eval),
@@ -59,8 +57,6 @@ function test_fwd_derivative()
     @test size(∇) == size(ps)
     @test !any(isnan.(∇))
 end
-
-fwd_derivative = Reactant.@compile test_fwd_derivative()
 
 @testset "Univariate Funtion Tests" begin
     test_fwd()

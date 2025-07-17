@@ -1,9 +1,9 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, move_to_hq, compile_mlir
+export T_KAM, init_T_KAM, generate_batch, move_to_hq
 
 using CUDA, KernelAbstractions
-using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA, Reactant
+using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 
 include("ebm/ebm_model.jl")
@@ -69,7 +69,8 @@ function generate_batch(
     ps = ps .|> half_quant
     z, st_ebm = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), rng)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    return model.lkhood.output_activation(x̂), st_ebm, st_gen
+    noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
+    return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end
 
 function init_T_KAM(
@@ -341,12 +342,6 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     end
 
     return model
-end
-
-function compile_mlir(model, ps, st, x, grads, rng)
-    loss_compiled =
-        model.loss_fcn(half_quant.(ps), grads, Lux.trainmode(st), model, x; rng = rng)
-    return loss_compiled
 end
 
 end

@@ -14,9 +14,10 @@ function cross_entropy_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
+    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
 )::AbstractArray{T} where {T<:half_quant}
-    log_x̂ = log.(x̂ .+ ε)
-    ll = permutedims(log_x̂, [1, 2, 4, 3]) .* x
+    log_x̂ = log.(permutedims(x̂, [1, 2, 4, 3]) .+ noise .+ ε)
+    ll = log_x̂ .* x
     ll = dropdims(sum(ll, dims = (1, 2)), dims = (1, 2)) # One-hot encoded cross-entropy
     return ll ./ size(x̂, 1)
 end
@@ -25,8 +26,9 @@ function l2_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
+    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
 )::AbstractArray{T} where {T<:half_quant}
-    ll = (x .- permutedims(x̂, [1, 2, 3, 5, 4])) .^ 2
+    ll = (x .- permutedims(x̂, [1, 2, 3, 5, 4]) .+ noise) .^ 2
     return -dropdims(sum(ll, dims = (1, 2, 3)); dims = (1, 2, 3))
 end
 
@@ -35,8 +37,9 @@ function cross_entropy_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(half_quant),
+    noise::AbstractArray{T} = device(zeros(T, size(x)...)),
 )::AbstractArray{T} where {T<:half_quant}
-    ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
+    ll = log.(x̂ .+ noise[:, :, :, 1] .+ ε) .* x ./ size(x, 1)
     return dropdims(sum(ll; dims = (1, 2)); dims = (1, 2))
 end
 
@@ -44,8 +47,9 @@ function l2_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(half_quant),
+    noise::AbstractArray{T} = device(zeros(T, size(x)...)),
 )::AbstractArray{T} where {T<:half_quant}
-    ll = (x - x̂) .^ 2
+    ll = (x - x̂ .+ noise) .^ 2
     return -dropdims(sum(ll; dims = (1, 2, 3)); dims = (1, 2, 3))
 end
 
@@ -56,7 +60,7 @@ function log_likelihood_IS(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = Random.default_rng(),
+    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(z)[end])),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -79,9 +83,11 @@ function log_likelihood_IS(
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
 
     # Add noise
-    noise = lkhood.σ_llhood * randn(rng, T, size(x̂)..., B) |> device
+    noise = lkhood.σ_llhood * noise
     x̂ = lkhood.output_activation(x̂ .+ noise)
-    ll = lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂; ε = ε) : l2_IS(x, x̂; ε = ε)
+    ll =
+        lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂; ε = ε, noise = noise) :
+        l2_IS(x, x̂; ε = ε, noise = noise)
     ll = ll ./ (2*lkhood.σ_llhood^2)
     return ll, st
 end
@@ -92,7 +98,7 @@ function log_likelihood_MALA(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = Random.default_rng(),
+    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(z)[end])),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -112,9 +118,11 @@ function log_likelihood_MALA(
     Q, P, S, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
-    noise = lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
+    noise = lkhood.σ_llhood .* noise[:, :, :, :, 1]
     x̂ = lkhood.output_activation(x̂ + noise)
-    ll = lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂; ε = ε) : l2_MALA(x, x̂; ε = ε)
+    ll =
+        lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂; ε = ε, noise = noise) :
+        l2_MALA(x, x̂; ε = ε, noise = noise)
     ll = ll ./ (2*lkhood.σ_llhood^2)
     return ll, st
 end

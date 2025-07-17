@@ -1,6 +1,6 @@
 module ImportanceSampling
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
 
@@ -17,8 +17,16 @@ function sample_importance(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple,AbstractArray{Int}} where {T<:half_quant}
     z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
-    logllhood, st_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; rng = rng, ε = m.ε)
+    logllhood, st_gen = log_likelihood_IS(
+        z,
+        x,
+        m.lkhood,
+        ps.gen,
+        st.gen;
+        rng = rng,
+        ε = m.ε,
+        noise = device(randn(rng, T, size(x)..., size(z)[end])),
+    )
     weights = softmax(full_quant.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)
@@ -38,7 +46,6 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     logprior, st_ebm = m.prior.lp_fcn(
         z,
@@ -49,8 +56,7 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; rng = rng, ε = m.ε)
+    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; ε = m.ε)
 
     loss, B = zero(T), size(x)[end]
     for b = 1:B
@@ -62,22 +68,21 @@ function marginal_llhood(
     return -((loss / B) - ex_prior)*m.loss_scaling, st_ebm, st_gen
 end
 
-function importance_loss(
+function grad_importance_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    st::NamedTuple,
-    model::Any,
-    x::AbstractArray{T};
-    rng::AbstractRNG = Random.default_rng(),
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    weights_resampled::AbstractArray{T},
+    resampled_idxs::AbstractArray{Int},
+    m::Any,
+    st_ebm::NamedTuple,
+    st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    """MLE loss with importance sampling."""
-
-    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
-        sample_importance(ps, st, model, x; rng = rng)
 
     f =
         (p, z_i, x_i, w, r, m, se, sg) -> begin
-            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg; rng = rng))
+            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -93,8 +98,24 @@ function importance_loss(
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
     )
+end
 
-    loss, st_ebm, st_gen = marginal_llhood(
+struct ImportanceLoss{T}
+    compiled_loss::Function
+    compiled_grad::Function
+end
+
+function initialize_importance_loss(
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    model::Any,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+)::ImportanceLoss{T} where {T<:half_quant}
+    ∇ = Enzyme.make_zero(ps)
+    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
+        sample_importance(ps, st, model, x; rng = rng)
+    compiled_loss = Reactant.@compile marginal_llhood(
         ps,
         z,
         x,
@@ -102,9 +123,45 @@ function importance_loss(
         resampled_idxs,
         model,
         st_ebm,
-        st_gen;
-        rng = rng,
+        st_gen,
     )
+    compiled_grad = Reactant.@compile grad_importance_llhood(
+        ps,
+        ∇,
+        z,
+        x,
+        weights_resampled,
+        resampled_idxs,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    return ImportanceLoss(compiled_loss, compiled_grad)
+end
+
+function (l::ImportanceLoss)(
+    ps::ComponentArray{T},
+    ∇::ComponentArray{T},
+    st::NamedTuple,
+    model::Any,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+) where {T<:half_quant}
+    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
+        sample_importance(ps, st, model, x; rng = rng)
+    ∇, st_ebm, st_gen = l.compiled_grad(
+        ps,
+        ∇,
+        z,
+        x,
+        weights_resampled,
+        resampled_idxs,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    loss, st_ebm, st_gen =
+        l.compiled_loss(ps, z, x, weights_resampled, resampled_idxs, model, st_ebm, st_gen)
     return loss, ∇, st_ebm, st_gen
 end
 

@@ -21,16 +21,16 @@ end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z::AbstractArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
     x::AbstractArray{T},
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
     logprior_pos, st_ebm = m.prior.lp_fcn(
-        z[:, :, :, 1],
+        z_posterior[:, :, :, 1],
         m.prior,
         ps.ebm,
         st_ebm;
@@ -38,13 +38,12 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     logllhood, st_gen =
-        log_likelihood_MALA(z[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; rng = rng, ε = m.ε)
+        log_likelihood_MALA(z_posterior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
-        z, st_ebm = m.prior.sample_z(m, size(x)[end], ps, st, rng)
         logprior, st_ebm = m.prior.lp_fcn(
-            z,
+            z_prior,
             m.prior,
             ps.ebm,
             st_ebm;
@@ -57,22 +56,20 @@ function marginal_llhood(
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen
 end
 
-function langevin_loss(
+function grad_langevin_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    st::NamedTuple,
-    model::Any,
-    x::AbstractArray{T};
-    rng::AbstractRNG = Random.default_rng(),
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
+    x::AbstractArray{T},
+    m::Any,
+    st_ebm::NamedTuple,
+    st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
-
-    z, st_new = sample_langevin(ps, st, model, x; rng = rng)
-    st_ebm, st_gen = st_new.ebm, st_new.gen
 
     f =
-        (p, z_i, x_i, m, se, sg) -> begin
-            first(marginal_llhood(p, z_i, x_i, m, se, sg; rng = rng))
+        (p, post_i, prior_i, x_i, m, se, sg) -> begin
+            first(marginal_llhood(p, post_i, prior_i, x_i, m, se, sg))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -80,15 +77,45 @@ function langevin_loss(
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z),
+        Enzyme.Const(z_posterior),
+        Enzyme.Const(z_prior),
         Enzyme.Const(x),
         Enzyme.Const(model),
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
     )
-
-    loss, st_ebm, st_gen = marginal_llhood(ps, z, x, model, st_ebm, st_gen; rng = rng)
-    return loss, ∇, st_ebm, st_gen
 end
+
+# function langevin_loss(
+#     ps::ComponentArray{T},
+#     ∇::ComponentArray{T},
+#     st::NamedTuple,
+#     model::Any,
+#     x::AbstractArray{T};
+#     rng::AbstractRNG = Random.default_rng(),
+# )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+#     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
+
+#     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+#     st_ebm, st_gen = st_new.ebm, st_new.gen
+#     z_prior, st_ebm = m.prior.sample_z(m, size(x)[end], ps, st, rng)
+
+#     ∇, st_ebm, st_gen =
+#         grad_langevin_llhood(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+
+#     loss, st_ebm, st_gen =
+#         marginal_llhood(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
+#     return loss, ∇, st_ebm, st_gen
+# end
+
+struct LangevinLoss{T}
+    compiled_loss::Function
+    compiled_grad::Function
+    compiled_logpos::Function
+    compiled_logpos_grad::Function
+end
+function initialize_langevin_loss(
+    ps::ComponentArray{T},
+)
 
 end

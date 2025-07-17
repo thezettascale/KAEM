@@ -27,8 +27,8 @@ function test_ps_derivative()
 
     loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
 
-    loss, ∇, st_ebm, st_gen, seed =
-        loss_compiled(half_quant.(ps), ∇, st, model, x_test; seed = 1)
+    loss, ∇, st_ebm, st_gen =
+        loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -60,8 +60,8 @@ function test_mala_loss()
     ∇ = zero(half_quant.(ps))
 
     loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
-    loss, ∇, st_ebm, st_gen, seed =
-        loss_compiled(half_quant.(ps), ∇, st, model, x_test; seed = 1)
+    loss, ∇, st_ebm, st_gen =
+        loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -98,8 +98,8 @@ function test_seq_loss()
     ∇ = zero(half_quant.(ps))
 
     loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
-    loss, ∇, st_ebm, st_gen, seed =
-        loss_compiled(half_quant.(ps), ∇, st, model, x_test; seed = 1)
+    loss, ∇, st_ebm, st_gen =
+        loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

@@ -17,7 +17,7 @@ using CUDA,
 include("../../utils.jl")
 include("../gen/gen_model.jl")
 include("log_posteriors.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq
+using .Utils: device, half_quant, full_quant, fq
 using .GeneratorModel: log_likelihood_MALA
 using .LogPosteriors: unadjusted_logpos
 
@@ -35,12 +35,12 @@ function ULA_sampler(
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     RE_frequency::Int = 10,
     prior_sampling_bool::Bool = false,
     prior_η::U = full_quant(1e-3),
     num_samples::Int = 100,
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
 
@@ -51,7 +51,7 @@ function ULA_sampler(
         x: The data.
         t: The temperatures if using Thermodynamic Integration.
         N: The number of iterations.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
         
     Unused arguments:
@@ -66,12 +66,11 @@ function ULA_sampler(
     # Initialize from prior
     z = begin
         if model.prior.ula && prior_sampling_bool
-            seed, rng = next_rng(seed)
-            z =
+                    z =
                 U.(π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)) |> device
         else
-            z, st_ebm, seed =
-                model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
+            z, st_ebm =
+                model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
             U.(z)
         end
@@ -94,7 +93,6 @@ function ULA_sampler(
         m::Any,
         p::ComponentArray{T},
         s::NamedTuple,
-        seed::Int,
     )::T
         sum(
             first(
@@ -104,8 +102,8 @@ function ULA_sampler(
                     t_i,
                     m,
                     p,
-                    s,
-                    seed;
+                    s;
+                    rng = rng,
                     prior_sampling_bool = prior_sampling_bool,
                 ),
             ),
@@ -113,9 +111,7 @@ function ULA_sampler(
     end
 
     # Pre-allocate noise
-    seed, rng = next_rng(seed)
     noise = randn(rng, U, Q, P, S, num_temps, N)
-    seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
     function logpos_grad(z_i::AbstractArray{T})::AbstractArray{U}
@@ -128,7 +124,6 @@ function ULA_sampler(
             Enzyme.Const(model),
             Enzyme.Const(ps),
             Enzyme.Const(st),
-            Enzyme.Const(seed),
         )
         return U.(∇z) ./ loss_scaling
     end
@@ -140,22 +135,22 @@ function ULA_sampler(
         if i % RE_frequency == 0 && num_temps > 1 && !prior_sampling_bool
             z_hq = T.(z)
             for t = 1:(num_temps-1)
-                ll_t, st_gen, seed = log_likelihood_MALA(
+                ll_t, st_gen = log_likelihood_MALA(
                     z_hq[:, :, :, t],
                     x,
                     model.lkhood,
                     ps.gen,
                     st.gen;
-                    seed = seed,
+                    rng = rng,
                     ε = model.ε,
                 )
-                ll_t1, st_gen, seed = log_likelihood_MALA(
+                ll_t1, st_gen = log_likelihood_MALA(
                     z_hq[:, :, :, t+1],
                     x,
                     model.lkhood,
                     ps.gen,
                     st_gen;
-                    seed = seed,
+                    rng = rng,
                     ε = model.ε,
                 )
                 log_swap_ratio = dropdims(
@@ -181,7 +176,7 @@ function ULA_sampler(
         z = dropdims(z; dims = 4)
     end
 
-    return T.(z), st, seed
+    return T.(z), st
 end
 
 end

@@ -13,6 +13,9 @@ using .Utils: device, half_quant
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
+
+rng = Random.MersenneTwister(1)
+
 commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -30,14 +33,16 @@ function setup_model(n_z)
     commit!(conf, "EbmModel", "layer_widths", "$(n_z), $(2*n_z+1)")
     commit!(conf, "GeneratorModel", "widths", "$(2*n_z+1), $(4*n_z+2)")
 
-    model = init_T_KAM(dataset, conf, img_size)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    model = init_T_KAM(dataset, conf, img_size; rng = rng)
+    ps, st = Lux.setup(rng, model)
     model = move_to_hq(model)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
-    return model, half_quant.(ps), ∇, st, x_test
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+
+    return model, half_quant.(ps), ∇, st, x_test, loss_compiled
 end
 
 results = DataFrame(
@@ -52,12 +57,12 @@ results = DataFrame(
 for n_z in [10, 20, 30, 40, 50]
     println("Benchmarking n_z = $n_z...")
 
-    model, ps, ∇, st, x_test = setup_model(n_z)
+    model, ps, ∇, st, x_test, loss_compiled = setup_model(n_z)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
+    b = @benchmark loss_compiled($ps, $∇, $st, $model, $x_test)
 
     push!(
         results,

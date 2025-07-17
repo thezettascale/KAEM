@@ -22,8 +22,8 @@ ENV["autoMALA"] = retrieve(conf, "POST_LANGEVIN", "use_autoMALA")
 include("src/pipeline/trainer.jl")
 using .trainer
 
-rng = Random.seed!(1)
+rng = Random.MersenneTwister(1)
 
 # Thermodynamic
-t = init_trainer(rng, conf, dataset)
+t = init_trainer(rng, conf, dataset; rng = rng)
 train!(t)

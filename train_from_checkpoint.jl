@@ -37,8 +37,8 @@ saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
 ps = convert(ComponentArray, saved_data["params"]) |> hq |> device
 st = convert(NamedTuple, saved_data["state"]) |> hq |> device
 
-rng = Random.seed!(1)
-t = init_trainer(rng, conf, dataset)
+rng = Random.MersenneTwister(1)
+t = init_trainer(rng, conf, dataset; rng = rng)
 t.ps, t.st = ps, st
 
 train!(t)

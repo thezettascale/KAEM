@@ -6,7 +6,7 @@ using CUDA, Random, Distributions, LinearAlgebra, ParallelStencil
 using NNlib: softmax
 
 include("../../utils.jl")
-using .Utils: next_rng, full_quant, device
+using .Utils: full_quant, device
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -67,7 +67,7 @@ function residual_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Residual resampling for weight filtering.
@@ -75,11 +75,10 @@ function residual_resampler(
     Args:
         weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
-        seed: Random seed for reproducibility.
+        rng: Random seed for reproducibility.
 
     Returns:
         - The resampled indices.
-        - The updated seed.
     """
     # Number times to replicate each sample, (convert to FP64 because stability issues)
     integer_counts = Int.(floor.(weights .* N))
@@ -89,7 +88,6 @@ function residual_resampler(
     residual_weights = softmax(weights .* (N .- integer_counts), dims = 2)
 
     # CDF and variate for resampling
-    seed, rng = next_rng(seed)
     u = device(rand(rng, U, B, N))
     cdf = cumsum(residual_weights, dims = 2)
 
@@ -104,7 +102,7 @@ function residual_resampler(
         B,
         N,
     )
-    return Int.(idxs), seed
+    return Int.(idxs)
 end
 
 @parallel_indices (b) function systematic_kernel!(
@@ -142,7 +140,7 @@ function systematic_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
@@ -150,22 +148,20 @@ function systematic_resampler(
     Args:
         weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
-        seed: Random seed for reproducibility.
+        rng: Random seed for reproducibility.
 
     Returns:
         - The resampled indices.
-        - The updated seed.
     """
 
     cdf = cumsum(weights, dims = 2)
 
     # Systematic thresholds
-    seed, rng = next_rng(seed)
     u = device((rand(rng, U, B, 1) .+ (0:(N-1))') ./ N)
 
     idxs = zeros(Int, B, N) |> device
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return idxs, seed
+    return idxs
 end
 
 @parallel_indices (b) function stratified_kernel!(
@@ -202,7 +198,7 @@ function stratified_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
@@ -210,31 +206,29 @@ function stratified_resampler(
     Args:
         weights: The weights of the population.
         ESS_bool: A boolean array indicating if the ESS is above the threshold.
-        seed: Random seed for reproducibility.
+        rng: Random seed for reproducibility.
 
     Returns:
         - The resampled indices.
-        - The updated seed.
     """
 
     cdf = cumsum(weights, dims = 2)
 
     # Stratified thresholds
-    seed, rng = next_rng(seed)
     u = device((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
 
     idxs = zeros(Int, B, N) |> device
     @parallel (1:B) stratified_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return idxs, seed
+    return idxs
 end
 
 function importance_resampler(
     weights::AbstractArray{U};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     ESS_threshold::U = full_quant(0.5),
     resampler::Function = systematic_sampler,
     verbose::Bool = false,
-)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
+)::Tuple{AbstractArray{Int}} where {U<:full_quant}
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 
@@ -243,13 +237,12 @@ function importance_resampler(
         weights: The weights of the population.
         t_resample: The temperature at which the last resample occurred.
         t2: The temperature at which to update the weights.
-        seed: Random seed for reproducibility.
+        rng: Random seed for reproducibility.
         ESS_threshold: The threshold for the effective sample size.
         resampler: The resampling function.
 
     Returns:
-        - The resampled indices.
-        - The updated seed.
+        - The resampled indices.    
     """
     B, N = size(weights)
 
@@ -259,8 +252,8 @@ function importance_resampler(
 
     # Only resample when needed 
     verbose && (any(ESS_bool) && println("Resampling!"))
-    any(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed = seed)
-    return repeat(collect(1:N)', B, 1), seed
+    any(ESS_bool) && return resampler(weights, ESS_bool, B, N; rng = rng)
+    return repeat(collect(1:N)', B, 1)
 end
 
 end

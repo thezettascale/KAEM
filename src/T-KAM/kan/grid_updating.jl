@@ -68,8 +68,8 @@ function update_model_grid(
     x::AbstractArray{T},
     ps::ComponentArray{T},
     st::NamedTuple,
-    seed::Int = 1,
-)::Tuple{Any,ComponentArray{T},NamedTuple,Int} where {T<:half_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{Any,ComponentArray{T},NamedTuple} where {T<:half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 
@@ -78,11 +78,11 @@ function update_model_grid(
         x: Data samples.
         ps: The parameters of the model.
         st: The states of the model.
+        rng: The random number generator.
 
     Returns:
         The updated model.
         The updated params.
-        The updated seed.
     """
     ps = ps .|> T
 
@@ -93,10 +93,10 @@ function update_model_grid(
 
     if model.update_prior_grid
 
-        z, _, seed = (
+        z, _ = (
             (model.MALA || model.N_t > 1) ?
-            model.posterior_sample(model, x, temps, ps, st, seed) :
-            model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
+            model.posterior_sample(model, x, temps, ps, st, rng) :
+            model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng)
         )
 
         Q, P = (
@@ -139,12 +139,12 @@ function update_model_grid(
 
     # Only update if KAN-type generator requires
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) &&
-        return model, T.(ps), st, seed
+        return model, T.(ps), st
 
-    z, _, seed = (
+    z, _ = (
         (model.MALA || model.N_t > 1) ?
-        model.posterior_sample(model, x, temps, ps, st, seed) :
-        model.prior.sample_z(model, model.grid_updates_samples, ps, st, seed)
+        model.posterior_sample(model, x, temps, ps, st, rng) :
+        model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng)
     )
 
     z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims = 2); dims = 2)
@@ -178,7 +178,7 @@ function update_model_grid(
         end
     end
 
-    return model, T.(ps), st, seed
+    return model, T.(ps), st
 end
 
 end

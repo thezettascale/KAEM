@@ -14,6 +14,8 @@ using .Utils: device, half_quant
 conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
 
+rng = Random.MersenneTwister(1)
+
 commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0")
 commit!(conf, "TRAINING", "verbose", "false")
@@ -30,8 +32,8 @@ dataset, img_size = get_vision_dataset(
 function setup_model(N_t)
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_t)")
 
-    model = init_T_KAM(dataset, conf, img_size)
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    model = init_T_KAM(dataset, conf, img_size; rng = rng)
+    ps, st = Lux.setup(rng, model)
     model = move_to_hq(model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
@@ -39,7 +41,7 @@ function setup_model(N_t)
 end
 
 function benchmark_prior(model, ps, st)
-    first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, 1))
+    first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
 end
 
 results = DataFrame(

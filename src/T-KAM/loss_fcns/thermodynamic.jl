@@ -6,18 +6,18 @@ using CUDA, KernelAbstractions, Enzyme, ComponentArrays
 using Statistics, Lux, LuxCUDA
 
 include("../../utils.jl")
-using .Utils: device, next_rng, half_quant, full_quant, hq
+using .Utils: device, half_quant, full_quant, hq
 
 function sample_thermo(
     ps::ComponentArray{T},
     st::NamedTuple,
     m::Any,
     x::AbstractArray{T};
-    seed::Int = 1,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
-    z, st, seed = m.posterior_sample(m, x, temps[2:end], ps, st, seed)
-    return z, temps, st, seed
+    z, st = m.posterior_sample(m, x, temps[2:end], ps, st, rng)
+    return z, temps, st
 end
 
 function marginal_llhood(
@@ -28,20 +28,20 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    seed::Int = 1,
-)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     log_ss = zero(T)
     st_ebm, st_gen = st_new.ebm, st_new.gen
 
     # Steppingstone estimator
     for k = 1:(T_length-2)
-        logllhood, st_gen, seed = log_likelihood_MALA(
+        logllhood, st_gen = log_likelihood_MALA(
             z[:, :, :, k],
             x,
             m.lkhood,
             ps.gen,
             st_gen;
-            seed = seed,
+            rng = rng,
             ε = m.ε,
         )
         log_ss += mean(logllhood .* Δt[k+1])
@@ -58,7 +58,7 @@ function marginal_llhood(
     )
     contrastive_div = mean(logprior)
 
-    z, st_ebm, seed = m.prior.sample_z(m, B, ps, st, seed)
+    z, st_ebm = m.prior.sample_z(m, B, ps, st, rng)
     if m.prior.contrastive_div
         logprior, st_ebm = m.prior.lp_fcn(
             z,
@@ -71,18 +71,18 @@ function marginal_llhood(
         contrastive_div -= mean(logprior)
     end
 
-    logllhood, st_gen, seed = log_likelihood_MALA(
+    logllhood, st_gen = log_likelihood_MALA(
         m.lkhood,
         ps.gen,
         st_gen,
         x,
         z[:, :, :, 1];
-        seed = seed,
+        rng = rng,
         ε = m.ε,
     )
     log_ss += mean(logllhood .* Δt[1])
 
-    return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen, seed
+    return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen
 end
 
 function thermo_loss(
@@ -91,14 +91,14 @@ function thermo_loss(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    seed::Int = 1,
-)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
-    z, temps, st, seed = sample_thermo(ps, st, model, x; seed = seed)
+    rng::AbstractRNG = default_rng(),
+)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+    z, temps, st = sample_thermo(ps, st, model, x; rng = rng)
     Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
 
     f =
         (p, z_i, x_i, t, m, se, sg) -> begin
-            first(marginal_llhood(p, z_i, x_i, t, m, se, sg; seed = seed))
+            first(marginal_llhood(p, z_i, x_i, t, m, se, sg; rng = rng))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -114,9 +114,9 @@ function thermo_loss(
         Enzyme.Const(st_gen),
     )
 
-    loss, st_ebm, st_gen, seed =
-        marginal_llhood(ps, z, x, temps, model, st_ebm, st_gen; seed = seed)
-    return loss, ∇, st_ebm, st_gen, seed
+    loss, st_ebm, st_gen =
+        marginal_llhood(ps, z, x, temps, model, st_ebm, st_gen; rng = rng)
+    return loss, ∇, st_ebm, st_gen
 end
 
 end

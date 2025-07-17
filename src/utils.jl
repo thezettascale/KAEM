@@ -1,7 +1,7 @@
 module Utils
 
 export removeNaN,
-    device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq, set_state!
+    device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
 using CUDA, LuxCUDA, KernelAbstractions, Enzyme, Enzyme.EnzymeRules
@@ -39,11 +39,6 @@ end
 
 function removeNeg(x; ε = half_quant(1e-4))
     return ifelse.(x .< ε, ε, x) |> device
-end
-
-function next_rng(seed)
-    rng = Random.seed!(seed)
-    return seed + 1, rng
 end
 
 function set_state!(st, dict)

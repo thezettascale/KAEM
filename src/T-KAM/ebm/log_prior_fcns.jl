@@ -16,7 +16,7 @@ using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq, set_state!
+using .Utils: device, half_quant, full_quant, fq, set_state!
 using .UnivariateFunctions: fwd
 
 function prior_fwd(

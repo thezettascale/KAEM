@@ -31,20 +31,19 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     x::AbstractArray{T}
     num_generated_samples::Int
     batch_size_for_gen::Int
-    seed::Int
     grid_update_frequency::Int
     last_grid_update::Int
     save_model::Bool
     gen_type::AbstractString
     checkpoint_every::Int
     loss::full_quant
+    rng::AbstractRNG
 end
 
 function init_trainer(
     rng::AbstractRNG,
     conf::ConfParse,
     dataset_name;
-    seed = 1,
     img_resize = nothing,
     file_loc = nothing,
     save_model = true,
@@ -131,9 +130,7 @@ function init_trainer(
         conf,
         x_shape;
         file_loc = file_loc,
-        prior_seed = seed,
-        lkhood_seed = seed,
-        data_seed = seed,
+        rng = rng,
     )
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
@@ -169,13 +166,13 @@ function init_trainer(
         device(x),
         num_generated_samples,
         batch_size_for_gen,
-        seed,
         grid_update_frequency,
         1,
         save_model,
         gen_type,
         checkpoint_every,
         zero(full_quant),
+        rng,
     )
 end
 
@@ -214,8 +211,8 @@ function train!(t::T_KAM_trainer)
             t.st.train_idx == 1 ||
             (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)
         ) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.st, t.seed =
-                update_model_grid(t.model, t.x, t.ps, Lux.testmode(t.st); seed = t.seed)
+            t.model, t.ps, t.st =
+                update_model_grid(t.model, t.x, t.ps, Lux.testmode(t.st); rng = t.rng)
             t.grid_update_frequency =
                 t.st.train_idx > 1 ?
                 floor(
@@ -229,13 +226,13 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        loss, grads, st_ebm, st_gen, t.seed = loss_compiled(
+        loss, grads, st_ebm, st_gen = loss_compiled(
             half_quant(t.ps),
             grads,
             Lux.trainmode(t.st),
             t.model,
             t.x;
-            seed = t.seed,
+            rng = t.rng,
         )
         t.loss = full_quant(loss) / loss_scaling
         copy!(G, full_quant.(grads) ./ loss_scaling)
@@ -257,12 +254,12 @@ function train!(t::T_KAM_trainer)
 
             test_loss = 0
             for x in t.model.test_loader
-                x_gen, st_ebm, st_gen, t.seed = CUDA.@fastmath generate_batch(
+                x_gen, st_ebm, st_gen = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
                     Lux.testmode(t.st),
                     size(x)[end];
-                    seed = t.seed,
+                    rng = t.rng,
                 )
                 @reset t.st.ebm = st_ebm
                 @reset t.st.gen = st_gen
@@ -296,7 +293,7 @@ function train!(t::T_KAM_trainer)
                 t.model.file_loc * "ckpt_epoch_$(epoch).jld2";
                 params = t.ps |> cpu_device(),
                 state = t.st |> cpu_device(),
-                seed = t.seed,
+                rng = t.rng,
             )
 
             train_loss = 0
@@ -306,12 +303,12 @@ function train!(t::T_KAM_trainer)
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
             for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-                batch, st_ebm, st_gen, t.seed = CUDA.@fastmath generate_batch(
+                batch, st_ebm, st_gen = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
                     Lux.testmode(t.st),
                     t.batch_size_for_gen;
-                    seed = t.seed,
+                    rng = t.rng,
                 )
                 @reset t.st.ebm = st_ebm
                 @reset t.st.gen = st_gen
@@ -384,12 +381,12 @@ function train!(t::T_KAM_trainer)
     gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     idx = length(t.model.lkhood.x_shape) + 1
     for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-        batch, t.st, t.seed = CUDA.@fastmath generate_batch(
+        batch, t.st = CUDA.@fastmath generate_batch(
             t.model,
             t.ps,
             Lux.testmode(t.st),
             t.batch_size_for_gen;
-            seed = t.seed,
+            rng = t.rng,
         )
         gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
     end

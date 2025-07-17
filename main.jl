@@ -25,16 +25,13 @@ using .trainer
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 prior_type = Dict(1 => "lognormal", 2 => "gaussian", 3 => "uniform", 4 => "ebm")
-
 bases = Dict(5 => "RBF", 6 => "FFT")
-
 acts = Dict(5 => "silu", 6 => "silu")
-
 grid_sizes = Dict(5 => "20", 6 => "50")
 
 if dataset == "CIFAR10" || dataset == "SVHN"
-    rng = Random.seed!(1)
-    t = init_trainer(rng, conf, dataset)
+    rng = Random.MersenneTwister(1)
+    t = init_trainer(rng, conf, dataset; rng = rng)
     train!(t)
 else
     for prior_idx in [4]
@@ -46,8 +43,8 @@ else
             commit!(conf, "EbmModel", "base_activation", acts[base_idx])
             commit!(conf, "GeneratorModel", "grid_size", grid_sizes[base_idx])
             commit!(conf, "EbmModel", "grid_size", grid_sizes[base_idx])
-            rng = Random.seed!(1)
-            t = init_trainer(rng, conf, dataset)
+            rng = Random.MersenneTwister(1)
+            t = init_trainer(rng, conf, dataset; rng = rng)
             train!(t)
         end
     end

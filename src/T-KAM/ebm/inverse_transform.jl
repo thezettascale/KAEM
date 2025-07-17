@@ -16,7 +16,7 @@ using CUDA,
 
 include("../../utils.jl")
 include("log_prior_fcns.jl")
-using .Utils: device, next_rng, half_quant, full_quant, fq
+using .Utils: device, half_quant, full_quant, fq
 using .LogPriorFCNs: prior_fwd
 using Flux: onehotbatch
 
@@ -149,7 +149,7 @@ function choose_component(
     num_samples::Int,
     q_size::Int,
     p_size::Int;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{AbstractArray{T},Int} where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
@@ -158,19 +158,17 @@ function choose_component(
         alpha: The mixture proportions, (q, p).
         num_samples: The number of samples to generate.
         q_size: The number of mixture models.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
     Returns:
-        chosen_components: The one-hot mask for each mixture model, (num_samples, q, p).
-        seed: The updated seed.
+        chosen_components: The one-hot mask for each mixture model, (num_samples, q, p).    
     """
-    seed, rng = next_rng(seed)
     rand_vals = rand(rng, full_quant, q_size, num_samples)
     α = cumsum(softmax(full_quant.(α); dims = 2); dims = 2)
 
     mask = @zeros(q_size, p_size, num_samples)
     @parallel (1:q_size, 1:num_samples) mask_kernel!(mask, α, rand_vals, p_size)
-    return mask, seed
+    return mask
 end
 
 @parallel_indices (q, p, b) function interp_kernel!(
@@ -210,9 +208,9 @@ function sample_univariate(
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
 
     cdf, grid, st = ebm.quad(ebm, ps, st, nothing)
     grid_size = size(grid, 2)
@@ -224,7 +222,6 @@ function sample_univariate(
         dims = 3,
     )
 
-    seed, rng = next_rng(seed)
     rand_vals = device(rand(rng, full_quant, 1, ebm.p_size, num_samples))
     rand_vals = rand_vals .* cdf[:, :, end]
     z = @zeros(ebm.q_size, ebm.p_size, num_samples)
@@ -235,7 +232,7 @@ function sample_univariate(
         rand_vals,
         grid_size,
     )
-    return T.(z), st, seed
+    return T.(z), st
 end
 
 @parallel_indices (q, b) function interp_kernel_mixture!(
@@ -268,9 +265,9 @@ function sample_mixture(
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Component-wise inverse transform sampling for the ebm-prior.
     p = components of model
@@ -283,10 +280,9 @@ function sample_mixture(
 
     Returns:
         z: The samples from the ebm-prior, (num_samples, q). 
-        seed: The updated seed.
     """
-    mask, seed =
-        choose_component(ps[Symbol("α")], num_samples, ebm.q_size, ebm.p_size; seed = seed)
+    mask =
+        choose_component(ps[Symbol("α")], num_samples, ebm.q_size, ebm.p_size; rng = rng)
 
     cdf, grid, st = ebm.quad(ebm, ps, st, mask)
     grid_size = size(grid, 2)
@@ -298,7 +294,6 @@ function sample_mixture(
         dims = 3,
     )
 
-    seed, rng = next_rng(seed)
     rand_vals = device(rand(rng, full_quant, ebm.q_size, num_samples))
     rand_vals = rand_vals .* cdf[:, :, end]
 
@@ -310,7 +305,7 @@ function sample_mixture(
         rand_vals,
         grid_size,
     )
-    return T.(z), st, seed
+    return T.(z), st
 end
 
 end

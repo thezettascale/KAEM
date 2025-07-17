@@ -21,7 +21,7 @@ using .ImportanceSampling
 using .ThermodynamicIntegration
 using .autoMALA_sampling: autoMALA_sampler
 using .ULA_sampling: ULA_sampler
-using .Utils: device, next_rng, half_quant, full_quant, hq
+using .Utils: device, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel
@@ -51,7 +51,7 @@ function generate_batch(
     ps::ComponentArray{T},
     st::NamedTuple,
     num_samples::Int;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """
     Inference pass to generate a batch of data from the model.
@@ -61,16 +61,15 @@ function generate_batch(
         model: The model.
         ps: The parameters of the model.
         st: The states of the model.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
     Returns:
         The generated data.
-        The updated seed.
     """
     ps = ps .|> half_quant
-    z, st_ebm, seed = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), seed)
+    z, st_ebm = model.prior.sample_z(model, num_samples, ps, Lux.testmode(st), rng)
     x̂, st_gen = model.lkhood.generate_from_z(model.lkhood, ps.gen, Lux.testmode(st.gen), z)
-    return model.lkhood.output_activation(x̂), st_ebm, st_gen, seed
+    return model.lkhood.output_activation(x̂), st_ebm, st_gen
 end
 
 function init_T_KAM(
@@ -78,9 +77,7 @@ function init_T_KAM(
     conf::ConfParse,
     x_shape::Tuple;
     file_loc::AbstractString = "logs/",
-    prior_seed::Int = 1,
-    lkhood_seed::Int = 1,
-    data_seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::T_KAM
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
@@ -99,7 +96,6 @@ function init_T_KAM(
         seq ? dataset[:, :, (N_train+1):(N_train+N_test)] :
         dataset[:, :, :, (N_train+1):(N_train+N_test)]
 
-    data_seed, rng = next_rng(data_seed)
     train_loader = DataLoader(
         train_data .|> half_quant,
         batchsize = batch_size,
@@ -133,8 +129,8 @@ function init_T_KAM(
         update_llhood_grid = false
     end
 
-    prior_model = init_EbmModel(conf; prior_seed = prior_seed)
-    lkhood_model = init_GenModel(conf, x_shape; lkhood_seed = lkhood_seed)
+    prior_model = init_EbmModel(conf; rng = rng)
+    lkhood_model = init_GenModel(conf, x_shape; rng = rng)
 
     if prior_model.ula
         loss_fcn = langevin_loss
@@ -142,12 +138,12 @@ function init_T_KAM(
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
         x_ = zeros(half_quant, 1, batch_size) |> device
         @reset prior_model.sample_z =
-            (m, n, p, s, seed_prior) -> ULA_sampler(
+            (m, n, p, s, rng) -> ULA_sampler(
                 m,
                 p,
                 Lux.testmode(s),
                 x_;
-                seed = seed_prior,
+                rng = rng,
                 prior_η = step_size,
                 ULA_prior = true,
                 N = num_steps,
@@ -185,11 +181,11 @@ function init_T_KAM(
     if (use_MALA && !(N_t > 1)) || (length(widths) > 2)
         loss_fcn = langevin_loss
         posterior_fcn =
-            (m, x, t, ps, st, seed) ->
-                ULA_sampler(m, ps, Lux.testmode(st), x; N = num_steps, seed = seed)
+            (m, x, t, ps, st, rng) ->
+                ULA_sampler(m, ps, Lux.testmode(st), x; N = num_steps, rng = rng)
         if autoMALA_bool
             posterior_fcn =
-                (m, x, t, ps, st, seed) -> autoMALA_sampler(
+                (m, x, t, ps, st, rng) -> autoMALA_sampler(
                     m,
                     ps,
                     Lux.testmode(st),
@@ -199,7 +195,7 @@ function init_T_KAM(
                     Δη = Δη,
                     η_min = η_minmax[1],
                     η_max = η_minmax[2],
-                    seed = seed,
+                    rng = rng,
                 )
         end
     end
@@ -215,19 +211,19 @@ function init_T_KAM(
 
         loss_fcn = thermo_loss
         posterior_fcn =
-            (m, x, t, ps, st, seed) -> ULA_sampler(
+            (m, x, t, ps, st, rng) -> ULA_sampler(
                 m,
                 ps,
                 Lux.testmode(st),
                 x;
                 temps = t,
                 N = num_steps,
-                seed = seed,
+                rng = rng,
                 RE_frequency = replica_exchange_frequency,
             )
         if autoMALA_bool
             posterior_fcn =
-                (m, x, t, ps, st, seed) -> autoMALA_sampler(
+                (m, x, t, ps, st, rng) -> autoMALA_sampler(
                     m,
                     ps,
                     Lux.testmode(st),
@@ -238,7 +234,7 @@ function init_T_KAM(
                     Δη = Δη,
                     η_min = η_minmax[1],
                     η_max = η_minmax[2],
-                    seed = seed,
+                    rng = rng,
                     RE_frequency = replica_exchange_frequency,
                 )
         end
@@ -347,14 +343,14 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     return model
 end
 
-function compile_mlir(model, ps, st, x, grads)
+function compile_mlir(model, ps, st, x, grads, rng)
     loss_compiled = Reactant.@compile model.loss_fcn(
         half_quant.(ps),
         grads,
         Lux.trainmode(st),
         model,
         x;
-        seed = 1,
+        rng = rng,
     )
     return loss_compiled
 end

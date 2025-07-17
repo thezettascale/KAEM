@@ -19,7 +19,7 @@ include("generator_fcns.jl")
 include("loglikelihoods.jl")
 include("../../utils.jl")
 using .UnivariateFunctions
-using .Utils: device, next_rng, half_quant, full_quant, hq, fq
+using .Utils: device, half_quant, full_quant, hq, fq
 using .EBM_Model
 using .WeightResamplers
 using .GeneratorFCNs
@@ -50,7 +50,7 @@ struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     d_model::Int
 end
 
-function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed::Int = 1)
+function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; rng::AbstractRNG = default_rng())
 
     prior_widths = (
         try
@@ -109,9 +109,9 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
     batchnorm = false
 
     resample_fcn =
-        (weights, seed) -> importance_resampler(
+        (weights, rng) -> importance_resampler(
             weights;
-            seed = seed,
+            rng = rng,
             ESS_threshold = ESS_threshold,
             resampler = resampler,
             verbose = verbose,
@@ -209,7 +209,6 @@ function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; lkhood_seed
         depth = 3
     else
         for i in eachindex(widths[1:(end-1)])
-            lkhood_seed, rng = next_rng(lkhood_seed)
             base_scale = (
                 μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
                 σ_base .* (

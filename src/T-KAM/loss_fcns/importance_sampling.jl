@@ -7,32 +7,31 @@ using NNlib: softmax
 export importance_loss
 
 include("../../utils.jl")
-using .Utils: device, next_rng, half_quant, full_quant, hq
+using .Utils: device, half_quant, full_quant, hq
 
 function sample_importance(
     ps::ComponentArray{T},
     st::NamedTuple,
     m::Any,
     x::AbstractArray{T};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::Tuple{
     AbstractArray{T},
     NamedTuple,
     NamedTuple,
     AbstractArray{Int},
-    Int,
 } where {T<:half_quant}
-    z, st_ebm, seed = m.prior.sample_z(m, m.IS_samples, ps, st, seed)
-    logllhood, st_gen, seed =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
+    z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
+    logllhood, st_gen =
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; rng = rng, ε = m.ε)
     weights = softmax(full_quant.(logllhood), dims = 2)
-    resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
+    resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)
     weights_resampled = softmax(
         reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
         dims = 2,
     )
-    return z, st_ebm, st_gen, weights_resampled, resampled_idxs, seed
+    return z, st_ebm, st_gen, weights_resampled, resampled_idxs
 end
 
 function marginal_llhood(
@@ -44,8 +43,8 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    seed::Int = 1,
-)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     logprior, st_ebm = m.prior.lp_fcn(
         z,
         m.prior,
@@ -55,8 +54,8 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen, seed =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
+    logllhood, st_gen =
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; rng = rng, ε = m.ε)
 
     loss, B = zero(T), size(x)[end]
     for b = 1:B
@@ -65,7 +64,7 @@ function marginal_llhood(
             dot(weights_resampled[b, :], logllhood[b, resampled_idxs[b, :]])
     end
 
-    return -((loss / B) - ex_prior)*m.loss_scaling, st_ebm, st_gen, seed
+    return -((loss / B) - ex_prior)*m.loss_scaling, st_ebm, st_gen
 end
 
 function importance_loss(
@@ -74,16 +73,16 @@ function importance_loss(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    seed::Int = 1,
-)::Tuple{T,NamedTuple,NamedTuple,Int} where {T<:half_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     """MLE loss with importance sampling."""
 
-    z, st_ebm, st_gen, weights_resampled, resampled_idxs, seed =
-        sample_importance(ps, st, model, x; seed = seed)
+    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
+        sample_importance(ps, st, model, x; rng = rng)
 
     f =
         (p, z_i, x_i, w, r, m, se, sg) -> begin
-            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg; seed = seed))
+            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg; rng = rng))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -100,7 +99,7 @@ function importance_loss(
         Enzyme.Const(st_gen),
     )
 
-    loss, st_ebm, st_gen, seed = marginal_llhood(
+    loss, st_ebm, st_gen = marginal_llhood(
         ps,
         z,
         x,
@@ -109,9 +108,9 @@ function importance_loss(
         model,
         st_ebm,
         st_gen;
-        seed = seed,
+        rng = rng,
     )
-    return loss, ∇, st_ebm, st_gen, seed
+    return loss, ∇, st_ebm, st_gen
 end
 
 end

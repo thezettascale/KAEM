@@ -5,7 +5,7 @@ export init_mass_matrix, sample_momentum
 using LinearAlgebra, Random, Distributions, Statistics
 
 include("../../utils.jl")
-using .Utils: next_rng, full_quant
+using .Utils: full_quant
 
 abstract type Preconditioner end
 
@@ -29,7 +29,7 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     ::IdentityPreconditioner,
     std_devs::AbstractArray{T};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::AbstractArray{T} where {T}
     fill!(dest, one(T))
     return dest
@@ -40,7 +40,7 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     ::DiagonalPreconditioner,
     std_devs::AbstractArray{T};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::AbstractArray{T} where {T}
     @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
     return dest
@@ -51,9 +51,8 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     prec::MixDiagonalPreconditioner,
     std_devs::AbstractArray{T};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
 )::AbstractArray{T} where {T}
-    seed, rng = next_rng(seed)
     u = rand(rng, T)
 
     if u ≤ prec.p0
@@ -64,32 +63,33 @@ function build_preconditioner!(
         fill!(dest, one(T))
     else
         # Random mixture
-        seed, rng = next_rng(seed)
-        mix = rand(rng, T)
+            mix = rand(rng, T)
         rmix = one(T) - mix
         @. dest = ifelse(iszero(std_devs), one(T), mix + rmix / std_devs)
     end
     return dest
 end
 
-function init_mass_matrix(z::AbstractArray{U}, seed::Int = 1) where {U<:full_quant}
+function init_mass_matrix(
+    z::AbstractArray{U},
+    rng::AbstractRNG = default_rng(),
+)::AbstractArray{U} where {U<:full_quant}
     Q, P, S = size(z)
     Σ = diag(cov(reshape(z, Q*P, S)'))
 
-    seed, rng = next_rng(seed)
     β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> U
 
     Σ_AM = sqrt.(β .* (1 ./ Σ) .+ (1 - β))
-    return reshape(Σ_AM, Q, P), seed
+    return reshape(Σ_AM, Q, P)
 end
 
 # This is transformed momentum!
 function sample_momentum(
     z::AbstractArray{U},
     M::AbstractArray{U};
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     preconditioner::Preconditioner = MixDiagonalPreconditioner(),
-)::Tuple{AbstractArray{U},AbstractArray{U},Int} where {U<:full_quant}
+)::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     Q, P, S = size(z)
 
     # Compute M^{1/2}
@@ -98,13 +98,12 @@ function sample_momentum(
     Σ = sqrt.(@views sum((z_reshaped .- μ) .^ 2, dims = 2) ./ (S-1))
 
     # Initialize mass matrix (M^{1/2})
-    build_preconditioner!(reshape(M, Q*P), preconditioner, vec(Σ); seed = seed)
+    build_preconditioner!(reshape(M, Q*P), preconditioner, vec(Σ); rng = rng)
 
     # Sample y ~ N(0,I) directly (transformed momentum)
-    seed, rng = next_rng(seed)
     y = randn(rng, U, Q, P, S)
 
-    return y, M, seed
+    return y, M
 end
 
 end

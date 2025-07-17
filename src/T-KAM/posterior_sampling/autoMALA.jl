@@ -19,7 +19,7 @@ include("preconditioner.jl")
 include("../gen/gen_model.jl")
 include("hamiltonian.jl")
 include("log_posteriors.jl")
-using .Utils: device, next_rng, half_quant, full_quant
+using .Utils: device, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianDynamics
 using .LogPosteriors: autoMALA_logpos_4D, autoMALA_logpos
@@ -220,8 +220,8 @@ function autoMALA_sampler(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     RE_frequency::Int = 10,
-    seed::Int = 1,
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant,U<:full_quant}
+    rng::AbstractRNG = default_rng(),
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 
@@ -233,15 +233,14 @@ function autoMALA_sampler(
         t: The temperatures if using Thermodynamic Integration.
         N: The number of iterations.
         η_init: The initial step size.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
     Returns:
         The posterior samples.
-        The updated seed.
     """
 
     # Initialize from prior (already in bounded space)
-    z, st_ebm, seed = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, seed)
+    z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
     z = U.(z)
     loss_scaling = model.loss_scaling |> U
 
@@ -256,42 +255,19 @@ function autoMALA_sampler(
     M = zeros(U, Q, P, 1, num_temps)
     z_cpu = cpu_device()(z)
     for k = 1:num_temps
-        M[:, :, 1, k], seed = init_mass_matrix(view(z_cpu,:,:,:,k), seed)
+        M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
     end
     @reset st.η_init = device(st.η_init)
 
     # Pre-allocate noise
-    seed, rng = next_rng(seed)
     log_u = log.(rand(rng, U, S, num_temps, N)) |> device
-    seed, rng = next_rng(seed)
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, N))) |> device
-    seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 
 
     num_acceptances = zeros(Int, S, num_temps) |> device
     mean_η = zeros(U, S, num_temps) |> device
     momentum = similar(z) |> cpu_device()
-
-    # logpos_4D_fcn =
-    #     (z_i, x_i, t_k, s, m, p, seed) -> begin
-    #         first(
-    #             autoMALA_logpos_4D(
-    #                 z_i,
-    #                 x_i,
-    #                 t_k,
-    #                 s,
-    #                 m,
-    #                 p;
-    #                 seed = seed,
-    #                 num_temps = num_temps,
-    #             ),
-    #         )
-    #     end
-    # logpos_2D_fcn =
-    #     (z_i, x_i, t_k, s, m, p, seed) -> begin
-    #         first(autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps))
-    #     end
 
     function logpos_4D(
         z_i::AbstractArray{T},
@@ -300,7 +276,6 @@ function autoMALA_sampler(
         s::NamedTuple,
         m::Any,
         p::ComponentArray{T},
-        seed::Int,
     )::T
         sum(
             first(
@@ -311,7 +286,7 @@ function autoMALA_sampler(
                     s,
                     m,
                     p;
-                    seed = seed,
+                    rng = rng,
                     num_temps = num_temps,
                 ),
             ),
@@ -324,11 +299,10 @@ function autoMALA_sampler(
         s::NamedTuple,
         m::Any,
         p::ComponentArray{T},
-        seed::Int,
     )::T
         sum(
             first(
-                autoMALA_logpos(z_i, x_i, t_k, s, m, p; seed = seed, num_temps = num_temps),
+                autoMALA_logpos(z_i, x_i, t_k, s, m, p; rng = rng, num_temps = num_temps),
             ),
         )
     end
@@ -351,10 +325,9 @@ function autoMALA_sampler(
             Enzyme.Const(t_k),
             Enzyme.Const(model),
             Enzyme.Const(ps),
-            Enzyme.Const(seed),
         )
-        logpos_z, st_ebm, st_gen, seed =
-            CUDA.@fastmath fcn(T.(z_i), x_i, t_k, st_i, model, ps, seed)
+        logpos_z, st_ebm, st_gen =
+            CUDA.@fastmath fcn(T.(z_i), x_i, t_k, st_i, model, ps)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
         return U.(logpos_z) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
@@ -366,8 +339,8 @@ function autoMALA_sampler(
     for i = 1:N
         z_cpu = cpu_device()(z)
         for k = 1:num_temps
-            momentum[:, :, :, k], M[:, :, 1, k], seed =
-                sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k]; seed = seed)
+            momentum[:, :, :, k], M[:, :, 1, k] =
+                sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k])
         end
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
@@ -423,22 +396,22 @@ function autoMALA_sampler(
 
                     # Global swap criterion
                     z_hq = T.(z)
-                    ll_t, st_gen, seed = log_likelihood_MALA(
+                    ll_t, st_gen = log_likelihood_MALA(
                         z_hq[:, :, :, t],
                         x,
                         model.lkhood,
                         ps.gen,
                         st.gen;
-                        seed = seed,
+                        rng = rng,
                         ε = model.ε,
                     )
-                    ll_t1, st_gen, seed = log_likelihood_MALA(
+                    ll_t1, st_gen = log_likelihood_MALA(
                         z_hq[:, :, :, t+1],
                         x,
                         model.lkhood,
                         ps.gen,
                         st_gen;
-                        seed = seed,
+                        rng = rng,
                         ε = model.ε,
                     )
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
@@ -465,7 +438,7 @@ function autoMALA_sampler(
     @reset st.η_init = mean_η
 
     any(isnan.(z)) && error("NaN in z")
-    return T.(z), st, seed
+    return T.(z), st
 end
 
 end

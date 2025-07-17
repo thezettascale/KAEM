@@ -51,8 +51,8 @@ for fcn_type in ["RBF", "FFT"]
             ps = saved_data["params"] .|> half_quant |> device
             st = saved_data["state"] |> hq |> device
 
-            rng = Random.seed!(1)
-            t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/")
+            rng = Random.MersenneTwister(1)
+            t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/", rng = rng)
             prior = t.model.prior
 
             ps = ps.ebm

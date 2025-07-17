@@ -26,11 +26,9 @@ function KAN_fwd(
         st: The states of the likelihood model.
         x: The data.
         z: The latent variable.
-        seed: The seed for the random number generator.
 
     Returns:
         The generated data.
-        The updated seed.
     """
     num_samples = size(z)[end]
     z = dropdims(sum(z, dims = 2), dims = 2)
@@ -71,10 +69,9 @@ function CNN_fwd(
         st: The states of the likelihood model.
         x: The data.
         z: The latent variable.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
     Returns:
         The generated data.
-        The updated seed.
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
     new_st = Dict()
@@ -154,8 +151,7 @@ function SEQ_fwd(
         z: The latent variable.
 
     Returns:
-        The generated data.
-        The updated seed.
+        The generated data. 
     """
     z = sum(z, dims = 2)
     new_st = Dict()

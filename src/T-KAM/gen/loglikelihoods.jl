@@ -7,7 +7,7 @@ using CUDA, KernelAbstractions, ComponentArrays
 using NNlib: softmax
 
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device, next_rng
+using .Utils: half_quant, full_quant, device
 
 ## Fcns for model with Importance Sampling ##
 function cross_entropy_IS(
@@ -56,9 +56,9 @@ function log_likelihood_IS(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Conditional likelihood of the generator.
 
@@ -69,23 +69,21 @@ function log_likelihood_IS(
         x: The data.
         z: The latent variable.
         tempered: Whether to use tempered likelihood.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
     Returns:
         The unnormalized log-likelihood.
-        The updated seed.
     """
     Q, P, S, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
 
     # Add noise
-    seed, rng = next_rng(seed)
     noise = lkhood.σ_llhood * randn(rng, T, size(x̂)..., B) |> device
     x̂ = lkhood.output_activation(x̂ .+ noise)
     ll = lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂; ε = ε) : l2_IS(x, x̂; ε = ε)
     ll = ll ./ (2*lkhood.σ_llhood^2)
-    return ll, st, seed
+    return ll, st
 end
 
 function log_likelihood_MALA(
@@ -94,9 +92,9 @@ function log_likelihood_MALA(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    seed::Int = 1,
+    rng::AbstractRNG = default_rng(),
     ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple,Int} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Conditional likelihood of the generator sampled by Langevin.
 
@@ -106,21 +104,19 @@ function log_likelihood_MALA(
         st: The states of the likelihood model.
         x: The data.
         z: The latent variable.
-        seed: The seed for the random number generator.
+        rng: The random number generator.
 
     Returns:
         The unnormalized log-likelihood.
-        The updated seed.
     """
     Q, P, S, B = size(z)..., size(x)[end]
 
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
-    seed, rng = next_rng(seed)
     noise = lkhood.σ_llhood * randn(rng, T, size(x̂)) |> device
     x̂ = lkhood.output_activation(x̂ + noise)
     ll = lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂; ε = ε) : l2_MALA(x, x̂; ε = ε)
     ll = ll ./ (2*lkhood.σ_llhood^2)
-    return ll, st, seed
+    return ll, st
 end
 
 end

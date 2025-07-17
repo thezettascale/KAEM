@@ -18,7 +18,7 @@ include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("../../utils.jl")
 using .UnivariateFunctions
-using .Utils: device, next_rng, half_quant, full_quant, removeZero, removeNeg, hq, fq
+using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .LogPriorFCNs
 using .InverseTransformSampling
 
@@ -68,7 +68,7 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     λ::half_quant
 end
 
-function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
+function init_EbmModel(conf::ConfParse; rng::AbstractRNG = default_rng())
     widths = (
         try
             parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
@@ -111,17 +111,16 @@ function init_EbmModel(conf::ConfParse; prior_seed::Int = 1)
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
 
     sample_function =
-        (m, n, p, s, seed) -> begin
+        (m, n, p, s, rng) -> begin
             if mixture_model
-                sample_mixture(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed = seed, ε = eps)
+                sample_mixture(m.prior, n, p.ebm, Lux.testmode(s.ebm); rng = rng, ε = eps)
             else
-                sample_univariate(m.prior, n, p.ebm, Lux.testmode(s.ebm); seed = seed, ε = eps)
+                sample_univariate(m.prior, n, p.ebm, Lux.testmode(s.ebm); rng = rng, ε = eps)
             end
         end
 
     functions = Dict()
     for i in eachindex(widths[1:(end-1)])
-        prior_seed, rng = next_rng(prior_seed)
         base_scale = (
             μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
             σ_base .* (

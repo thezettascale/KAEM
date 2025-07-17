@@ -321,8 +321,8 @@ function autoMALA_sampler(
             Enzyme.Active,
             Enzyme.Duplicated(T.(z_i), ∇z),
             Enzyme.Const(x_i),
-            Enzyme.Const(Lux.testmode(st_i)),
             Enzyme.Const(t_k),
+            Enzyme.Const(Lux.testmode(st_i)),
             Enzyme.Const(model),
             Enzyme.Const(ps),
         )

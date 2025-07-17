@@ -121,6 +121,7 @@ function ULA_sampler(
             Enzyme.Active,
             Enzyme.Duplicated(T.(z_i), ∇z),
             Enzyme.Const(x),
+            Enzyme.Const(t),
             Enzyme.Const(model),
             Enzyme.Const(ps),
             Enzyme.Const(st),

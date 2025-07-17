@@ -22,10 +22,10 @@ function test_model_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = prep_model(model, ps, st, x_test)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
-    loss, ∇, st_ebm, st_gen = loss_compiled(half_quant.(ps), ∇, st, model, x_test)
+    loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

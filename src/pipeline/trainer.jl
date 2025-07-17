@@ -128,6 +128,7 @@ function init_trainer(
     model = init_T_KAM(dataset, conf, x_shape; file_loc = file_loc, rng = rng)
     params, state = Lux.setup(rng, model)
     model = move_to_hq(model)
+    model = prep_model(model, params, state, x; rng = rng)
 
     optimizer = create_opt(conf)
     grid_update_frequency =
@@ -183,7 +184,6 @@ function train!(t::T_KAM_trainer)
     grads = half_quant.(zero(t.ps))
 
     loss_file = t.model.file_loc * "loss.csv"
-    loss_compiled = compile_mlir(t.model, t.ps, t.st, t.x, grads)
 
     function find_nan(grads)
         for k in keys(grads)
@@ -220,7 +220,7 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        loss, grads, st_ebm, st_gen = loss_compiled(
+        loss, grads, st_ebm, st_gen = t.model.loss_fcn(
             half_quant(t.ps),
             grads,
             Lux.trainmode(t.st),

@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, move_to_hq
+export T_KAM, init_T_KAM, generate_batch, move_to_hq, prep_model
 
 using CUDA, KernelAbstractions
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -19,8 +19,8 @@ using .GeneratorModel
 using .LangevinMLE
 using .ImportanceSampling
 using .ThermodynamicIntegration
-using .autoMALA_sampling: autoMALA_sampler
-using .ULA_sampling: ULA_sampler
+using .autoMALA_sampling: initialize_autoMALA_sampler, sample
+using .ULA_sampling: initialize_ULA_sampler, sample
 using .Utils: device, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
@@ -42,6 +42,7 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     ε::T
     file_loc::AbstractString
     max_samples::Int
+    MALA::Bool
     conf::ConfParse
 end
 
@@ -174,6 +175,7 @@ function init_T_KAM(
         file_loc,
         max(IS_samples, batch_size),
         conf,
+        parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")),
     )
 end
 
@@ -187,18 +189,31 @@ function init_prior_sampler(
 ) where {T<:half_quant}
 
     loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
-    @reset model.loss_fcn = (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+    @reset model.loss_fcn =
+        (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
     if model.prior.ula
         loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
 
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
-            step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
-        
-        sampler_struct = initialize_ULA_sampler(ps, Lux.testmode(st), model, x; prior_η = step_size, N = num_steps, num_samples = size(x)[end], prior_sampling_bool = true, rng = rng)
+        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
 
-        @reset model.loss_fcn = (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
-        @reset model.prior.sample_z = (m, n, p, s, rng) -> sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
+        sampler_struct = initialize_ULA_sampler(
+            ps,
+            Lux.testmode(st),
+            model,
+            x;
+            prior_η = step_size,
+            N = num_steps,
+            num_samples = size(x)[end],
+            prior_sampling_bool = true,
+            rng = rng,
+        )
+
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+        @reset model.prior.sample_z =
+            (m, n, p, s, rng) -> sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
     end
 
     return model
@@ -234,10 +249,35 @@ function init_posterior_sampler(
 
     if (use_MALA && !(model.N_t > 1)) || (length(widths) > 2)
         loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
-        sampler_struct = autoMALA_bool ? initialize_autoMALA_sampler(ps, Lux.testmode(st), model, x; N = num_steps, N_unadjusted = N_unadjusted, Δη = Δη, η_min = η_minmax[1], η_max = η_minmax[2], seq = model.lkhood.seq_length > 1, rng = rng) : initialize_ULA_sampler(ps, Lux.testmode(st), model, x; N = num_steps, num_samples = size(x)[end])
+        sampler_struct =
+            autoMALA_bool ?
+            initialize_autoMALA_sampler(
+                ps,
+                Lux.testmode(st),
+                model,
+                x;
+                N = num_steps,
+                N_unadjusted = N_unadjusted,
+                Δη = Δη,
+                η_min = η_minmax[1],
+                η_max = η_minmax[2],
+                seq = model.lkhood.seq_length > 1,
+                rng = rng,
+            ) :
+            initialize_ULA_sampler(
+                ps,
+                Lux.testmode(st),
+                model,
+                x;
+                N = num_steps,
+                num_samples = size(x)[end],
+            )
 
-        @reset model.loss_fcn = (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
-        @reset model.posterior_sample = (m, x, t, ps, st, rng) -> sample(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+        @reset model.posterior_sample =
+            (m, x, t, ps, st, rng) ->
+                sample(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
     end
 
     if model.N_t > 1
@@ -250,12 +290,54 @@ function init_posterior_sampler(
         temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])
 
         loss_struct = initialize_thermo_loss(ps, Lux.testmode(st), model, x; rng = rng)
-        sampler_struct = autoMALA_bool ? initialize_autoMALA_sampler(ps, Lux.testmode(st), model, x; temps = temps, N = num_steps, N_unadjusted = N_unadjusted, Δη = Δη, η_min = η_minmax[1], η_max = η_minmax[2], seq = model.lkhood.seq_length > 1, RE_frequency = replica_exchange_frequency, rng = rng) : initialize_ULA_sampler(ps, Lux.testmode(st), model, x; temps = temps, N = num_steps, num_samples = size(x)[end], RE_frequency = replica_exchange_frequency, rng = rng)
+        sampler_struct =
+            autoMALA_bool ?
+            initialize_autoMALA_sampler(
+                ps,
+                Lux.testmode(st),
+                model,
+                x;
+                temps = temps,
+                N = num_steps,
+                N_unadjusted = N_unadjusted,
+                Δη = Δη,
+                η_min = η_minmax[1],
+                η_max = η_minmax[2],
+                seq = model.lkhood.seq_length > 1,
+                RE_frequency = replica_exchange_frequency,
+                rng = rng,
+            ) :
+            initialize_ULA_sampler(
+                ps,
+                Lux.testmode(st),
+                model,
+                x;
+                temps = temps,
+                N = num_steps,
+                num_samples = size(x)[end],
+                RE_frequency = replica_exchange_frequency,
+                rng = rng,
+            )
 
-        @reset model.loss_fcn = (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
-        @reset model.posterior_sample = (m, x, t, ps, st, rng) -> sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+        @reset model.posterior_sample =
+            (m, x, t, ps, st, rng) ->
+                sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
     end
 
+    return model
+end
+
+function prep_model(
+    model::T_KAM,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+) where {T<:half_quant}
+    model = init_prior_sampler(model, ps, st, x, model.conf; rng = rng)
+    model = init_posterior_sampler(model, ps, st, x, model.conf; rng = rng)
     return model
 end
 
@@ -267,7 +349,6 @@ function init_from_file(file_loc::AbstractString, ckpt::Int)
     st = convert(NamedTuple, saved_data["state"])
     return model, ps, st
 end
-
 
 function Lux.initialparameters(
     rng::AbstractRNG,

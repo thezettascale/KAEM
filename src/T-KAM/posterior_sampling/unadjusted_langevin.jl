@@ -1,6 +1,6 @@
 module ULA_sampling
 
-export ULA_sampler
+export initialize_ULA_sampler, sample
 
 using CUDA,
     KernelAbstractions,
@@ -80,7 +80,9 @@ function initialize_ULA_sampler(
 
     z = begin
         if model.prior.ula && prior_sampling_bool
-            z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)  |> device
+            z =
+                π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng) |>
+                device
         else
             z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
@@ -92,14 +94,24 @@ function initialize_ULA_sampler(
     z = reshape(z, Q, P, S, num_temps)
     ∇z = Enzyme.make_zero(z) |> device
 
-    ll = (z, x, lkhood, ps_gen, st_gen) -> log_likelihood_MALA(z, x, lkhood, ps_gen, st_gen; ε = model.ε)
+    ll =
+        (z, x, lkhood, ps_gen, st_gen) ->
+            log_likelihood_MALA(z, x, lkhood, ps_gen, st_gen; ε = model.ε)
     compiled_llhood = Reactant.@compile ll(z, x, model.lkhood, ps.gen, st.gen)
 
-    logpos_grad_compiled = Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
+    logpos_grad_compiled =
+        Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
 
-    return ULA_sampler(compiled_llhood, logpos_grad_compiled, prior_sampling_bool, N, RE_frequency, prior_η)
+    return ULA_sampler(
+        compiled_llhood,
+        logpos_grad_compiled,
+        prior_sampling_bool,
+        N,
+        RE_frequency,
+        prior_η,
+    )
 end
-    
+
 
 function sample(
     sampler::ULA_sampler,
@@ -160,7 +172,19 @@ function sample(
 
     for i = 1:sampler.N
         ξ = device(noise[:, :, :, :, i])
-        ∇z = U.(sampler.compiled_logpos_grad(z, ∇z, x, t, model, ps, st, sampler.prior_sampling_bool)) / loss_scaling
+        ∇z =
+            U.(
+                sampler.compiled_logpos_grad(
+                    z,
+                    ∇z,
+                    x,
+                    t,
+                    model,
+                    ps,
+                    st,
+                    sampler.prior_sampling_bool,
+                ),
+            ) / loss_scaling
         z += η .* ∇z .+ sqrt(2 * η) .* ξ
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

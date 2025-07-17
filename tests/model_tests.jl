@@ -24,10 +24,10 @@ function test_ps_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
     model = move_to_hq(model)
+    model = prep_model(model, ps, st, x_test)
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
+    loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
 
-    loss, ∇, st_ebm, st_gen = loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -56,10 +56,10 @@ function test_mala_loss()
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
+    model = prep_model(model, ps, st, x_test)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
-    loss, ∇, st_ebm, st_gen = loss_compiled(half_quant.(ps), ∇, st, model, x_test)
+    loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end
@@ -73,10 +73,10 @@ function test_cnn_loss()
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
+    model = prep_model(model, ps, st, x_test)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
-    loss, ∇, st_ebm, st_gen = loss_compiled(half_quant.(ps), ∇, st, model, x_test)
+    loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -92,10 +92,10 @@ function test_seq_loss()
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
+    model = prep_model(model, ps, st, x_test)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
-    loss, ∇, st_ebm, st_gen = loss_compiled(half_quant.(ps), ∇, st, model, x_test)
+    loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

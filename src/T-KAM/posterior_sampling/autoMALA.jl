@@ -1,6 +1,6 @@
 module autoMALA_sampling
 
-export autoMALA_sampler
+export initialize_autoMALA_sampler, sample
 
 using CUDA,
     KernelAbstractions,
@@ -222,7 +222,7 @@ struct autoMALA_sampler{T}
     seq::Bool
 end
 
-function initialize_autoMALA_sampler(   
+function initialize_autoMALA_sampler(
     ps::ComponentArray{T},
     st::NamedTuple,
     model::Any,
@@ -252,11 +252,44 @@ function initialize_autoMALA_sampler(
     momentum = similar(z) |> device
     η = device(st.η_init)
 
-    compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(z, ∇z, x_t, t_expanded, st, model, ps, num_temps, seq)
-    compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(z[:,:,:,1], ∇z[:,:,:,1], x_t[:,:,:,1], t_expanded[:,:,:,1], st, model, ps, num_temps, seq)
-    compiled_llhood = Reactant.@compile log_likelihood_MALA(z[:,:,:,1], x, model.lkhood, ps.gen, st.gen)
+    compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(
+        z,
+        ∇z,
+        x_t,
+        t_expanded,
+        st,
+        model,
+        ps,
+        num_temps,
+        seq,
+    )
+    compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(
+        z[:, :, :, 1],
+        ∇z[:, :, :, 1],
+        x_t[:, :, :, 1],
+        t_expanded[:, :, :, 1],
+        st,
+        model,
+        ps,
+        num_temps,
+        seq,
+    )
+    compiled_llhood = Reactant.@compile log_likelihood_MALA(
+        z[:, :, :, 1],
+        x,
+        model.lkhood,
+        ps.gen,
+        st.gen,
+    )
 
-    function logpos_withgrad(z_i::AbstractArray{T}, x_i::AbstractArray{T}, st_i::NamedTuple, t_k::AbstractArray{T}, m::Any, p::ComponentArray{T})::Tuple{U,AbstractArray{U},NamedTuple}
+    function logpos_withgrad(
+        z_i::AbstractArray{T},
+        x_i::AbstractArray{T},
+        st_i::NamedTuple,
+        t_k::AbstractArray{T},
+        m::Any,
+        p::ComponentArray{T},
+    )::Tuple{U,AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
         logpos, ∇z, st_ebm, st_gen = fcn(z_i, x_i, t_k, st_i, m, p, num_temps, seq)
         @reset st_i.ebm = st_ebm
@@ -265,12 +298,38 @@ function initialize_autoMALA_sampler(
     end
 
     logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t_expanded, model, ps)
-    compiled_autoMALA_step = Reactant.@compile autoMALA_step(log_a, log_b, z, x_t, t_expanded, st, logpos_z, ∇z, momentum, M, η, Δη, logpos_withgrad)
+    compiled_autoMALA_step = Reactant.@compile autoMALA_step(
+        log_a,
+        log_b,
+        z,
+        x_t,
+        t_expanded,
+        st,
+        logpos_z,
+        ∇z,
+        momentum,
+        M,
+        η,
+        Δη,
+        logpos_withgrad,
+    )
 
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
-    return autoMALA_sampler(compiled_llhood, compiled_logpos_withgrad, compiled_autoMALA_step, N, N_unadjusted, Δη, η_min, η_max, RE_frequency, ε, seq)
+    return autoMALA_sampler(
+        compiled_llhood,
+        compiled_logpos_withgrad,
+        compiled_autoMALA_step,
+        N,
+        N_unadjusted,
+        Δη,
+        η_min,
+        η_max,
+        RE_frequency,
+        ε,
+        seq,
+    )
 end
 
 function sample(
@@ -373,7 +432,9 @@ function sample(
         end
 
         accept = (log_u[:, :, i] .< log_r) .* reversible
-        z = ẑ .* reshape(accept, 1, 1, S, num_temps) .+ z .* reshape(1 .- accept, 1, 1, S, num_temps)
+        z =
+            ẑ .* reshape(accept, 1, 1, S, num_temps) .+
+            z .* reshape(1 .- accept, 1, 1, S, num_temps)
         mean_η .= mean_η .+ η_prop .* accept
         η .= η_prop .* accept .+ η .* (1 .- accept)
         num_acceptances .= num_acceptances .+ accept
@@ -384,13 +445,25 @@ function sample(
 
                 # Global swap criterion
                 z_hq = T.(z)
-                ll_t, st_gen = sampler.compiled_llhood(z_hq[:, :, :, t], x, model.lkhood, ps.gen, st.gen)
-                ll_t1, st_gen = sampler.compiled_llhood(z_hq[:, :, :, t+1], x, model.lkhood, ps.gen, st_gen)
+                ll_t, st_gen = sampler.compiled_llhood(
+                    z_hq[:, :, :, t],
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st.gen,
+                )
+                ll_t1, st_gen = sampler.compiled_llhood(
+                    z_hq[:, :, :, t+1],
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st_gen,
+                )
                 log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
                 swap = log_u_swap[:, t, i] .< log_swap_ratio
                 @reset st.gen = st_gen
-                
+
                 # Swap samples where accepted
                 z[:, :, :, t] .=
                     z[:, :, :, t] .* reshape(swap, 1, 1, S) +

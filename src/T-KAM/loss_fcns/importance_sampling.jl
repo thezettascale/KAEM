@@ -4,7 +4,7 @@ using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
 
-export importance_loss
+export initialize_importance_loss, loss
 
 include("../../utils.jl")
 using .Utils: device, half_quant, full_quant, hq

@@ -228,7 +228,7 @@ function importance_resampler(
     ESS_threshold::U = full_quant(0.5),
     resampler::Function = systematic_sampler,
     verbose::Bool = false,
-)::Tuple{AbstractArray{Int}} where {U<:full_quant}
+)::AbstractArray{Int} where {U<:full_quant}
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 

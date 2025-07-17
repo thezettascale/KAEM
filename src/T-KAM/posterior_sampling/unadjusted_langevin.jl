@@ -121,7 +121,7 @@ function sample(
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
 
@@ -148,15 +148,15 @@ function sample(
     z = begin
         if model.prior.ula && sampler.prior_sampling_bool
             z =
-                U.(π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)) |> device
+                full_quant.(π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)) |> device
         else
             z, st_ebm = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
-            U.(z)
+            full_quant.(z)
         end
     end
 
-    loss_scaling = model.loss_scaling |> U
+    loss_scaling = model.loss_scaling |> full_quant
 
     η = sampler.prior_sampling_bool ? sampler.prior_η : mean(st.η_init)
     seq = model.lkhood.seq_length > 1
@@ -167,13 +167,13 @@ function sample(
     ∇z = zeros(T, size(z)) |> device
 
     # Pre-allocate noise
-    noise = randn(rng, U, Q, P, S, num_temps, sampler.N)
+    noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps, sampler.N)) |> device
 
     for i = 1:sampler.N
         ξ = device(noise[:, :, :, :, i])
         ∇z =
-            U.(
+            full_quant.(
                 sampler.compiled_logpos_grad(
                     z,
                     ∇z,

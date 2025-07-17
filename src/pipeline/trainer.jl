@@ -127,7 +127,6 @@ function init_trainer(
     println("Initializing model")
     model = init_T_KAM(dataset, conf, x_shape; file_loc = file_loc, rng = rng)
     params, state = Lux.setup(rng, model)
-    model = move_to_hq(model)
     model = prep_model(model, params, state, x; rng = rng)
 
     optimizer = create_opt(conf)

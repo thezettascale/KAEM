@@ -104,7 +104,6 @@ params, state = Lux.setup(rng, model)
 # Params must be ComponentArrays.jl. Option to reduce precision
 ps = convert(ComponentArray, params) |> hq |> device
 st = convert(NamedTuple, state) |> hq |> device
-model = move_to_hq(model) 
 
 # Parse config to setup sampling and training criterions
 model = prep_model(model, params, state, x; rng = rng) 

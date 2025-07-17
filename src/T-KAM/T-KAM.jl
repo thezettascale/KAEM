@@ -207,16 +207,12 @@ function init_prior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
         @reset model.prior.sample_z =
-            (m, n, p, s, rng) -> ula_sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
+            (m, n, p, s, rng) -> sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
 
         println("Prior sampler: ULA")
     else
-        loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
-        @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
-
         println("Prior sampler: ITS")
     end
 
@@ -230,6 +226,7 @@ function init_posterior_sampler(
     st::NamedTuple,
     x::AbstractArray{T},
     conf::ConfParse;
+    rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
 
     # MLE or Thermodynamic Integration
@@ -241,17 +238,9 @@ function init_posterior_sampler(
     η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
 
     # Importance sampling or MALA
-    widths = (
-        try
-            parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
-        end
-    )
-    use_MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
 
-    if (use_MALA && !(model.N_t > 1)) || (length(widths) > 2)
+    if (model.MALA && !(model.N_t > 1)) || model.prior.ula
         loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
         sampler_struct =
             autoMALA_bool ?
@@ -282,9 +271,9 @@ function init_posterior_sampler(
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
                 sample(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
-    end
 
-    if model.N_t > 1
+        println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
+    elseif model.N_t > 1
         num_steps =
             parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
         replica_exchange_frequency = parse(
@@ -329,9 +318,46 @@ function init_posterior_sampler(
             (m, x, t, ps, st, rng) ->
                 sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
 
-        println("Thermodynamic sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
+        println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
-        println("Posterior sampler: $(model.MALA ? (autoMALA_bool ? "autoMALA" : "ULA") : "IS")")
+        loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+
+        println("Posterior sampler: IS")
+    end
+
+    return model
+end
+
+function move_to_hq(model::T_KAM)
+    """Moves the model to half precision."""
+
+    if model.prior.layernorm
+        for i = 1:(model.prior.depth-1)
+            @reset model.prior.fcns_qp[Symbol("ln_$i")] =
+                model.prior.fcns_qp[Symbol("ln_$i")] |> hq
+        end
+    end
+
+    if model.lkhood.layernorm
+        for i = 1:(model.lkhood.depth-1)
+            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] =
+                model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
+        end
+    end
+
+    if model.lkhood.CNN
+        for i = 1:model.lkhood.depth
+            @reset model.lkhood.Φ_fcns[Symbol("$i")] =
+                model.lkhood.Φ_fcns[Symbol("$i")] |> hq
+            if model.lkhood.batchnorm
+                @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] =
+                    model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
+            end
+        end
+        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] =
+            model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
     end
 
     return model
@@ -344,6 +370,7 @@ function prep_model(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
+    model = move_to_hq(model)
     model = init_prior_sampler(model, ps, st, x, model.conf; rng = rng)
     model = init_posterior_sampler(model, ps, st, x, model.conf; rng = rng)
     return model
@@ -380,39 +407,6 @@ function Lux.initialstates(
                  fill(η_init, model.max_samples, 1),
         train_idx = 1,
     )
-end
-
-function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
-    """Moves the model to half precision."""
-
-    if model.prior.layernorm
-        for i = 1:(model.prior.depth-1)
-            @reset model.prior.fcns_qp[Symbol("ln_$i")] =
-                model.prior.fcns_qp[Symbol("ln_$i")] |> hq
-        end
-    end
-
-    if model.lkhood.layernorm
-        for i = 1:(model.lkhood.depth-1)
-            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] =
-                model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
-        end
-    end
-
-    if model.lkhood.CNN
-        for i = 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")] =
-                model.lkhood.Φ_fcns[Symbol("$i")] |> hq
-            if model.lkhood.batchnorm
-                @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] =
-                    model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
-            end
-        end
-        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] =
-            model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
-    end
-
-    return model
 end
 
 end

@@ -27,11 +27,11 @@ function sample_importance(
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
     weights = softmax(full_quant.(logllhood), dims = 2)
     resampled_idxs, seed = m.lkhood.resample_z(weights, seed)
-    weights_resampled =
-        softmax(
-            reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
-            dims = 2,
-        ) .|> T
+    weights = T.(weights)
+    weights_resampled = softmax(
+        reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
+        dims = 2,
+    )
     return z, st_ebm, st_gen, weights_resampled, resampled_idxs, seed
 end
 

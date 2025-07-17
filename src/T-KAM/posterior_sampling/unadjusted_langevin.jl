@@ -68,14 +68,12 @@ function ULA_sampler(
         if model.prior.ula && prior_sampling_bool
             seed, rng = next_rng(seed)
             z =
-                π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng) .|>
-                U |>
-                device
+                U.(π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)) |> device
         else
             z, st_ebm, seed =
                 model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, seed)
             @reset st.ebm = st_ebm
-            z .|> U
+            U.(z)
         end
     end
 

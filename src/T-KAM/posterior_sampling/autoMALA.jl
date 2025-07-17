@@ -242,7 +242,7 @@ function autoMALA_sampler(
 
     # Initialize from prior (already in bounded space)
     z, st_ebm, seed = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, seed)
-    z = z .|> U
+    z = U.(z)
     loss_scaling = model.loss_scaling |> U
 
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
@@ -264,7 +264,7 @@ function autoMALA_sampler(
     seed, rng = next_rng(seed)
     log_u = log.(rand(rng, U, S, num_temps, N)) |> device
     seed, rng = next_rng(seed)
-    ratio_bounds = log.(rand(rng, Uniform(0, 1), S, num_temps, 2, N)) .|> U |> device
+    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, N))) |> device
     seed, rng = next_rng(seed)
     log_u_swap = log.(rand(rng, U, S, num_temps, N)) |> device
 

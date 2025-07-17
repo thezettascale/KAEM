@@ -112,7 +112,7 @@ function Cheby_basis(
 )::AbstractArray{T} where {T<:half_quant}
     x = NNlib.tanh_fast(x) ./ σ
     x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = collect(0:degree) .|> T |> device
+    linspace = collect(T, 0:degree) |> device
     return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
 end
 

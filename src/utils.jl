@@ -42,7 +42,7 @@ function removeNeg(x; ε = half_quant(1e-4))
 end
 
 function next_rng(seed)
-    rng = Random.seed!(seed)
+    rng = MersenneTwister(seed)
     return seed + 1, rng
 end
 

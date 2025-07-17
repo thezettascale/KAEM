@@ -28,7 +28,7 @@ function residual_resampler(
         - The updated seed.
     """
     # Number times to replicate each sample, (convert to FP64 because stability issues)
-    integer_counts = floor.(weights .* N) .|> Int
+    integer_counts = Int.(floor.(weights .* N))
     num_remaining = dropdims(N .- sum(integer_counts, dims = 2); dims = 2)
 
     # Residual weights to resample from

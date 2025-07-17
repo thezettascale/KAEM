@@ -68,7 +68,7 @@ function residual_resampler(
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
+)::AbstractArray{Int} where {U<:full_quant}
     """
     Residual resampling for weight filtering.
 
@@ -141,7 +141,7 @@ function systematic_resampler(
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
+)::AbstractArray{Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -199,7 +199,7 @@ function stratified_resampler(
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
+)::AbstractArray{Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 

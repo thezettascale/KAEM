@@ -37,7 +37,7 @@ function test_grid_update()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = Lux.setup(default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
 
@@ -54,7 +54,7 @@ function test_mala_loss()
     commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = Lux.setup(default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
@@ -72,14 +72,14 @@ function test_cnn_loss()
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = Lux.setup(default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
     loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
-    loss, ∇, st_ebm, st_gen, seed =
-        loss_compiled(half_quant.(ps), ∇, st, model, x_test; seed = 1)
+    loss, ∇, st_ebm, st_gen =
+        loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -92,7 +92,7 @@ function test_seq_loss()
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf, (50, 10))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
+    ps, st = Lux.setup(default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))

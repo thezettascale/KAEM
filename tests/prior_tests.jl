@@ -16,7 +16,7 @@ p_size = first(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 q_size = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 
 Random.seed!(42)
-EBM = init_EbmModel(conf; prior_seed = 1)
+EBM = init_EbmModel(conf)
 ps, st = Lux.setup(Random.GLOBAL_RNG, EBM)
 
 struct PriorWrapper{T<:EbmModel{Float32}}
@@ -34,12 +34,12 @@ function test_shapes()
 end
 
 function test_sampling()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
+    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, default_rng()))
     @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
 function test_log_prior()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, 42))
+    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, default_rng()))
     log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st.ebm))
     @test size(log_p) == (b_size,)
 end

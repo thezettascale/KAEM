@@ -349,7 +349,7 @@ end
 
 function compile_mlir(model, ps, st, x, grads)
     loss_compiled = Reactant.@compile model.loss_fcn(
-        half_quant(ps),
+        half_quant.(ps),
         grads,
         Lux.trainmode(st),
         model,

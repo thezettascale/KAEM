@@ -28,35 +28,6 @@ function test_B_spline_basis()
     B = B_spline_basis(x_eval, extended_grid, σ; degree = degree)
     @test size(B) == (i, g + degree - 1, b)
     @test !any(isnan.(B))
-
-end
-
-function test_B_spline_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    ∇ = Enzyme.make_zero(x_eval)
-    grid = rand(half_quant, i, g) |> device
-    extended_grid = extend_grid(grid; k_extend = degree)
-
-    function fcn(
-        z::AbstractArray{T},
-        g::AbstractArray{T},
-        sig::AbstractArray{T},
-    )::T where {T<:half_quant}
-        sum(B_spline_basis(z, g, sig; degree = degree))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(extended_grid),
-        Enzyme.Const(σ),
-    )
-
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
 end
 
 function test_RBF_basis()
@@ -69,33 +40,6 @@ function test_RBF_basis()
     @test !any(isnan.(B_rbf))
 end
 
-function test_RBF_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    ∇ = Enzyme.make_zero(x_eval)
-    grid = rand(half_quant, i, g) |> device
-
-    function fcn(
-        z::AbstractArray{T},
-        g::AbstractArray{T},
-        sig::AbstractArray{T},
-    )::T where {T<:half_quant}
-        sum(RBF_basis(z, g, sig; degree = degree))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
-
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
-end
-
 function test_RSWAF_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
@@ -104,33 +48,6 @@ function test_RSWAF_basis()
     B_rswaf = RSWAF_basis(x_eval, grid, σ; degree = degree)
     @test size(B_rswaf) == (i, g, b)
     @test !any(isnan.(B_rswaf))
-end
-
-function test_RSWAF_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    ∇ = Enzyme.make_zero(x_eval)
-    grid = rand(half_quant, i, g) |> device
-
-    function fcn(
-        z::AbstractArray{T},
-        g::AbstractArray{T},
-        sig::AbstractArray{T},
-    )::T where {T<:half_quant}
-        sum(RSWAF_basis(z, g, sig; degree = degree))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
-
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
 end
 
 function test_FFT_basis()
@@ -143,33 +60,6 @@ function test_FFT_basis()
     @test !any(isnan.(B_fft))
 end
 
-function test_FFT_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    ∇ = Enzyme.make_zero(x_eval)
-    grid = rand(half_quant, i, g) |> device
-
-    function fcn(
-        z::AbstractArray{T},
-        g::AbstractArray{T},
-        sig::AbstractArray{T},
-    )::T where {T<:half_quant}
-        sum(FFT_basis(z, g, sig; degree = degree))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
-
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
-end
-
 function test_Cheby_basis()
     Random.seed!(42)
     x_eval = rand(half_quant, i, b) |> device
@@ -178,33 +68,6 @@ function test_Cheby_basis()
     B_cheby = Cheby_basis(x_eval, grid, σ; degree = degree)
     @test size(B_cheby) == (i, degree + 1, b)
     @test !any(isnan.(B_cheby))
-end
-
-function test_Cheby_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
-    ∇ = Enzyme.make_zero(x_eval)
-    grid = rand(half_quant, i, g) |> device
-
-    function fcn(
-        z::AbstractArray{T},
-        g::AbstractArray{T},
-        sig::AbstractArray{T},
-    )::T where {T<:half_quant}
-        sum(Cheby_basis(z, g, sig; degree = degree))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        fcn,
-        Enzyme.Active,
-        Enzyme.Duplicated(x_eval, ∇),
-        Enzyme.Const(grid),
-        Enzyme.Const(σ),
-    )
-
-    @test size(∇) == size(x_eval)
-    @test !any(isnan.(∇))
 end
 
 function test_coef2curve()
@@ -271,9 +134,4 @@ end
     test_Cheby_basis()
     test_coef2curve()
     test_curve2coef()
-    # test_B_spline_derivative()
-    # test_RBF_derivative()
-    # test_RSWAF_derivative()
-    # test_FFT_derivative()
-    # test_Cheby_derivative()
 end

@@ -36,39 +36,7 @@ function test_grid_update()
     @test size(grid) == (5, 12)
 end
 
-function test_fwd_derivative()
-    Random.seed!(42)
-    x_eval = rand(half_quant, 5, 3) |> device
-    fcn = init_function(5, 2; spline_function = "RBF")
-    ps, st = Lux.setup(Random.GLOBAL_RNG, fcn)
-    ps, st = ps |> ComponentArray |> device, st |> device
-    ∇ = Enzyme.make_zero(ps)
-
-    function f(
-        p::ComponentArray{T},
-        s::NamedTuple,
-        x::AbstractArray{T},
-        layer::Any,
-    )::T where {T<:half_quant}
-        sum(fwd(layer, p, s, x))
-    end
-
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        f,
-        Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(st),
-        Enzyme.Const(x_eval),
-        Enzyme.Const(fcn),
-    )
-
-    @test size(∇) == size(ps)
-    @test !any(isnan.(∇))
-end
-
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
-    # test_fwd_derivative()
 end

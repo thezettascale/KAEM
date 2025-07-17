@@ -24,7 +24,7 @@ function test_model_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
     loss, ∇, st_ebm, st_gen =
         loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0

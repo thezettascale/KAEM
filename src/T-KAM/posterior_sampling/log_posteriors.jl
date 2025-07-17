@@ -71,7 +71,7 @@ function autoMALA_logpos(
     return (lp + t .* ll) .* m.loss_scaling, st_ebm, st_gen
 end
 
-autoMALA_value_and_grad_4D(
+function autoMALA_value_and_grad_4D(
     z_i::AbstractArray{T},
     ∇z::AbstractArray{T},
     x_i::AbstractArray{T},

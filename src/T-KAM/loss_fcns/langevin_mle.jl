@@ -2,7 +2,7 @@ module LangevinMLE
 
 export initialize_langevin_loss, loss
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 
 include("../../utils.jl")
@@ -125,4 +125,6 @@ function loss(
     ∇, st_ebm, st_gen = l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
     loss, st_ebm, st_gen = l.compiled_loss(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
     return loss, ∇, st_ebm, st_gen
+end
+
 end

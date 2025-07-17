@@ -54,7 +54,7 @@ function logpos_grad(
     return ∇z
 end
 
-struct ULA_sampler{T}
+struct ULA_sampler{T<:half_quant,U<:full_quant}
     compiled_llhood::Function
     compiled_logpos_grad::Function
     prior_sampling_bool::Bool

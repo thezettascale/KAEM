@@ -209,7 +209,7 @@ function autoMALA_step(
     return ẑ, η, η_prime, reversible, log_r, st
 end
 
-struct autoMALA_sampler{T}
+struct autoMALA_sampler{T<:half_quant,U<:full_quant}
     compiled_llhood::Function
     compiled_logpos_withgrad::Function
     compiled_autoMALA_step::Function

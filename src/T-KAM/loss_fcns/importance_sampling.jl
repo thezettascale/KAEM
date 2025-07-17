@@ -139,7 +139,8 @@ function initialize_importance_loss(
     return ImportanceLoss(compiled_loss, compiled_grad)
 end
 
-function (l::ImportanceLoss)(
+function loss(
+    l::ImportanceLoss,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,

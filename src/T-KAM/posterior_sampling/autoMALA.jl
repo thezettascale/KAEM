@@ -219,7 +219,6 @@ struct autoMALA_sampler{T}
     η_min::U
     η_max::U
     RE_frequency::Int
-    ε::U
     seq::Bool
 end
 
@@ -234,7 +233,6 @@ function initialize_autoMALA_sampler(
     Δη::U = full_quant(2),
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
-    ε::U = eps(full_quant),
     seq::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant,U<:full_quant}
@@ -310,7 +308,6 @@ function sample(
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
-    # TODO: Stencil this
     M = zeros(U, Q, P, 1, num_temps)
     z_cpu = cpu_device()(z)
     for k = 1:num_temps

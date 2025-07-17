@@ -69,7 +69,7 @@ function initialize_ULA_sampler(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    prior_η::U = full_quant(1e-3);
+    prior_η::U = full_quant(1e-3),
     temps::AbstractArray{T} = [one(half_quant)],
     prior_sampling_bool::Bool = false,
     num_samples::Int = 100,

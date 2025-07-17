@@ -30,11 +30,14 @@ function marginal_llhood(
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+    num_temps = length(temps)
+    Δt = temps[2:end] - temps[1:(end-1)]
+
     log_ss = zero(T)
     st_ebm, st_gen = st_new.ebm, st_new.gen
 
     # Steppingstone estimator
-    for k = 1:(T_length-2)
+    for k = 1:(num_temps-2)
         logllhood, st_gen = log_likelihood_MALA(
             z_posterior[:, :, :, k],
             x,
@@ -48,7 +51,7 @@ function marginal_llhood(
 
     # MLE estimator
     logprior, st_ebm = m.prior.lp_fcn(
-        z_posterior[:, :, :, T_length-1],
+        z_posterior[:, :, :, num_temps-1],
         m.prior,
         ps.ebm,
         st_ebm;
@@ -108,25 +111,42 @@ function grad_thermo_llhood(
     return ∇, st_ebm, st_gen
 end
 
-function thermo_loss(
+struct ThermodynamicLoss{T}
+    compiled_loss::Function
+    compiled_grad::Function
+end
+
+function initialize_thermo_loss(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+) where {T<:half_quant}
     z_posterior, temps, st = sample_thermo(ps, st, model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
-    z_prior, st_ebm = m.prior.sample_z(m, size(x)[end], ps, st, rng)
-    Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
-    ∇, st_ebm, st_gen =
-        grad_thermo_llhood(ps, ∇, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
-
-    loss, st_ebm, st_gen =
-        marginal_llhood(ps, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
-    return loss, ∇, st_ebm, st_gen
+    compiled_loss = Reactant.@compile marginal_llhood(ps, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
+    compiled_grad = Reactant.@compile grad_thermo_llhood(ps, ∇, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
+    return ThermodynamicLoss(compiled_loss, compiled_grad)
 end
 
+function loss(
+    l::ThermodynamicLoss,
+    ps::ComponentArray{T},
+    ∇::ComponentArray{T},
+    st::NamedTuple,
+    model::Any,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+) where {T<:half_quant}
+    z_posterior, temps, st = sample_thermo(ps, st, model, x; rng = rng)
+    st_ebm, st_gen = st.ebm, st.gen
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+
+    ∇, st_ebm, st_gen = l.compiled_grad(ps, ∇, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
+    loss, st_ebm, st_gen = l.compiled_loss(ps, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
+    return loss, ∇, st_ebm, st_gen
 end

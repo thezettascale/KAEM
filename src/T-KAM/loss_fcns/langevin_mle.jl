@@ -84,38 +84,45 @@ function grad_langevin_llhood(
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
     )
+
+    return ∇, st_ebm, st_gen
 end
-
-# function langevin_loss(
-#     ps::ComponentArray{T},
-#     ∇::ComponentArray{T},
-#     st::NamedTuple,
-#     model::Any,
-#     x::AbstractArray{T};
-#     rng::AbstractRNG = Random.default_rng(),
-# )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-#     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
-
-#     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
-#     st_ebm, st_gen = st_new.ebm, st_new.gen
-#     z_prior, st_ebm = m.prior.sample_z(m, size(x)[end], ps, st, rng)
-
-#     ∇, st_ebm, st_gen =
-#         grad_langevin_llhood(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
-
-#     loss, st_ebm, st_gen =
-#         marginal_llhood(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
-#     return loss, ∇, st_ebm, st_gen
-# end
 
 struct LangevinLoss{T}
     compiled_loss::Function
     compiled_grad::Function
-    compiled_logpos::Function
-    compiled_logpos_grad::Function
 end
+
 function initialize_langevin_loss(
     ps::ComponentArray{T},
-)
+    ∇::ComponentArray{T},
+    st::NamedTuple,
+    model::Any,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+    z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
+    compiled_loss = Reactant.@compile marginal_llhood(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    compiled_grad = Reactant.@compile grad_langevin_llhood(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    return LangevinLoss(compiled_loss, compiled_grad)
+end
+
+function loss(
+    l::LangevinLoss,
+    ps::ComponentArray{T},
+    ∇::ComponentArray{T},
+    st::NamedTuple,
+    model::Any,
+    x::AbstractArray{T};
+    rng::AbstractRNG = Random.default_rng(),
+) where {T<:half_quant}
+    z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+    st_ebm, st_gen = st_new.ebm, st_new.gen
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+
+    ∇, st_ebm, st_gen = l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    loss, st_ebm, st_gen = l.compiled_loss(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    return loss, ∇, st_ebm, st_gen
 end

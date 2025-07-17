@@ -19,7 +19,8 @@ end
     ESS_bool::AbstractArray{Bool},
     cdf::AbstractArray{U},
     u::AbstractArray{U},
-    num_remaining::AbstractArray{U},
+    num_remaining::AbstractArray{Int},
+    integer_counts::AbstractArray{Int},
     B::Int,
     N::Int,
 )::Nothing where {U<:full_quant}
@@ -34,17 +35,17 @@ end
         # Deterministic replication as explicit assignment loop
         for s = 1:N
             count = integer_counts[b, s]
-            for i = 0:count-1
-                idxs[b, c + i] = s
-            end
-            c += count
+            for i = c:(c+count-1)
+                idxs[b, i] = s
+                c += count
+            end    
         end
 
         # Multinomial resampling as explicit assignment loop
         if num_remaining[b] > 0
             for k = 1:num_remaining[b]
                 idx = N
-                for j = 1:N
+                for j = c:N
                     if cdf[b, j] >= u[b, k]
                         idx = j
                         break
@@ -79,7 +80,7 @@ function residual_resampler(
         - The updated seed.
     """
     # Number times to replicate each sample, (convert to FP64 because stability issues)
-    integer_counts = U.(floor.(weights .* N))
+    integer_counts = Int.(floor.(weights .* N))
     num_remaining = dropdims(N .- sum(integer_counts, dims = 2); dims = 2)
 
     # Residual weights to resample from
@@ -87,11 +88,20 @@ function residual_resampler(
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
-    u = device(rand(rng, U, B, maximum(Int.(num_remaining))))
+    u = device(rand(rng, U, B, N))
     cdf = cumsum(residual_weights, dims = 2)
 
     idxs = zeros(Int, B, N) |> device
-    @parallel (1:B) residual_kernel!(idxs, ESS_bool, cdf, u, num_remaining, B, N)
+    @parallel (1:B) residual_kernel!(
+        idxs,
+        ESS_bool,
+        cdf,
+        u,
+        num_remaining,
+        integer_counts,
+        B,
+        N,
+    )
     return Int.(idxs), seed
 end
 
@@ -247,8 +257,7 @@ function importance_resampler(
 
     # Only resample when needed 
     verbose && (any(ESS_bool) && println("Resampling!"))
-    any(ESS_bool) &&
-        return resampler(weights, ESS_bool, B, N; seed = seed)
+    any(ESS_bool) && return resampler(weights, ESS_bool, B, N; seed = seed)
     return repeat(collect(1:N)', B, 1), seed
 end
 

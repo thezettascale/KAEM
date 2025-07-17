@@ -12,25 +12,31 @@ using .Utils
 function test_systematic_resampler()
     Random.seed!(42)
     weights = rand(full_quant, 10, 10) |> device
+    ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = importance_resampler(weights; resampler = systematic_resampler)
+    idxs, seed = systematic_resampler(weights, ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
+    @test !any(isnan, idxs)
 end
 
 function test_stratified_resampler()
     Random.seed!(42)
     weights = rand(full_quant, 10, 10) |> device
+    ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = importance_resampler(weights; resampler = stratified_resampler)
+    idxs, seed = stratified_resampler(weights, ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
+    @test !any(isnan, idxs)
 end
 
 function test_residual_resampler()
     Random.seed!(42)
     weights = rand(full_quant, 10, 10) |> device
+    ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = importance_resampler(weights; resampler = residual_resampler)
+    idxs, seed = residual_resampler(weights, ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
+    @test !any(isnan, idxs)
 end
 
 @testset "Resampler Tests" begin

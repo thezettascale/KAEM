@@ -230,6 +230,7 @@ function initialize_autoMALA_sampler(
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
     N_unadjusted::Int = 1,
+    RE_frequency::Int = 10,
     Δη::U = full_quant(2),
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
@@ -242,6 +243,7 @@ function initialize_autoMALA_sampler(
 
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, num_temps)
+    ∇z = similar(z) |> device
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     seq = model.lkhood.seq_length > 1

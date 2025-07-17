@@ -12,9 +12,9 @@ using .Utils: half_quant, full_quant, device
 ## Fcns for model with Importance Sampling ##
 function cross_entropy_IS(
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
+    x̂::AbstractArray{T},
+    noise::AbstractArray{T};
     ε::T = eps(T),
-    noise::AbstractArray{T} = device(zeros(T, size(x̂)..., size(x)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 4, 3]))
@@ -26,9 +26,9 @@ end
 
 function l2_IS(
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
+    x̂::AbstractArray{T},
+    noise::AbstractArray{T};
     ε::T = eps(T),
-    noise::AbstractArray{T} = device(zeros(T, size(x̂)..., size(x)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 3, 5, 4]))
@@ -39,9 +39,9 @@ end
 ## Fcns for model with Lagenvin methods ##
 function cross_entropy_MALA(
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
+    x̂::AbstractArray{T},
+    noise::AbstractArray{T};
     ε::T = eps(half_quant),
-    noise::AbstractArray{T} = device(zeros(T, size(x)...)),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = act_fcn(x̂ .+ noise)
@@ -51,9 +51,9 @@ end
 
 function l2_MALA(
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
+    x̂::AbstractArray{T},
+    noise::AbstractArray{T};
     ε::T = eps(half_quant),
-    noise::AbstractArray{T} = device(zeros(T, size(x)...)),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = act_fcn(x̂ .+ noise)
@@ -68,7 +68,7 @@ function log_likelihood_IS(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(z)[end])),
+    noise::AbstractArray{T} = device(zeros(T, lkhood.x_shape..., size(z)[end], size(x)[end])),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -86,20 +86,17 @@ function log_likelihood_IS(
     Returns:
         The unnormalized log-likelihood.
     """
-    Q, P, S, B = size(z)..., size(x)[end]
-
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
-
-    # Add noise
+    noise = lkhood.σ_llhood * noise
     ll =
         lkhood.seq_length > 1 ?
         cross_entropy_IS(
             x,
-            x̂;
+            x̂,
+            noise;
             ε = ε,
-            noise = lkhood.σ_llhood * noise,
             act_fcn = lkhood.output_activation,
-        ) : l2_IS(x, x̂; ε = ε, noise = noise)
+        ) : l2_IS(x, x̂, noise; ε = ε)
     ll = ll ./ (2*lkhood.σ_llhood^2)
     return ll, st
 end
@@ -110,7 +107,7 @@ function log_likelihood_MALA(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(z)[end])),
+    noise::AbstractArray{T} = device(zeros(T, size(x))),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -127,16 +124,15 @@ function log_likelihood_MALA(
     Returns:
         The unnormalized log-likelihood.
     """
-    Q, P, S, B = size(z)..., size(x)[end]
-
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
+    noise = lkhood.σ_llhood * noise
     ll =
         lkhood.seq_length > 1 ?
         cross_entropy_MALA(
             x,
-            x̂;
+            x̂,
+            noise;
             ε = ε,
-            noise = lkhood.σ_llhood .* noise[:, :, :, :, 1],
             act_fcn = lkhood.output_activation,
         ) : l2_MALA(x, x̂; ε = ε, noise = noise)
     ll = ll ./ (2*lkhood.σ_llhood^2)

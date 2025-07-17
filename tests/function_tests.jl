@@ -44,7 +44,12 @@ function test_fwd_derivative()
     ps, st = ps |> ComponentArray |> device, st |> device
     ∇ = Enzyme.make_zero(ps)
 
-    function f(p::ComponentArray{T}, s::NamedTuple, x::AbstractArray{T}, layer::Any)::T where {T<:half_quant}
+    function f(
+        p::ComponentArray{T},
+        s::NamedTuple,
+        x::AbstractArray{T},
+        layer::Any,
+    )::T where {T<:half_quant}
         sum(fwd(layer, p, s, x))
     end
 

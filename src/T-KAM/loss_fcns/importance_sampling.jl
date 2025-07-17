@@ -58,20 +58,14 @@ function marginal_llhood(
     logllhood, st_gen, seed =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; seed = seed, ε = m.ε)
 
-    # Parse samples
-    logprior_resampled =
-        reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
-    logllhood_resampled =
-        reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
+    loss, B = zero(T), size(x)[end]
+    for b = 1:B
+        loss +=
+            dot(weights_resampled[b, :], logprior[resampled_idxs[b, :]]) +
+            dot(weights_resampled[b, :], logllhood[b, resampled_idxs[b, :]])
+    end
 
-    # Expected posterior
-    loss_prior = sum(weights_resampled .* logprior_resampled', dims = 2)
-    loss_llhood = sum(weights_resampled .* logllhood_resampled, dims = 2)
-
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling,
-    st_ebm,
-    st_gen,
-    seed
+    return -((loss / B) - ex_prior)*m.loss_scaling, st_ebm, st_gen, seed
 end
 
 function importance_loss(

@@ -25,7 +25,7 @@ function test_ps_derivative()
     ∇ = zero(half_quant.(ps))
     model = move_to_hq(model)
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
 
     loss, ∇, st_ebm, st_gen =
         loss_compiled(half_quant.(ps), ∇, st, model, x_test)
@@ -59,7 +59,7 @@ function test_mala_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
     loss, ∇, st_ebm, st_gen =
         loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
@@ -77,7 +77,7 @@ function test_cnn_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
     loss, ∇, st_ebm, st_gen =
         loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
@@ -97,7 +97,7 @@ function test_seq_loss()
     model = move_to_hq(model)
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
     loss, ∇, st_ebm, st_gen =
         loss_compiled(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0

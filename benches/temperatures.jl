@@ -39,7 +39,7 @@ function setup_model(N_t)
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
 
     return model, half_quant.(ps), ∇, st, x_test, loss_compiled
 end

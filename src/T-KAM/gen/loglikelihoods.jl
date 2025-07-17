@@ -3,7 +3,7 @@ module LogLikelihoods
 export cross_entropy_IS,
     l2_IS, cross_entropy_MALA, l2_MALA, log_likelihood_IS, log_likelihood_MALA
 
-using CUDA, KernelAbstractions, ComponentArrays
+using CUDA, KernelAbstractions, ComponentArrays, Random
 using NNlib: softmax
 
 include("../../utils.jl")

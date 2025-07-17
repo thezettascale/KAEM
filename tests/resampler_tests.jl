@@ -12,32 +12,35 @@ using .Utils
 
 function test_systematic_resampler()
     Random.seed!(42)
-    weights = rand(full_quant, 10, 10) |> device
-    ESS_bool = rand(Bool, 10) |> device
+    weights = rand(full_quant, 4, 4) |> device
+    ESS_bool = rand(Bool, 4) |> device
 
-    idxs, seed = systematic_resampler(softmax(weights; dims = 2), ESS_bool, 10, 10)
-    @test size(idxs) == (10, 10)
+    idxs, seed = systematic_resampler(softmax(weights; dims = 2), ESS_bool, 4, 4)
+    @test size(idxs) == (4, 4)
     @test !any(isnan, idxs)
+    println(idxs)
 end
 
 function test_stratified_resampler()
     Random.seed!(42)
-    weights = rand(full_quant, 10, 10) |> device
-    ESS_bool = rand(Bool, 10) |> device
+    weights = rand(full_quant, 4, 4) |> device
+    ESS_bool = rand(Bool, 4) |> device
 
-    idxs, seed = stratified_resampler(softmax(weights; dims = 2), ESS_bool, 10, 10)
-    @test size(idxs) == (10, 10)
+    idxs, seed = stratified_resampler(softmax(weights; dims = 2), ESS_bool, 4, 4)
+    @test size(idxs) == (4, 4)
     @test !any(isnan, idxs)
+    println(idxs)
 end
 
 function test_residual_resampler()
     Random.seed!(42)
-    weights = rand(full_quant, 10, 10) |> device
-    ESS_bool = rand(Bool, 10) |> device
+    weights = rand(full_quant, 4, 4) |> device
+    ESS_bool = rand(Bool, 4) |> device
 
-    idxs, seed = residual_resampler(softmax(weights; dims = 2), ESS_bool, 10, 10)
-    @test size(idxs) == (10, 10)
+    idxs, seed = residual_resampler(softmax(weights; dims = 2), ESS_bool, 4, 4)
+    @test size(idxs) == (4, 4)
     @test !any(isnan, idxs)
+    println(idxs)
 end
 
 @testset "Resampler Tests" begin

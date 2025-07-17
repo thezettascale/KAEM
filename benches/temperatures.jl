@@ -34,14 +34,12 @@ function setup_model(N_t)
 
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
     ps, st = Lux.setup(rng, model)
-    model = move_to_hq(model)
+    model = prep_model(model, ps, st, dataset)
     x_test = device(first(model.train_loader))
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
-    loss_compiled = compile_mlir(model, ps, st, x_test, ∇, Random.default_rng())
-
-    return model, half_quant.(ps), ∇, st, x_test, loss_compiled
+    return model, half_quant.(ps), ∇, st, x_test
 end
 
 results = DataFrame(
@@ -56,12 +54,12 @@ results = DataFrame(
 for N_t in [1, 2, 4, 6, 8, 10]
     println("Benchmarking N_t = $N_t...")
 
-    model, ps, ∇, st, x_test, loss_compiled = setup_model(N_t)
+    model, ps, ∇, st, x_test = setup_model(N_t)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark loss_compiled($ps, $∇, $st, $model, $x_test)
+    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
 
     push!(
         results,

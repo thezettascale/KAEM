@@ -134,7 +134,7 @@ function log_likelihood_MALA(
             noise;
             ε = ε,
             act_fcn = lkhood.output_activation,
-        ) : l2_MALA(x, x̂; ε = ε, noise = noise)
+        ) : l2_MALA(x, x̂, noise; ε = ε)
     ll = ll ./ (2*lkhood.σ_llhood^2)
     return ll, st
 end

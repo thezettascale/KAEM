@@ -50,7 +50,7 @@ function autoMALA_logpos_4D(
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        logpos = hcat(logpos, logprior + t[:, k] .* logllhood)
+        logpos = hcat(logpos, lp + t[:, k] .* ll)
     end
 
     return logpos .* m.loss_scaling, st_ebm, st_gen

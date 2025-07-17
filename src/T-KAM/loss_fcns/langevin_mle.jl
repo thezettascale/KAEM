@@ -5,7 +5,9 @@ export initialize_langevin_loss, loss
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 
+include("../gen/loglikelihoods.jl")
 include("../../utils.jl")
+using .LogLikelihoods: log_likelihood_MALA
 using .Utils: device, half_quant, full_quant, hq
 
 function sample_langevin(
@@ -104,8 +106,25 @@ function initialize_langevin_loss(
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
-    compiled_loss = Reactant.@compile marginal_llhood(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
-    compiled_grad = Reactant.@compile grad_langevin_llhood(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    compiled_loss = Reactant.@compile marginal_llhood(
+        ps,
+        z_posterior,
+        z_prior,
+        x,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    compiled_grad = Reactant.@compile grad_langevin_llhood(
+        ps,
+        ∇,
+        z_posterior,
+        z_prior,
+        x,
+        model,
+        st_ebm,
+        st_gen,
+    )
     return LangevinLoss(compiled_loss, compiled_grad)
 end
 
@@ -122,8 +141,10 @@ function loss(
     st_ebm, st_gen = st_new.ebm, st_new.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
-    ∇, st_ebm, st_gen = l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
-    loss, st_ebm, st_gen = l.compiled_loss(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    ∇, st_ebm, st_gen =
+        l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    loss, st_ebm, st_gen =
+        l.compiled_loss(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
     return loss, ∇, st_ebm, st_gen
 end
 

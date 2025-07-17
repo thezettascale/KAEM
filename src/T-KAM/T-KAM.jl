@@ -174,8 +174,8 @@ function init_T_KAM(
         eps,
         file_loc,
         max(IS_samples, batch_size),
-        conf,
         parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")),
+        conf,
     )
 end
 

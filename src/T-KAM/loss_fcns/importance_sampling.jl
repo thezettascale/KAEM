@@ -6,7 +6,9 @@ using NNlib: softmax
 
 export initialize_importance_loss, loss
 
+include("../gen/loglikelihoods.jl")
 include("../../utils.jl")
+using .LogLikelihoods: log_likelihood_IS
 using .Utils: device, half_quant, full_quant, hq
 
 function sample_importance(
@@ -23,7 +25,6 @@ function sample_importance(
         m.lkhood,
         ps.gen,
         st.gen;
-        rng = rng,
         ε = m.ε,
         noise = device(randn(rng, T, size(x)..., size(z)[end])),
     )
@@ -56,7 +57,7 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; ε = m.ε)
+    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
 
     loss, B = zero(T), size(x)[end]
     for b = 1:B

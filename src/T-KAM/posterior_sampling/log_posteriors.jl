@@ -81,9 +81,11 @@ function autoMALA_value_and_grad_4D(
     ps::ComponentArray{T},
     num_temps::Int,
     seq::Bool,
-    )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    fcn = (z, x, temps, s, model, p, n, sequence) -> sum(first(autoMALA_logpos_4D(z, x, temps, s, model, p, n, sequence)))
+    fcn =
+        (z, x, temps, s, model, p, n, sequence) ->
+            sum(first(autoMALA_logpos_4D(z, x, temps, s, model, p, n, sequence)))
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -98,8 +100,9 @@ function autoMALA_value_and_grad_4D(
         Enzyme.Const(num_temps),
         Enzyme.Const(seq),
     )
-    
-    logpos, st_ebm, st_gen = CUDA.@fastmath autoMALA_logpos_4D(z_i, x_i, t, st_i, m, ps, num_temps, seq)
+
+    logpos, st_ebm, st_gen =
+        CUDA.@fastmath autoMALA_logpos_4D(z_i, x_i, t, st_i, m, ps, num_temps, seq)
     return logpos, ∇z, st_ebm, st_gen
 end
 
@@ -113,9 +116,11 @@ function autoMALA_value_and_grad(
     ps::ComponentArray{T},
     num_temps::Int,
     seq::Bool,
-    )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    fcn = (z, x, temps, s, model, p, n) -> sum(first(autoMALA_logpos(z, x, temps, s, model, p, n)))
+    fcn =
+        (z, x, temps, s, model, p, n) ->
+            sum(first(autoMALA_logpos(z, x, temps, s, model, p, n)))
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -130,9 +135,9 @@ function autoMALA_value_and_grad(
         Enzyme.Const(num_temps),
     )
 
-    logpos, st_ebm, st_gen = CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, st_i, m, ps, num_temps)
+    logpos, st_ebm, st_gen =
+        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, st_i, m, ps, num_temps)
     return logpos, ∇z, st_ebm, st_gen
 end
 
 end
-

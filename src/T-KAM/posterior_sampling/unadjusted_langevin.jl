@@ -211,13 +211,11 @@ function sample(
                 swap = log_u_swap[:, t, i] .< log_swap_ratio
                 @reset st.gen = st_gen
 
-                # Swap samples where accepted
-                z[:, :, :, t] .=
-                    z[:, :, :, t] .* reshape(swap, 1, 1, S) +
-                    z[:, :, :, t+1] .* reshape(1 .- swap, 1, 1, S)
-                z[:, :, :, t+1] .=
-                    z[:, :, :, t+1] .* reshape(swap, 1, 1, S) +
-                    z[:, :, :, t] .* reshape(1 .- swap, 1, 1, S)
+                # Swap population if likelihood of population in new temperature is higher on average
+                if mean(swap) > 0.5
+                    z[:, :, :, t] .= z[:, :, :, t+1]
+                    z[:, :, :, t+1] .= z[:, :, :, t]
+                end
             end
         end
     end

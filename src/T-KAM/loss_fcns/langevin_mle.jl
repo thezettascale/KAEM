@@ -74,7 +74,7 @@ function langevin_loss(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 
-    z, st_new = sample_langevin(ps, st, model
+    z, st_new = sample_langevin(ps, st, model, x; rng = rng)
     st_ebm, st_gen = st_new.ebm, st_new.gen
 
     f =

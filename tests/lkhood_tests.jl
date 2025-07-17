@@ -85,7 +85,7 @@ function test_logllhood()
 
     x = randn(half_quant, out_dim, out_dim, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    logllhood, _, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen)
+    logllhood, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen)
     @test size(logllhood) == (b_size, b_size)
 end
 

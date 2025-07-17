@@ -65,7 +65,7 @@ In this project, implicit types/quantization are never used. Quantization is exp
 
 Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.
 
-Autodifferentiation was switched from [Zygote](https://github.com/FluxML/Zygote.jl) to [Enzyme](https://enzyme.mit.edu/julia/stable/).
+Autodifferentiation was switched from [Zygote](https://github.com/FluxML/Zygote.jl) to [Enzyme](https://enzyme.mit.edu/julia/stable/)/[Reactant](https://github.com/EnzymeAD/Reactant.jl/). Threads and CUDA Kernels are launched through [ParallelStencils](https://github.com/omlins/ParallelStencil.jl).
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

@@ -15,12 +15,7 @@ function sample_importance(
     m::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{
-    AbstractArray{T},
-    NamedTuple,
-    NamedTuple,
-    AbstractArray{Int},
-} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,AbstractArray{Int}} where {T<:half_quant}
     z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
     logllhood, st_gen =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; rng = rng, ε = m.ε)

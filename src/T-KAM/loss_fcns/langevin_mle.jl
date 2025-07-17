@@ -37,15 +37,8 @@ function marginal_llhood(
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
-    logllhood, st_gen = log_likelihood_MALA(
-        z[:, :, :, 1],
-        x,
-        m.lkhood,
-        ps.gen,
-        st_gen;
-        rng = rng,
-        ε = m.ε,
-    )
+    logllhood, st_gen =
+        log_likelihood_MALA(z[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; rng = rng, ε = m.ε)
     contrastive_div = mean(logprior_pos)
 
     if m.prior.contrastive_div
@@ -94,8 +87,7 @@ function langevin_loss(
         Enzyme.Const(st_gen),
     )
 
-    loss, st_ebm, st_gen =
-        marginal_llhood(ps, z, x, model, st_ebm, st_gen; rng = rng)
+    loss, st_ebm, st_gen = marginal_llhood(ps, z, x, model, st_ebm, st_gen; rng = rng)
     return loss, ∇, st_ebm, st_gen
 end
 

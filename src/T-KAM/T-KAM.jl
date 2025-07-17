@@ -344,14 +344,8 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 end
 
 function compile_mlir(model, ps, st, x, grads, rng)
-    loss_compiled = Reactant.@compile model.loss_fcn(
-        half_quant.(ps),
-        grads,
-        Lux.trainmode(st),
-        model,
-        x;
-        rng = rng,
-    )
+    loss_compiled =
+        model.loss_fcn(half_quant.(ps), grads, Lux.trainmode(st), model, x; rng = rng)
     return loss_compiled
 end
 

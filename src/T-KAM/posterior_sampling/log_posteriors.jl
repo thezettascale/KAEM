@@ -1,6 +1,7 @@
 module LogPosteriors
 
-using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random
+using CUDA,
+    KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -48,6 +49,7 @@ function autoMALA_logpos_4D(
     ps::ComponentArray{T};
     rng::AbstractRNG = Random.default_rng(),
     num_temps::Int = 1,
+    seq::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     logpos = zeros(T, size(z_i, 3), 0) |> device
     st_ebm, st_gen = st_i.ebm, st_i.gen
@@ -82,8 +84,7 @@ function autoMALA_logpos(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen
     lp, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
-    ll, st_gen =
-        log_likelihood_MALA(z_i, x, m.lkhood, ps.gen, st_gen; rng = rng, ε = m.ε)
+    ll, st_gen = log_likelihood_MALA(z_i, x, m.lkhood, ps.gen, st_gen; rng = rng, ε = m.ε)
     return (lp + t .* ll) .* m.loss_scaling, st_ebm, st_gen
 end
 

@@ -40,7 +40,7 @@ end
                     idxs[b, i] = s
                 end
                 c += count
-            end    
+            end
         end
 
         # Multinomial resampling as explicit assignment loop

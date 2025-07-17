@@ -281,8 +281,7 @@ function sample_mixture(
     Returns:
         z: The samples from the ebm-prior, (num_samples, q). 
     """
-    mask =
-        choose_component(ps[Symbol("α")], num_samples, ebm.q_size, ebm.p_size; rng = rng)
+    mask = choose_component(ps[Symbol("α")], num_samples, ebm.q_size, ebm.p_size; rng = rng)
 
     cdf, grid, st = ebm.quad(ebm, ps, st, mask)
     grid_size = size(grid, 2)

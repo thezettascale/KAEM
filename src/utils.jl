@@ -1,7 +1,6 @@
 module Utils
 
-export removeNaN,
-    device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!
+export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
 using CUDA, LuxCUDA, KernelAbstractions, Enzyme, Enzyme.EnzymeRules

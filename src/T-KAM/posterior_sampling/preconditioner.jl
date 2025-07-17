@@ -63,7 +63,7 @@ function build_preconditioner!(
         fill!(dest, one(T))
     else
         # Random mixture
-            mix = rand(rng, T)
+        mix = rand(rng, T)
         rmix = one(T) - mix
         @. dest = ifelse(iszero(std_devs), one(T), mix + rmix / std_devs)
     end

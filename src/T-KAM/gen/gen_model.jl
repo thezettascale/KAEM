@@ -50,7 +50,11 @@ struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     d_model::Int
 end
 
-function init_GenModel(conf::ConfParse, x_shape::Tuple{Vararg{Int}}; rng::AbstractRNG = Random.default_rng())
+function init_GenModel(
+    conf::ConfParse,
+    x_shape::Tuple{Vararg{Int}};
+    rng::AbstractRNG = Random.default_rng(),
+)
 
     prior_widths = (
         try

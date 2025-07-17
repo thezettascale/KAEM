@@ -71,15 +71,8 @@ function marginal_llhood(
         contrastive_div -= mean(logprior)
     end
 
-    logllhood, st_gen = log_likelihood_MALA(
-        m.lkhood,
-        ps.gen,
-        st_gen,
-        x,
-        z[:, :, :, 1];
-        rng = rng,
-        ε = m.ε,
-    )
+    logllhood, st_gen =
+        log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x, z[:, :, :, 1]; rng = rng, ε = m.ε)
     log_ss += mean(logllhood .* Δt[1])
 
     return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen

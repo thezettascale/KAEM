@@ -340,7 +340,7 @@ function sample(
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant,U<:full_quant}
+) where {T<:half_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 
@@ -356,8 +356,8 @@ function sample(
 
     # Initialize from prior 
     z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
-    z = U.(z)
-    loss_scaling = model.loss_scaling |> U
+    z = full_quant.(z)
+    loss_scaling = model.loss_scaling |> full_quant
 
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, num_temps)
@@ -367,7 +367,7 @@ function sample(
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
-    M = zeros(U, Q, P, 1, num_temps)
+    M = zeros(full_quant, Q, P, 1, num_temps)
     z_cpu = cpu_device()(z)
     for k = 1:num_temps
         M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
@@ -375,11 +375,11 @@ function sample(
     @reset st.η_init = device(st.η_init)
 
     log_u = log.(rand(rng, num_temps, sampler.N)) |> device
-    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
-    log_u_swap = log.(rand(rng, U, S, num_temps, sampler.N)) |> device
+    ratio_bounds = log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
+    log_u_swap = log.(rand(rng, full_quant, S, num_temps, sampler.N)) |> device
 
     num_acceptances = zeros(Int, S, num_temps) |> device
-    mean_η = zeros(U, S, num_temps) |> device
+    mean_η = zeros(full_quant, S, num_temps) |> device
     momentum = similar(z) |> device
 
     burn_in = 0

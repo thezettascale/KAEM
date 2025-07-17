@@ -17,7 +17,7 @@ function cross_entropy_IS(
     noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
-    x̂ = act_fcn(permutedims(x̂, [1, 2, 4, 3]) .+ noise)
+    x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 4, 3]))
     log_x̂ = log.(x̂ .+ ε)
     ll = log_x̂ .* x
     ll = dropdims(sum(ll, dims = (1, 2)), dims = (1, 2)) # One-hot encoded cross-entropy
@@ -31,7 +31,7 @@ function l2_IS(
     noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
-    x̂ = act_fcn(permutedims(x̂, [1, 2, 3, 5, 4]) .+ noise)
+    x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 3, 5, 4]))
     ll = (x .- x̂) .^ 2
     return -dropdims(sum(ll, dims = (1, 2, 3)); dims = (1, 2, 3))
 end

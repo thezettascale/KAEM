@@ -188,10 +188,6 @@ function init_prior_sampler(
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
 
-    loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
-    @reset model.loss_fcn =
-        (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
-
     if model.prior.ula
         loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
 
@@ -211,9 +207,17 @@ function init_prior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
         @reset model.prior.sample_z =
-            (m, n, p, s, rng) -> sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
+            (m, n, p, s, rng) -> ula_sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
+
+        println("Prior sampler: ULA")
+    else
+        loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+
+        println("Prior sampler: ITS")
     end
 
     return model
@@ -324,6 +328,10 @@ function init_posterior_sampler(
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
                 sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
+
+        println("Thermodynamic sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
+    else
+        println("Posterior sampler: $(model.MALA ? (autoMALA_bool ? "autoMALA" : "ULA") : "IS")")
     end
 
     return model

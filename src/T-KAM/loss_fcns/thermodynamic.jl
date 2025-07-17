@@ -13,7 +13,7 @@ function sample_thermo(
     st::NamedTuple,
     m::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
     z, st = m.posterior_sample(m, x, temps[2:end], ps, st, rng)
@@ -28,7 +28,7 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     log_ss = zero(T)
     st_ebm, st_gen = st_new.ebm, st_new.gen
@@ -91,7 +91,7 @@ function thermo_loss(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     z, temps, st = sample_thermo(ps, st, model, x; rng = rng)
     Δt, T_length, B = temps[2:end] - temps[1:(end-1)], length(temps), size(x)[end]

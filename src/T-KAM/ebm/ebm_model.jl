@@ -68,7 +68,7 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     λ::half_quant
 end
 
-function init_EbmModel(conf::ConfParse; rng::AbstractRNG = default_rng())
+function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     widths = (
         try
             parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))

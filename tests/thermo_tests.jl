@@ -20,7 +20,7 @@ function test_model_derivative()
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(default_rng(), model)
+    ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 

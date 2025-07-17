@@ -35,7 +35,7 @@ function ULA_sampler(
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     RE_frequency::Int = 10,
     prior_sampling_bool::Bool = false,
     prior_η::U = full_quant(1e-3),

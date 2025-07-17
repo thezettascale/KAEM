@@ -16,7 +16,7 @@ function unadjusted_logpos(
     ps::ComponentArray{T},
     st::NamedTuple;
     prior_sampling_bool::Bool = false,
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     tot = zero(T)
     st_ebm, st_gen = st.ebm, st.gen
@@ -46,7 +46,7 @@ function autoMALA_logpos_4D(
     st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     num_temps::Int = 1,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     logpos = zeros(T, S, 0) |> device
@@ -77,7 +77,7 @@ function autoMALA_logpos(
     st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     num_temps::Int = 1,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen

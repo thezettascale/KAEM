@@ -51,7 +51,7 @@ function generate_batch(
     ps::ComponentArray{T},
     st::NamedTuple,
     num_samples::Int;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
     """
     Inference pass to generate a batch of data from the model.
@@ -77,7 +77,7 @@ function init_T_KAM(
     conf::ConfParse,
     x_shape::Tuple;
     file_loc::AbstractString = "logs/",
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::T_KAM
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))

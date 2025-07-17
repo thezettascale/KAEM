@@ -68,7 +68,7 @@ function update_model_grid(
     x::AbstractArray{T},
     ps::ComponentArray{T},
     st::NamedTuple,
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{Any,ComponentArray{T},NamedTuple} where {T<:half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.

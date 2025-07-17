@@ -14,7 +14,7 @@ function sample_importance(
     st::NamedTuple,
     m::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
     AbstractArray{T},
     NamedTuple,
@@ -43,7 +43,7 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     logprior, st_ebm = m.prior.lp_fcn(
         z,
@@ -73,7 +73,7 @@ function importance_loss(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     """MLE loss with importance sampling."""
 

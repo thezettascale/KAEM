@@ -67,7 +67,7 @@ function residual_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Residual resampling for weight filtering.
@@ -140,7 +140,7 @@ function systematic_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
@@ -198,7 +198,7 @@ function stratified_resampler(
     ESS_bool::AbstractArray{Bool},
     B::Int,
     N::Int;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{Int},Int} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
@@ -224,7 +224,7 @@ end
 
 function importance_resampler(
     weights::AbstractArray{U};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     ESS_threshold::U = full_quant(0.5),
     resampler::Function = systematic_sampler,
     verbose::Bool = false,

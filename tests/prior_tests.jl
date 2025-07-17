@@ -34,12 +34,12 @@ function test_shapes()
 end
 
 function test_sampling()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, default_rng()))
+    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
 function test_log_prior()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, default_rng()))
+    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st.ebm))
     @test size(log_p) == (b_size,)
 end

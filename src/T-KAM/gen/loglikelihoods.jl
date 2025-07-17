@@ -56,7 +56,7 @@ function log_likelihood_IS(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -92,7 +92,7 @@ function log_likelihood_MALA(
     lkhood::Any,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """

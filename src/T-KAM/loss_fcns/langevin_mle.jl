@@ -13,7 +13,7 @@ function sample_langevin(
     st::NamedTuple,
     m::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     z, st_ebm = m.posterior_sample(m, x, 0, ps, st, rng)
     return z, st_ebm
@@ -26,7 +26,7 @@ function marginal_llhood(
     m::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
     logprior_pos, st_ebm = m.prior.lp_fcn(
@@ -70,7 +70,7 @@ function langevin_loss(
     st::NamedTuple,
     model::Any,
     x::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     """MLE loss without importance, (used when posterior expectation = MCMC estimate)."""
 

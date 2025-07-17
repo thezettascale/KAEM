@@ -29,7 +29,7 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     ::IdentityPreconditioner,
     std_devs::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::AbstractArray{T} where {T}
     fill!(dest, one(T))
     return dest
@@ -40,7 +40,7 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     ::DiagonalPreconditioner,
     std_devs::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::AbstractArray{T} where {T}
     @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
     return dest
@@ -51,7 +51,7 @@ function build_preconditioner!(
     dest::AbstractArray{T},
     prec::MixDiagonalPreconditioner,
     std_devs::AbstractArray{T};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::AbstractArray{T} where {T}
     u = rand(rng, T)
 
@@ -72,7 +72,7 @@ end
 
 function init_mass_matrix(
     z::AbstractArray{U},
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::AbstractArray{U} where {U<:full_quant}
     Q, P, S = size(z)
     Σ = diag(cov(reshape(z, Q*P, S)'))
@@ -87,7 +87,7 @@ end
 function sample_momentum(
     z::AbstractArray{U},
     M::AbstractArray{U};
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     preconditioner::Preconditioner = MixDiagonalPreconditioner(),
 )::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     Q, P, S = size(z)

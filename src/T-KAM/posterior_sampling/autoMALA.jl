@@ -220,7 +220,7 @@ function autoMALA_sampler(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     RE_frequency::Int = 10,
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.

@@ -149,7 +149,7 @@ function choose_component(
     num_samples::Int,
     q_size::Int,
     p_size::Int;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},Int} where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
@@ -208,7 +208,7 @@ function sample_univariate(
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
 
@@ -265,7 +265,7 @@ function sample_mixture(
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;
-    rng::AbstractRNG = default_rng(),
+    rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """

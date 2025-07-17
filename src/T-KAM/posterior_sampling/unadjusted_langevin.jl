@@ -148,7 +148,9 @@ function sample(
     z = begin
         if model.prior.ula && sampler.prior_sampling_bool
             z =
-                full_quant.(π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)) |> device
+                full_quant.(
+                    π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng),
+                ) |> device
         else
             z, st_ebm = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm

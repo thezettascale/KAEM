@@ -2,7 +2,7 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM, generate_batch, move_to_hq, prep_model
 
-using CUDA, KernelAbstractions
+using CUDA, KernelAbstractions, Enzyme
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 
@@ -189,8 +189,6 @@ function init_prior_sampler(
 ) where {T<:half_quant}
 
     if model.prior.ula
-        loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
-
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
 
@@ -206,8 +204,6 @@ function init_prior_sampler(
             rng = rng,
         )
 
-        @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
         @reset model.prior.sample_z =
             (m, n, p, s, rng) -> sample(sampler_struct, m, p, Lux.testmode(s), x; rng = rng)
 
@@ -241,7 +237,6 @@ function init_posterior_sampler(
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
 
     if (model.MALA && !(model.N_t > 1)) || model.prior.ula
-        loss_struct = initialize_langevin_loss(ps, Lux.testmode(st), model, x; rng = rng)
         sampler_struct =
             autoMALA_bool ?
             initialize_autoMALA_sampler(
@@ -266,11 +261,22 @@ function init_posterior_sampler(
                 num_samples = size(x)[end],
             )
 
-        @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
                 sample(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
+
+        loss_struct = initialize_langevin_loss(
+            ps,
+            Enzyme.make_zero(ps),
+            Lux.testmode(st),
+            model,
+            x;
+            rng = rng,
+        )
+
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -282,7 +288,6 @@ function init_posterior_sampler(
         )
         temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])
 
-        loss_struct = initialize_thermo_loss(ps, Lux.testmode(st), model, x; rng = rng)
         sampler_struct =
             autoMALA_bool ?
             initialize_autoMALA_sampler(
@@ -312,11 +317,22 @@ function init_posterior_sampler(
                 rng = rng,
             )
 
-        @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
                 sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
+
+        loss_struct = initialize_thermo_loss(
+            ps,
+            Enzyme.make_zero(ps),
+            Lux.testmode(st),
+            model,
+            x;
+            rng = rng,
+        )
+
+        @reset model.loss_fcn =
+            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else

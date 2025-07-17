@@ -375,7 +375,8 @@ function sample(
     @reset st.η_init = device(st.η_init)
 
     log_u = log.(rand(rng, num_temps, sampler.N)) |> device
-    ratio_bounds = log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
+    ratio_bounds =
+        log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
     log_u_swap = log.(rand(rng, full_quant, S, num_temps, sampler.N)) |> device
 
     num_acceptances = zeros(Int, S, num_temps) |> device

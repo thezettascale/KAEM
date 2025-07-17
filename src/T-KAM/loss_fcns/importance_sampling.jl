@@ -17,18 +17,17 @@ function sample_importance(
     m::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,AbstractArray{T},AbstractArray{Int}} where {T<:half_quant}
+)::Tuple{
+    AbstractArray{T},
+    NamedTuple,
+    NamedTuple,
+    AbstractArray{T},
+    AbstractArray{Int},
+} where {T<:half_quant}
     z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
     noise = device(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
-    logllhood, st_gen = log_likelihood_IS(
-        z,
-        x,
-        m.lkhood,
-        ps.gen,
-        st.gen;
-        ε = m.ε,
-        noise = noise,
-    )
+    logllhood, st_gen =
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; ε = m.ε, noise = noise)
     weights = softmax(full_quant.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)

@@ -25,5 +25,5 @@ using .trainer
 rng = Random.MersenneTwister(1)
 
 # Thermodynamic
-t = init_trainer(rng, conf, dataset; rng = rng)
+t = init_trainer(rng, conf, dataset)
 train!(t)

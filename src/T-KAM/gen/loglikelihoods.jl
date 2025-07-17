@@ -14,7 +14,7 @@ function cross_entropy_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
-    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
+    noise::AbstractArray{T} = device(zeros(T, size(x̂)..., size(x)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 4, 3]))
@@ -28,9 +28,10 @@ function l2_IS(
     x::AbstractArray{T},
     x̂::AbstractArray{T};
     ε::T = eps(T),
-    noise::AbstractArray{T} = device(zeros(T, size(x)..., size(x̂)[end])),
+    noise::AbstractArray{T} = device(zeros(T, size(x̂)..., size(x)[end])),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
+    println("x̂: ", size(x̂), "noise: ", size(noise))
     x̂ = act_fcn(permutedims(x̂ .+ noise, [1, 2, 3, 5, 4]))
     ll = (x .- x̂) .^ 2
     return -dropdims(sum(ll, dims = (1, 2, 3)); dims = (1, 2, 3))

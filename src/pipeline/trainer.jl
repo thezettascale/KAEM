@@ -181,7 +181,7 @@ function train!(t::T_KAM_trainer)
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
-    grads = half_quant.(zero(t.ps))
+    grads = half_quant.(Enzyme.make_zero(half_quant.(t.ps)))
 
     loss_file = t.model.file_loc * "loss.csv"
 
@@ -230,6 +230,8 @@ function train!(t::T_KAM_trainer)
         )
         t.loss = full_quant(loss) / loss_scaling
         copy!(G, full_quant.(grads) ./ loss_scaling)
+        @reset t.st.ebm = st_ebm
+        @reset t.st.gen = st_gen
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
         t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(G))")

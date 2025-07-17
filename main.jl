@@ -44,7 +44,7 @@ else
             commit!(conf, "GeneratorModel", "grid_size", grid_sizes[base_idx])
             commit!(conf, "EbmModel", "grid_size", grid_sizes[base_idx])
             rng = Random.MersenneTwister(1)
-            t = init_trainer(rng, conf, dataset; rng = rng)
+            t = init_trainer(rng, conf, dataset)
             train!(t)
         end
     end

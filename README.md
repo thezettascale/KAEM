@@ -27,7 +27,7 @@ make test
 
 This repo uses shell scripts solely for convenience, you can run everything without them too. If you want to use the shell scripts, [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) is recommended.
 
-## Main experiments:
+## Make commands:
 
 List commands:
 ```
@@ -57,6 +57,72 @@ For developing, I recommend:
 ```
 make dev
 tmux attach-session -t tkam_dev
+```
+
+## Julia flow:
+
+With trainer (preferable):
+
+```julia
+using ConfParser, Random
+
+include("src/pipeline/trainer.jl")
+using .trainer
+
+t = init_trainer(
+      rng, 
+      conf, 
+      dataset_name; 
+      img_resize = (16,16), 
+      file_loc = loc
+)
+train!(t)
+```
+
+Without trainer:
+
+```julia
+using Random, Lux, Enzyme, ComponentArrays, Accessors
+
+include("src/T-KAM/T-KAM.jl")
+include("src/utils.jl")
+using .T_KAM_model
+using .Utils: device, half_quant, full_quant, hq, fq
+
+
+model = init_T_KAM(
+      dataset, 
+      conf, 
+      x_shape; 
+      file_loc = file_loc, 
+      rng = rng
+)
+
+# Explicit Lux.jl initialisation
+params, state = Lux.setup(rng, model) 
+
+# Params must be ComponentArrays.jl. Option to reduce precision
+ps = convert(ComponentArray, params) |> hq |> device
+st = convert(NamedTuple, state) |> hq |> device
+model = move_to_hq(model) 
+
+# Parse config to setup sampling and training criterions
+model = prep_model(model, params, state, x; rng = rng) 
+
+# Training loss/grads are Reactant.jl compiled
+grads = Enzyme.make_zero(ps) # or zero(ps)
+loss, grads, st_ebm, st_gen = model.loss_fcn(
+      ps,
+      grads,
+      Lux.trainmode(st),
+      model,
+      x;
+      rng=Random.default_rng()
+)
+
+# States reset with Accessors.jl:
+@reset st.ebm = st_ebm
+@reset st.gen = st_gen
 ```
 
 ## Personal preferences

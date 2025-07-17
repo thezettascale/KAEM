@@ -38,7 +38,7 @@ ps = convert(ComponentArray, saved_data["params"]) |> hq |> device
 st = convert(NamedTuple, saved_data["state"]) |> hq |> device
 
 rng = Random.MersenneTwister(1)
-t = init_trainer(rng, conf, dataset; rng = rng)
+t = init_trainer(rng, conf, dataset)
 t.ps, t.st = ps, st
 
 train!(t)

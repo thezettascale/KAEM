@@ -8,7 +8,6 @@ include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
 using .spline_functions
 using .Utils
-using Enzyme
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, device([one(half_quant)])
 

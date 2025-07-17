@@ -2,11 +2,62 @@ module WeightResamplers
 
 export residual_resampler, systematic_resampler, stratified_resampler, importance_resampler
 
-using Random, Distributions, LinearAlgebra
+using CUDA, Random, Distributions, LinearAlgebra, ParallelStencil
 using NNlib: softmax
 
 include("../../utils.jl")
-using .Utils: next_rng, full_quant
+using .Utils: next_rng, full_quant, device
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
+
+@parallel_indices (b) function residual_kernel!(
+    idxs::AbstractArray{Int},
+    ESS_bool::AbstractArray{Bool},
+    cdf::AbstractArray{U},
+    u::AbstractArray{U},
+    num_remaining::AbstractArray{U},
+    B::Int,
+    N::Int,
+)::Nothing where {U<:full_quant}
+    c = 1
+
+    if !ESS_bool[b] # No resampling
+        for n = 1:N
+            idxs[b, n] = n
+        end
+    else
+
+        # Deterministic replication as explicit assignment loop
+        for s = 1:N
+            count = integer_counts[b, s]
+            for i = 0:count-1
+                idxs[b, c + i] = s
+            end
+            c += count
+        end
+
+        # Multinomial resampling as explicit assignment loop
+        if num_remaining[b] > 0
+            for k = 1:num_remaining[b]
+                idx = N
+                for j = 1:N
+                    if cdf[b, j] >= u[b, k]
+                        idx = j
+                        break
+                    end
+                end
+                idx = idx > N ? N : idx
+                idxs[b, c] = idx
+                c += 1
+            end
+        end
+    end
+    return nothing
+end
 
 function residual_resampler(
     weights::AbstractArray{U},
@@ -28,7 +79,7 @@ function residual_resampler(
         - The updated seed.
     """
     # Number times to replicate each sample, (convert to FP64 because stability issues)
-    integer_counts = Int.(floor.(weights .* N))
+    integer_counts = U.(floor.(weights .* N))
     num_remaining = dropdims(N .- sum(integer_counts, dims = 2); dims = 2)
 
     # Residual weights to resample from
@@ -36,34 +87,42 @@ function residual_resampler(
 
     # CDF and variate for resampling
     seed, rng = next_rng(seed)
-    u = rand(rng, U, B, maximum(num_remaining))
+    u = device(rand(rng, U, B, maximum(Int.(num_remaining))))
     cdf = cumsum(residual_weights, dims = 2)
 
-    idxs = Array{Int}(undef, B, N)
-    Threads.@threads for b = 1:B
-        c = 1
+    idxs = zeros(Int, B, N) |> device
+    @parallel (1:B) residual_kernel!(idxs, ESS_bool, cdf, u, num_remaining, B, N)
+    return Int.(idxs), seed
+end
 
-        if !ESS_bool[b]
-            idxs[b, :] .= 1:N
-        else
-            # Deterministic replication
-            for s = 1:N
-                count = integer_counts[b, s]
-                if count > 0
-                    idxs[b, c:(c+count-1)] .= s
-                    c += count
+@parallel_indices (b) function systematic_kernel!(
+    idxs::AbstractArray{Int},
+    ESS_bool::AbstractArray{Bool},
+    cdf::AbstractArray{U},
+    u::AbstractArray{U},
+    B::Int,
+    N::Int,
+)::Nothing where {U<:full_quant}
+    if !ESS_bool[b] # No resampling
+        for n = 1:N
+            idxs[b, n] = n
+        end
+    else
+        # Searchsortedfirst as explicit assignment loop
+        for n = 1:N
+            val = u[b, n]
+            idx = N
+            for j = 1:N
+                if cdf[b, j] >= val
+                    idx = j
+                    break
                 end
             end
-
-            # Multinomial resampling
-            if num_remaining[b] > 0
-                idxs[b, c:end] .=
-                    searchsortedfirst.(Ref(cdf[b, :]), u[b, 1:num_remaining[b]])
-            end
+            idx = idx > N ? N : idx
+            idxs[b, n] = idx
         end
     end
-    replace!(idxs, N+1 => N)
-    return idxs, seed
+    return nothing
 end
 
 function systematic_resampler(
@@ -90,15 +149,40 @@ function systematic_resampler(
 
     # Systematic thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, U, B, 1) .+ (0:(N-1))') ./ N
+    u = device((rand(rng, U, B, 1) .+ (0:(N-1))') ./ N)
 
-    idxs = Array{Int}(undef, B, N)
-    Threads.@threads for b = 1:B
-        idxs[b, :] .=
-            !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
-    end
-    replace!(idxs, N+1 => N)
+    idxs = zeros(Int, B, N) |> device
+    @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
     return idxs, seed
+end
+
+@parallel_indices (b) function stratified_kernel!(
+    idxs::AbstractArray{Int},
+    ESS_bool::AbstractArray{Bool},
+    cdf::AbstractArray{U},
+    u::AbstractArray{U},
+    B::Int,
+    N::Int,
+)::Nothing where {U<:full_quant}
+    if !ESS_bool[b] # No resampling
+        for n = 1:N
+            idxs[b, n] = n
+        end
+    else
+        for n = 1:N
+            val = u[b, n]
+            idx = N
+            for j = 1:N
+                if cdf[b, j] >= val
+                    idx = j
+                    break
+                end
+            end
+            idx = idx > N ? N : idx
+            idxs[b, n] = idx
+        end
+    end
+    return nothing
 end
 
 function stratified_resampler(
@@ -125,14 +209,10 @@ function stratified_resampler(
 
     # Stratified thresholds
     seed, rng = next_rng(seed)
-    u = (rand(rng, U, B, N) .+ (0:(N-1))') ./ N
+    u = device((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
 
-    idxs = Array{Int}(undef, B, N)
-    Threads.@threads for b = 1:B
-        idxs[b, :] .=
-            !ESS_bool[b] ? collect(1:N) : searchsortedfirst.(Ref(cdf[b, :]), u[b, :])
-    end
-    replace!(idxs, N+1 => N)
+    idxs = zeros(Int, B, N) |> device
+    @parallel (1:B) stratified_kernel!(idxs, ESS_bool, cdf, u, B, N)
     return idxs, seed
 end
 
@@ -168,7 +248,7 @@ function importance_resampler(
     # Only resample when needed 
     verbose && (any(ESS_bool) && println("Resampling!"))
     any(ESS_bool) &&
-        return resampler(cpu_device()(weights), cpu_device()(ESS_bool), B, N; seed = seed)
+        return resampler(weights, ESS_bool, B, N; seed = seed)
     return repeat(collect(1:N)', B, 1), seed
 end
 

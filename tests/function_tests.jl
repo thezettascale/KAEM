@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
+using Test, Random, LinearAlgebra, Lux, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"

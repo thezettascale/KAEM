@@ -1,6 +1,6 @@
 module LogPosteriors
 
-using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra
+using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")

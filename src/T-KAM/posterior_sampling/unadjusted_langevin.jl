@@ -168,7 +168,7 @@ function sample(
 
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S, num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, U, S, num_temps, sampler.N)) |> device
+    log_u_swap = log.(rand(rng, num_temps, sampler.N)) |> device
 
     for i = 1:sampler.N
         ξ = device(noise[:, :, :, :, i])
@@ -208,11 +208,11 @@ function sample(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,
                 )
-                swap = log_u_swap[:, t, i] .< log_swap_ratio
+                swap = log_u_swap[t, i] < mean(log_swap_ratio)
                 @reset st.gen = st_gen
 
                 # Swap population if likelihood of population in new temperature is higher on average
-                if mean(swap) > 0.5
+                if swap
                     z[:, :, :, t] .= z[:, :, :, t+1]
                     z[:, :, :, t+1] .= z[:, :, :, t]
                 end

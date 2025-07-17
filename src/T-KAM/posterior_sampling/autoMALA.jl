@@ -374,7 +374,7 @@ function sample(
     end
     @reset st.η_init = device(st.η_init)
 
-    log_u = log.(rand(rng, U, S, num_temps, sampler.N)) |> device
+    log_u = log.(rand(rng, num_temps, sampler.N)) |> device
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
     log_u_swap = log.(rand(rng, U, S, num_temps, sampler.N)) |> device
 
@@ -461,11 +461,11 @@ function sample(
                 )
                 log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
-                swap = log_u_swap[:, t, i] .< log_swap_ratio
+                swap = log_u_swap[t, i] < mean(log_swap_ratio)
                 @reset st.gen = st_gen
 
                 # Swap population if likelihood of population in new temperature is higher on average
-                if mean(swap) > 0.5
+                if swap
                     z[:, :, :, t] .= z[:, :, :, t+1]
                     z[:, :, :, t+1] .= z[:, :, :, t]
                 end

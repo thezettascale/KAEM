@@ -49,7 +49,7 @@ function autoMALA_logpos_4D(
     rng::AbstractRNG = Random.default_rng(),
     num_temps::Int = 1,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    logpos = zeros(T, S, 0) |> device
+    logpos = zeros(T, size(z_i, 3), 0) |> device
     st_ebm, st_gen = st_i.ebm, st_i.gen
 
     for k = 1:num_temps

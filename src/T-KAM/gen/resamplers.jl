@@ -35,8 +35,10 @@ end
         # Deterministic replication as explicit assignment loop
         for s = 1:N
             count = integer_counts[b, s]
-            for i = c:(c+count-1)
-                idxs[b, i] = s
+            if count > 0
+                for i = c:(c+count-1)
+                    idxs[b, i] = s
+                end
                 c += count
             end    
         end
@@ -45,14 +47,14 @@ end
         if num_remaining[b] > 0
             for k = 1:num_remaining[b]
                 idx = N
-                for j = c:N
+                for j = 1:N
                     if cdf[b, j] >= u[b, k]
                         idx = j
                         break
                     end
                 end
                 idx = idx > N ? N : idx
-                idxs[b, c] = idx
+                idxs[b, c+k-1] = idx
                 c += 1
             end
         end

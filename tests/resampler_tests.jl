@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -14,7 +14,7 @@ function test_systematic_resampler()
     weights = rand(full_quant, 10, 10) |> device
     ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = systematic_resampler(weights, ESS_bool, 10, 10)
+    idxs, seed = systematic_resampler(softmax(weights), ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
     @test !any(isnan, idxs)
 end
@@ -24,7 +24,7 @@ function test_stratified_resampler()
     weights = rand(full_quant, 10, 10) |> device
     ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = stratified_resampler(weights, ESS_bool, 10, 10)
+    idxs, seed = stratified_resampler(softmax(weights), ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
     @test !any(isnan, idxs)
 end
@@ -34,7 +34,7 @@ function test_residual_resampler()
     weights = rand(full_quant, 10, 10) |> device
     ESS_bool = rand(Bool, 10) |> device
 
-    idxs, seed = residual_resampler(weights, ESS_bool, 10, 10)
+    idxs, seed = residual_resampler(softmax(weights), ESS_bool, 10, 10)
     @test size(idxs) == (10, 10)
     @test !any(isnan, idxs)
 end

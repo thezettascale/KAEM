@@ -15,7 +15,7 @@ using CUDA,
 include("univariate_functions.jl")
 include("../../utils.jl")
 using .UnivariateFunctions: fwd, extend_grid, univariate_function
-using .Utils: half_quant, full_quant, device, next_rng
+using .Utils: half_quant, full_quant, device
 
 function update_fcn_grid(
     l::Any,

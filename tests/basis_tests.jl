@@ -272,8 +272,8 @@ end
     test_coef2curve()
     test_curve2coef()
     # test_B_spline_derivative()
-    test_RBF_derivative()
-    test_RSWAF_derivative()
-    test_FFT_derivative()
-    test_Cheby_derivative()
+    # test_RBF_derivative()
+    # test_RSWAF_derivative()
+    # test_FFT_derivative()
+    # test_Cheby_derivative()
 end

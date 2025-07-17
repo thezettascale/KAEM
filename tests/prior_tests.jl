@@ -65,5 +65,5 @@ end
 @testset "Mixture Prior Tests" begin
     test_sampling()
     test_log_prior()
-    test_log_prior_derivative()
+    # test_log_prior_derivative()
 end

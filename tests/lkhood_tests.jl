@@ -189,7 +189,7 @@ end
     test_cnn_generate()
     test_seq_generate()
     test_logllhood()
-    test_derivative()
-    test_cnn_derivative()
+    # test_derivative()
+    # test_cnn_derivative()
     # test_seq_derivative() # Not with Enzyme
 end

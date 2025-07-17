@@ -192,6 +192,7 @@ function train!(t::T_KAM_trainer)
     grads = half_quant.(zero(t.ps))
 
     loss_file = t.model.file_loc * "loss.csv"
+    loss_compiled = compile_mlir(t.model, t.ps, t.st, t.x, grads)
 
     function find_nan(grads)
         for k in keys(grads)
@@ -228,7 +229,7 @@ function train!(t::T_KAM_trainer)
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
-        loss, grads, st_ebm, st_gen, t.seed = t.model.loss_fcn(
+        loss, grads, st_ebm, st_gen, t.seed = loss_compiled(
             half_quant(t.ps),
             grads,
             Lux.trainmode(t.st),

@@ -1,9 +1,9 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, move_to_hq
+export T_KAM, init_T_KAM, generate_batch, move_to_hq, compile_mlir
 
 using CUDA, KernelAbstractions
-using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
+using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA, Reactant
 using Flux: DataLoader
 
 include("ebm/ebm_model.jl")
@@ -345,6 +345,18 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     end
 
     return model
+end
+
+function compile_mlir(model, ps, st, x, grads)
+    loss_compiled = Reactant.@compile CUDA.@fastmath model.loss_fcn(
+        half_quant(ps),
+        grads,
+        Lux.trainmode(st),
+        model,
+        x;
+        seed = 1,
+    )
+    return loss_compiled
 end
 
 end

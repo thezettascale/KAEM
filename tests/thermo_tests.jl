@@ -23,7 +23,8 @@ function test_loss()
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
 
-    loss = first(model.loss_fcn(half_quant.(ps), st, model, x_test))
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
+    loss = first(loss_compiled(half_quant.(ps), st, model, x_test))
     @test !isnan(loss)
 end
 
@@ -36,8 +37,9 @@ function test_model_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     ∇ = zero(half_quant.(ps))
 
+    loss_compiled = compile_mlir(model, ps, st, x_test, ∇)
     loss, ∇, st_ebm, st_gen, seed =
-        model.loss_fcn(half_quant.(ps), ∇, st, model, x_test; seed = 1)
+        loss_compiled(half_quant.(ps), ∇, st, model, x_test; seed = 1)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
 end

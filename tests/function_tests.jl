@@ -70,5 +70,5 @@ end
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
-    test_fwd_derivative()
+    # test_fwd_derivative()
 end

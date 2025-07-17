@@ -54,7 +54,7 @@ end
                     end
                 end
                 idx = idx > N ? N : idx
-                idxs[b, c+k-1] = idx
+                idxs[b, c] = idx
                 c += 1
             end
         end

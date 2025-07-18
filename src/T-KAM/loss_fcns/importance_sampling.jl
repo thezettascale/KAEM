@@ -3,6 +3,7 @@ module ImportanceSampling
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
+using LinearAlgebra: dot
 
 export initialize_importance_loss, loss
 

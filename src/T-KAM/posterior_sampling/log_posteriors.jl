@@ -1,7 +1,14 @@
 module LogPosteriors
 
 using CUDA,
-    KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
+    KernelAbstractions,
+    ComponentArrays,
+    Statistics,
+    Lux,
+    LuxCUDA,
+    LinearAlgebra,
+    Random,
+    Enzyme
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -81,7 +88,7 @@ function autoMALA_value_and_grad_4D(
     ps::ComponentArray{T},
     num_temps::Int,
     seq::Bool,
-)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
         (z, x, temps, s, model, p, n, sequence) ->
@@ -116,7 +123,7 @@ function autoMALA_value_and_grad(
     ps::ComponentArray{T},
     num_temps::Int,
     seq::Bool,
-)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
         (z, x, temps, s, model, p, n) ->

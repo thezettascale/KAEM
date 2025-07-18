@@ -117,7 +117,7 @@ function test_Cheby_basis()
     x_eval = rand(half_quant, i, b) |> device
     Random.seed!(42)
     grid = rand(half_quant, i, g) |> device
-    coef = rand(half_quant, i, o, degree) |> device
+    coef = rand(half_quant, i, o, degree+1) |> device
 
     y = coef2curve_Spline(x_eval, grid, coef, σ; k = degree, basis_function = Cheby_basis)
     @test size(y) == (i, o, b)

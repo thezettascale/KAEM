@@ -8,7 +8,8 @@ export extend_grid,
     RBF_basis,
     RSWAF_basis,
     FFT_basis,
-    Cheby_basis
+    Cheby_basis,
+    ParallelStencil
 
 using CUDA, KernelAbstractions, Tullio
 using LinearAlgebra, NNlib
@@ -27,45 +28,74 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     return grid
 end
 
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, half_quant, 3)
+else
+    @init_parallel_stencil(Threads, half_quant, 3)
+end
+
+@parallel_indices (i, g, s) function B_spline_deg0!(
+    B::AbstractArray{T},
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    B[i, g, s] = T(x[i, s] >= grid[g] && x[i, s] < grid[g+1])
+    return nothing
+end
+
+@parallel_indices (i, g, s) function B_spline_degk!(
+    B::AbstractArray{T},
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+    d::Int,
+)::Nothing where {T<:half_quant}
+    B1 = B[i, s, g]
+    B2 = B[i, s, g+1]
+    grid_1 = grid[s, g]
+    grid_2 = grid[s, g+1]
+    grid_3 = grid[s, d+g]
+    grid_4 = grid[s, d+g+1]
+
+    numer1 = x[i, s] - grid_1
+    denom1 = grid_3 - grid_1
+    numer2 = grid_4 - x[i, s]
+    denom2 = grid_4 - grid_2
+
+    mask1 = T(denom1 != 0)
+    mask2 = T(denom2 != 0)
+    term1 = ((numer1 / denom1) * B1) * mask1
+    term2 = ((numer2 / denom2) * B2) * mask2
+    B[i, s, g] = term1 + term2
+    return nothing
+end
+
 function B_spline_basis(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::AbstractArray{T} where {T<:half_quant}
-    I, S, G = size(x, 1), size(x, 2), size(grid, 2)
+)::Nothing where {T<:half_quant}
+    I, S, G = size(x)..., size(grid, 2)
+    B = @zeros(I, G-1, S)
+    @parallel (1:I, 1:(G-1), 1:S) B_spline_deg0!(B, x, grid)
 
-    # Initialize degree 0, piecewise const
-    grid_1 = grid[:, 1:(end-1)]
-    grid_2 = grid[:, 2:end]
-    term1 = reshape(x, I, 1, S) .>= grid_1
-    term2 = reshape(x, I, 1, S) .< grid_2
-    B = T.(term1 .* term2)
-
-    # Iteratively build up to degree k
     for d = 1:degree
         gmax = G - d - 1
-        B1 = B[:, 1:gmax, :]
-        B2 = B[:, 2:(gmax+1), :]
-        grid_1 = grid[:, 1:gmax]
-        grid_2 = grid[:, 2:(gmax+1)]
-        grid_3 = grid[:, (d+1):(d+gmax)]
-        grid_4 = grid[:, (d+2):(d+gmax+1)]
-
-        numer1 = reshape(x, I, 1, S) .- grid_1
-        denom1 = grid_3 .- grid_1
-        numer2 = grid_4 .- reshape(x, I, 1, S)
-        denom2 = grid_4 .- grid_2
-
-        mask1 = T.(denom1 .!= 0) |> device
-        mask2 = T.(denom2 .!= 0) |> device
-        term1 = ((numer1 ./ denom1) .* B1) .* mask1
-        term2 = ((numer2 ./ denom2) .* B2) .* mask2
-
-        B = term1 + term2
+        @parallel (1:I, 1:gmax, 1:S) B_spline_degk!(B, x, grid, d)
     end
-
     return B
+end
+
+@parallel_indices (i, g, s) function RBF_kernel!(
+    B::AbstractArray{T},
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+    σ::AbstractArray{T},
+    scale::T,
+)::Nothing where {T<:half_quant}
+    diff = x[i, s] - grid[i, g]
+    B[i, g, s] = exp(-(diff / scale * σ[1]) ^ 2 / 2)
+    return nothing
 end
 
 function RBF_basis(
@@ -73,11 +103,23 @@ function RBF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::AbstractArray{T} where {T<:half_quant}
+)::Nothing where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
+    B = @zeros(I, G, S)
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
-    diff = reshape(x, I, 1, S) .- grid
-    return exp.(-(diff ./ scale .* σ) .^ 2 / 2)
+    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ, scale)
+    return B
+end
+
+@parallel_indices (i, g, s) function RSWAF_kernel!(
+    B::AbstractArray{T},
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+    σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    diff = x[i, s] - grid[i, g]
+    B[i, g, s] = 1 - tanh(diff / σ[1]) ^ 2
+    return nothing
 end
 
 function RSWAF_basis(
@@ -85,51 +127,48 @@ function RSWAF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::AbstractArray{T} where {T<:half_quant}
+)::Nothing where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- grid
-    diff = NNlib.tanh_fast(diff ./ σ)
-    return 1 .- diff .^ 2
+    B = @zeros(I, G, S)
+    @parallel (1:I, 1:G, 1:S) RSWAF_kernel!(B, x, grid, σ)
+    return B
 end
 
-function FFT_basis(
+@parallel_indices (i, d, s) function Cheby_kernel!(
+    B::AbstractArray{T},
     x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T};
-    degree::Int = 3,
-)::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
-    freq = reshape(x, I, 1, S) .* grid
-    freq = T(2π) .* freq .* σ
-    return cos.(freq), sin.(freq)
+    lin::AbstractArray{T},
+    σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    z = NNlib.tanh_fast(x[i, s] / σ[1])
+    B[i, d, s] = cos(lin[d] * acos(z))
+    return nothing
 end
 
 function Cheby_basis(
     x::AbstractArray{T},
-    grid_::AbstractArray{T},
+    grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::AbstractArray{T} where {T<:half_quant}
-    x = NNlib.tanh_fast(x) ./ σ
-    x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = collect(T, 0:degree) |> device
-    return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
+)::Nothing where {T<:half_quant}
+    I, S, G = size(x)..., size(grid, 2)
+    B = @zeros(I, degree+1, S)
+    lin = collect(T, 0:degree) |> device
+    @parallel (1:I, 1:(degree+1), 1:S) Cheby_kernel!(B, x, lin, σ)
+    return B
 end
 
-function coef2curve_FFT(
-    x_eval::AbstractArray{T},
-    grid::AbstractArray{T},
+@parallel_indices (i, o, s) function spline_mul!(
+    y::AbstractArray{T},
+    spl::AbstractArray{T},
     coef::AbstractArray{T},
-    σ::AbstractArray{T};
-    k::Int = 3,
-    basis_function::Function = FFT_basis,
-)::AbstractArray{T} where {T<:half_quant}
-    spl = basis_function(x_eval, grid, σ; degree = k)
-    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
-    even, odd = spl
-    even_coef, odd_coef =
-        reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
-    return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
+) where {T<:half_quant}
+    acc = zero(T)
+    for g = 1:size(spl, 2)
+        acc += spl[i, g, s] * coef[i, o, g]
+    end
+    y[i, o, s] = acc
+    return nothing
 end
 
 function coef2curve_Spline(
@@ -138,13 +177,68 @@ function coef2curve_Spline(
     coef::AbstractArray{T},
     σ::AbstractArray{T};
     k::Int = 3,
-    basis_function::Function = FFT_basis,
+    basis_function::Function = RBF_basis,
 )::AbstractArray{T} where {T<:half_quant}
-    spl = basis_function(x_eval, grid, σ; degree = k)
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
-    spl = reshape(spl, I, G, 1, S)
-    coef = reshape(coef, I, G, O, 1)
-    return dropdims(sum(spl .* coef, dims = 2), dims = 2)
+    spl = @zeros(I, G, S)
+    y = @zeros(I, O, S)
+
+    spl = basis_function(x_eval, grid, σ; degree = k)
+    @parallel (1:I, 1:O, 1:S) spline_mul!(y, spl, coef)
+    return y
+end
+
+@parallel_indices (i, g, s) function FFT_kernel!(
+    even::AbstractArray{T},
+    odd::AbstractArray{T},
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+    σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    freq = x[i, s] * grid[i, g]
+    freq = T(2π) * freq * σ[1]
+    even[i, g, s] = cos(freq)
+    odd[i, g, s] = sin(freq)
+    return nothing
+end
+
+function FFT_basis(
+    x::AbstractArray{T},
+    grid::AbstractArray{T},
+    σ::AbstractArray{T},
+)::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
+    I, S, G = size(x)..., size(grid, 2)
+    even = @zeros(I, G, S)
+    odd = @zeros(I, G, S)
+    @parallel (1:I, 1:G, 1:S) FFT_kernel!(even, odd, x, grid, σ)
+    return even, odd
+end
+
+@parallel_indices (i, o, s) function FFT_mul!(
+    y::AbstractArray{T},
+    even::AbstractArray{T},
+    odd::AbstractArray{T},
+    even_coef::AbstractArray{T},
+    odd_coef::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    acc = zero(T)
+    for g = 1:size(even, 2)
+        acc += even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
+    end
+    y[i, o, s] = acc
+    return nothing
+end
+
+function coef2curve_FFT(
+    x_eval::AbstractArray{T},
+    grid::AbstractArray{T},
+    coef::AbstractArray{T},
+    σ::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant}
+    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
+    spl = FFT_basis(x_eval, grid, σ)
+    @parallel (1:I, 1:O, 1:S) FFT_mul!(y, spl, coef)
+    return y
 end
 
 function curve2coef(

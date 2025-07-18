@@ -105,8 +105,7 @@ function init_function(
     basis_fcn = get(SplineBasis_mapping, spline_function, B_spline_basis)
     basis_mul = spline_function == "Cheby" ? ChebyMUL : SplineMUL
     coef2curve_fcn =
-        basis_fcn == FFT_basis ?
-        (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ; k = spline_degree) :
+        basis_fcn == FFT_basis ? (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ) :
         (x, g, c, σ) ->
             coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
     curve2coef_fcn =

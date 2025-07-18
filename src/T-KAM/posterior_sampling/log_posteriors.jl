@@ -74,7 +74,7 @@ function autoMALA_logpos(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen
     lp, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
-    ll, st_gen = log_likelihood_MALA(z_i, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
+    ll, st_gen = log_likelihood_MALA(z_i, x_i, m.lkhood, ps.gen, st_gen; ε = m.ε)
     return (lp + t .* ll) .* m.loss_scaling, st_ebm, st_gen
 end
 

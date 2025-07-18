@@ -102,7 +102,7 @@ function residual_resampler(
         B,
         N,
     )
-    return Int.(idxs)
+    return Int.(Array(idxs))
 end
 
 @parallel_indices (b) function systematic_kernel!(
@@ -161,7 +161,7 @@ function systematic_resampler(
 
     idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return idxs
+    return Int.(Array(idxs))
 end
 
 @parallel_indices (b) function stratified_kernel!(
@@ -219,7 +219,7 @@ function stratified_resampler(
 
     idxs = @zeros(B, N)
     @parallel (1:B) stratified_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return idxs
+    return Int.(Array(idxs))    
 end
 
 function importance_resampler(

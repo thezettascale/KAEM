@@ -177,8 +177,8 @@ function sample(
         ∇z =
             full_quant.(
                 sampler.compiled_logpos_grad(
-                    z,
-                    ∇z,
+                    T.(z),
+                    T.(∇z),
                     x,
                     t,
                     model,

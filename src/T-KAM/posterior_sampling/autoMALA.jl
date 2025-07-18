@@ -52,11 +52,11 @@ function select_step_size(
     log_a::AbstractArray{U},
     log_b::AbstractArray{U},
     z::AbstractArray{U},
+    ∇z::AbstractArray{U},
     x::AbstractArray{T},
     temps::AbstractArray{T},
     st::NamedTuple,
     logpos_z::AbstractArray{U},
-    ∇z::AbstractArray{U},
     momentum::AbstractArray{U},
     M::AbstractArray{U},
     η_init::AbstractArray{U},
@@ -76,10 +76,10 @@ function select_step_size(
 
     ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(
         z,
+        ∇z,
         x,
         st,
         logpos_z,
-        ∇z,
         momentum,
         M,
         η_init,
@@ -102,10 +102,10 @@ function select_step_size(
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st =
             leapfrop_proposal(
                 z[:, :, active_chains],
+                ∇z[:, :, active_chains],
                 x_active,
                 st,
                 logpos_z[active_chains],
-                ∇z[:, :, active_chains],
                 momentum[:, :, active_chains],
                 M[:, :, active_chains],
                 η_init[active_chains],
@@ -144,11 +144,11 @@ function autoMALA_step(
     log_a::AbstractArray{U},
     log_b::AbstractArray{U},
     z::AbstractArray{U},
+    ∇z::AbstractArray{U},
     x::AbstractArray{T},
     temps::AbstractArray{T},
     st::NamedTuple,
     logpos_z::AbstractArray{U},
-    ∇z::AbstractArray{U},
     momentum::AbstractArray{U},
     M::AbstractArray{U},
     η_init::AbstractArray{U},
@@ -171,11 +171,11 @@ function autoMALA_step(
         log_a,
         log_b,
         z,
+        ∇z,
         x,
         temps,
         st,
         logpos_z,
-        ∇z,
         momentum,
         M,
         η_init,
@@ -190,11 +190,11 @@ function autoMALA_step(
         log_a,
         log_b,
         ẑ,
+        ∇ẑ,
         x,
         temps,
         st,
         logpos_ẑ,
-        ∇ẑ,
         p̂,
         M,
         η_init,
@@ -265,11 +265,12 @@ function initialize_autoMALA_sampler(
         num_temps,
         seq,
     )
+    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
     compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(
         z[:, :, :, 1],
         ∇z[:, :, :, 1],
-        x_t[:, :, :, 1],
-        t_expanded[:, :, :, 1],
+        x_single,
+        t_expanded[:, 1],
         st,
         model,
         ps,
@@ -278,14 +279,15 @@ function initialize_autoMALA_sampler(
     )
     compiled_llhood = Reactant.@compile log_likelihood_MALA(
         z[:, :, :, 1],
-        x,
+        x_single,
         model.lkhood,
         ps.gen,
-        st.gen,
+        st.gen, 
     )
 
     function logpos_withgrad(
-        z_i::AbstractArray{T},
+        z_i::AbstractArray{U},
+        ∇z_i::AbstractArray{U},
         x_i::AbstractArray{T},
         st_i::NamedTuple,
         t_k::AbstractArray{T},
@@ -293,22 +295,22 @@ function initialize_autoMALA_sampler(
         p::ComponentArray{T},
     )::Tuple{U,AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
-        logpos, ∇z, st_ebm, st_gen = fcn(z_i, x_i, t_k, st_i, m, p, num_temps, seq)
+        logpos, ∇z_k, st_ebm, st_gen = fcn(T.(z_i), T.(∇z_i), x_i, t_k, st_i, m, p, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
-        return U.(logpos) ./ loss_scaling, U.(∇z) ./ loss_scaling, st_i
+        return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end
 
-    logpos_z, ∇z, st = logpos_withgrad(z, x_t, st, t_expanded, model, ps)
+    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, st, t_expanded, model, ps)
     compiled_autoMALA_step = Reactant.@compile autoMALA_step(
         log_a,
         log_b,
         z,
+        ∇z,
         x_t,
         t_expanded,
         st,
         logpos_z,
-        ∇z,
         momentum,
         M,
         η,

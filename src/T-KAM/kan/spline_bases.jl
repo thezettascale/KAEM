@@ -38,7 +38,7 @@ end
     x::AbstractArray{T},
     grid::AbstractArray{T},
 )::Nothing where {T<:half_quant}
-    B[i, g, s] = T(x[i, s] >= grid[g] && x[i, s] < grid[g+1])
+    B[i, g, s, 1] = T(x[i, s] >= grid[i, g] && x[i, s] < grid[i, g+1])
     return nothing
 end
 
@@ -46,25 +46,31 @@ end
     B::AbstractArray{T},
     x::AbstractArray{T},
     grid::AbstractArray{T},
-    d::Int,
+    k::Int,
 )::Nothing where {T<:half_quant}
-    B1 = B[i, g, s]
-    B2 = B[i, g+1, s]
-    grid_1 = grid[i, g]
-    grid_2 = grid[i, g+1]
-    grid_3 = grid[i, d+g]
-    grid_4 = grid[i, d+g+1]
+    xi = x[i, s]
+    t_g = grid[i, g]
+    t_gp = grid[i, g+1]
+    t_gk = grid[i, g+k]
+    t_gp1k = grid[i, g+k+1]
 
-    numer1 = x[i, s] - grid_1
-    denom1 = grid_3 - grid_1
-    numer2 = grid_4 - x[i, s]
-    denom2 = grid_4 - grid_2
+    B1 = B[i, g, s, k]
+    B2 = B[i, g+1, s, k]
 
-    mask1 = T(denom1 != 0)
-    mask2 = T(denom2 != 0)
-    term1 = ((numer1 / denom1) * B1) * mask1
-    term2 = ((numer2 / denom2) * B2) * mask2
-    B[i, g, s] = term1 + term2
+    denom1 = t_gk - t_g
+    denom2 = t_gp1k - t_gp
+
+    term1 = zero(T)
+    term2 = zero(T)
+
+    if denom1 != 0
+        term1 = (xi - t_g) / denom1 * B1
+    end
+    if denom2 != 0
+        term2 = (t_gp1k - xi) / denom2 * B2
+    end
+
+    B[i, g, s, k+1] = term1 + term2
     return nothing
 end
 
@@ -75,14 +81,15 @@ function B_spline_basis(
     degree::Int = 3,
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    B = @zeros(I, G-1, S)
+    B = @zeros(I, G-1, S, degree+1)
     @parallel (1:I, 1:(G-1), 1:S) B_spline_deg0!(B, x, grid)
 
-    for d = 1:degree
-        gmax = G - d - 1
-        @parallel (1:I, 1:gmax, 1:S) B_spline_degk!(B, x, grid, d)
+    for k = 1:degree
+        gmax = G - k - 1
+        @parallel (1:I, 1:gmax, 1:S) B_spline_degk!(B, x, grid, k)
     end
-    return B
+    
+    return B[:, 1:(G-degree-1), :, degree+1]
 end
 
 @parallel_indices (i, g, s) function RBF_kernel!(

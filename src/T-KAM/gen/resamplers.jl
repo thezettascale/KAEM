@@ -15,7 +15,7 @@ else
 end
 
 @parallel_indices (b) function residual_kernel!(
-    idxs::AbstractArray{Int},
+    idxs::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},
     cdf::AbstractArray{U},
     u::AbstractArray{U},
@@ -91,7 +91,7 @@ function residual_resampler(
     u = device(rand(rng, U, B, N))
     cdf = cumsum(residual_weights, dims = 2)
 
-    idxs = zeros(Int, B, N) |> device
+    idxs = @zeros(B, N)
     @parallel (1:B) residual_kernel!(
         idxs,
         ESS_bool,
@@ -106,7 +106,7 @@ function residual_resampler(
 end
 
 @parallel_indices (b) function systematic_kernel!(
-    idxs::AbstractArray{Int},
+    idxs::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},
     cdf::AbstractArray{U},
     u::AbstractArray{U},
@@ -159,13 +159,13 @@ function systematic_resampler(
     # Systematic thresholds
     u = device((rand(rng, U, B, 1) .+ (0:(N-1))') ./ N)
 
-    idxs = zeros(Int, B, N) |> device
+    idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
     return idxs
 end
 
 @parallel_indices (b) function stratified_kernel!(
-    idxs::AbstractArray{Int},
+    idxs::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},
     cdf::AbstractArray{U},
     u::AbstractArray{U},
@@ -217,7 +217,7 @@ function stratified_resampler(
     # Stratified thresholds
     u = device((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
 
-    idxs = zeros(Int, B, N) |> device
+    idxs = @zeros(B, N)
     @parallel (1:B) stratified_kernel!(idxs, ESS_bool, cdf, u, B, N)
     return idxs
 end

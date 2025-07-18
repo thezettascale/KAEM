@@ -130,7 +130,16 @@ In this project, implicit types/quantization are never used. Quantization is exp
 
 Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.
 
-Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Threads and CUDA Kernels are launched through [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl).
+The following optimisations are in place:
+
+- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Enzyme is for highly efficient reverse-mode autodifferentation of statically analyzable LLVM. Reactant compiles to MLIR, (amongst other things).
+- Broadcasts, Threads and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). ParallelStencils.jl allows for supremely optimised stencil computations, agnostic to the device in use. 
+
+If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
+
+```bash
+export LD_LIBRARY_PATH=/home/USER/.julia/artifacts/path-to-lib/lib:$LD_LIBRARY_PATH
+```
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

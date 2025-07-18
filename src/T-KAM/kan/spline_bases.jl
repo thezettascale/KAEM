@@ -48,12 +48,12 @@ end
     grid::AbstractArray{T},
     d::Int,
 )::Nothing where {T<:half_quant}
-    B1 = B[i, s, g]
-    B2 = B[i, s, g+1]
-    grid_1 = grid[s, g]
-    grid_2 = grid[s, g+1]
-    grid_3 = grid[s, d+g]
-    grid_4 = grid[s, d+g+1]
+    B1 = B[i, g, s]
+    B2 = B[i, g+1, s]
+    grid_1 = grid[i, g]
+    grid_2 = grid[i, g+1]
+    grid_3 = grid[i, d+g]
+    grid_4 = grid[i, d+g+1]
 
     numer1 = x[i, s] - grid_1
     denom1 = grid_3 - grid_1
@@ -64,7 +64,7 @@ end
     mask2 = T(denom2 != 0)
     term1 = ((numer1 / denom1) * B1) * mask1
     term2 = ((numer2 / denom2) * B2) * mask2
-    B[i, s, g] = term1 + term2
+    B[i, g, s] = term1 + term2
     return nothing
 end
 
@@ -73,7 +73,7 @@ function B_spline_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::Nothing where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G-1, S)
     @parallel (1:I, 1:(G-1), 1:S) B_spline_deg0!(B, x, grid)
@@ -102,7 +102,7 @@ function RBF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::Nothing where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
@@ -126,7 +126,7 @@ function RSWAF_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::Nothing where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
     @parallel (1:I, 1:G, 1:S) RSWAF_kernel!(B, x, grid, σ)
@@ -149,7 +149,7 @@ function Cheby_basis(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
     degree::Int = 3,
-)::Nothing where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, degree+1, S)
     lin = collect(T, 0:degree) |> device

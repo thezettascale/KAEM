@@ -8,10 +8,9 @@ export extend_grid,
     RBF_basis,
     RSWAF_basis,
     FFT_basis,
-    Cheby_basis,
-    ParallelStencil
+    Cheby_basis
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions, Tullio, ParallelStencil
 using LinearAlgebra, NNlib
 
 include("../../utils.jl")

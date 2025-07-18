@@ -17,6 +17,12 @@ using LinearAlgebra, NNlib
 include("../../utils.jl")
 using .Utils: removeNaN, device, half_quant, full_quant
 
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, half_quant, 3)
+else
+    @init_parallel_stencil(Threads, half_quant, 3)
+end
+
 function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
@@ -26,12 +32,6 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     end
 
     return grid
-end
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, half_quant, 3)
-else
-    @init_parallel_stencil(Threads, half_quant, 3)
 end
 
 @parallel_indices (i, g, s) function B_spline_deg0!(

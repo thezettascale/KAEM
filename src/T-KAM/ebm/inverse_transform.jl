@@ -37,7 +37,6 @@ function trapezium_quadrature(
 
     # Evaluate prior on grid [0,1]
     f_grid = st[Symbol("1")].grid
-    grid = f_grid
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     π_grid =
@@ -61,7 +60,7 @@ function trapezium_quadrature(
     # CDF by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
-    return trapz, grid, st
+    return trapz, st[Symbol("1")].grid, st
 end
 
 function get_gausslegendre(
@@ -98,6 +97,7 @@ function gausslegendre_quadrature(
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights = get_gausslegendre(ebm, ps, st)
+    grid = nodes
     π_nodes =
         ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(nodes', ps, ε) :
         ebm.π_pdf(nodes, ε)
@@ -112,20 +112,20 @@ function gausslegendre_quadrature(
         @tullio trapz[q, b, g] :=
             (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b])
         @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g]
-        return trapz, nodes, st
+        return trapz, grid, st
     else
         @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-        return trapz, nodes, st
+        return trapz, grid, st
     end
 end
 
 @parallel_indices (q, b) function mask_kernel!(
-    mask::AbstractArray{T},
-    α::AbstractArray{T},
-    rand_vals::AbstractArray{T},
+    mask::AbstractArray{U},
+    α::AbstractArray{U},
+    rand_vals::AbstractArray{U},
     p_size::Int,
-)::Nothing where {T<:half_quant}
-    idx = p_size + 1
+)::Nothing where {U<:full_quant}
+    idx = p_size
     val = rand_vals[q, b]
     for j = 1:p_size
         if α[q, j] >= val
@@ -134,12 +134,9 @@ end
         end
     end
 
-    # Edge-case: Clamp
-    idx = idx > p_size ? p_size : idx
-
     # One-hot vector for this (q, b)
     for k = 1:p_size
-        mask[q, b, k] = (idx == k) ? one(eltype(mask)) : zero(eltype(mask))
+        mask[q, b, k] = (idx == k) ? one(U) : zero(U)
     end
     return nothing
 end
@@ -150,7 +147,7 @@ function choose_component(
     q_size::Int,
     p_size::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},Int} where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
 

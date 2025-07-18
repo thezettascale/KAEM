@@ -64,7 +64,7 @@ function grad_langevin_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    m::Any,
+    model::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}

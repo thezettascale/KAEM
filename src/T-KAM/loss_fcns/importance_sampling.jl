@@ -77,7 +77,7 @@ function grad_importance_llhood(
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
-    m::Any,
+    model::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}

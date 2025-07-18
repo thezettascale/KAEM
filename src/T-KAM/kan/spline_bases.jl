@@ -220,6 +220,7 @@ function FFT_basis(
 end
 
 @parallel_indices (i, o, s) function FFT_mul!(
+    y::AbstractArray{T},
     even::AbstractArray{T},
     odd::AbstractArray{T},
     even_coef::AbstractArray{T},
@@ -239,10 +240,10 @@ function coef2curve_FFT(
     coef::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    I, S, O, G = size(x_eval)..., size(coef)[2:3]...
-    spl = FFT_basis(x_eval, grid, σ)
-    even, odd = @zeros(I, O, S)
-    @parallel (1:I, 1:O, 1:S) FFT_mul!(even, odd, coef[1, :, :, :], coef[2, :, :, :])
+    I, S, O, G = size(x_eval)..., size(coef)[3:4]...
+    even, odd = FFT_basis(x_eval, grid, σ)
+    y = @zeros(I, O, S)
+    @parallel (1:I, 1:O, 1:S) FFT_mul!(y, even, odd, coef[1, :, :, :], coef[2, :, :, :])
     return y
 end
 

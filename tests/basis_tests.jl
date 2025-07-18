@@ -107,7 +107,7 @@ function test_FFT_basis()
     grid = rand(half_quant, i, g) |> device
     coef = rand(half_quant, 2, i, o, g) |> device
 
-    y = coef2curve_Spline(x_eval, grid, coef, σ; k = degree, basis_function = FFT_basis)
+    y = coef2curve_FFT(x_eval, grid, coef, σ)
     @test size(y) == (i, o, b)
     @test !any(isnan.(y))
 end

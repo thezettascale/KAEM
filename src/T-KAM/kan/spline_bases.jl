@@ -88,7 +88,7 @@ function B_spline_basis(
         gmax = G - k - 1
         @parallel (1:I, 1:gmax, 1:S) B_spline_degk!(B, x, grid, k)
     end
-    
+
     return B[:, 1:(G-degree-1), :, degree+1]
 end
 
@@ -188,7 +188,6 @@ function coef2curve_Spline(
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     spl = @zeros(I, G, S)
     y = @zeros(I, O, S)
-
     spl = basis_function(x_eval, grid, σ; degree = k)
     @parallel (1:I, 1:O, 1:S) spline_mul!(y, spl, coef)
     return y
@@ -221,7 +220,6 @@ function FFT_basis(
 end
 
 @parallel_indices (i, o, s) function FFT_mul!(
-    y::AbstractArray{T},
     even::AbstractArray{T},
     odd::AbstractArray{T},
     even_coef::AbstractArray{T},
@@ -243,7 +241,8 @@ function coef2curve_FFT(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     spl = FFT_basis(x_eval, grid, σ)
-    @parallel (1:I, 1:O, 1:S) FFT_mul!(y, spl, coef)
+    even, odd = @zeros(I, O, S)
+    @parallel (1:I, 1:O, 1:S) FFT_mul!(even, odd, coef[1, :, :, :], coef[2, :, :, :])
     return y
 end
 

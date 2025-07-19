@@ -109,30 +109,30 @@ function update_model_grid(
 
         for i = 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(
-                model.prior.fcns_qp[Symbol("$i")],
-                ps.ebm[Symbol("$i")],
-                st.ebm[Symbol("$i")],
+                model.prior.fcns_qp[i],
+                ps.ebm.fcn[i],
+                st.ebm.fcn[i],
                 z,
             )
-            @reset ps.ebm[Symbol("$i")].coef = new_coef
-            @reset st.ebm[Symbol("$i")].grid = new_grid
+            @reset ps.ebm.fcn[i].coef = new_coef
+            @reset st.ebm.fcn[i].grid = new_grid
 
             z = fwd(
-                model.prior.fcns_qp[Symbol("$i")],
-                ps.ebm[Symbol("$i")],
-                st.ebm[Symbol("$i")],
+                model.prior.fcns_qp[i],
+                ps.ebm.fcn[i],
+                st.ebm.fcn[i],
                 z,
             )
             z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
 
-            if model.prior.layernorm && i < model.prior.depth
+            if model.prior.layernorm_bool && i < model.prior.depth
                 z, st_ebm = Lux.apply(
-                    model.prior.fcns_qp[Symbol("ln_$i")],
+                    model.prior.layernorms[i],
                     z,
-                    ps.ebm[Symbol("ln_$i")],
-                    st.ebm[Symbol("ln_$i")],
+                    ps.ebm.layernorm[i],
+                    st.ebm.layernorm[i],
                 )
-                @reset st.ebm[Symbol("ln_$i")] = st_ebm
+                @reset st.ebm.layernorm[i] = st_ebm
             end
         end
     end
@@ -151,30 +151,30 @@ function update_model_grid(
 
     for i = 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(
-            model.lkhood.Φ_fcns[Symbol("$i")],
-            ps.gen[Symbol("$i")],
-            st.gen[Symbol("$i")],
+            model.lkhood.Φ_fcns[i],
+            ps.gen.fcn[i],
+            st.gen.fcn[i],
             z,
         )
-        @reset ps.gen[Symbol("$i")].coef = new_coef
-        @reset st.gen[Symbol("$i")].grid = new_grid
+        @reset ps.gen.fcn[i].coef = new_coef
+        @reset st.gen.fcn[i].grid = new_grid
 
         z = fwd(
-            model.lkhood.Φ_fcns[Symbol("$i")],
-            ps.gen[Symbol("$i")],
-            st.gen[Symbol("$i")],
+            model.lkhood.Φ_fcns[i],
+            ps.gen.fcn[i],
+            st.gen.fcn[i],
             z,
         )
         z = dropdims(sum(z, dims = 1); dims = 1)
 
-        if model.lkhood.layernorm && i < model.lkhood.depth
+        if model.lkhood.layernorm_bool && i < model.lkhood.depth
             z, st_gen = Lux.apply(
-                model.lkhood.Φ_fcns[Symbol("ln_$i")],
+                model.lkhood.layernorms[i],
                 z,
-                ps.gen[Symbol("ln_$i")],
-                st.gen[Symbol("ln_$i")],
+                ps.gen.layernorm[i],
+                st.gen.layernorm[i],
             )
-            @reset st.gen[Symbol("ln_$i")] = st_gen
+            @reset st.gen.layernorm[i] = st_gen
         end
     end
 

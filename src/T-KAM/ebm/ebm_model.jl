@@ -35,7 +35,7 @@ function lognormal_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractAr
 end
 
 function learnable_gaussian_pdf(z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
-    return one(half_quant) ./ (abs.(ps[Symbol("π_σ")] .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε)))
+    return one(half_quant) ./ (abs.(ps.fcn.π_σ .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps.fcn.π_μ .^ 2) ./ (2 .* (ps.fcn.π_σ .^ 2) .+ ε)))
 end
 
 function ebm_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
@@ -55,7 +55,8 @@ const quad_map =
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     fcns_qp::NamedTuple
-    layernorm::Bool
+    layernorms::NamedTuple
+    layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
     π_pdf::Function
@@ -84,7 +85,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )
 
     spline_degree = parse(Int, retrieve(conf, "EbmModel", "spline_degree"))
-    layernorm = parse(Bool, retrieve(conf, "EbmModel", "layer_norm"))
+    layernorm_bool = parse(Bool, retrieve(conf, "EbmModel", "layer_norm"))
     base_activation = retrieve(conf, "EbmModel", "base_activation")
     spline_function = retrieve(conf, "EbmModel", "spline_function")
     grid_size = parse(Int, retrieve(conf, "EbmModel", "grid_size"))
@@ -125,7 +126,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             end
         end
 
-    functions = NamedTuple()
+    fcns_temp = []
+    layernorms_temp = []
     for i in eachindex(widths[1:(end-1)])
         base_scale = (
             μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
@@ -153,12 +155,18 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             τ_trainable = τ_trainable,
         )
 
-        @reset functions[Symbol("$i")] = func
+        push!(fcns_temp, func)
 
-        if (layernorm && i < length(widths)-1)
-            @reset functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+        if (layernorm_bool && i < length(widths)-1)
+            push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
         end
 
+    end
+
+    functions = ntuple(i -> fcns_temp[i], length(widths)-1)
+    layernorms = ntuple(i -> layernorms_temp[i], length(widths)-1)
+    if layernorm_bool
+        layernorms = ntuple(i -> layernorms_temp[i], length(widths)-1)
     end
 
     ula = length(widths) > 2
@@ -186,7 +194,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
     return EbmModel(
         functions,
-        layernorm,
+        layernorm_bool,
         length(widths)-1,
         prior_type,
         get(prior_pdf, prior_type, (z, ε) -> ones(half_quant, size(z))),
@@ -207,44 +215,35 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    ps = NamedTuple(
-        Symbol("$i") => Lux.initialparameters(rng, prior.fcns_qp[Symbol("$i")]) for
-        i = 1:prior.depth
+    fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
+    layernorm_ps = NamedTuple()
+    if prior.layernorm_bool
+        layernorm_ps = ntuple(i -> Lux.initialparameters(rng, prior.layernorms[i]), prior.depth-1)
+    end
+
+    fcn_ps = merge(fcn_ps, (
+    π_μ = prior.prior_type == "learnable_gaussian" ? zeros(half_quant, 1, prior.p_size) : nothing,
+    π_σ = prior.prior_type == "learnable_gaussian" ? ones(half_quant, 1, prior.p_size) : nothing,
+    α   = prior.mixture_model ? glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : nothing,
+    ))
+   
+    return(
+        fcn = fcn_ps,
+        layernorm = layernorm_ps,
     )
-
-    if prior.layernorm
-        for i = 1:(prior.depth-1)
-            @reset ps[Symbol("ln_$i")] =
-                Lux.initialparameters(rng, prior.fcns_qp[Symbol("ln_$i")])
-        end
-    end
-
-    if prior.prior_type == "learnable_gaussian"
-        @reset ps[Symbol("π_μ")] = zeros(half_quant, 1, prior.p_size)
-        @reset ps[Symbol("π_σ")] = ones(half_quant, 1, prior.p_size)
-    end
-
-    if prior.mixture_model
-        @reset ps[Symbol("α")] = glorot_uniform(rng, full_quant, prior.q_size, prior.p_size)
-    end
-
-    return ps
 end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    st = NamedTuple(
-        Symbol("$i") => Lux.initialstates(rng, prior.fcns_qp[Symbol("$i")]) for
-        i = 1:prior.depth
-    )
-
-    if prior.layernorm
-        for i = 1:(prior.depth-1)
-            @reset st[Symbol("ln_$i")] =
-                Lux.initialstates(rng, prior.fcns_qp[Symbol("ln_$i")]) |> hq
-        end
+    fcn_st = ntuple(i -> Lux.initialstates(rng, prior.fcns_qp[i]), prior.depth)
+    layernorm_st = NamedTuple()
+    if prior.layernorm_bool
+        layernorm_st = ntuple(i -> Lux.initialstates(rng, prior.layernorms[i]) |> hq, prior.depth-1)
     end
 
-    return st
+    return (
+        fcn = fcn_st,
+        layernorm = layernorm_st,
+    )
 end
 
 end

@@ -365,31 +365,31 @@ end
 function move_to_hq(model::T_KAM)
     """Moves the model to half precision."""
 
-    if model.prior.layernorm
+    if model.prior.layernorm_bool
         for i = 1:(model.prior.depth-1)
-            @reset model.prior.fcns_qp[Symbol("ln_$i")] =
-                model.prior.fcns_qp[Symbol("ln_$i")] |> hq
+            @reset model.prior.layernorms[i] =
+                model.prior.layernorms[i] |> hq
         end
     end
 
-    if model.lkhood.layernorm
+    if model.lkhood.layernorm_bool
         for i = 1:(model.lkhood.depth-1)
-            @reset model.lkhood.Φ_fcns[Symbol("ln_$i")] =
-                model.lkhood.Φ_fcns[Symbol("ln_$i")] |> hq
+            @reset model.lkhood.layernorms[i] =
+                model.lkhood.layernorms[i] |> hq
         end
     end
 
     if model.lkhood.CNN
         for i = 1:model.lkhood.depth
-            @reset model.lkhood.Φ_fcns[Symbol("$i")] =
-                model.lkhood.Φ_fcns[Symbol("$i")] |> hq
-            if model.lkhood.batchnorm
-                @reset model.lkhood.Φ_fcns[Symbol("bn_$i")] =
-                    model.lkhood.Φ_fcns[Symbol("bn_$i")] |> hq
+            @reset model.lkhood.fcn[i] =
+                model.lkhood.fcn[i] |> hq
+            if model.lkhood.batchnorm_bool
+                @reset model.lkhood.batchnorms[i] =
+                    model.lkhood.batchnorms[i] |> hq
             end
         end
-        @reset model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] =
-            model.lkhood.Φ_fcns[Symbol("$(model.lkhood.depth+1)")] |> hq
+        @reset model.lkhood.fcn[model.lkhood.depth+1] =
+            model.lkhood.fcn[model.lkhood.depth+1] |> hq
     end
 
     return model

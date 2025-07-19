@@ -36,7 +36,7 @@ function trapezium_quadrature(
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
-    f_grid = st[Symbol("1")].grid
+    f_grid = st.fcn[1].grid
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     π_grid =
@@ -60,7 +60,7 @@ function trapezium_quadrature(
     # CDF by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
-    return trapz, st[Symbol("1")].grid, st
+    return trapz, st[1].grid, st
 end
 
 function get_gausslegendre(
@@ -70,16 +70,16 @@ function get_gausslegendre(
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     """Get Gauss-Legendre nodes and weights for prior's domain"""
 
-    a, b = minimum(st[Symbol("1")].grid; dims = 2), maximum(st[Symbol("1")].grid; dims = 2)
+    a, b = minimum(st.fcn[1].grid; dims = 2), maximum(st.fcn[1].grid; dims = 2)
 
     no_grid = (
-        ebm.fcns_qp[Symbol("1")].spline_string == "FFT" ||
-        ebm.fcns_qp[Symbol("1")].spline_string == "Cheby"
+        ebm.fcns_qp[1].spline_string == "FFT" ||
+        ebm.fcns_qp[1].spline_string == "Cheby"
     )
 
     if no_grid
-        a = fill(half_quant(first(ebm.fcns_qp[Symbol("1")].grid_range)), size(a)) |> device
-        b = fill(half_quant(last(ebm.fcns_qp[Symbol("1")].grid_range)), size(b)) |> device
+        a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> device
+        b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> device
     end
 
     nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
@@ -278,7 +278,7 @@ function sample_mixture(
     Returns:
         z: The samples from the ebm-prior, (num_samples, q). 
     """
-    mask = choose_component(ps[Symbol("α")], num_samples, ebm.q_size, ebm.p_size; rng = rng)
+    mask = choose_component(ps.α, num_samples, ebm.q_size, ebm.p_size; rng = rng)
 
     cdf, grid, st = ebm.quad(ebm, ps, st, mask)
     grid_size = size(grid, 2)

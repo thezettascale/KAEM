@@ -36,8 +36,11 @@ const resampler_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     Φ_fcns::NamedTuple
-    layernorm::Bool
-    batchnorm::Bool
+    layernorms::NamedTuple
+    batchnorms::NamedTuple
+    attention::NamedTuple
+    layernorm_bool::Bool
+    batchnorm_bool::Bool
     depth::Int
     out_size::Int
     σ_llhood::T
@@ -89,7 +92,7 @@ function init_GenModel(
     ))
 
     spline_degree = parse(Int, retrieve(conf, "GeneratorModel", "spline_degree"))
-    layernorm = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
+    layernorm_bool = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
     base_activation = retrieve(conf, "GeneratorModel", "base_activation")
     spline_function = retrieve(conf, "GeneratorModel", "spline_function")
     grid_size = parse(Int, retrieve(conf, "GeneratorModel", "grid_size"))
@@ -110,7 +113,7 @@ function init_GenModel(
     resampler = retrieve(conf, "GeneratorModel", "resampler")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
     resampler = get(resampler_map, resampler, systematic_resampler)
-    batchnorm = false
+    batchnorm_bool = false
 
     resample_fcn =
         (weights, rng) -> importance_resampler(
@@ -126,7 +129,6 @@ function init_GenModel(
         sequence_length > 1 ? (x -> softmax(x, dims = 1)) :
         get(output_activation_mapping, output_act, identity)
 
-    Φ_functions = NamedTuple()
     depth = length(widths)-1
     d_model = 0
 
@@ -147,6 +149,15 @@ function init_GenModel(
             τ_trainable = τ_trainable,
         )
 
+    fcns_temp = []
+    layernorms_temp = []
+    batchnorms_temp = []
+
+    Φ_functions = NamedTuple()
+    layernorms = NamedTuple()
+    batchnorms = NamedTuple()
+    attention = NamedTuple()
+
     if CNN
         channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
         hidden_c = (q_size, channels...)
@@ -155,9 +166,9 @@ function init_GenModel(
         k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
         paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
         act = activation_mapping[retrieve(conf, "CNN", "activation")]
-        batchnorm = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
+        batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
         generate_fcn = CNN_fwd
-        layernorm = false
+        layernorm_bool = false
 
         length(strides) != length(hidden_c) &&
             (error("Number of strides must be equal to the number of hidden layers + 1."))
@@ -168,24 +179,27 @@ function init_GenModel(
             (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
         for i in eachindex(hidden_c[1:(end-1)])
-            @reset Φ_functions[Symbol("$i")] = Lux.ConvTranspose(
+            push!(fcns_temp, Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
                 hidden_c[i] => hidden_c[i+1],
                 identity;
                 stride = strides[i],
                 pad = paddings[i],
-            )
-            if batchnorm
-                @reset Φ_functions[Symbol("bn_$i")] = Lux.BatchNorm(hidden_c[i+1], act)
+            ))
+            if batchnorm_bool
+                push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
             end
         end
-        @reset Φ_functions[Symbol("$(length(hidden_c))")] = Lux.ConvTranspose(
+        push!(fcns_temp, Lux.ConvTranspose(
             (k_size[end], k_size[end]),
             hidden_c[end] => output_dim,
             identity;
             stride = strides[end],
             pad = paddings[end],
-        )
+        ))
+
+        Φ_functions = ntuple(i -> fcns_temp[i], length(hidden_c)-1)
+        batchnorms = ntuple(i -> batchnorms_temp[i], length(hidden_c)-1)
 
     elseif sequence_length > 1
 
@@ -196,21 +210,26 @@ function init_GenModel(
         d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
         # Projection
-        @reset Φ_functions[Symbol("1")] = Lux.Dense(q_size => d_model)
-        @reset Φ_functions[Symbol("ln_1")] = Lux.LayerNorm((d_model, 1), gelu)
+        push!(fcns_temp, Lux.Dense(q_size => d_model))
+        push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
 
         # Query, Key, Value
-        @reset Φ_functions[Symbol("Q")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("K")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("V")] = Lux.Dense(d_model => d_model)
+        attention = (
+            Q = Lux.Dense(d_model => d_model),
+            K = Lux.Dense(d_model => d_model),
+            V = Lux.Dense(d_model => d_model),
+        )
 
         # Feed forward
-        @reset Φ_functions[Symbol("2")] = Lux.Dense(d_model => d_model)
-        @reset Φ_functions[Symbol("ln_2")] = Lux.LayerNorm((d_model, 1), gelu)
+        push!(fcns_temp, Lux.Dense(d_model => d_model))
+        push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
 
         # Output layer
-        @reset Φ_functions[Symbol("3")] = Lux.Dense(d_model => output_dim)
+        push!(fcns_temp, Lux.Dense(d_model => output_dim))
         depth = 3
+
+        Φ_functions = ntuple(i -> fcns_temp[i], 3)
+        layernorms = ntuple(i -> layernorms_temp[i], 2)
     else
         for i in eachindex(widths[1:(end-1)])
             base_scale = (
@@ -220,19 +239,24 @@ function init_GenModel(
                     one(full_quant)
                 ) .* (one(full_quant) / √(full_quant(widths[i])))
             )
-            @reset Φ_functions[Symbol("$i")] =
-                initialize_function(widths[i], widths[i+1], base_scale)
+            push!(fcns_temp, initialize_function(widths[i], widths[i+1], base_scale))
 
-            if (layernorm && i < depth)
-                @reset Φ_functions[Symbol("ln_$i")] = Lux.LayerNorm(widths[i+1])
+            if (layernorm_bool && i < depth)
+                push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
             end
         end
+
+        Φ_functions = ntuple(i -> fcns_temp[i], depth)
+        layernorms = ntuple(i -> layernorms_temp[i], depth-1)
     end
 
     return GenModel(
         Φ_functions,
-        layernorm,
-        batchnorm,
+        layernorms,
+        batchnorms,
+        attention,
+        layernorm_bool,
+        batchnorm_bool,
         depth,
         output_dim,
         gen_var,
@@ -247,72 +271,61 @@ function init_GenModel(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-
-    ps = NamedTuple(
-        Symbol("$i") => Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$i")]) for
-        i = 1:lkhood.depth
-    )
-
-    if lkhood.CNN
-        @reset ps[Symbol("$(lkhood.depth+1)")] =
-            Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")])
-        if lkhood.batchnorm
-            for i = 1:lkhood.depth
-                @reset ps[Symbol("bn_$i")] =
-                    Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("bn_$i")])
-            end
-        end
+    fcn_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.Φ_fcns[i]), lkhood.depth)
+    layernorm_ps = NamedTuple()
+    if lkhood.layernorm_bool
+        layernorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.layernorms[i]), lkhood.depth-1)
     end
 
-    if lkhood.layernorm
-        for i = 1:(lkhood.depth-1)
-            @reset ps[Symbol("ln_$i")] =
-                Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("ln_$i")])
-        end
+    batchnorm_ps = NamedTuple()
+    if lkhood.batchnorm_bool
+        batchnorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.batchnorms[i]), lkhood.depth-1)
     end
 
+    attention_ps = NamedTuple()
     if lkhood.seq_length > 1
-        @reset ps[Symbol("Q")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("Q")])
-        @reset ps[Symbol("K")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("K")])
-        @reset ps[Symbol("V")] = Lux.initialparameters(rng, lkhood.Φ_fcns[Symbol("V")])
+        attention_ps = (
+            Q = Lux.initialparameters(rng, lkhood.attention.Q),
+            K = Lux.initialparameters(rng, lkhood.attention.K),
+            V = Lux.initialparameters(rng, lkhood.attention.V),
+        )
     end
 
-    return ps
+    return (
+        fcn = fcn_ps,
+        layernorm = layernorm_ps,
+        batchnorm = batchnorm_ps,
+        attention = attention_ps,
+    )
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-
-    st = NamedTuple(
-        Symbol("$i") => Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$i")]) |> hq for
-        i = 1:lkhood.depth
-    )
-
-    if lkhood.CNN
-        @reset st[Symbol("$(lkhood.depth+1)")] =
-            Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("$(lkhood.depth+1)")]) |> hq
-
-        if lkhood.batchnorm
-            for i = 1:lkhood.depth
-                @reset st[Symbol("bn_$i")] =
-                    Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("bn_$i")]) |> hq
-            end
-        end
+    fcn_st = ntuple(i -> Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq, lkhood.depth)
+    layernorm_st = NamedTuple()
+    if lkhood.layernorm_bool
+        layernorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.layernorms[i]) |> hq, lkhood.depth-1)
     end
 
-    if lkhood.layernorm
-        for i = 1:(lkhood.depth-1)
-            @reset st[Symbol("ln_$i")] =
-                Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("ln_$i")]) |> hq
-        end
+    batchnorm_st = NamedTuple()
+    if lkhood.batchnorm_bool
+        batchnorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq, lkhood.depth-1)
     end
 
+    attention_st = NamedTuple()
     if lkhood.seq_length > 1
-        @reset st[Symbol("Q")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("Q")])
-        @reset st[Symbol("K")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("K")])
-        @reset st[Symbol("V")] = Lux.initialstates(rng, lkhood.Φ_fcns[Symbol("V")])
+        attention_st = (
+            Q = Lux.initialstates(rng, lkhood.attention.Q) |> hq,
+            K = Lux.initialstates(rng, lkhood.attention.K) |> hq,
+            V = Lux.initialstates(rng, lkhood.attention.V) |> hq,
+        )
     end
 
-    return st
+    return (
+        fcn = fcn_st,
+        layernorm = layernorm_st,
+        batchnorm = batchnorm_st,
+        attention = attention_st,
+    )
 end
 
 end

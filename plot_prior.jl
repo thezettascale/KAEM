@@ -62,8 +62,8 @@ for fcn_type in ["RBF", "FFT"]
             grid_range =
                 Dict("uniform" => (0, 1), "lognormal" => (0, 3), "gaussian" => (-3, 3))[prior_type]
 
-            a, b = minimum(st[Symbol("1")].grid; dims = 2),
-            maximum(st[Symbol("1")].grid; dims = 2)
+            a, b = minimum(st.fcn[1].grid; dims = 2),
+            maximum(st.fcn[1].grid; dims = 2)
             if fcn_type == "FFT"
                 a = fill(half_quant(first(grid_range)), size(a)) |> device
                 b = fill(half_quant(last(grid_range)), size(b)) |> device

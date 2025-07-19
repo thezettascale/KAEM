@@ -320,7 +320,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
 
     attention_st = (a = zero(T))
     if lkhood.seq_length > 1
-        attention_st = NamedTuple(
+        attention_st = (
             Q = Lux.initialstates(rng, lkhood.attention.Q) |> hq,
             K = Lux.initialstates(rng, lkhood.attention.K) |> hq,
             V = Lux.initialstates(rng, lkhood.attention.V) |> hq,

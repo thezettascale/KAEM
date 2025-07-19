@@ -35,7 +35,7 @@ const resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::Tuple
+    Φ_fcns::Vector{Any}
     layernorms::Tuple
     batchnorms::Tuple
     attention::NamedTuple
@@ -149,11 +149,10 @@ function init_GenModel(
             τ_trainable = τ_trainable,
         )
 
-    fcns_temp = []
+    Φ_functions = []
     layernorms_temp = []
     batchnorms_temp = []
 
-    Φ_functions = ()
     layernorms = ()
     batchnorms = ()
     attention = NamedTuple()
@@ -179,7 +178,7 @@ function init_GenModel(
             (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
         for i in eachindex(hidden_c[1:(end-1)])
-            push!(fcns_temp, Lux.ConvTranspose(
+            push!(Φ_functions, Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
                 hidden_c[i] => hidden_c[i+1],
                 identity;
@@ -190,7 +189,7 @@ function init_GenModel(
                 push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
             end
         end
-        push!(fcns_temp, Lux.ConvTranspose(
+        push!(Φ_functions, Lux.ConvTranspose(
             (k_size[end], k_size[end]),
             hidden_c[end] => output_dim,
             identity;
@@ -198,13 +197,11 @@ function init_GenModel(
             pad = paddings[end],
         ))
 
-        Φ_functions = ntuple(i -> fcns_temp[i], length(fcns_temp))
-
         if batchnorm_bool && length(batchnorms_temp) > 0
             batchnorms = ntuple(i -> batchnorms_temp[i], length(batchnorms_temp))
         end
 
-        depth = length(fcns_temp)
+        depth = length(Φ_functions)
 
     elseif sequence_length > 1
 
@@ -215,7 +212,7 @@ function init_GenModel(
         d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
 
         # Projection
-        push!(fcns_temp, Lux.Dense(q_size => d_model))
+        push!(Φ_functions, Lux.Dense(q_size => d_model))
         push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
 
         # Query, Key, Value
@@ -226,14 +223,13 @@ function init_GenModel(
         )
 
         # Feed forward
-        push!(fcns_temp, Lux.Dense(d_model => d_model))
+        push!(Φ_functions, Lux.Dense(d_model => d_model))
         push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
 
         # Output layer
-        push!(fcns_temp, Lux.Dense(d_model => output_dim))
+        push!(Φ_functions, Lux.Dense(d_model => output_dim))
         depth = 3
 
-        Φ_functions = ntuple(i -> fcns_temp[i], 3)
         layernorms = ntuple(i -> layernorms_temp[i], 2)
     else
         for i in eachindex(widths[1:(end-1)])
@@ -244,14 +240,13 @@ function init_GenModel(
                     one(full_quant)
                 ) .* (one(full_quant) / √(full_quant(widths[i])))
             )
-            push!(fcns_temp, initialize_function(widths[i], widths[i+1], base_scale))
+            push!(Φ_functions, initialize_function(widths[i], widths[i+1], base_scale))
 
             if (layernorm_bool && i < depth)
                 push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
             end
         end
 
-        Φ_functions = ntuple(i -> fcns_temp[i], depth)
         if layernorm_bool && length(layernorms_temp) > 0
             layernorms = ntuple(i -> layernorms_temp[i], depth-1)
         end

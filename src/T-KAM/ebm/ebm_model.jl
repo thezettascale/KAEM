@@ -54,7 +54,7 @@ const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple
+    fcns_qp::Vector{Any}    
     layernorms::Tuple
     layernorm_bool::Bool
     depth::Int
@@ -126,7 +126,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             end
         end
 
-    fcns_temp = []
+    functions = []
     layernorms_temp = []
     for i in eachindex(widths[1:(end-1)])
         base_scale = (
@@ -155,7 +155,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             τ_trainable = τ_trainable,
         )
 
-        push!(fcns_temp, func)
+        push!(functions, func)
 
         if (layernorm_bool && i < length(widths)-1)
             push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
@@ -163,7 +163,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
     end
 
-    functions = ntuple(i -> fcns_temp[i], length(widths)-1)
     layernorms = ()
     if layernorm_bool && length(layernorms_temp) > 0
         layernorms = ntuple(i -> layernorms_temp[i], length(widths)-1)

@@ -46,7 +46,7 @@ function logpos_grad(
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x),
         Enzyme.Const(t),
-        Enzyme.Const(model),
+        Enzyme.Const(m),
         Enzyme.Const(ps),
         Enzyme.Const(st),
         Enzyme.Const(prior_sampling_bool),
@@ -80,12 +80,12 @@ function initialize_ULA_sampler(
 
     z = begin
         if model.prior.ula && prior_sampling_bool
-            z =
-                π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng) |>
-                device
+            z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
+            z = device(full_quant.(z))
         else
             z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
+            full_quant.(z)
         end
     end
 
@@ -95,9 +95,9 @@ function initialize_ULA_sampler(
     ∇z = Enzyme.make_zero(z) |> device
 
     ll =
-        (z, x, lkhood, ps_gen, st_gen) ->
-            log_likelihood_MALA(z, x, lkhood, ps_gen, st_gen; ε = model.ε)
-    compiled_llhood = Reactant.@compile ll(z, x, model.lkhood, ps.gen, st.gen)
+        (z_i, x_i, l, ps_gen, st_gen) ->
+            log_likelihood_MALA(z_i, x_i, l, ps_gen, st_gen; ε = model.ε)
+    compiled_llhood = Reactant.@compile ll(z[:,:,:,1], x, model.lkhood, ps.gen, st.gen)
 
     logpos_grad_compiled =
         Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)

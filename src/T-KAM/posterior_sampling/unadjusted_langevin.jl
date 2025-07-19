@@ -147,10 +147,8 @@ function ULA_sample(
     # Initialize from prior
     z = begin
         if model.prior.ula && sampler.prior_sampling_bool
-            z =
-                full_quant.(
-                    π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng),
-                ) |> device
+            z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
+            z = device(full_quant.(z))
         else
             z, st_ebm = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
@@ -166,7 +164,7 @@ function ULA_sample(
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     S = sampler.prior_sampling_bool ? size(z)[end] : S
     z = reshape(z, Q, P, S, num_temps)
-    ∇z = zeros(T, size(z)) |> device
+    ∇z = similar(z) |> device
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)

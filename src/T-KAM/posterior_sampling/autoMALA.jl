@@ -342,7 +342,7 @@ function initialize_autoMALA_sampler(
 
     return autoMALA_sampler(
         compiled_llhood,
-        compiled_logpos_withgrad,
+        logpos_withgrad,
         compiled_autoMALA_step,
         N,
         N_unadjusted,

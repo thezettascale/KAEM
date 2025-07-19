@@ -36,8 +36,8 @@ function setup_model(N_l)
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
 
     ps, st = Lux.setup(rng, model)
-    model = move_to_hq(model)
     ps, st = ComponentArray(ps) |> device, st |> device
+    model = prep_model(model)
 
     return model, ps, st
 end

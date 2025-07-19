@@ -272,6 +272,7 @@ function initialize_autoMALA_sampler(
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
+    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
     compiled_llhood = Reactant.@compile log_likelihood_MALA(
         z[:, :, :, 1],
         x_single,

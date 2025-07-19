@@ -336,7 +336,7 @@ function initialize_autoMALA_sampler(
         Δη,
         η_min,
         η_max,
-        ε,
+        model.ε,
         seq,
     )
 
@@ -350,7 +350,6 @@ function initialize_autoMALA_sampler(
         η_min,
         η_max,
         RE_frequency,
-        ε,
         seq,
     )
 end
@@ -455,7 +454,7 @@ function sample(
                 sampler.Δη,
                 sampler.η_min,
                 sampler.η_max,
-                sampler.ε,
+                model.ε,
                 sampler.seq,
             )
         end

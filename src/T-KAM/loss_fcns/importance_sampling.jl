@@ -50,7 +50,7 @@ end
     logprior::AbstractArray{T},
     logllhood::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
-) where {T<:half_quant}
+)::Nothing where {T<:half_quant}
     idx = resampled_idxs[b, s]
     loss[b, s] = weights_resampled[b, s] * (logprior[idx] + logllhood[b, idx])
     return nothing

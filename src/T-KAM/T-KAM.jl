@@ -419,7 +419,7 @@ function Lux.initialstates(
     return (
         ebm = Lux.initialstates(rng, model.prior),
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([η_init], model.max_samples, model.N_t) :
+        η_init = model.N_t > 1 ? repeat([η_init], model.max_samples, model.N_t+1) :
                  fill(η_init, model.max_samples, 1),
         train_idx = 1,
     )

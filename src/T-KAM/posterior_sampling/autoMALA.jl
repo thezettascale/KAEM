@@ -104,7 +104,7 @@ function select_step_size(
             safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
 
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
-        
+
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st =
             leapfrop_proposal(
                 z[:, :, active_chains],
@@ -224,10 +224,10 @@ function autoMALA_step(
 end
 
 struct autoMALA_sampler{U<:full_quant}
-    compiled_llhood
-    compiled_leapfrog
-    logpos_withgrad
-    compiled_autoMALA_step
+    compiled_llhood::Any
+    compiled_leapfrog::Any
+    logpos_withgrad::Any
+    compiled_autoMALA_step::Any
     N::Int
     N_unadjusted::Int
     Δη::U
@@ -299,7 +299,7 @@ function initialize_autoMALA_sampler(
     end
 
     logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
-    
+
     compiled_leapfrog = Reactant.@compile leapfrop_proposal(
         z,
         ∇z,
@@ -499,7 +499,7 @@ function autoMALA_sample(
             end
         end
 
-        
+
     end
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)

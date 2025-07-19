@@ -232,7 +232,10 @@ function init_posterior_sampler(
     N_unadjusted = parse(Int, retrieve(conf, "POST_LANGEVIN", "N_unadjusted"))
     Δη = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
-    replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))
+    replica_exchange_frequency = parse(
+        Int,
+        retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
+    )
 
     # Importance sampling or MALA
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
@@ -325,8 +328,15 @@ function init_posterior_sampler(
 
 
         @reset model.posterior_sample =
-            (m, x, t, ps, st, rng) ->
-                sample_function(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
+            (m, x, t, ps, st, rng) -> sample_function(
+                sampler_struct,
+                m,
+                ps,
+                Lux.testmode(st),
+                x;
+                temps = t,
+                rng = rng,
+            )
 
         loss_struct = initialize_thermo_loss(
             ps,

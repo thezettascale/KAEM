@@ -91,8 +91,8 @@ function grad_langevin_llhood(
 end
 
 struct LangevinLoss
-    compiled_loss
-    compiled_grad
+    compiled_loss::Any
+    compiled_grad::Any
 end
 
 function initialize_langevin_loss(

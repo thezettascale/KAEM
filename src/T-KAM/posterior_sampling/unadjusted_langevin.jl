@@ -54,9 +54,9 @@ function logpos_grad(
     return ∇z
 end
 
-struct ULA_sampler{T<:half_quant,U<:full_quant}
-    compiled_llhood
-    compiled_logpos_grad
+struct ULA_sampler{U<:full_quant}
+    compiled_llhood::Any
+    compiled_logpos_grad::Any
     prior_sampling_bool::Bool
     N::Int
     RE_frequency::Int
@@ -97,7 +97,7 @@ function initialize_ULA_sampler(
     ll =
         (z_i, x_i, l, ps_gen, st_gen) ->
             log_likelihood_MALA(z_i, x_i, l, ps_gen, st_gen; ε = model.ε)
-    compiled_llhood = Reactant.@compile ll(z[:,:,:,1], x, model.lkhood, ps.gen, st.gen)
+    compiled_llhood = Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
 
     logpos_grad_compiled =
         Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
@@ -150,7 +150,7 @@ function ULA_sample(
             z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
             z = device(full_quant.(z))
         else
-            z, st_ebm = model.prior.sample_z(m, size(x)[end]*length(temps), ps, st, rng)
+            z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
             full_quant.(z)
         end

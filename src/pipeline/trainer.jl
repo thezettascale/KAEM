@@ -20,7 +20,7 @@ using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme
 
 mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
-    model
+    model::Any
     cnn::Bool
     o::opt
     dataset_name::AbstractString

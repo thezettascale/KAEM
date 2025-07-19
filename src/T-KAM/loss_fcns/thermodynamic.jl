@@ -108,13 +108,13 @@ function grad_thermo_llhood(
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
     )
-    
+
     return ∇, st_ebm, st_gen
 end
 
 struct ThermodynamicLoss
-    compiled_loss
-    compiled_grad
+    compiled_loss::Any
+    compiled_grad::Any
 end
 
 function initialize_thermo_loss(

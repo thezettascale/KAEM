@@ -124,8 +124,8 @@ function grad_importance_llhood(
 end
 
 struct ImportanceLoss
-    compiled_loss
-    compiled_grad
+    compiled_loss::Any
+    compiled_grad::Any
 end
 
 function initialize_importance_loss(

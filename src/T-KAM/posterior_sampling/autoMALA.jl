@@ -383,6 +383,7 @@ function autoMALA_sample(
     z = reshape(z, Q, P, S, num_temps)
     ∇z = similar(z) |> device
     z_hq = T.(z)
+    z_copy = similar(z[:,:,:,1]) |> device
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
@@ -492,8 +493,9 @@ function autoMALA_sample(
 
                     # Swap population if likelihood of population in new temperature is higher on average
                     if swap
+                        z_copy .= z[:, :, :, t]
                         z[:, :, :, t] .= z[:, :, :, t+1]
-                        z[:, :, :, t+1] .= z[:, :, :, t]
+                        z[:, :, :, t+1] .= z_copy
                     end
                 end
             end

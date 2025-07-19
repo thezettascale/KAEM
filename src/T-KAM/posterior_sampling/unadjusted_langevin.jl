@@ -157,6 +157,7 @@ function ULA_sample(
     end
 
     loss_scaling = model.loss_scaling |> full_quant
+    st_gen = st.gen
 
     η = sampler.prior_sampling_bool ? sampler.prior_η : mean(st.η_init)
     seq = model.lkhood.seq_length > 1
@@ -165,6 +166,8 @@ function ULA_sample(
     S = sampler.prior_sampling_bool ? size(z)[end] : S
     z = reshape(z, Q, P, S, num_temps)
     ∇z = similar(z) |> device
+    z_hq = T.(z)
+    z_copy = similar(z[:,:,:,1]) |> device
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
@@ -178,7 +181,7 @@ function ULA_sample(
                     T.(z),
                     T.(∇z),
                     x,
-                    t,
+                    temps,
                     model,
                     ps,
                     st,
@@ -213,8 +216,9 @@ function ULA_sample(
 
                 # Swap population if likelihood of population in new temperature is higher on average
                 if swap
+                    z_copy .= z[:, :, :, t]
                     z[:, :, :, t] .= z[:, :, :, t+1]
-                    z[:, :, :, t+1] .= z[:, :, :, t]
+                    z[:, :, :, t+1] .= z_copy
                 end
             end
         end

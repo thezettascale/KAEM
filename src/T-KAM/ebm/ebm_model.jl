@@ -216,17 +216,16 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    # fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
     fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
-    layernorm_ps = NamedTuple(:a => T(0))
+    layernorm_ps = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for i in 1:prior.depth-1)
     end
 
     prior_ps = (
-    π_μ = prior.prior_type == "learnable_gaussian" ? zeros(half_quant, 1, prior.p_size) : nothing,
-    π_σ = prior.prior_type == "learnable_gaussian" ? ones(half_quant, 1, prior.p_size) : nothing,
-    α   = prior.mixture_model ? glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : nothing,
+    π_μ = prior.prior_type == "learnable_gaussian" ? zeros(half_quant, 1, prior.p_size) : zero(T),
+    π_σ = prior.prior_type == "learnable_gaussian" ? ones(half_quant, 1, prior.p_size) : zero(T),
+    α   = prior.mixture_model ? glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : zero(T),
     )
    
     return(
@@ -238,7 +237,7 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
-    layernorm_st = NamedTuple(:a => T(0))
+    layernorm_st = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for i in 1:prior.depth-1)
     end

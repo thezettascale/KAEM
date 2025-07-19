@@ -105,22 +105,6 @@ function select_step_size(
 
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
         
-        # TODO: Remove this
-        println(
-            "x_active: ", size(x_active), 
-            " z_active: ", size(z[:, :, active_chains]),
-            " ∇z_active: ", size(∇z[:, :, active_chains]),
-            " temps_active: ", size(temps[active_chains]), 
-            " logpos_z_active: ", size(logpos_z[active_chains]), 
-            " momentum_active: ", size(momentum[:, :, active_chains]), 
-            " M_active: ", size(M[:, :, active_chains]), 
-            " η_init_active: ", size(η_init[active_chains]),
-            " η_min: ", η_min,
-            " η_max: ", η_max,
-            " seq: ", seq,
-            " active_chains: ", active_chains
-        )
-        
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st =
             leapfrop_proposal(
                 z[:, :, active_chains],

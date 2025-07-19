@@ -26,8 +26,6 @@ function momentum_update(
     M::AbstractArray{U},
     η::AbstractArray{U},
 )::AbstractArray{U} where {U<:full_quant}
-    # TODO: Remove this
-    println("y: ", size(y), " ∇ẑ: ", size(∇ẑ), " M: ", size(M), " η: ", size(η))
     return y .+ (reshape(η, 1, 1, size(η)...) ./ 2) .* ∇ẑ ./ M
 end
 

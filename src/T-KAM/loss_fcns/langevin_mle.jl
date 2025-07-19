@@ -104,6 +104,7 @@ function initialize_langevin_loss(
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+    st_ebm, st_gen = st_new.ebm, st_new.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
     compiled_loss = Reactant.@compile marginal_llhood(

@@ -247,7 +247,9 @@ function init_GenModel(
         end
 
         Φ_functions = ntuple(i -> fcns_temp[i], depth)
-        layernorms = ntuple(i -> layernorms_temp[i], depth-1)
+        if layernorm_bool && length(layernorms_temp) > 0
+            layernorms = ntuple(i -> layernorms_temp[i], depth-1)
+        end
     end
 
     return GenModel(
@@ -273,12 +275,12 @@ end
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.Φ_fcns[i]), lkhood.depth)
     layernorm_ps = NamedTuple()
-    if lkhood.layernorm_bool
+    if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.layernorms[i]), lkhood.depth-1)
     end
 
     batchnorm_ps = NamedTuple()
-    if lkhood.batchnorm_bool
+    if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.batchnorms[i]), lkhood.depth-1)
     end
 
@@ -302,12 +304,12 @@ end
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = ntuple(i -> Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq, lkhood.depth)
     layernorm_st = NamedTuple()
-    if lkhood.layernorm_bool
+    if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.layernorms[i]) |> hq, lkhood.depth-1)
     end
 
     batchnorm_st = NamedTuple()
-    if lkhood.batchnorm_bool
+    if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq, lkhood.depth-1)
     end
 

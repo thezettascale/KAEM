@@ -421,7 +421,8 @@ function autoMALA_sample(
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
         logpos_z, ∇z, st = sampler.compiled_logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
 
-        if sampler.N_unadjusted < sampler.N
+        if burn_in < sampler.N
+            burn_in += 1
             z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(
                 z,
                 ∇z,
@@ -458,48 +459,50 @@ function autoMALA_sample(
                 model.ε,
                 sampler.seq,
             )
-        end
 
-        accept = (log_u[:, :, i] .< log_r) .* reversible
-        z =
-            ẑ .* reshape(accept, 1, 1, S, num_temps) .+
-            z .* reshape(1 .- accept, 1, 1, S, num_temps)
-        mean_η .= mean_η .+ η_prop .* accept
-        η .= η_prop .* accept .+ η .* (1 .- accept)
-        num_acceptances .= num_acceptances .+ accept
+            accept = (log_u[:, :, i] .< log_r) .* reversible
+            z =
+                ẑ .* reshape(accept, 1, 1, S, num_temps) .+
+                z .* reshape(1 .- accept, 1, 1, S, num_temps)
+            mean_η .= mean_η .+ η_prop .* accept
+            η .= η_prop .* accept .+ η .* (1 .- accept)
+            num_acceptances .= num_acceptances .+ accept
 
-        # Replica exchange Monte Carlo
-        if i % sampler.RE_frequency == 0 && num_temps > 1
-            for t = 1:(num_temps-1)
+            # Replica exchange Monte Carlo
+            if i % sampler.RE_frequency == 0 && num_temps > 1
+                for t = 1:(num_temps-1)
 
-                # Global swap criterion
-                z_hq = T.(z)
-                ll_t, st_gen = sampler.compiled_llhood(
-                    z_hq[:, :, :, t],
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st.gen,
-                )
-                ll_t1, st_gen = sampler.compiled_llhood(
-                    z_hq[:, :, :, t+1],
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_gen,
-                )
-                log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
+                    # Global swap criterion
+                    z_hq = T.(z)
+                    ll_t, st_gen = sampler.compiled_llhood(
+                        z_hq[:, :, :, t],
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st.gen,
+                    )
+                    ll_t1, st_gen = sampler.compiled_llhood(
+                        z_hq[:, :, :, t+1],
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st_gen,
+                    )
+                    log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
-                swap = log_u_swap[t, i] < mean(log_swap_ratio)
-                @reset st.gen = st_gen
+                    swap = log_u_swap[t, i] < mean(log_swap_ratio)
+                    @reset st.gen = st_gen
 
-                # Swap population if likelihood of population in new temperature is higher on average
-                if swap
-                    z[:, :, :, t] .= z[:, :, :, t+1]
-                    z[:, :, :, t+1] .= z[:, :, :, t]
+                    # Swap population if likelihood of population in new temperature is higher on average
+                    if swap
+                        z[:, :, :, t] .= z[:, :, :, t+1]
+                        z[:, :, :, t+1] .= z[:, :, :, t]
+                    end
                 end
             end
         end
+
+        
     end
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)

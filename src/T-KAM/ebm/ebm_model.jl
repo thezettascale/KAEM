@@ -35,7 +35,7 @@ function lognormal_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractAr
 end
 
 function learnable_gaussian_pdf(z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
-    return one(half_quant) ./ (abs.(ps.fcn.π_σ .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps.fcn.π_μ .^ 2) ./ (2 .* (ps.fcn.π_σ .^ 2) .+ ε)))
+    return one(half_quant) ./ (abs.(ps.dist.π_σ .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps.dist.π_μ .^ 2) ./ (2 .* (ps.dist.π_σ .^ 2) .+ ε)))
 end
 
 function ebm_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
@@ -54,8 +54,8 @@ const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::NamedTuple
-    layernorms::NamedTuple
+    fcns_qp::Tuple
+    layernorms::Tuple
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -164,7 +164,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     end
 
     functions = ntuple(i -> fcns_temp[i], length(widths)-1)
-    layernorms = NamedTuple()
+    layernorms = ()
     if layernorm_bool && length(layernorms_temp) > 0
         layernorms = ntuple(i -> layernorms_temp[i], length(widths)-1)
     end
@@ -217,26 +217,27 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
-    layernorm_ps = NamedTuple()
+    layernorm_ps = ()
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = ntuple(i -> Lux.initialparameters(rng, prior.layernorms[i]), prior.depth-1)
     end
 
-    fcn_ps = merge(fcn_ps, (
+    prior_ps = (
     π_μ = prior.prior_type == "learnable_gaussian" ? zeros(half_quant, 1, prior.p_size) : nothing,
     π_σ = prior.prior_type == "learnable_gaussian" ? ones(half_quant, 1, prior.p_size) : nothing,
     α   = prior.mixture_model ? glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : nothing,
-    ))
+    )
    
     return(
         fcn = fcn_ps,
+        dist = prior_ps,
         layernorm = layernorm_ps,
     )
 end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_st = ntuple(i -> Lux.initialstates(rng, prior.fcns_qp[i]), prior.depth)
-    layernorm_st = NamedTuple()
+    layernorm_st = ()
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_st = ntuple(i -> Lux.initialstates(rng, prior.layernorms[i]) |> hq, prior.depth-1)
     end

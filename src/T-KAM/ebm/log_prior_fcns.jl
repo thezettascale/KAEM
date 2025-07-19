@@ -159,7 +159,7 @@ function log_prior_mix(
     S = size(z, 2)
 
     # Mixture proportions and prior
-    alpha = softmax(ps.fcn.α; dims = 2)
+    alpha = softmax(ps.dist.α; dims = 2)
     π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
     log_απ = log.(reshape(alpha, size(alpha)..., 1) .* π_0 .+ ε)
 
@@ -177,7 +177,7 @@ function log_prior_mix(
     # Unnormalized or normalized log-probability
     logprob = f + log_απ
     logprob = logprob .- log_Z
-    l1_reg = ebm.λ * sum(abs.(ps.fcn.α))
+    l1_reg = ebm.λ * sum(abs.(ps.dist.α))
     return dropdims(sum(logprob; dims = (1, 2)); dims = (1, 2)) .+ l1_reg, st
 end
 

@@ -35,9 +35,9 @@ const resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::NamedTuple
-    layernorms::NamedTuple
-    batchnorms::NamedTuple
+    Φ_fcns::Tuple
+    layernorms::Tuple
+    batchnorms::Tuple
     attention::NamedTuple
     layernorm_bool::Bool
     batchnorm_bool::Bool
@@ -153,9 +153,9 @@ function init_GenModel(
     layernorms_temp = []
     batchnorms_temp = []
 
-    Φ_functions = NamedTuple()
-    layernorms = NamedTuple()
-    batchnorms = NamedTuple()
+    Φ_functions = ()
+    layernorms = ()
+    batchnorms = ()
     attention = NamedTuple()
 
     if CNN
@@ -274,17 +274,17 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.Φ_fcns[i]), lkhood.depth)
-    layernorm_ps = NamedTuple()
+    layernorm_ps = ()
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.layernorms[i]), lkhood.depth-1)
     end
 
-    batchnorm_ps = NamedTuple()
+    batchnorm_ps = ()
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_ps = ntuple(i -> Lux.initialparameters(rng, lkhood.batchnorms[i]), lkhood.depth-1)
     end
 
-    attention_ps = NamedTuple()
+    attention_ps = ()
     if lkhood.seq_length > 1
         attention_ps = (
             Q = Lux.initialparameters(rng, lkhood.attention.Q),
@@ -303,17 +303,17 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = ntuple(i -> Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq, lkhood.depth)
-    layernorm_st = NamedTuple()
+    layernorm_st = ()
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.layernorms[i]) |> hq, lkhood.depth-1)
     end
 
-    batchnorm_st = NamedTuple()
+    batchnorm_st = ()
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_st = ntuple(i -> Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq, lkhood.depth-1)
     end
 
-    attention_st = NamedTuple()
+    attention_st = ()
     if lkhood.seq_length > 1
         attention_st = (
             Q = Lux.initialstates(rng, lkhood.attention.Q) |> hq,

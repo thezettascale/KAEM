@@ -36,8 +36,7 @@ function KAN_fwd(
 
     # KAN functions
     for i = 1:lkhood.depth
-        fcn = get(lkhood.Φ_fcns, i, nothing)
-        z = fwd(fcn, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]], z)
+        z = fwd(lkhood.Φ_fcns[i], ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]], z)
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if lkhood.layernorm_bool && i < lkhood.depth

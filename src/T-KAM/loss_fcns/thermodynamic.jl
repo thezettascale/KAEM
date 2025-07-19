@@ -34,9 +34,7 @@ function marginal_llhood(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     num_temps = length(temps)
     Δt = temps[2:end] - temps[1:(end-1)]
-
     log_ss = zero(T)
-    st_ebm, st_gen = st_new.ebm, st_new.gen
 
     # Steppingstone estimator
     for k = 1:(num_temps-2)

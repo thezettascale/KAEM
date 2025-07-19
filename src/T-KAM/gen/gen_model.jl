@@ -198,7 +198,7 @@ function init_GenModel(
             pad = paddings[end],
         ))
 
-        Φ_functions = ntuple(i -> fcns_temp[i], length(hidden_c)-1)
+        Φ_functions = ntuple(i -> fcns_temp[i], length(hidden_c))
 
         if batchnorm_bool && length(batchnorms_temp) > 0
             batchnorms = ntuple(i -> batchnorms_temp[i], length(hidden_c)-1)

@@ -77,7 +77,7 @@ function CNN_fwd(
     fcn_st = Dict()
     batchnorm_st = Dict()
 
-    for i = 1:lkhood.depth
+    for i = 1:lkhood.depth-1
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
         fcn_st[symbol_map[i]] = st_new
@@ -94,12 +94,12 @@ function CNN_fwd(
     end
 
     z, st_new = Lux.apply(
-        lkhood.Φ_fcns[lkhood.depth+1],
+        lkhood.Φ_fcns[lkhood.depth],
         z,
-        ps.fcn[symbol_map[lkhood.depth+1]],
-        st.fcn[symbol_map[lkhood.depth+1]],
+        ps.fcn[symbol_map[lkhood.depth]],
+        st.fcn[symbol_map[lkhood.depth]],
     )
-    fcn_st[symbol_map[lkhood.depth+1]] = st_new
+    fcn_st[symbol_map[lkhood.depth]] = st_new
 
     set_state!(st.fcn, fcn_st)
     set_state!(st.batchnorm, batchnorm_st)

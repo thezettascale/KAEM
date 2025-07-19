@@ -300,7 +300,7 @@ function init_posterior_sampler(
                 Lux.testmode(st),
                 model,
                 x;
-                temps = temps,
+                temps = temps[2:end],
                 N = num_steps,
                 N_unadjusted = N_unadjusted,
                 Δη = Δη,
@@ -315,7 +315,7 @@ function init_posterior_sampler(
                 Lux.testmode(st),
                 model,
                 x;
-                temps = temps,
+                temps = temps[2:end],
                 N = num_steps,
                 num_samples = size(x)[end],
                 RE_frequency = replica_exchange_frequency,
@@ -425,7 +425,7 @@ function Lux.initialstates(
     return (
         ebm = Lux.initialstates(rng, model.prior),
         gen = Lux.initialstates(rng, model.lkhood),
-        η_init = model.N_t > 1 ? repeat([η_init], model.max_samples, model.N_t+1) :
+        η_init = model.N_t > 1 ? repeat([η_init], model.max_samples, model.N_t) :
                  fill(η_init, model.max_samples, 1),
         train_idx = 1,
     )

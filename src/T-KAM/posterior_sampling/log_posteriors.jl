@@ -24,7 +24,7 @@ function unadjusted_logpos(
     ps::ComponentArray{T},
     st::NamedTuple,
     prior_sampling_bool::Bool = false,
-)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+)::T where {T<:half_quant}
     tot = zero(T)
     st_ebm, st_gen = st.ebm, st.gen
 

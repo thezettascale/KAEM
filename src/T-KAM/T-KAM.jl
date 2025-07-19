@@ -19,8 +19,8 @@ using .GeneratorModel
 using .LangevinMLE
 using .ImportanceSampling
 using .ThermodynamicIntegration
-using .autoMALA_sampling: initialize_autoMALA_sampler, sample
-using .ULA_sampling: initialize_ULA_sampler, sample
+using .autoMALA_sampling: initialize_autoMALA_sampler, autoMALA_sample
+using .ULA_sampling: initialize_ULA_sampler, ULA_sample
 using .Utils: device, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer

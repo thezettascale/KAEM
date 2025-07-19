@@ -90,7 +90,7 @@ function grad_langevin_llhood(
     return ∇, st_ebm, st_gen
 end
 
-struct LangevinLoss{T}
+struct LangevinLoss
     compiled_loss
     compiled_grad
 end
@@ -102,7 +102,7 @@ function initialize_langevin_loss(
     model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::LangevinLoss{T} where {T<:half_quant}
+) where {T<:half_quant}
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 

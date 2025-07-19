@@ -123,7 +123,7 @@ function grad_importance_llhood(
     return ∇, st_ebm, st_gen
 end
 
-struct ImportanceLoss{T}
+struct ImportanceLoss
     compiled_loss
     compiled_grad
 end
@@ -134,7 +134,7 @@ function initialize_importance_loss(
     model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::ImportanceLoss{T} where {T<:half_quant}
+) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
     z, st_ebm, st_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, st, model, x; rng = rng)

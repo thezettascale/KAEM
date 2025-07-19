@@ -114,7 +114,7 @@ function grad_thermo_llhood(
     return ∇, st_ebm, st_gen
 end
 
-struct ThermodynamicLoss{T}
+struct ThermodynamicLoss
     compiled_loss
     compiled_grad
 end
@@ -126,7 +126,7 @@ function initialize_thermo_loss(
     model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::ThermodynamicLoss{T} where {T<:half_quant}
+) where {T<:half_quant}
     z_posterior, temps, st = sample_thermo(ps, st, model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)

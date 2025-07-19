@@ -194,6 +194,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
     return EbmModel(
         functions,
+        layernorms,
         layernorm_bool,
         length(widths)-1,
         prior_type,

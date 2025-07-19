@@ -295,6 +295,9 @@ function initialize_autoMALA_sampler(
             fcn(T.(z_i), T.(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
+
+        all(iszero, ∇z_k) && error("∇z_k is zero")
+
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end
 
@@ -383,7 +386,7 @@ function autoMALA_sample(
     z = reshape(z, Q, P, S, num_temps)
     ∇z = similar(z) |> device
     z_hq = T.(z)
-    z_copy = similar(z[:,:,:,1]) |> device
+    z_copy = similar(z[:, :, :, 1]) |> device
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)

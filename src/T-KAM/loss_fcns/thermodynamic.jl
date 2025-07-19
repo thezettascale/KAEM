@@ -98,7 +98,6 @@ function grad_thermo_llhood(
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
-        Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z_posterior),
         Enzyme.Const(z_prior),

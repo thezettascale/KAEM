@@ -42,7 +42,6 @@ function logpos_grad(
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
-        Enzyme.Active,
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x),
         Enzyme.Const(t),
@@ -167,7 +166,7 @@ function ULA_sample(
     z = reshape(z, Q, P, S, num_temps)
     ∇z = similar(z) |> device
     z_hq = T.(z)
-    z_copy = similar(z[:,:,:,1]) |> device
+    z_copy = similar(z[:, :, :, 1]) |> device
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
@@ -188,6 +187,7 @@ function ULA_sample(
                     sampler.prior_sampling_bool,
                 ),
             ) / loss_scaling
+        all(iszero, ∇z) && error("∇z is zero")
         z += η .* ∇z .+ sqrt(2 * η) .* ξ
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

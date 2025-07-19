@@ -20,7 +20,7 @@ end
 function sample_importance(
     ps::ComponentArray{T},
     st::NamedTuple,
-    m::Any,
+    m,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
@@ -62,7 +62,7 @@ function marginal_llhood(
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
-    m::Any,
+    m,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
@@ -96,7 +96,7 @@ function grad_importance_llhood(
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
-    model::Any,
+    model,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
@@ -124,14 +124,14 @@ function grad_importance_llhood(
 end
 
 struct ImportanceLoss{T}
-    compiled_loss::Any
-    compiled_grad::Any
+    compiled_loss
+    compiled_grad
 end
 
 function initialize_importance_loss(
     ps::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::ImportanceLoss{T} where {T<:half_quant}
@@ -163,11 +163,11 @@ function initialize_importance_loss(
 end
 
 function importance_loss(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}

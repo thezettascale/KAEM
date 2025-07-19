@@ -12,7 +12,7 @@ using .Utils: half_quant, full_quant, device, set_state!
 using .UnivariateFunctions: fwd
 
 function KAN_fwd(
-    lkhood::Any,
+    lkhood,
     ps::ComponentArray{T},
     st::NamedTuple,
     z::AbstractArray{T},
@@ -55,7 +55,7 @@ function KAN_fwd(
 end
 
 function CNN_fwd(
-    lkhood::Any,
+    lkhood,
     ps::ComponentArray{T},
     st::NamedTuple,
     z::AbstractArray{T},
@@ -136,7 +136,7 @@ function scaled_dot_product_attention(
 end
 
 function SEQ_fwd(
-    lkhood::Any,
+    lkhood,
     ps::ComponentArray{T},
     st::NamedTuple,
     z::AbstractArray{T},

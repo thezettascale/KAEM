@@ -61,7 +61,7 @@ function select_step_size(
     η_init::AbstractArray{U},
     Δη::U,
     logpos_withgrad::Function,
-    model::Any,
+    model,
     ps::ComponentArray{T},
     st::NamedTuple;
     η_min::U = full_quant(1e-5),
@@ -158,7 +158,7 @@ function autoMALA_step(
     momentum::AbstractArray{U},
     M::AbstractArray{U},
     logpos_withgrad::Function,
-    model::Any,
+    model,
     ps::ComponentArray{T},
     st::NamedTuple,
     η_init::AbstractArray{U},
@@ -222,10 +222,10 @@ function autoMALA_step(
     return ẑ, η, η_prime, reversible, log_r, st
 end
 
-struct autoMALA_sampler{T<:half_quant,U<:full_quant}
-    compiled_llhood::Any
-    compiled_logpos_withgrad::Any
-    compiled_autoMALA_step::Any
+struct autoMALA_sampler{U<:full_quant}
+    compiled_llhood
+    compiled_logpos_withgrad
+    compiled_autoMALA_step
     N::Int
     N_unadjusted::Int
     Δη::U
@@ -238,7 +238,7 @@ end
 function initialize_autoMALA_sampler(
     ps::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     N::Int = 20,
@@ -306,7 +306,7 @@ function initialize_autoMALA_sampler(
         ∇z_i::AbstractArray{U},
         x_i::AbstractArray{T},
         t_k::AbstractArray{T},
-        m::Any,
+        m,
         p::ComponentArray{T},
         st_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
@@ -356,8 +356,8 @@ function initialize_autoMALA_sampler(
 end
 
 function autoMALA_sample(
-    sampler::Any,
-    model::Any,
+    sampler,
+    model,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T};

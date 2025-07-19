@@ -20,7 +20,7 @@ using .Utils: device, half_quant, full_quant, fq, set_state!
 using .UnivariateFunctions: fwd
 
 function prior_fwd(
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple,
     z::AbstractArray{T},
@@ -66,7 +66,7 @@ end
 
 function log_prior_ula(
     z::AbstractArray{T},
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple;
     ε::T = eps(half_quant),
@@ -82,7 +82,7 @@ end
 
 function log_prior_univar(
     z::AbstractArray{T},
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple;
     ε::T = eps(half_quant),
@@ -130,7 +130,7 @@ end
 
 function log_prior_mix(
     z::AbstractArray{T},
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple;
     ε::T = eps(half_quant),

@@ -27,7 +27,7 @@ else
 end
 
 function trapezium_quadrature(
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple;
     ε::T = eps(half_quant),
@@ -64,7 +64,7 @@ function trapezium_quadrature(
 end
 
 function get_gausslegendre(
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple,
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
@@ -88,7 +88,7 @@ function get_gausslegendre(
 end
 
 function gausslegendre_quadrature(
-    ebm::Any,
+    ebm,
     ps::ComponentArray{T},
     st::NamedTuple;
     ε::T = eps(half_quant),
@@ -201,7 +201,7 @@ end
 end
 
 function sample_univariate(
-    ebm::Any,
+    ebm,
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;
@@ -258,7 +258,7 @@ end
 end
 
 function sample_mixture(
-    ebm::Any,
+    ebm,
     num_samples::Int,
     ps::ComponentArray{T},
     st::NamedTuple;

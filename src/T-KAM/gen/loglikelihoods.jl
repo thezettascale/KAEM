@@ -65,7 +65,7 @@ end
 function log_likelihood_IS(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood::Any,
+    lkhood,
     ps::ComponentArray{T},
     st::NamedTuple;
     noise::AbstractArray{T} = device(
@@ -101,7 +101,7 @@ end
 function log_likelihood_MALA(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood::Any,
+    lkhood,
     ps::ComponentArray{T},
     st::NamedTuple;
     noise::AbstractArray{T} = device(zeros(T, size(x))),

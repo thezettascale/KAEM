@@ -39,7 +39,7 @@ function leapfrop_proposal(
     M::AbstractArray{U},         # This is M^{1/2}
     η::AbstractArray{U},
     logpos_withgrad::Function,
-    model::Any,
+    model,
     ps::ComponentArray{T},
     st::NamedTuple,
 )::Tuple{

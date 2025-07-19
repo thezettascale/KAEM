@@ -13,7 +13,7 @@ using .Utils: device, half_quant, full_quant, hq
 function sample_thermo(
     ps::ComponentArray{T},
     st::NamedTuple,
-    m::Any,
+    m,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -28,7 +28,7 @@ function marginal_llhood(
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractVector{T},
-    m::Any,
+    m,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
@@ -88,7 +88,7 @@ function grad_thermo_llhood(
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractVector{T},
-    model::Any,
+    model,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
@@ -115,15 +115,15 @@ function grad_thermo_llhood(
 end
 
 struct ThermodynamicLoss{T}
-    compiled_loss::Any
-    compiled_grad::Any
+    compiled_loss
+    compiled_grad
 end
 
 function initialize_thermo_loss(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::ThermodynamicLoss{T} where {T<:half_quant}
@@ -156,11 +156,11 @@ function initialize_thermo_loss(
 end
 
 function thermodynamic_loss(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}

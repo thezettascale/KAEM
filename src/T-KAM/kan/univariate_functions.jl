@@ -54,7 +54,7 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
 end
 
 function ChebyMUL(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -64,7 +64,7 @@ function ChebyMUL(
 end
 
 function SplineMUL(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -188,7 +188,7 @@ function Lux.initialstates(
 end
 
 function fwd(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},

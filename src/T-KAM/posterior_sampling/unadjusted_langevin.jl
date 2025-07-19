@@ -34,7 +34,7 @@ function logpos_grad(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     t::AbstractArray{T},
-    m::Any,
+    m,
     ps::ComponentArray{T},
     st::NamedTuple,
     prior_sampling_bool::Bool,
@@ -55,8 +55,8 @@ function logpos_grad(
 end
 
 struct ULA_sampler{T<:half_quant,U<:full_quant}
-    compiled_llhood::Any
-    compiled_logpos_grad::Any
+    compiled_llhood
+    compiled_logpos_grad
     prior_sampling_bool::Bool
     N::Int
     RE_frequency::Int
@@ -67,7 +67,7 @@ end
 function initialize_ULA_sampler(
     ps::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     prior_η::U = full_quant(1e-3),
     temps::AbstractArray{T} = [one(half_quant)],
@@ -114,8 +114,8 @@ end
 
 
 function ULA_sample(
-    sampler::Any,
-    model::Any,
+    sampler,
+    model,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T};

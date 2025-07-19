@@ -232,6 +232,7 @@ function init_posterior_sampler(
     N_unadjusted = parse(Int, retrieve(conf, "POST_LANGEVIN", "N_unadjusted"))
     Δη = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "autoMALA_η_changerate"))
     η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
+    replica_exchange_frequency = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"))
 
     # Importance sampling or MALA
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
@@ -250,6 +251,7 @@ function init_posterior_sampler(
                 η_min = η_minmax[1],
                 η_max = η_minmax[2],
                 seq = model.lkhood.seq_length > 1,
+                RE_frequency = replica_exchange_frequency,
                 rng = rng,
             ) :
             initialize_ULA_sampler(
@@ -259,6 +261,8 @@ function init_posterior_sampler(
                 x;
                 N = num_steps,
                 num_samples = size(x)[end],
+                RE_frequency = replica_exchange_frequency,
+                rng = rng,
             )
         sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
 

@@ -18,7 +18,7 @@ using .UnivariateFunctions: fwd, extend_grid, univariate_function
 using .Utils: half_quant, full_quant, device
 
 function update_fcn_grid(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T},
@@ -64,7 +64,7 @@ function update_fcn_grid(
 end
 
 function update_model_grid(
-    model::Any,
+    model,
     x::AbstractArray{T},
     ps::ComponentArray{T},
     st::NamedTuple,

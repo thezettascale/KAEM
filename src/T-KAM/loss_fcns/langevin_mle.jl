@@ -13,7 +13,7 @@ using .Utils: device, half_quant, full_quant, hq
 function sample_langevin(
     ps::ComponentArray{T},
     st::NamedTuple,
-    m::Any,
+    m,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -26,7 +26,7 @@ function marginal_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    m::Any,
+    m,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
@@ -64,7 +64,7 @@ function grad_langevin_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    model::Any,
+    model,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
@@ -91,15 +91,15 @@ function grad_langevin_llhood(
 end
 
 struct LangevinLoss{T}
-    compiled_loss::Any
-    compiled_grad::Any
+    compiled_loss
+    compiled_grad
 end
 
 function initialize_langevin_loss(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::LangevinLoss{T} where {T<:half_quant}
@@ -129,11 +129,11 @@ function initialize_langevin_loss(
 end
 
 function langevin_loss(
-    l::Any,
+    l,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,
-    model::Any,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}

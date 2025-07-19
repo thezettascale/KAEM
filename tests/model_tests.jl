@@ -43,7 +43,7 @@ function test_grid_update()
 
     size_grid = size(st.ebm[Symbol("1")].grid)
     x = first(model.train_loader) |> device
-    model, ps, st, seed = update_model_grid(model, x, ps, Lux.testmode(st))
+    model, ps, st = update_model_grid(model, x, ps, Lux.testmode(st))
     @test all(size(st.ebm[Symbol("1")].grid) .== size_grid)
     @test !any(isnan, ps)
 end

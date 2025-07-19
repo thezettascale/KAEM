@@ -286,7 +286,7 @@ function initialize_autoMALA_sampler(
         z[:, :, :, 1],
         ∇z[:, :, :, 1],
         x_single,
-        t_expanded[:, 1],
+        t_expanded[:, 1:1],
         model,
         ps,
         st,

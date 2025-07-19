@@ -162,8 +162,8 @@ function initialize_importance_loss(
     return ImportanceLoss(marginal_llhood, grad_importance_llhood)
 end
 
-function loss(
-    l::ImportanceLoss,
+function importance_loss(
+    l::Any,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,

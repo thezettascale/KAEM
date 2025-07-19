@@ -128,8 +128,8 @@ function initialize_langevin_loss(
     return LangevinLoss(compiled_loss, compiled_grad)
 end
 
-function loss(
-    l::LangevinLoss,
+function langevin_loss(
+    l::Any,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,

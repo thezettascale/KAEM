@@ -155,8 +155,8 @@ function initialize_thermo_loss(
     return ThermodynamicLoss(compiled_loss, compiled_grad)
 end
 
-function loss(
-    l::ThermodynamicLoss,
+function thermodynamic_loss(
+    l::Any,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st::NamedTuple,

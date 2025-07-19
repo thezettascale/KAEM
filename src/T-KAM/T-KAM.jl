@@ -260,11 +260,12 @@ function init_posterior_sampler(
                 N = num_steps,
                 num_samples = size(x)[end],
             )
+        sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
 
 
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
-                sample(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
+                sample_function(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
 
         loss_struct = initialize_langevin_loss(
             ps,
@@ -276,7 +277,7 @@ function init_posterior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -316,11 +317,12 @@ function init_posterior_sampler(
                 RE_frequency = replica_exchange_frequency,
                 rng = rng,
             )
+        sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
 
 
         @reset model.posterior_sample =
             (m, x, t, ps, st, rng) ->
-                sample(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
+                sample_function(sampler_struct, m, ps, Lux.testmode(st), x; temps = t, rng = rng)
 
         loss_struct = initialize_thermo_loss(
             ps,
@@ -332,13 +334,13 @@ function init_posterior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> thermodynamic_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
         loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
 
         println("Posterior sampler: IS")
     end

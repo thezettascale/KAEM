@@ -113,7 +113,7 @@ function initialize_ULA_sampler(
 end
 
 
-function sample(
+function ULA_sample(
     sampler::Any,
     model::Any,
     ps::ComponentArray{T},

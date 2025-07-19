@@ -355,7 +355,7 @@ function initialize_autoMALA_sampler(
     )
 end
 
-function sample(
+function autoMALA_sample(
     sampler::Any,
     model::Any,
     ps::ComponentArray{T},

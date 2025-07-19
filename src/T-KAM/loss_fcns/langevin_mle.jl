@@ -67,7 +67,7 @@ function grad_langevin_llhood(
     model::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     f =
         (p, post_i, prior_i, x_i, m, se, sg) -> begin
@@ -91,8 +91,8 @@ function grad_langevin_llhood(
 end
 
 struct LangevinLoss{T}
-    compiled_loss::Function
-    compiled_grad::Function
+    compiled_loss::Any
+    compiled_grad::Any
 end
 
 function initialize_langevin_loss(
@@ -102,7 +102,7 @@ function initialize_langevin_loss(
     model::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+)::LangevinLoss{T} where {T<:half_quant}
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
@@ -136,7 +136,7 @@ function loss(
     model::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
+)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
     st_ebm, st_gen = st_new.ebm, st_new.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)

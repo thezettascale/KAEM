@@ -55,8 +55,8 @@ function logpos_grad(
 end
 
 struct ULA_sampler{T<:half_quant,U<:full_quant}
-    compiled_llhood::Function
-    compiled_logpos_grad::Function
+    compiled_llhood::Any
+    compiled_logpos_grad::Any
     prior_sampling_bool::Bool
     N::Int
     RE_frequency::Int
@@ -114,7 +114,7 @@ end
 
 
 function sample(
-    sampler::ULA_sampler,
+    sampler::Any,
     model::Any,
     ps::ComponentArray{T},
     st::NamedTuple,

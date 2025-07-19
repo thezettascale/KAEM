@@ -73,6 +73,7 @@ function select_step_size(
     AbstractArray{U},
     AbstractArray{U},
     AbstractArray{U},
+    AbstractArray{U},
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
@@ -222,9 +223,9 @@ function autoMALA_step(
 end
 
 struct autoMALA_sampler{T<:half_quant,U<:full_quant}
-    compiled_llhood::Function
-    compiled_logpos_withgrad::Function
-    compiled_autoMALA_step::Function
+    compiled_llhood::Any
+    compiled_logpos_withgrad::Any
+    compiled_autoMALA_step::Any
     N::Int
     N_unadjusted::Int
     Δη::U
@@ -355,14 +356,14 @@ function initialize_autoMALA_sampler(
 end
 
 function sample(
-    sampler::autoMALA_sampler,
+    sampler::Any,
     model::Any,
     ps::ComponentArray{T},
     st::NamedTuple,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(half_quant)],
     rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 

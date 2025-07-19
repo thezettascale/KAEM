@@ -99,7 +99,7 @@ function grad_importance_llhood(
     model::Any,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
-)::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     f =
         (p, z_i, x_i, w, r, m, se, sg) -> begin
@@ -124,8 +124,8 @@ function grad_importance_llhood(
 end
 
 struct ImportanceLoss{T}
-    compiled_loss::Function
-    compiled_grad::Function
+    compiled_loss::Any
+    compiled_grad::Any
 end
 
 function initialize_importance_loss(
@@ -170,7 +170,7 @@ function loss(
     model::Any,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
+)::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     z, st_ebm, st_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, st, model, x; rng = rng)
     ∇, st_ebm, st_gen = l.compiled_grad(

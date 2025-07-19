@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!
+export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!, symbol_map
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
 using CUDA, LuxCUDA, KernelAbstractions, Enzyme, Enzyme.EnzymeRules
@@ -47,5 +47,17 @@ function set_state!(st, dict)
 end
 
 EnzymeRules.inactive(::typeof(set_state!), args...) = nothing
+
+const symbol_map = (
+    :a,
+    :b,
+    :c,
+    :d,
+    :e,
+    :f,
+    :g,
+    :h,
+    :i,
+)
 
 end

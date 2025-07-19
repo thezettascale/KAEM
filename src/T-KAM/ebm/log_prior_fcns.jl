@@ -16,7 +16,7 @@ using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, half_quant, full_quant, fq, set_state!
+using .Utils: device, half_quant, full_quant, fq, set_state!, symbol_map
 using .UnivariateFunctions: fwd
 
 function prior_fwd(
@@ -44,7 +44,7 @@ function prior_fwd(
 
     for i = 1:ebm.depth
 
-        z = fwd(ebm.fcns_qp[i], ps.fcn[i], st.fcn[i], z)
+        z = fwd(ebm.fcns_qp[i], ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]], z)
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
@@ -56,7 +56,7 @@ function prior_fwd(
                 ps.layernorm[i],
                 st.layernorm[i],
             )
-            new_st[i] = st_new
+            new_st[symbol_map[i]] = st_new
         end
     end
 

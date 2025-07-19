@@ -15,7 +15,7 @@ using CUDA,
 include("univariate_functions.jl")
 include("../../utils.jl")
 using .UnivariateFunctions: fwd, extend_grid, univariate_function
-using .Utils: half_quant, full_quant, device
+using .Utils: half_quant, full_quant, device, symbol_map
 
 function update_fcn_grid(
     l,
@@ -110,17 +110,17 @@ function update_model_grid(
         for i = 1:model.prior.depth
             new_grid, new_coef = update_fcn_grid(
                 model.prior.fcns_qp[i],
-                ps.ebm.fcn[i],
-                st.ebm.fcn[i],
+                ps.ebm.fcn[symbol_map[i]],
+                st.ebm.fcn[symbol_map[i]],
                 z,
             )
-            @reset ps.ebm.fcn[i].coef = new_coef
-            @reset st.ebm.fcn[i].grid = new_grid
+            @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
+            @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
 
             z = fwd(
                 model.prior.fcns_qp[i],
-                ps.ebm.fcn[i],
-                st.ebm.fcn[i],
+                ps.ebm.fcn[symbol_map[i]],
+                st.ebm.fcn[symbol_map[i]],
                 z,
             )
             z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
@@ -129,10 +129,10 @@ function update_model_grid(
                 z, st_ebm = Lux.apply(
                     model.prior.layernorms[i],
                     z,
-                    ps.ebm.layernorm[i],
-                    st.ebm.layernorm[i],
+                    ps.ebm.layernorm[symbol_map[i]],
+                    st.ebm.layernorm[symbol_map[i]],
                 )
-                @reset st.ebm.layernorm[i] = st_ebm
+                @reset st.ebm.layernorm[symbol_map[i]] = st_ebm
             end
         end
     end
@@ -152,17 +152,17 @@ function update_model_grid(
     for i = 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(
             model.lkhood.Φ_fcns[i],
-            ps.gen.fcn[i],
-            st.gen.fcn[i],
+            ps.gen.fcn[symbol_map[i]],
+            st.gen.fcn[symbol_map[i]],
             z,
         )
-        @reset ps.gen.fcn[i].coef = new_coef
-        @reset st.gen.fcn[i].grid = new_grid
+        @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
+        @reset st.gen.fcn[symbol_map[i]].grid = new_grid
 
         z = fwd(
             model.lkhood.Φ_fcns[i],
-            ps.gen.fcn[i],
-            st.gen.fcn[i],
+            ps.gen.fcn[symbol_map[i]],
+            st.gen.fcn[symbol_map[i]],
             z,
         )
         z = dropdims(sum(z, dims = 1); dims = 1)
@@ -171,10 +171,10 @@ function update_model_grid(
             z, st_gen = Lux.apply(
                 model.lkhood.layernorms[i],
                 z,
-                ps.gen.layernorm[i],
-                st.gen.layernorm[i],
+                ps.gen.layernorm[symbol_map[i]],
+                st.gen.layernorm[symbol_map[i]],
             )
-            @reset st.gen.layernorm[i] = st_gen
+            @reset st.gen.layernorm[symbol_map[i]] = st_gen
         end
     end
 

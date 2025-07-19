@@ -8,7 +8,7 @@ using NNlib: softmax, batched_mul
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device, set_state!
+using .Utils: half_quant, full_quant, device, set_state!, symbol_map
 using .UnivariateFunctions: fwd
 
 function KAN_fwd(
@@ -36,17 +36,17 @@ function KAN_fwd(
 
     # KAN functions
     for i = 1:lkhood.depth
-        z = fwd(lkhood.Φ_fcns[i], ps.fcn[i], st.fcn[i], z)
+        z = fwd(lkhood.Φ_fcns[i], ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]], z)
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if lkhood.layernorm_bool && i < lkhood.depth
             z, st_new = Lux.apply(
                 lkhood.layernorms[i],
                 z,
-                ps.layernorm[i],
-                st.layernorm[i],
+                ps.layernorm[symbol_map[i]],
+                st.layernorm[symbol_map[i]],
             )
-            layernorm_st[i] = st_new
+            layernorm_st[symbol_map[i]] = st_new
         end
     end
 
@@ -79,27 +79,27 @@ function CNN_fwd(
 
     for i = 1:lkhood.depth
         z, st_new =
-            Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[i], st.fcn[i])
-        fcn_st[i] = st_new
+            Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
+        fcn_st[symbol_map[i]] = st_new
 
         if lkhood.batchnorm_bool
             z, st_new = Lux.apply(
                 lkhood.batchnorms[i],
                 z,
-                ps.batchnorm[i],
-                st.batchnorm[i],
+                ps.batchnorm[symbol_map[i]],
+                st.batchnorm[symbol_map[i]],
             )
-            batchnorm_st[i] = st_new
+            batchnorm_st[symbol_map[i]] = st_new
         end
     end
 
     z, st_new = Lux.apply(
         lkhood.Φ_fcns[lkhood.depth+1],
         z,
-        ps.fcn[lkhood.depth+1],
-        st.fcn[lkhood.depth+1],
+        ps.fcn[symbol_map[lkhood.depth+1]],
+        st.fcn[symbol_map[lkhood.depth+1]],
     )
-    fcn_st[lkhood.depth+1] = st_new
+    fcn_st[symbol_map[lkhood.depth+1]] = st_new
 
     set_state!(st.fcn, fcn_st)
     set_state!(st.batchnorm, batchnorm_st)
@@ -161,48 +161,48 @@ function SEQ_fwd(
     attention_st = Dict()
 
     # Projection
-    z, st_new = Lux.apply(lkhood.Φ_fcns[1], z, ps.fcn[1], st.fcn[1])
-    fcn_st[1] = st_new
+    z, st_new = Lux.apply(lkhood.Φ_fcns[1], z, ps.fcn[:a], st.fcn[:a])
+    fcn_st[:a] = st_new
     z, st_new =
-        Lux.apply(lkhood.layernorms[1], z, ps.layernorm[1], st.layernorm[1])
-    layernorm_st[1] = st_new
+        Lux.apply(lkhood.layernorms[1], z, ps.layernorm[:a], st.layernorm[:a])
+    layernorm_st[:a] = st_new
 
     z_prev = z
     for t = 2:lkhood.seq_length
 
         # Self-attention
         Q, st_new =
-            Lux.apply(lkhood.attention.Q, z, ps.attention.Q, st.attention.Q)
-        attention_st[Q] = st_new
+            Lux.apply(lkhood.attention.Q, z, ps.attention[:Q], st.attention[:Q])
+        attention_st[:Q] = st_new
         K, st_new =
-            Lux.apply(lkhood.attention.K, z, ps.attention.K, st.attention.K) 
-        attention_st[K] = st_new
+            Lux.apply(lkhood.attention.K, z, ps.attention[:K], st.attention[:K]) 
+        attention_st[:K] = st_new
         V, st_new =
-            Lux.apply(lkhood.attention.V, z, ps.attention.V, st.attention.V)
-        attention_st[V] = st_new
+            Lux.apply(lkhood.attention.V, z, ps.attention[:V], st.attention[:V])
+        attention_st[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z .+ attn
 
         # Feed forward
         z, st_new =
-            Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[2], st.fcn[2])
-        fcn_st[2] = st_new
+            Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[:b], st.fcn[:b])
+        fcn_st[:b] = st_new
         z, st_new = Lux.apply(
             lkhood.layernorms[2],
             z[:, end:end, :],
-            ps.layernorm[2],
-            st.layernorm[2],
+            ps.layernorm[:b],
+            st.layernorm[:b],
         )
-        layernorm_st[2] = st_new
+        layernorm_st[:b] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
     end
 
     # Output layer
-    z, st_new = Lux.apply(lkhood.Φ_fcns[3], z, ps.fcn[3], st.fcn[3])
-    fcn_st[3] = st_new
+    z, st_new = Lux.apply(lkhood.Φ_fcns[3], z, ps.fcn[:c], st.fcn[:c])
+    fcn_st[:c] = st_new
 
     set_state!(st.fcn, fcn_st)
     set_state!(st.layernorm, layernorm_st)  

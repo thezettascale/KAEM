@@ -36,7 +36,7 @@ function trapezium_quadrature(
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
-    f_grid = st.fcn[1].grid
+    f_grid = st.fcn[:a].grid
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     π_grid =
@@ -70,7 +70,7 @@ function get_gausslegendre(
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     """Get Gauss-Legendre nodes and weights for prior's domain"""
 
-    a, b = minimum(st.fcn[1].grid; dims = 2), maximum(st.fcn[1].grid; dims = 2)
+    a, b = minimum(st.fcn[:a].grid; dims = 2), maximum(st.fcn[:a].grid; dims = 2)
 
     no_grid = (
         ebm.fcns_qp[1].spline_string == "FFT" ||

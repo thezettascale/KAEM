@@ -18,7 +18,7 @@ include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("../../utils.jl")
 using .UnivariateFunctions
-using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq
+using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
 using .LogPriorFCNs
 using .InverseTransformSampling
 
@@ -216,10 +216,11 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
-    layernorm_ps = ()
+    # fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
+    fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
+    layernorm_ps = NamedTuple()
     if prior.layernorm_bool && length(prior.layernorms) > 0
-        layernorm_ps = ntuple(i -> Lux.initialparameters(rng, prior.layernorms[i]), prior.depth-1)
+        layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for i in 1:prior.depth-1)
     end
 
     prior_ps = (
@@ -236,10 +237,10 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:h
 end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    fcn_st = ntuple(i -> Lux.initialstates(rng, prior.fcns_qp[i]), prior.depth)
-    layernorm_st = ()
+    fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
+    layernorm_st = NamedTuple()
     if prior.layernorm_bool && length(prior.layernorms) > 0
-        layernorm_st = ntuple(i -> Lux.initialstates(rng, prior.layernorms[i]) |> hq, prior.depth-1)
+        layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for i in 1:prior.depth-1)
     end
 
     return (

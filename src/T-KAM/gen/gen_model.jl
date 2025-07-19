@@ -204,7 +204,7 @@ function init_GenModel(
             batchnorms = ntuple(i -> batchnorms_temp[i], length(batchnorms_temp))
         end
 
-        depth += 1
+        depth = length(fcns_temp)
 
     elseif sequence_length > 1
 

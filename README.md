@@ -132,8 +132,8 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 
 The following optimisations are in place:
 
-- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Enzyme is for highly efficient reverse-mode autodifferentation of statically analyzable LLVM. Reactant compiles to MLIR, (amongst other things).
-- Broadcasts, Threads and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). ParallelStencils.jl allows for supremely optimised stencil computations, agnostic to the device in use. 
+- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Enzyme provides highly efficient reverse-mode autodifferentation of statically analyzable LLVM. Reactant compiles to MLIR, (amongst other things).
+- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). This allows for supremely optimized stencil computations, agnostic to the device in use. 
 
 If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
 

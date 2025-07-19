@@ -419,7 +419,7 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z, st = sampler.compiled_logpos_withgrad(z, x_t, t_expanded, model, ps, st)
+        logpos_z, ∇z, st = sampler.compiled_logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
 
         if sampler.N_unadjusted < sampler.N
             z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(

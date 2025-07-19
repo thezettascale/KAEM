@@ -112,7 +112,7 @@ function scaled_dot_product_attention(
     V::AbstractArray{T},
     d_model::Int,
 ) where {T<:half_quant}
-    scale = sqrt(eltype(Q)(d_model))
+    scale = sqrt(T(d_model))
     D, L, B = size(Q)
     _, I, _ = size(K)
 

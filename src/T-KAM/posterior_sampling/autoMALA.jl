@@ -317,7 +317,7 @@ function initialize_autoMALA_sampler(
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end
 
-    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps st)
+    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
     compiled_autoMALA_step = Reactant.@compile autoMALA_step(
         log_a,
         log_b,

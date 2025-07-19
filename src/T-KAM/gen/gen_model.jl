@@ -278,15 +278,15 @@ function init_GenModel(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-    fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for i in 1:lkhood.depth)
+    fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for i in eachindex(lkhood.Φ_fcns))
     layernorm_ps = (a = zero(T))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
-        layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for i in 1:lkhood.depth-1)
+        layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for i in eachindex(lkhood.layernorms))
     end
 
     batchnorm_ps = (a = zero(T))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
-        batchnorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for i in 1:lkhood.depth-1)
+        batchnorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for i in eachindex(lkhood.batchnorms))
     end
 
     attention_ps = (a = zero(T))
@@ -307,15 +307,15 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-    fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for i in 1:lkhood.depth)
+    fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for i in eachindex(lkhood.Φ_fcns))
     layernorm_st = (a = zero(T))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
-        layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for i in 1:lkhood.depth-1)
+        layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for i in eachindex(lkhood.layernorms))
     end
 
     batchnorm_st = (a = zero(T))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
-        batchnorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for i in 1:lkhood.depth-1)
+        batchnorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for i in eachindex(lkhood.batchnorms))
     end
 
     attention_st = (a = zero(T))

@@ -33,13 +33,15 @@ function leapfrop_proposal(
     z::AbstractArray{U},
     ∇z::AbstractArray{U},
     x::AbstractArray{T},
-    st,
+    temps::AbstractArray{T},
     logpos_z::AbstractArray{U},
     momentum::AbstractArray{U},  # This is y = M^{-1/2}p
     M::AbstractArray{U},         # This is M^{1/2}
     η::AbstractArray{U},
     logpos_withgrad::Function,
-    temps::AbstractArray{T},
+    model::Any,
+    ps::ComponentArray{T},
+    st::NamedTuple,
 )::Tuple{
     AbstractArray{U},
     AbstractArray{U},
@@ -58,7 +60,7 @@ function leapfrop_proposal(
     p, ẑ = position_update(z, momentum, ∇z, M, η)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, ∇z, x, st, temps)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, ∇z, x, temps, model, ps, st)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
     p = momentum_update(p, ∇ẑ, M, η)

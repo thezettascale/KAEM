@@ -43,9 +43,9 @@ function autoMALA_logpos_4D(
     z_i::AbstractArray{T},
     x_i::AbstractArray{T},
     t::AbstractArray{T},
-    st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T},
+    st_i::NamedTuple,
     num_temps::Int,
     seq::Bool,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
@@ -67,9 +67,9 @@ function autoMALA_logpos(
     z_i::AbstractArray{T},
     x_i::AbstractArray{T},
     t::AbstractArray{T},
-    st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T},
+    temps::AbstractArray{T},
     num_temps::Int,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen
@@ -83,9 +83,9 @@ function autoMALA_value_and_grad_4D(
     ∇z::AbstractArray{T},
     x_i::AbstractArray{T},
     t::AbstractArray{T},
-    st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T},
+    st_i::NamedTuple,
     num_temps::Int,
     seq::Bool,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
@@ -118,9 +118,9 @@ function autoMALA_value_and_grad(
     ∇z::AbstractArray{T},
     x_i::AbstractArray{T},
     t::AbstractArray{T},
-    st_i::NamedTuple,
     m::Any,
     ps::ComponentArray{T},
+    st_i::NamedTuple,
     num_temps::Int,
     seq::Bool,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}

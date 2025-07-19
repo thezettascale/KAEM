@@ -1,7 +1,7 @@
 module ImportanceSampling
 
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
-using Statistics, Lux, LuxCUDA
+using Statistics, Lux, LuxCUDA, ParallelStencil
 using NNlib: softmax
 
 export initialize_importance_loss, loss
@@ -10,6 +10,12 @@ include("../gen/loglikelihoods.jl")
 include("../../utils.jl")
 using .LogLikelihoods: log_likelihood_IS
 using .Utils: device, half_quant, full_quant, hq
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
 
 function sample_importance(
     ps::ComponentArray{T},
@@ -38,6 +44,18 @@ function sample_importance(
     return z, st_ebm, st_gen, weights_resampled, resampled_idxs
 end
 
+@parallel_indices (b, s) function resampled_kernel!(
+    loss::AbstractArray{T},
+    weights_resampled::AbstractArray{T},
+    logprior::AbstractArray{T},
+    logllhood::AbstractArray{T},
+    resampled_idxs::AbstractArray{Int},
+) where {T<:half_quant}
+    idx = resampled_idxs[b, s]
+    loss[b, s] = weights_resampled[b, s] * (logprior[idx] + logllhood[b, idx])
+    return nothing
+end
+
 function marginal_llhood(
     ps::ComponentArray{T},
     z::AbstractArray{T},
@@ -59,12 +77,16 @@ function marginal_llhood(
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
 
-    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
-    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
-    loss_prior = sum(weights_resampled .* logprior_resampled'; dims = 2)
-    loss_llhood = sum(weights_resampled .* logllhood_resampled; dims = 2)
-
-    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st_ebm, st_gen
+    B, S = size(x)[end], size(z)[end]
+    marginal_llhood = @zeros(B, S)
+    @parallel (1:B, 1:S) resampled_kernel!(
+        marginal_llhood,
+        weights_resampled,
+        logprior,
+        logllhood,
+        resampled_idxs,
+    )
+    return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling, st_ebm, st_gen
 end
 
 function grad_importance_llhood(

@@ -285,7 +285,7 @@ function initialize_autoMALA_sampler(
         x_single,
         model.lkhood,
         ps.gen,
-        st.gen, 
+        st.gen,
     )
 
     function logpos_withgrad(
@@ -298,7 +298,8 @@ function initialize_autoMALA_sampler(
         p::ComponentArray{T},
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
-        logpos, ∇z_k, st_ebm, st_gen = fcn(T.(z_i), T.(∇z_i), x_i, t_k, st_i, m, p, num_temps, seq)
+        logpos, ∇z_k, st_ebm, st_gen =
+            fcn(T.(z_i), T.(∇z_i), x_i, t_k, st_i, m, p, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
@@ -315,7 +316,7 @@ function initialize_autoMALA_sampler(
         st,
         logpos_z,
         momentum,
-        M,
+        device(repeat(M, 1, 1, S, 1)),
         η,
         Δη,
         logpos_withgrad,
@@ -366,6 +367,7 @@ function sample(
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     z = reshape(z, Q, P, S, num_temps)
     ∇z = similar(z) |> device
+    z_hq = T.(z)
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)

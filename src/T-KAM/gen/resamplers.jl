@@ -102,7 +102,7 @@ function residual_resampler(
         B,
         N,
     )
-    return Int.(Array(idxs))
+    return Int.(idxs)
 end
 
 @parallel_indices (b) function systematic_kernel!(
@@ -120,10 +120,9 @@ end
     else
         # Searchsortedfirst as explicit assignment loop
         for n = 1:N
-            val = u[b, n]
             idx = N
             for j = 1:N
-                if cdf[b, j] >= val
+                if cdf[b, j] >= u[b, n]
                     idx = j
                     break
                 end
@@ -161,7 +160,7 @@ function systematic_resampler(
 
     idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return Int.(Array(idxs))
+    return Int.(idxs)
 end
 
 function stratified_resampler(
@@ -190,7 +189,7 @@ function stratified_resampler(
 
     idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
-    return Int.(Array(idxs))    
+    return Int.(idxs)
 end
 
 function importance_resampler(

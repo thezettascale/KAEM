@@ -15,6 +15,7 @@ function position_update(
     η::AbstractArray{U},
 )::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     η = reshape(η, 1, 1, size(η)...)
+    println("momentum: ", size(momentum), " ∇z: ", size(∇z), " M: ", size(M), " η: ", size(η))
     y = momentum .+ (η ./ 2) .* ∇z ./ M
     ẑ = z .+ η .* y ./ M
     return y, ẑ

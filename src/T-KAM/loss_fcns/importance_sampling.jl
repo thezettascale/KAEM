@@ -3,7 +3,6 @@ module ImportanceSampling
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
-using LinearAlgebra: dot
 
 export initialize_importance_loss, loss
 
@@ -60,14 +59,12 @@ function marginal_llhood(
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
 
-    loss, B = zero(T), size(x)[end]
-    for b = 1:B
-        loss +=
-            dot(weights_resampled[b, :], logprior[resampled_idxs[b, :]]) +
-            dot(weights_resampled[b, :], logllhood[b, resampled_idxs[b, :]])
-    end
+    logprior_resampled = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:size(x)[end]))
+    logllhood_resampled = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:size(x)[end]))
+    loss_prior = sum(weights_resampled .* logprior_resampled'; dims = 2)
+    loss_llhood = sum(weights_resampled .* logllhood_resampled; dims = 2)
 
-    return -((loss / B) - ex_prior)*m.loss_scaling, st_ebm, st_gen
+    return -(mean(loss_prior .+ loss_llhood) - ex_prior)*m.loss_scaling, st_ebm, st_gen
 end
 
 function grad_importance_llhood(

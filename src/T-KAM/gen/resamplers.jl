@@ -164,35 +164,6 @@ function systematic_resampler(
     return Int.(Array(idxs))
 end
 
-@parallel_indices (b) function stratified_kernel!(
-    idxs::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
-    cdf::AbstractArray{U},
-    u::AbstractArray{U},
-    B::Int,
-    N::Int,
-)::Nothing where {U<:full_quant}
-    if !ESS_bool[b] # No resampling
-        for n = 1:N
-            idxs[b, n] = n
-        end
-    else
-        for n = 1:N
-            val = u[b, n]
-            idx = N
-            for j = 1:N
-                if cdf[b, j] >= val
-                    idx = j
-                    break
-                end
-            end
-            idx = idx > N ? N : idx
-            idxs[b, n] = idx
-        end
-    end
-    return nothing
-end
-
 function stratified_resampler(
     weights::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},
@@ -218,7 +189,7 @@ function stratified_resampler(
     u = device((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
 
     idxs = @zeros(B, N)
-    @parallel (1:B) stratified_kernel!(idxs, ESS_bool, cdf, u, B, N)
+    @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
     return Int.(Array(idxs))    
 end
 

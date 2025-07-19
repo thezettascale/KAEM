@@ -254,6 +254,9 @@ function initialize_autoMALA_sampler(
     momentum = similar(z) |> device
     η = device(st.η_init)
 
+    log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
+    dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
+
     compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(
         z,
         ∇z,
@@ -293,7 +296,7 @@ function initialize_autoMALA_sampler(
         t_k::AbstractArray{T},
         m::Any,
         p::ComponentArray{T},
-    )::Tuple{U,AbstractArray{U},NamedTuple}
+    )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
         logpos, ∇z_k, st_ebm, st_gen = fcn(T.(z_i), T.(∇z_i), x_i, t_k, st_i, m, p, num_temps, seq)
         @reset st_i.ebm = st_ebm
@@ -317,9 +320,6 @@ function initialize_autoMALA_sampler(
         Δη,
         logpos_withgrad,
     )
-
-    log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
-    dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
     return autoMALA_sampler(
         compiled_llhood,

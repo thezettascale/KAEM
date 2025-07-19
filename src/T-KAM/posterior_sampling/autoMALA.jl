@@ -1,6 +1,6 @@
 module autoMALA_sampling
 
-export initialize_autoMALA_sampler, sample
+export initialize_autoMALA_sampler, autoMALA_sample
 
 using CUDA,
     KernelAbstractions,

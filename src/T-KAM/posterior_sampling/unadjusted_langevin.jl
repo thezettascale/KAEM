@@ -1,6 +1,6 @@
 module ULA_sampling
 
-export initialize_ULA_sampler, sample
+export initialize_ULA_sampler, ULA_sample
 
 using CUDA,
     KernelAbstractions,

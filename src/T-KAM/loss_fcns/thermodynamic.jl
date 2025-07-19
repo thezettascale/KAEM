@@ -1,6 +1,6 @@
 module ThermodynamicIntegration
 
-export initialize_thermo_loss, loss
+export initialize_thermo_loss, thermodynamic_loss
 
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA

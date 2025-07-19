@@ -69,7 +69,7 @@ function autoMALA_logpos(
     t::AbstractArray{T},
     m::Any,
     ps::ComponentArray{T},
-    temps::AbstractArray{T},
+    st_i::NamedTuple,
     num_temps::Int,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen
@@ -91,8 +91,8 @@ function autoMALA_value_and_grad_4D(
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
-        (z, x, temps, s, model, p, n, sequence) ->
-            sum(first(autoMALA_logpos_4D(z, x, temps, s, model, p, n, sequence)))
+        (z, x, temps, model, p, s, n, sequence) ->
+            sum(first(autoMALA_logpos_4D(z, x, temps, model, p, s, n, sequence)))
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -101,15 +101,15 @@ function autoMALA_value_and_grad_4D(
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x_i),
         Enzyme.Const(t),
-        Enzyme.Const(Lux.testmode(st_i)),
         Enzyme.Const(m),
         Enzyme.Const(ps),
+        Enzyme.Const(Lux.testmode(st_i)),
         Enzyme.Const(num_temps),
         Enzyme.Const(seq),
     )
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos_4D(z_i, x_i, t, st_i, m, ps, num_temps, seq)
+        CUDA.@fastmath autoMALA_logpos_4D(z_i, x_i, t, m, ps, st_i, num_temps, seq)
     return logpos, ∇z, st_ebm, st_gen
 end
 
@@ -126,8 +126,8 @@ function autoMALA_value_and_grad(
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
-        (z, x, temps, s, model, p, n) ->
-            sum(first(autoMALA_logpos(z, x, temps, s, model, p, n)))
+        (z, x, temps, model, p, s, n) ->
+            sum(first(autoMALA_logpos(z, x, temps, model, p, s, n)))
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -136,14 +136,14 @@ function autoMALA_value_and_grad(
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x_i),
         Enzyme.Const(t),
-        Enzyme.Const(Lux.testmode(st_i)),
         Enzyme.Const(m),
         Enzyme.Const(ps),
+        Enzyme.Const(Lux.testmode(st_i)),
         Enzyme.Const(num_temps),
     )
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, st_i, m, ps, num_temps)
+        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i, num_temps)
     return logpos, ∇z, st_ebm, st_gen
 end
 

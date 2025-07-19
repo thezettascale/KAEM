@@ -311,7 +311,7 @@ function initialize_autoMALA_sampler(
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
         logpos, ∇z_k, st_ebm, st_gen =
-            fcn(T.(z_i), T.(∇z_i), x_i, t_k, st_i, m, p, num_temps, seq)
+            fcn(T.(z_i), T.(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i

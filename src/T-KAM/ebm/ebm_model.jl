@@ -218,7 +218,7 @@ end
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     # fcn_ps = ntuple(i -> Lux.initialparameters(rng, prior.fcns_qp[i]), prior.depth)
     fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
-    layernorm_ps = NamedTuple()
+    layernorm_ps = NamedTuple(:a => T(0))
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for i in 1:prior.depth-1)
     end
@@ -238,7 +238,7 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
-    layernorm_st = NamedTuple()
+    layernorm_st = NamedTuple(:a => T(0))
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for i in 1:prior.depth-1)
     end

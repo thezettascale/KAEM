@@ -274,17 +274,17 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for i in 1:lkhood.depth)
-    layernorm_ps = NamedTuple()
+    layernorm_ps = NamedTuple(:a => T(0))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for i in 1:lkhood.depth-1)
     end
 
-    batchnorm_ps = NamedTuple()
+    batchnorm_ps = NamedTuple(:a => T(0))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for i in 1:lkhood.depth-1)
     end
 
-    attention_ps = NamedTuple()
+    attention_ps = NamedTuple(:a => T(0))
     if lkhood.seq_length > 1
         attention_ps = NamedTuple(
             :Q => Lux.initialparameters(rng, lkhood.attention.Q),
@@ -303,17 +303,17 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for i in 1:lkhood.depth)
-    layernorm_st = NamedTuple()
+    layernorm_st = NamedTuple(:a => T(0))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for i in 1:lkhood.depth-1)
     end
 
-    batchnorm_st = NamedTuple()
+    batchnorm_st = NamedTuple(:a => T(0))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
         batchnorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for i in 1:lkhood.depth-1)
     end
 
-    attention_st = NamedTuple()
+    attention_st = NamedTuple(:a => T(0))
     if lkhood.seq_length > 1
         attention_st = NamedTuple(
             :Q => Lux.initialstates(rng, lkhood.attention.Q) |> hq,

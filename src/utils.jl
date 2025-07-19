@@ -48,6 +48,7 @@ end
 
 EnzymeRules.inactive(::typeof(set_state!), args...) = nothing
 
+# Num layers must be flexible, yet static, so this is used to index into params/state
 const symbol_map = (
     :a,
     :b,

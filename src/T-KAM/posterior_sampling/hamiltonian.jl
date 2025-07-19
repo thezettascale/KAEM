@@ -2,7 +2,7 @@ module HamiltonianDynamics
 
 export position_update, momentum_update, leapfrop_proposal
 
-using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA
+using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, ComponentArrays
 
 include("../../utils.jl")
 using .Utils: full_quant, half_quant

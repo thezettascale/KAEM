@@ -130,28 +130,28 @@ function initialize_thermo_loss(
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
-    # compiled_loss = Reactant.@compile marginal_llhood(
-    #     ps,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     temps,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    # compiled_grad = Reactant.@compile grad_thermo_llhood(
-    #     ps,
-    #     ∇,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     temps,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    return ThermodynamicLoss(marginal_llhood, grad_thermo_llhood)
+    compiled_loss = Reactant.@compile marginal_llhood(
+        ps,
+        z_posterior,
+        z_prior,
+        x,
+        temps,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    compiled_grad = Reactant.@compile grad_thermo_llhood(
+        ps,
+        ∇,
+        z_posterior,
+        z_prior,
+        x,
+        temps,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    return ThermodynamicLoss(compiled_loss, compiled_grad)
 end
 
 function loss(

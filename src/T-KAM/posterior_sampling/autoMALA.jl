@@ -269,40 +269,36 @@ function initialize_autoMALA_sampler(
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
-    # compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(
-    #     z,
-    #     ∇z,
-    #     x_t,
-    #     t_expanded,
-    #     model,
-    #     ps,
-    #     st,
-    #     num_temps,
-    #     seq,
-    # )
-    # x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
-    # compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(
-    #     z[:, :, :, 1],
-    #     ∇z[:, :, :, 1],
-    #     x_single,
-    #     t_expanded[:, 1],
-    #     model,
-    #     ps,
-    #     st,
-    #     num_temps,
-    #     seq,
-    # )
-    # compiled_llhood = Reactant.@compile log_likelihood_MALA(
-    #     z[:, :, :, 1],
-    #     x_single,
-    #     model.lkhood,
-    #     ps.gen,
-    #     st.gen,
-    # )
-
-    compiled_logpos_withgrad_4D = autoMALA_value_and_grad_4D
-    compiled_logpos_withgrad_3D = autoMALA_value_and_grad
-    compiled_llhood = log_likelihood_MALA
+    compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(
+        z,
+        ∇z,
+        x_t,
+        t_expanded,
+        model,
+        ps,
+        st,
+        num_temps,
+        seq,
+    )
+    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
+    compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(
+        z[:, :, :, 1],
+        ∇z[:, :, :, 1],
+        x_single,
+        t_expanded[:, 1],
+        model,
+        ps,
+        st,
+        num_temps,
+        seq,
+    )
+    compiled_llhood = Reactant.@compile log_likelihood_MALA(
+        z[:, :, :, 1],
+        x_single,
+        model.lkhood,
+        ps.gen,
+        st.gen,
+    )
 
     function logpos_withgrad(
         z_i::AbstractArray{U},
@@ -321,29 +317,28 @@ function initialize_autoMALA_sampler(
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end
 
-    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, st, t_expanded, model, ps)
-    # compiled_autoMALA_step = Reactant.@compile autoMALA_step(
-    #     log_a,
-    #     log_b,
-    #     z,
-    #     ∇z,
-    #     x_t,
-    #     t_expanded,
-    #     logpos_z,
-    #     momentum,
-    #     device(repeat(M, 1, 1, S, 1)),
-    #     logpos_withgrad,
-    #     model,
-    #     ps,
-    #     st,
-    #     η,
-    #     Δη,
-    #     η_min,
-    #     η_max,
-    #     ε,
-    #     seq,
-    # )
-    compiled_autoMALA_step = autoMALA_step
+    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps st)
+    compiled_autoMALA_step = Reactant.@compile autoMALA_step(
+        log_a,
+        log_b,
+        z,
+        ∇z,
+        x_t,
+        t_expanded,
+        logpos_z,
+        momentum,
+        device(repeat(M, 1, 1, S, 1)),
+        logpos_withgrad,
+        model,
+        ps,
+        st,
+        η,
+        Δη,
+        η_min,
+        η_max,
+        ε,
+        seq,
+    )
 
     return autoMALA_sampler(
         compiled_llhood,

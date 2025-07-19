@@ -106,26 +106,26 @@ function initialize_langevin_loss(
     z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
 
-    # compiled_loss = Reactant.@compile marginal_llhood(
-    #     ps,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    # compiled_grad = Reactant.@compile grad_langevin_llhood(
-    #     ps,
-    #     ∇,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    return LangevinLoss(marginal_llhood, grad_langevin_llhood)
+    compiled_loss = Reactant.@compile marginal_llhood(
+        ps,
+        z_posterior,
+        z_prior,
+        x,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    compiled_grad = Reactant.@compile grad_langevin_llhood(
+        ps,
+        ∇,
+        z_posterior,
+        z_prior,
+        x,
+        model,
+        st_ebm,
+        st_gen,
+    )
+    return LangevinLoss(compiled_loss, compiled_grad)
 end
 
 function loss(

@@ -43,7 +43,9 @@ function prior_fwd(
     new_st = Dict()
 
     for i = 1:ebm.depth
-        z = fwd(ebm.fcns_qp[Symbol("$i")], ps[Symbol("$i")], st[Symbol("$i")], z)
+
+        fcn = get(ebm.fcns_qp, Symbol("$i"), nothing)
+        z = fwd(fcn, ps[Symbol("$i")], st[Symbol("$i")], z)
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)

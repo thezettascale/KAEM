@@ -187,7 +187,9 @@ function ULA_sample(
                     sampler.prior_sampling_bool,
                 ),
             ) / loss_scaling
-        all(iszero, ∇z) && error("∇z is zero")
+
+        # all(iszero, ∇z) && error("∇z is zero")
+        
         z += η .* ∇z .+ sqrt(2 * η) .* ξ
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

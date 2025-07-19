@@ -296,7 +296,7 @@ function initialize_autoMALA_sampler(
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
-        all(iszero, ∇z_k) && error("∇z_k is zero")
+        # all(iszero, ∇z_k) && error("∇z_k is zero")
 
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end

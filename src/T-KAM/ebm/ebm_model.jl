@@ -22,26 +22,32 @@ using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq
 using .LogPriorFCNs
 using .InverseTransformSampling
 
+function uniform_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+    return half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device
+end
+
+function gaussian_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+    return half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
+end
+
+function lognormal_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+    return exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε)
+end
+
+function learnable_gaussian_pdf(z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+    return one(half_quant) ./ (abs.(ps[Symbol("π_σ")] .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε)))
+end
+
+function ebm_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+    return ones(half_quant, size(z)) .- ε |> device
+end
+
 const prior_pdf = Dict(
-    "uniform" =>
-        (z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant} ->
-            half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device,
-    "gaussian" =>
-        (z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant} ->
-            half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2),
-    "lognormal" =>
-        (z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant} ->
-            exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε),
-    "ebm" =>
-        (z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant} ->
-            ones(half_quant, size(z)) .- ε |> device,
-    "learnable_gaussian" =>
-        (z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant)::AbstractArray{half_quant} ->
-            (
-                one(half_quant) ./ (abs.(ps[Symbol("π_σ")]) .* half_quant(sqrt(2π)) .+ ε) .* exp.(
-                    -(z .- ps[Symbol("π_μ")] .^ 2) ./ (2 .* (ps[Symbol("π_σ")] .^ 2) .+ ε),
-                )
-            ),
+    "uniform" => uniform_pdf,
+    "gaussian" => gaussian_pdf,
+    "lognormal" => lognormal_pdf,
+    "ebm" => ebm_pdf,
+    "learnable_gaussian" => learnable_gaussian_pdf,
 )
 
 const quad_map =

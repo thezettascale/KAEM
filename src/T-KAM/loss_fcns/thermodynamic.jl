@@ -73,7 +73,7 @@ function marginal_llhood(
     end
 
     logllhood, st_gen =
-        log_likelihood_MALA(m.lkhood, ps.gen, st_gen, x, z_prior[:, :, :, 1]; ε = m.ε)
+        log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
     log_ss += mean(logllhood .* Δt[1])
 
     return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen

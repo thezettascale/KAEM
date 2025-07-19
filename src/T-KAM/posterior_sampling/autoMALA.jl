@@ -225,7 +225,8 @@ end
 
 struct autoMALA_sampler{U<:full_quant}
     compiled_llhood
-    compiled_logpos_withgrad
+    compiled_leapfrog
+    logpos_withgrad
     compiled_autoMALA_step
     N::Int
     N_unadjusted::Int
@@ -271,29 +272,6 @@ function initialize_autoMALA_sampler(
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
-    compiled_logpos_withgrad_4D = Reactant.@compile autoMALA_value_and_grad_4D(
-        z,
-        ∇z,
-        x_t,
-        t_expanded,
-        model,
-        ps,
-        st,
-        num_temps,
-        seq,
-    )
-    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
-    compiled_logpos_withgrad_3D = Reactant.@compile autoMALA_value_and_grad(
-        z[:, :, :, 1],
-        ∇z[:, :, :, 1],
-        x_single,
-        t_expanded[:, 1],
-        model,
-        ps,
-        st,
-        num_temps,
-        seq,
-    )
     compiled_llhood = Reactant.@compile log_likelihood_MALA(
         z[:, :, :, 1],
         x_single,
@@ -311,7 +289,7 @@ function initialize_autoMALA_sampler(
         p::ComponentArray{T},
         st_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
-        fcn = ndims(z_i) == 4 ? compiled_logpos_withgrad_4D : compiled_logpos_withgrad_3D
+        fcn = ndims(z_i) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
         logpos, ∇z_k, st_ebm, st_gen =
             fcn(T.(z_i), T.(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
@@ -320,6 +298,22 @@ function initialize_autoMALA_sampler(
     end
 
     logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
+    
+    compiled_leapfrog = Reactant.@compile leapfrop_proposal(
+        z,
+        ∇z,
+        x_t,
+        t_expanded,
+        logpos_z,
+        momentum,
+        device(repeat(M, 1, 1, S, 1)),
+        η,
+        logpos_withgrad,
+        model,
+        ps,
+        st,
+    )
+
     compiled_autoMALA_step = Reactant.@compile autoMALA_step(
         log_a,
         log_b,
@@ -344,6 +338,7 @@ function initialize_autoMALA_sampler(
 
     return autoMALA_sampler(
         compiled_llhood,
+        compiled_leapfrog,
         logpos_withgrad,
         compiled_autoMALA_step,
         N,
@@ -420,11 +415,11 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z, st = sampler.compiled_logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
+        logpos_z, ∇z, st = sampler.logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
 
         if burn_in < sampler.N
             burn_in += 1
-            z, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(
+            z, logpos_ẑ, ∇ẑ, p̂, log_r, st = sampler.compiled_leapfrog(
                 z,
                 ∇z,
                 x_t,
@@ -433,7 +428,7 @@ function autoMALA_sample(
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
                 η,
-                sampler.compiled_logpos_withgrad,
+                sampler.logpos_withgrad,
                 model,
                 ps,
                 st,
@@ -449,7 +444,7 @@ function autoMALA_sample(
                 logpos_z,
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
-                sampler.compiled_logpos_withgrad,
+                sampler.logpos_withgrad,
                 model,
                 ps,
                 st,

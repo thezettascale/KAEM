@@ -17,7 +17,7 @@ function sample_langevin(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
-    z, st_ebm = m.posterior_sample(m, x, 0, ps, st, rng)
+    z, st_ebm = m.posterior_sample(m, x, ps, st, rng)
     return z[:, :, :, 1], st_ebm
 end
 

@@ -171,7 +171,7 @@ end
 ) where {T<:half_quant}
     acc = zero(T)
     for g = 1:size(spl, 2)
-        acc += spl[i, g, s] * coef[i, o, g]
+        acc = acc + spl[i, g, s] * coef[i, o, g]
     end
     y[i, o, s] = acc
     return nothing
@@ -228,7 +228,7 @@ end
 )::Nothing where {T<:half_quant}
     acc = zero(T)
     for g = 1:size(even, 2)
-        acc += even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
+        acc = acc + even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
     end
     y[i, o, s] = acc
     return nothing

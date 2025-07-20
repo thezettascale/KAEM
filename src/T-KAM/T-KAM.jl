@@ -271,7 +271,7 @@ function init_posterior_sampler(
 
 
         @reset model.posterior_sample =
-            (m, x, t, ps, st, rng) ->
+            (m, x, ps, st, rng) ->
                 sample_function(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
 
         loss_struct = initialize_langevin_loss(

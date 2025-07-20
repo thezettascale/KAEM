@@ -100,7 +100,7 @@ function initialize_ULA_sampler(
             log_likelihood_MALA(z_i, x_i, l, ps_gen, st_gen; ε = model.ε)
     # compiled_llhood = Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
 
-    # logpos_grad_compiled =
+    # compiled_logpos_grad =
     #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
 
     compiled_llhood = ll
@@ -108,7 +108,7 @@ function initialize_ULA_sampler(
 
     return ULA_sampler(
         compiled_llhood,
-        logpos_grad_compiled,
+        compiled_logpos_grad,
         prior_sampling_bool,
         N,
         RE_frequency,

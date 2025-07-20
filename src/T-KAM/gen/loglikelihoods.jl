@@ -39,7 +39,7 @@ end
 ## Fcns for model with Lagenvin methods ##
 function cross_entropy_MALA(
     x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x̂::AbstractArray{T};
     ε::T = eps(half_quant),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
@@ -49,7 +49,7 @@ end
 
 function l2_MALA(
     x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x̂::AbstractArray{T};
     ε::T = eps(half_quant),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
@@ -98,7 +98,7 @@ function log_likelihood_MALA(
     lkhood,
     ps::ComponentArray{T},
     st::NamedTuple;
-    ε::T = eps(T),
+    ε::T = eps(half_quant),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     Conditional likelihood of the generator sampled by Langevin.

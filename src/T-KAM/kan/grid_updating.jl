@@ -119,7 +119,7 @@ function update_model_grid(
             @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
             @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
 
-            z, _ = model.prior.Lux.apply(
+            z, _ = Lux.apply(
                 prior.fcns_qp[i],
                 z,
                 ps.ebm.fcn[symbol_map[i]],

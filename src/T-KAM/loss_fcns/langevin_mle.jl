@@ -94,15 +94,15 @@ end
 
 function initialize_langevin_loss(
     ps::ComponentArray{T},
-    ∇::ComponentArray{T},
     st::NamedTuple,
     model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
-    z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+    ∇ = Enzyme.make_zero(ps)
+    z_posterior, st_new = sample_langevin(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st_new.ebm, st_new.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
     compiled_loss = Reactant.@compile marginal_llhood(
         ps,
@@ -110,8 +110,8 @@ function initialize_langevin_loss(
         z_prior,
         x,
         model,
-        st_ebm,
-        st_gen,
+        Lux.testmode(st).ebm,
+        Lux.testmode(st).gen,
     )
     compiled_grad = Reactant.@compile grad_langevin_llhood(
         ps,
@@ -135,9 +135,9 @@ function langevin_loss(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, st_new = sample_langevin(ps, st, model, x; rng = rng)
+    z_posterior, st_new = sample_langevin(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st_new.ebm, st_new.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
     ∇, st_ebm, st_gen =
         l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)

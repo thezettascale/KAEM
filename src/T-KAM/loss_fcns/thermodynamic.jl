@@ -115,15 +115,15 @@ end
 
 function initialize_thermo_loss(
     ps::ComponentArray{T},
-    ∇::ComponentArray{T},
     st::NamedTuple,
     model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
-    z_posterior, temps, st = sample_thermo(ps, st, model, x; rng = rng)
+    ∇ = Enzyme.make_zero(ps)
+    z_posterior, temps, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
     compiled_loss = Reactant.@compile marginal_llhood(
         ps,
@@ -132,8 +132,8 @@ function initialize_thermo_loss(
         x,
         temps,
         model,
-        st_ebm,
-        st_gen,
+        Lux.testmode(st).ebm,
+        Lux.testmode(st).gen,
     )
     compiled_grad = Reactant.@compile grad_thermo_llhood(
         ps,
@@ -158,9 +158,9 @@ function thermodynamic_loss(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, temps, st = sample_thermo(ps, st, model, x; rng = rng)
+    z_posterior, temps, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st, rng)
+    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
     ∇, st_ebm, st_gen =
         l.compiled_grad(ps, ∇, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)

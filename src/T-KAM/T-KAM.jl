@@ -276,15 +276,14 @@ function init_posterior_sampler(
 
         loss_struct = initialize_langevin_loss(
             ps,
-            Enzyme.make_zero(ps),
-            Lux.testmode(st),
+            Lux.trainmode(st),
             model,
             x;
             rng = rng,
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -340,21 +339,20 @@ function init_posterior_sampler(
 
         loss_struct = initialize_thermo_loss(
             ps,
-            Enzyme.make_zero(ps),
-            Lux.testmode(st),
+            Lux.trainmode(st),
             model,
             x;
             rng = rng,
         )
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> thermodynamic_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
-        loss_struct = initialize_importance_loss(ps, Lux.testmode(st), model, x; rng = rng)
+        loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; rng = rng)
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, s, m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: IS")
     end

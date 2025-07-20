@@ -18,7 +18,7 @@ function sample_langevin(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     z, st_ebm = m.posterior_sample(m, x, 0, ps, st, rng)
-    return z, st_ebm
+    return z[:, :, :, 1], st_ebm
 end
 
 function marginal_llhood(
@@ -32,7 +32,7 @@ function marginal_llhood(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
     logprior_pos, st_ebm = m.prior.lp_fcn(
-        z_posterior[:, :, :, 1],
+        z_posterior,
         m.prior,
         ps.ebm,
         st_ebm;
@@ -40,7 +40,7 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     logllhood, st_gen =
-        log_likelihood_MALA(z_posterior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
+        log_likelihood_MALA(z_posterior, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
 
     logprior, st_ebm = m.prior.lp_fcn(
             z_prior,

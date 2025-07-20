@@ -60,7 +60,7 @@ function leapfrop_proposal(
     p, ẑ = position_update(z, momentum, ∇z, M, η)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(ẑ, ∇z, x, temps, model, ps, st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), T.(∇z), x, temps, model, ps, st)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
     p = momentum_update(p, ∇ẑ, M, η)

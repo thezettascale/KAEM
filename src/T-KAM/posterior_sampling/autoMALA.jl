@@ -253,13 +253,14 @@ function initialize_autoMALA_sampler(
     compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant,U<:full_quant}
-    z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
-    z = U.(z)
+    z_hq, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
     loss_scaling = model.loss_scaling |> U
 
-    num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    z = reshape(z, Q, P, S, num_temps)
-    ∇z = similar(z) |> device
+    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
+    z_hq = reshape(z_hq, Q, P, S, num_temps)
+    z_fq = U.(z_hq)
+    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_hq = Enzyme.make_zero(z_hq)
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     seq = model.lkhood.seq_length > 1
@@ -267,15 +268,15 @@ function initialize_autoMALA_sampler(
 
     M = zeros(U, Q, P, 1, num_temps) |> device
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2))) |> device
-    momentum = similar(z) |> device
+    momentum = Enzyme.make_zero(z_fq)
     η = device(st.η_init)
 
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
     function logpos_withgrad(
-        z_i::AbstractArray{U},
-        ∇z_i::AbstractArray{U},
+        z_i::AbstractArray{T},
+        ∇z_i::AbstractArray{T},
         x_i::AbstractArray{T},
         t_k::AbstractArray{T},
         m,
@@ -284,7 +285,7 @@ function initialize_autoMALA_sampler(
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
         logpos, ∇z_k, st_ebm, st_gen =
-            fcn(T.(z_i), T.(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
+            fcn(z_i, ∇z_i, x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
@@ -292,14 +293,14 @@ function initialize_autoMALA_sampler(
     end
 
     compiled_llhood = log_likelihood_MALA
-    logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
+    logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
     compiled_leapfrog = leapfrop_proposal
     compiled_autoMALA_step = autoMALA_step
 
     if compile_mlir
         x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
         compiled_llhood = Reactant.@compile log_likelihood_MALA(
-            z[:, :, :, 1],
+            z_hq[:, :, :, 1],
             x_single,
             model.lkhood,
             ps.gen,
@@ -307,8 +308,8 @@ function initialize_autoMALA_sampler(
         )
 
         compiled_leapfrog = Reactant.@compile leapfrop_proposal(
-            z,
-            ∇z,
+            z_fq,
+            ∇z_fq,
             x_t,
             t_expanded,
             logpos_z,
@@ -324,8 +325,8 @@ function initialize_autoMALA_sampler(
         compiled_autoMALA_step = Reactant.@compile autoMALA_step(
             log_a,
             log_b,
-            z,
-            ∇z,
+            z_fq,
+            ∇z_fq,
             x_t,
             t_expanded,
             logpos_z,
@@ -382,22 +383,24 @@ function autoMALA_sample(
     """
 
     # Initialize from prior 
-    z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
-    z = full_quant.(z)
+    z_hq, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
     loss_scaling = model.loss_scaling |> full_quant
 
-    num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    z = reshape(z, Q, P, S, num_temps)
-    ∇z = similar(z) |> device
-    z_hq = T.(z)
-    z_copy = similar(z[:, :, :, 1]) |> device
+    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
+    z_hq = reshape(z_hq, Q, P, S, num_temps)
+    
+    # Pre-allocate for both precisions
+    z_fq = full_quant.(z_hq)
+    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_hq = Enzyme.make_zero(z_hq)
+    z_copy = similar(z_hq[:, :, :, 1])
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
     M = zeros(full_quant, Q, P, 1, num_temps)
-    z_cpu = cpu_device()(z)
+    z_cpu = cpu_device()(z_fq)
     for k = 1:num_temps
         M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
     end
@@ -410,13 +413,13 @@ function autoMALA_sample(
 
     num_acceptances = zeros(Int, S, num_temps) |> device
     mean_η = zeros(full_quant, S, num_temps) |> device
-    momentum = similar(z) |> device
+    momentum = Enzyme.make_zero(z_fq)
 
     burn_in = 0
     η = st.η_init
 
     for i = 1:sampler.N
-        z_cpu = cpu_device()(z)
+        z_cpu = cpu_device()(z_fq)
         for k = 1:num_temps
             momentum[:, :, :, k], M[:, :, 1, k] =
                 sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k])
@@ -424,13 +427,13 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z, st = sampler.logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
+        logpos_z, ∇z_fq, st = sampler.logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
 
         if burn_in < sampler.N
             burn_in += 1
-            z, logpos_ẑ, ∇ẑ, p̂, log_r, st = sampler.compiled_leapfrog(
-                z,
-                ∇z,
+            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st = sampler.compiled_leapfrog(
+                z_fq,
+                ∇z_fq,
                 x_t,
                 t_expanded,
                 logpos_z,
@@ -446,8 +449,8 @@ function autoMALA_sample(
             ẑ, η_prop, η_prime, reversible, log_r, st = sampler.compiled_autoMALA_step(
                 log_a,
                 log_b,
-                z,
-                ∇z,
+                z_fq,
+                ∇z_fq,
                 x_t,
                 t_expanded,
                 logpos_z,
@@ -466,19 +469,21 @@ function autoMALA_sample(
             )
 
             accept = (log_u[:, :, i] .< log_r) .* reversible
-            z =
+            z_fq =
                 ẑ .* reshape(accept, 1, 1, S, num_temps) .+
-                z .* reshape(1 .- accept, 1, 1, S, num_temps)
+                z_fq .* reshape(1 .- accept, 1, 1, S, num_temps)
             mean_η .= mean_η .+ η_prop .* accept
             η .= η_prop .* accept .+ η .* (1 .- accept)
             num_acceptances .= num_acceptances .+ accept
+
+            z_hq = T.(z_fq)
+            ∇z_hq = T.(∇z_fq)
 
             # Replica exchange Monte Carlo
             if i % sampler.RE_frequency == 0 && num_temps > 1
                 for t = 1:(num_temps-1)
 
                     # Global swap criterion
-                    z_hq = T.(z)
                     ll_t, st_gen = sampler.compiled_llhood(
                         z_hq[:, :, :, t],
                         x,
@@ -500,9 +505,10 @@ function autoMALA_sample(
 
                     # Swap population if likelihood of population in new temperature is higher on average
                     if swap
-                        z_copy .= z[:, :, :, t]
-                        z[:, :, :, t] .= z[:, :, :, t+1]
-                        z[:, :, :, t+1] .= z_copy
+                        z_copy .= z_hq[:, :, :, t]
+                        z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
+                        z_hq[:, :, :, t+1] .= z_copy
+                        z_hq = full_quant.(z_hq)
                     end
                 end
             end
@@ -515,7 +521,7 @@ function autoMALA_sample(
     mean_η = ifelse.(isnan.(mean_η), st.η_init, mean_η) |> device
     @reset st.η_init = mean_η
 
-    return T.(z), st
+    return z_hq, st
 end
 
 end

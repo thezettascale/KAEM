@@ -43,7 +43,7 @@ function logpos_grad(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
         Enzyme.Active(zero(T)),
-        Enzyme.Duplicated(T.(z_i), ∇z),
+        Enzyme.Duplicated(T.(z_i), T.(∇z)),
         Enzyme.Const(x),
         Enzyme.Const(t),
         Enzyme.Const(m),
@@ -52,6 +52,7 @@ function logpos_grad(
         Enzyme.Const(T(!prior_sampling_bool)),
     )
     any(isnan, ∇z) && error("∇z is NaN")
+    all(iszero, ∇z) && error("∇z is zero")
     return ∇z
 end
 
@@ -94,7 +95,10 @@ function initialize_ULA_sampler(
     num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
     S = prior_sampling_bool ? size(z)[end] : S
     z = reshape(z, Q, P, S, num_temps)
-    ∇z = Enzyme.make_zero(z) |> device
+
+    z_hq = T.(z)
+    ∇z_fq = Enzyme.make_zero(z) |> device
+    ∇z_hq = T.(∇z_fq)
 
     ll =
         (z_i, x_i, l, ps_gen, st_gen) ->
@@ -104,10 +108,10 @@ function initialize_ULA_sampler(
     compiled_logpos_grad = logpos_grad
     if compile_mlir
         compiled_llhood =
-            Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
+            Reactant.@compile ll(z_hq[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
         compiled_logpos_grad = Reactant.@compile logpos_grad(
-            z,
-            ∇z,
+            z_hq,
+            ∇z_hq,
             x,
             temps,
             model,
@@ -160,14 +164,14 @@ function ULA_sample(
         The posterior samples.
     """
     # Initialize from prior
-    z = begin
+    z_hq = begin
         if model.prior.ula && sampler.prior_sampling_bool
             z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
-            z = device(full_quant.(z))
+            z = device(z)
         else
             z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
             @reset st.ebm = st_ebm
-            full_quant.(z)
+            z
         end
     end
 
@@ -177,12 +181,15 @@ function ULA_sample(
     η = sampler.prior_sampling_bool ? sampler.prior_η : mean(st.η_init)
     seq = model.lkhood.seq_length > 1
 
-    num_temps, Q, P, S = length(temps), size(z)[1:2]..., size(x)[end]
-    S = sampler.prior_sampling_bool ? size(z)[end] : S
-    z = reshape(z, Q, P, S, num_temps)
-    ∇z = similar(z) |> device
-    z_hq = T.(z)
-    z_copy = similar(z[:, :, :, 1]) |> device
+    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
+    S = sampler.prior_sampling_bool ? size(z_hq)[end] : S
+    z_hq = reshape(z_hq, Q, P, S, num_temps)
+    
+    # Pre-allocate for both precisions
+    z_fq = full_quant.(z_hq)
+    ∇z_fq = Enzyme.make_zero(z_fq) 
+    ∇z_hq = Enzyme.make_zero(z_hq) 
+    z_copy = similar(z_hq[:, :, :, 1])
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
@@ -190,11 +197,11 @@ function ULA_sample(
 
     for i = 1:sampler.N
         ξ = device(noise[:, :, :, :, i])
-        ∇z =
+        ∇z_fq =
             full_quant.(
                 sampler.compiled_logpos_grad(
-                    T.(z),
-                    T.(∇z),
+                    z_hq,
+                    ∇z_hq,
                     x,
                     temps,
                     model,
@@ -202,12 +209,15 @@ function ULA_sample(
                     st,
                     sampler.prior_sampling_bool,
                 ),
-            ) / loss_scaling
+            ) ./ loss_scaling
 
-        z += η .* ∇z .+ sqrt(2 * η) .* ξ
+        z_fq += η .* ∇z_fq .+ sqrt(2 * η) .* ξ
+        println("norm of ∇z: ", norm(∇z_fq))
+
+        ∇z_hq = T.(∇z_fq)
+        z_hq = T.(z_fq)
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
-            z_hq = T.(z)
             for t = 1:(num_temps-1)
                 ll_t, st_gen = sampler.compiled_llhood(
                     z_hq[:, :, :, t],
@@ -232,9 +242,9 @@ function ULA_sample(
 
                 # Swap population if likelihood of population in new temperature is higher on average
                 if swap
-                    z_copy .= z[:, :, :, t]
-                    z[:, :, :, t] .= z[:, :, :, t+1]
-                    z[:, :, :, t+1] .= z_copy
+                    z_copy .= z_hq[:, :, :, t]
+                    z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
+                    z_hq[:, :, :, t+1] .= z_copy
                 end
             end
         end
@@ -242,10 +252,10 @@ function ULA_sample(
 
     if sampler.prior_sampling_bool
         st = st.ebm
-        z = dropdims(z; dims = 4)
+        z_hq = dropdims(z_hq; dims = 4)
     end
 
-    return T.(z), st
+    return z_hq, st
 end
 
 

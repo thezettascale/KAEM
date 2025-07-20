@@ -116,6 +116,7 @@ function autoMALA_value_and_grad_4D(
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
+    all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos_value_4D(z_i, x_i, t, m, ps, st_i, num_temps, seq)
@@ -167,7 +168,8 @@ function autoMALA_value_and_grad(
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
-
+    all(iszero, ∇z) && error("∇z is zero")
+    
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i, num_temps)
     return logpos, ∇z, st_ebm, st_gen

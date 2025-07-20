@@ -50,9 +50,8 @@ function marginal_llhood(
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
-
-    contrastive_div = mean(logprior_pos) - m.prior.contrastive_div * mean(logprior)
-    return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
+    return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*m.loss_scaling, st_ebm, st_gen
 end
 
 function grad_langevin_llhood(

@@ -67,12 +67,12 @@ function marginal_llhood(
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
-    contrastive_div = mean(logprior_pos) - m.prior.contrastive_div * mean(logprior)
+    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
 
     logllhood, st_gen =
         log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
     steppingstone_loss = mean(logllhood .* Δt[1]) + sum(log_ss)
-    return -(steppingstone_loss + contrastive_div) * m.loss_scaling, st_ebm, st_gen
+    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * m.loss_scaling, st_ebm, st_gen
 end
 
 function grad_thermo_llhood(

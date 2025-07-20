@@ -15,7 +15,7 @@ conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "4")
 out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
-commit!(conf, "TRAINING", "MLIR_compile", "true")
+# commit!(conf, "TRAINING", "MLIR_compile", "true")
 
 function test_posterior_sampling()
     Random.seed!(42)

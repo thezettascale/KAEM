@@ -212,8 +212,9 @@ function ULA_sample(
             ) ./ loss_scaling
 
         z_fq += η .* ∇z_fq .+ sqrt(2 * η) .* ξ
-
         z_hq = T.(z_fq)
+
+        println("norm: $(norm(z_fq))")
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
             for t = 1:(num_temps-1)

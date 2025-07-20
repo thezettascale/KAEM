@@ -44,17 +44,15 @@ function prior_fwd(
 
     for i = 1:ebm.depth
 
-        z, st_new = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
+        z, st_new =
+            Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
 
-        z, st_new = (ebm.layernorm_bool && i < ebm.depth) ? Lux.apply(
-            ebm.layernorms[i],
-            z,
-            ps.layernorm[i],
-            st.layernorm[i],
-        ) : (z, st)
+        z, st_new =
+            (ebm.layernorm_bool && i < ebm.depth) ?
+            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st.layernorm[i]) : (z, st)
 
         (ebm.layernorm_bool && i < ebm.depth) && @reset st.layernorm[i] = st_new
     end

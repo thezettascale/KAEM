@@ -72,10 +72,8 @@ function get_gausslegendre(
 
     a, b = minimum(st.fcn[:a].grid; dims = 2), maximum(st.fcn[:a].grid; dims = 2)
 
-    no_grid = (
-        ebm.fcns_qp[1].spline_string == "FFT" ||
-        ebm.fcns_qp[1].spline_string == "Cheby"
-    )
+    no_grid =
+        (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
     if no_grid
         a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> device

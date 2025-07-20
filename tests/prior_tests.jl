@@ -47,7 +47,7 @@ end
 function test_grad_prior()
     z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     grads = Enzyme.make_zero(ps.ebm)
-    
+
     closure = (z_i, p, s, m) -> begin
         sum(first(wrap.prior.lp_fcn(z_i, wrap.prior, p, s)))
     end

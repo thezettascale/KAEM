@@ -145,8 +145,8 @@ function initialize_importance_loss(
         weights_resampled,
         resampled_idxs,
         model,
-        Lux.testmode(st).ebm,
-        Lux.testmode(st).gen,
+        st_ebm,
+        st_gen,
     )
     compiled_grad = Reactant.@compile grad_importance_llhood(
         ps,
@@ -156,8 +156,8 @@ function initialize_importance_loss(
         weights_resampled,
         resampled_idxs,
         model,
-        st_ebm,
-        st_gen,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
     )
     return ImportanceLoss(marginal_llhood, grad_importance_llhood)
 end
@@ -181,8 +181,8 @@ function importance_loss(
         weights_resampled,
         resampled_idxs,
         model,
-        st_ebm,
-        st_gen,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
     )
     loss, st_ebm, st_gen =
         l.compiled_loss(ps, z, x, weights_resampled, resampled_idxs, model, st_ebm, st_gen)

@@ -41,16 +41,6 @@ function removeNeg(x; ε = half_quant(1e-4))
 end
 
 # Num layers must be flexible, yet static, so this is used to index into params/state
-const symbol_map = (
-    :a,
-    :b,
-    :c,
-    :d,
-    :e,
-    :f,
-    :g,
-    :h,
-    :i,
-)
+const symbol_map = (:a, :b, :c, :d, :e, :f, :g, :h, :i)
 
 end

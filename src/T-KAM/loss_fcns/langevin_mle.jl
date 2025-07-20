@@ -43,12 +43,12 @@ function marginal_llhood(
         log_likelihood_MALA(z_posterior, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
 
     logprior, st_ebm = m.prior.lp_fcn(
-            z_prior,
-            m.prior,
-            ps.ebm,
-            st_ebm;
-            ε = m.ε,
-            normalize = !m.prior.contrastive_div,
+        z_prior,
+        m.prior,
+        ps.ebm,
+        st_ebm;
+        ε = m.ε,
+        normalize = !m.prior.contrastive_div,
     )
 
     contrastive_div = mean(logprior_pos) - m.prior.contrastive_div * mean(logprior)
@@ -110,8 +110,8 @@ function initialize_langevin_loss(
         z_prior,
         x,
         model,
-        Lux.testmode(st).ebm,
-        Lux.testmode(st).gen,
+        st_ebm,
+        st_gen,
     )
     compiled_grad = Reactant.@compile grad_langevin_llhood(
         ps,
@@ -120,8 +120,8 @@ function initialize_langevin_loss(
         z_prior,
         x,
         model,
-        st_ebm,
-        st_gen,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
     )
     return LangevinLoss(compiled_loss, compiled_grad)
 end
@@ -139,8 +139,16 @@ function langevin_loss(
     st_ebm, st_gen = st_new.ebm, st_new.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
-    ∇, st_ebm, st_gen =
-        l.compiled_grad(ps, ∇, z_posterior, z_prior, x, model, st_ebm, st_gen)
+    ∇, st_ebm, st_gen = l.compiled_grad(
+        ps,
+        ∇,
+        z_posterior,
+        z_prior,
+        x,
+        model,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
+    )
     loss, st_ebm, st_gen =
         l.compiled_loss(ps, z_posterior, z_prior, x, model, st_ebm, st_gen)
     return loss, ∇, st_ebm, st_gen

@@ -48,9 +48,10 @@ function logpos_grad(
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
-        Enzyme.Const(st),
+        Enzyme.Const(Lux.trainmode(st)),
         Enzyme.Const(prior_sampling_bool),
     )
+    println("norm of ∇z: ", norm(∇z))
     return ∇z
 end
 
@@ -190,7 +191,7 @@ function ULA_sample(
             ) / loss_scaling
 
         # all(iszero, ∇z) && error("∇z is zero")
-        
+
         z += η .* ∇z .+ sqrt(2 * η) .* ξ
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

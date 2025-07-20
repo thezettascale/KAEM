@@ -274,16 +274,11 @@ function init_posterior_sampler(
             (m, x, ps, st, rng) ->
                 sample_function(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
 
-        loss_struct = initialize_langevin_loss(
-            ps,
-            Lux.trainmode(st),
-            model,
-            x;
-            rng = rng,
-        )
+        loss_struct = initialize_langevin_loss(ps, Lux.trainmode(st), model, x; rng = rng)
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) ->
+                langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -337,22 +332,18 @@ function init_posterior_sampler(
                 rng = rng,
             )
 
-        loss_struct = initialize_thermo_loss(
-            ps,
-            Lux.trainmode(st),
-            model,
-            x;
-            rng = rng,
-        )
+        loss_struct = initialize_thermo_loss(ps, Lux.trainmode(st), model, x; rng = rng)
 
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) ->
+                thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
         loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; rng = rng)
         @reset model.loss_fcn =
-            (p, ∇, s, m, x_i) -> importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+            (p, ∇, s, m, x_i) ->
+                importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: IS")
     end
@@ -365,25 +356,21 @@ function move_to_hq(model::T_KAM)
 
     if model.prior.layernorm_bool
         for i = 1:(model.prior.depth-1)
-            @reset model.prior.layernorms[i] =
-                model.prior.layernorms[i] |> hq
+            @reset model.prior.layernorms[i] = model.prior.layernorms[i] |> hq
         end
     end
 
     if model.lkhood.layernorm_bool
         for i = 1:(model.lkhood.depth-1)
-            @reset model.lkhood.layernorms[i] =
-                model.lkhood.layernorms[i] |> hq
+            @reset model.lkhood.layernorms[i] = model.lkhood.layernorms[i] |> hq
         end
     end
 
     if model.lkhood.CNN
-        for i = 1:model.lkhood.depth-1
-            @reset model.lkhood.Φ_fcns[i] =
-                model.lkhood.Φ_fcns[i] |> hq
+        for i = 1:(model.lkhood.depth-1)
+            @reset model.lkhood.Φ_fcns[i] = model.lkhood.Φ_fcns[i] |> hq
             if model.lkhood.batchnorm_bool
-                @reset model.lkhood.batchnorms[i] =
-                    model.lkhood.batchnorms[i] |> hq
+                @reset model.lkhood.batchnorms[i] = model.lkhood.batchnorms[i] |> hq
             end
         end
         @reset model.lkhood.Φ_fcns[model.lkhood.depth] =

@@ -132,8 +132,8 @@ function initialize_thermo_loss(
         x,
         temps,
         model,
-        Lux.testmode(st).ebm,
-        Lux.testmode(st).gen,
+        st_ebm,
+        st_gen,
     )
     compiled_grad = Reactant.@compile grad_thermo_llhood(
         ps,
@@ -143,8 +143,8 @@ function initialize_thermo_loss(
         x,
         temps,
         model,
-        st_ebm,
-        st_gen,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
     )
     return ThermodynamicLoss(compiled_loss, compiled_grad)
 end
@@ -162,8 +162,17 @@ function thermodynamic_loss(
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
-    ∇, st_ebm, st_gen =
-        l.compiled_grad(ps, ∇, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
+    ∇, st_ebm, st_gen = l.compiled_grad(
+        ps,
+        ∇,
+        z_posterior,
+        z_prior,
+        x,
+        temps,
+        model,
+        Lux.trainmode(st_ebm),
+        Lux.trainmode(st_gen),
+    )
     loss, st_ebm, st_gen =
         l.compiled_loss(ps, z_posterior, z_prior, x, temps, model, st_ebm, st_gen)
     return loss, ∇, st_ebm, st_gen

@@ -178,24 +178,30 @@ function init_GenModel(
             (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
         for i in eachindex(hidden_c[1:(end-1)])
-            push!(Φ_functions, Lux.ConvTranspose(
-                (k_size[i], k_size[i]),
-                hidden_c[i] => hidden_c[i+1],
-                identity;
-                stride = strides[i],
-                pad = paddings[i],
-            ))
+            push!(
+                Φ_functions,
+                Lux.ConvTranspose(
+                    (k_size[i], k_size[i]),
+                    hidden_c[i] => hidden_c[i+1],
+                    identity;
+                    stride = strides[i],
+                    pad = paddings[i],
+                ),
+            )
             if batchnorm_bool
                 push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
             end
         end
-        push!(Φ_functions, Lux.ConvTranspose(
-            (k_size[end], k_size[end]),
-            hidden_c[end] => output_dim,
-            identity;
-            stride = strides[end],
-            pad = paddings[end],
-        ))
+        push!(
+            Φ_functions,
+            Lux.ConvTranspose(
+                (k_size[end], k_size[end]),
+                hidden_c[end] => output_dim,
+                identity;
+                stride = strides[end],
+                pad = paddings[end],
+            ),
+        )
 
         if batchnorm_bool && length(batchnorms_temp) > 0
             batchnorms = ntuple(i -> batchnorms_temp[i], length(batchnorms_temp))
@@ -273,15 +279,24 @@ function init_GenModel(
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-    fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for i in eachindex(lkhood.Φ_fcns))
+    fcn_ps = NamedTuple(
+        symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for
+        i in eachindex(lkhood.Φ_fcns)
+    )
     layernorm_ps = (a = zero(T))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
-        layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for i in eachindex(lkhood.layernorms))
+        layernorm_ps = NamedTuple(
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for
+            i in eachindex(lkhood.layernorms)
+        )
     end
 
     batchnorm_ps = (a = zero(T))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
-        batchnorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for i in eachindex(lkhood.batchnorms))
+        batchnorm_ps = NamedTuple(
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for
+            i in eachindex(lkhood.batchnorms)
+        )
     end
 
     attention_ps = (a = zero(T))
@@ -302,15 +317,24 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
 end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
-    fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for i in eachindex(lkhood.Φ_fcns))
+    fcn_st = NamedTuple(
+        symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for
+        i in eachindex(lkhood.Φ_fcns)
+    )
     layernorm_st = (a = zero(T))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
-        layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for i in eachindex(lkhood.layernorms))
+        layernorm_st = NamedTuple(
+            symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for
+            i in eachindex(lkhood.layernorms)
+        )
     end
 
     batchnorm_st = (a = zero(T))
     if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
-        batchnorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for i in eachindex(lkhood.batchnorms))
+        batchnorm_st = NamedTuple(
+            symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for
+            i in eachindex(lkhood.batchnorms)
+        )
     end
 
     attention_st = (a = zero(T))

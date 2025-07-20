@@ -26,16 +26,29 @@ function uniform_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArra
     return half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device
 end
 
-function gaussian_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+function gaussian_pdf(
+    z::AbstractArray{full_quant},
+    ε::full_quant,
+)::AbstractArray{half_quant}
     return half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
 end
 
-function lognormal_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
+function lognormal_pdf(
+    z::AbstractArray{full_quant},
+    ε::full_quant,
+)::AbstractArray{half_quant}
     return exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε)
 end
 
-function learnable_gaussian_pdf(z::AbstractArray{full_quant}, ps::ComponentArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
-    return one(half_quant) ./ (abs.(ps.dist.π_σ .* half_quant(sqrt(2π)) .+ ε) .* exp.(-(z .- ps.dist.π_μ .^ 2) ./ (2 .* (ps.dist.π_σ .^ 2) .+ ε)))
+function learnable_gaussian_pdf(
+    z::AbstractArray{full_quant},
+    ps::ComponentArray{full_quant},
+    ε::full_quant,
+)::AbstractArray{half_quant}
+    return one(half_quant) ./ (
+        abs.(ps.dist.π_σ .* half_quant(sqrt(2π)) .+ ε) .*
+        exp.(-(z .- ps.dist.π_μ .^ 2) ./ (2 .* (ps.dist.π_σ .^ 2) .+ ε))
+    )
 end
 
 function ebm_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
@@ -214,36 +227,43 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    fcn_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
+    fcn_ps = NamedTuple(
+        symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for
+        i = 1:prior.depth
+    )
     layernorm_ps = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
-        layernorm_ps = NamedTuple(symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for i in 1:prior.depth-1)
+        layernorm_ps = NamedTuple(
+            symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
+            i = 1:(prior.depth-1)
+        )
     end
 
     prior_ps = (
-    π_μ = prior.prior_type == "learnable_gaussian" ? zeros(half_quant, 1, prior.p_size) : zero(T),
-    π_σ = prior.prior_type == "learnable_gaussian" ? ones(half_quant, 1, prior.p_size) : zero(T),
-    α   = prior.mixture_model ? glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : zero(T),
+        π_μ = prior.prior_type == "learnable_gaussian" ?
+              zeros(half_quant, 1, prior.p_size) : zero(T),
+        π_σ = prior.prior_type == "learnable_gaussian" ?
+              ones(half_quant, 1, prior.p_size) : zero(T),
+        α = prior.mixture_model ?
+            glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : zero(T),
     )
-   
-    return(
-        fcn = fcn_ps,
-        dist = prior_ps,
-        layernorm = layernorm_ps,
-    )
+
+    return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)
 end
 
 function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
-    fcn_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth)
+    fcn_st = NamedTuple(
+        symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
+    )
     layernorm_st = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
-        layernorm_st = NamedTuple(symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for i in 1:prior.depth-1)
+        layernorm_st = NamedTuple(
+            symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
+            i = 1:(prior.depth-1)
+        )
     end
 
-    return (
-        fcn = fcn_st,
-        layernorm = layernorm_st,
-    )
+    return (fcn = fcn_st, layernorm = layernorm_st)
 end
 
 end

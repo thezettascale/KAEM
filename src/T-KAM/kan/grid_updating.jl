@@ -119,7 +119,12 @@ function update_model_grid(
             @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
             @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
 
-            z, _ = model.prior.Lux.apply(prior.fcns_qp[i], z, ps.ebm.fcn[symbol_map[i]], st.ebm.fcn[symbol_map[i]])
+            z, _ = model.prior.Lux.apply(
+                prior.fcns_qp[i],
+                z,
+                ps.ebm.fcn[symbol_map[i]],
+                st.ebm.fcn[symbol_map[i]],
+            )
             z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
 
             if model.prior.layernorm_bool && i < model.prior.depth
@@ -156,7 +161,8 @@ function update_model_grid(
         @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
         @reset st.gen.fcn[symbol_map[i]].grid = new_grid
 
-        z, _ = model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], st.gen.fcn[symbol_map[i]])
+        z, _ =
+            model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], st.gen.fcn[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if model.lkhood.layernorm_bool && i < model.lkhood.depth

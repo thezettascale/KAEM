@@ -70,14 +70,15 @@ function test_grad_llhood()
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     grads = Enzyme.make_zero(ps.gen)
 
-    closure = (z_i, x_i, ll, ps_gen, st_gen) -> begin
-        logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen)
-        return sum(logllhood)
-    end
+    closure =
+        (z_i, x_i, ll, ps_gen, st_gen) -> begin
+            logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen)
+            return sum(logllhood)
+        end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
-        closure, 
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
+        closure,
         Enzyme.Active,
         Enzyme.Const(z),
         Enzyme.Const(x),
@@ -102,14 +103,15 @@ function test_mala_grad_llhood()
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     grads = Enzyme.make_zero(ps.gen)
 
-    closure = (z_i, x_i, ll, ps_gen, st_gen) -> begin
-        logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
-        return sum(logllhood)
-    end
+    closure =
+        (z_i, x_i, ll, ps_gen, st_gen) -> begin
+            logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
+            return sum(logllhood)
+        end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
-        closure, 
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
+        closure,
         Enzyme.Active,
         Enzyme.Const(z),
         Enzyme.Const(x),
@@ -151,14 +153,15 @@ function test_cnn_grad_llhood()
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
     grads = Enzyme.make_zero(ps.gen)
 
-    closure = (z_i, x_i, ll, ps_gen, st_gen) -> begin
-        logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
-        return sum(logllhood)
-    end
+    closure =
+        (z_i, x_i, ll, ps_gen, st_gen) -> begin
+            logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
+            return sum(logllhood)
+        end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
-        closure, 
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
+        closure,
         Enzyme.Active,
         Enzyme.Const(z),
         Enzyme.Const(x),

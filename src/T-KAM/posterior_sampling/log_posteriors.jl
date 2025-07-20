@@ -34,7 +34,7 @@ function unadjusted_logpos(
 
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot += ll * not_prior
+        tot += sum(ll) * not_prior
     end
 
     return tot * m.loss_scaling

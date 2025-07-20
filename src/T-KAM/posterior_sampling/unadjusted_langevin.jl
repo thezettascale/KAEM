@@ -52,6 +52,7 @@ function logpos_grad(
         Enzyme.Const(T(!prior_sampling_bool)),
     )
     any(isnan, ∇z) && error("∇z is NaN")
+    error(∇z)
     return ∇z
 end
 
@@ -76,6 +77,7 @@ function initialize_ULA_sampler(
     num_samples::Int = 100,
     N::Int = 20,
     RE_frequency::Int = 10,
+    compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant,U<:full_quant}
 
@@ -98,13 +100,23 @@ function initialize_ULA_sampler(
     ll =
         (z_i, x_i, l, ps_gen, st_gen) ->
             log_likelihood_MALA(z_i, x_i, l, ps_gen, st_gen; ε = model.ε)
-    # compiled_llhood = Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
-
-    # compiled_logpos_grad =
-    #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
 
     compiled_llhood = ll
     compiled_logpos_grad = logpos_grad
+    if compile_mlir
+        compiled_llhood =
+            Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
+        compiled_logpos_grad = Reactant.@compile logpos_grad(
+            z,
+            ∇z,
+            x,
+            temps,
+            model,
+            ps,
+            st,
+            prior_sampling_bool,
+        )
+    end
 
     return ULA_sampler(
         compiled_llhood,

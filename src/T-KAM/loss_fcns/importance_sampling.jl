@@ -133,33 +133,40 @@ function initialize_importance_loss(
     st::NamedTuple,
     model,
     x::AbstractArray{T};
+    compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
     z, st_ebm, st_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, Lux.testmode(st), model, x; rng = rng)
-    # compiled_loss = Reactant.@compile marginal_llhood(
-    #     ps,
-    #     z,
-    #     x,
-    #     weights_resampled,
-    #     resampled_idxs,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    # compiled_grad = Reactant.@compile grad_importance_llhood(
-    #     ps,
-    #     ∇,
-    #     z,
-    #     x,
-    #     weights_resampled,
-    #     resampled_idxs,
-    #     model,
-    #     Lux.trainmode(st_ebm),
-    #     Lux.trainmode(st_gen),
-    # )
-    return ImportanceLoss(marginal_llhood, grad_importance_llhood)
+    compiled_loss = marginal_llhood
+    compiled_grad = grad_importance_llhood
+
+    if compile_mlir
+        compiled_loss = Reactant.@compile marginal_llhood(
+            ps,
+            z,
+            x,
+            weights_resampled,
+            resampled_idxs,
+            model,
+            st_ebm,
+            st_gen,
+        )
+        compiled_grad = Reactant.@compile grad_importance_llhood(
+            ps,
+            ∇,
+            z,
+            x,
+            weights_resampled,
+            resampled_idxs,
+            model,
+            Lux.trainmode(st_ebm),
+            Lux.trainmode(st_gen),
+        )
+    end
+
+    return ImportanceLoss(compiled_loss, compiled_grad)
 end
 
 function importance_loss(

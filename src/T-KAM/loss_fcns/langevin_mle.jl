@@ -96,33 +96,39 @@ function initialize_langevin_loss(
     st::NamedTuple,
     model,
     x::AbstractArray{T};
+    compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
     z_posterior, st_new = sample_langevin(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st_new.ebm, st_new.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
+    compiled_loss = marginal_llhood
+    compiled_grad = grad_langevin_llhood
 
-    # compiled_loss = Reactant.@compile marginal_llhood(
-    #     ps,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     model,
-    #     st_ebm,
-    #     st_gen,
-    # )
-    # compiled_grad = Reactant.@compile grad_langevin_llhood(
-    #     ps,
-    #     ∇,
-    #     z_posterior,
-    #     z_prior,
-    #     x,
-    #     model,
-    #     Lux.trainmode(st_ebm),
-    #     Lux.trainmode(st_gen),
-    # )
-    return LangevinLoss(marginal_llhood, grad_langevin_llhood)
+    if compile_mlir
+        compiled_loss = Reactant.@compile marginal_llhood(
+            ps,
+            z_posterior,
+            z_prior,
+            x,
+            model,
+            st_ebm,
+            st_gen,
+        )
+        compiled_grad = Reactant.@compile grad_langevin_llhood(
+            ps,
+            ∇,
+            z_posterior,
+            z_prior,
+            x,
+            model,
+            Lux.trainmode(st_ebm),
+            Lux.trainmode(st_gen),
+        )
+    end
+
+    return LangevinLoss(compiled_loss, compiled_grad)
 end
 
 function langevin_loss(

@@ -250,6 +250,7 @@ function initialize_autoMALA_sampler(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     seq::Bool = false,
+    compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant,U<:full_quant}
     z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
@@ -272,16 +273,6 @@ function initialize_autoMALA_sampler(
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
-    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
-    # compiled_llhood = Reactant.@compile log_likelihood_MALA(
-    #     z[:, :, :, 1],
-    #     x_single,
-    #     model.lkhood,
-    #     ps.gen,
-    #     st.gen,
-    # )
-    compiled_llhood = log_likelihood_MALA
-
     function logpos_withgrad(
         z_i::AbstractArray{U},
         ∇z_i::AbstractArray{U},
@@ -297,52 +288,61 @@ function initialize_autoMALA_sampler(
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
-        # all(iszero, ∇z_k) && error("∇z_k is zero")
-
         return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
     end
 
+    compiled_llhood = log_likelihood_MALA
     logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
-
     compiled_leapfrog = leapfrop_proposal
     compiled_autoMALA_step = autoMALA_step
 
-    # compiled_leapfrog = Reactant.@compile leapfrop_proposal(
-    #     z,
-    #     ∇z,
-    #     x_t,
-    #     t_expanded,
-    #     logpos_z,
-    #     momentum,
-    #     device(repeat(M, 1, 1, S, 1)),
-    #     η,
-    #     logpos_withgrad,
-    #     model,
-    #     ps,
-    #     st,
-    # )
+    if compile_mlir
+        x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
+        compiled_llhood = Reactant.@compile log_likelihood_MALA(
+            z[:, :, :, 1],
+            x_single,
+            model.lkhood,
+            ps.gen,
+            st.gen,
+        )
 
-    # compiled_autoMALA_step = Reactant.@compile autoMALA_step(
-    #     log_a,
-    #     log_b,
-    #     z,
-    #     ∇z,
-    #     x_t,
-    #     t_expanded,
-    #     logpos_z,
-    #     momentum,
-    #     device(repeat(M, 1, 1, S, 1)),
-    #     logpos_withgrad,
-    #     model,
-    #     ps,
-    #     st,
-    #     η,
-    #     Δη,
-    #     η_min,
-    #     η_max,
-    #     model.ε,
-    #     seq,
-    # )
+        compiled_leapfrog = Reactant.@compile leapfrop_proposal(
+            z,
+            ∇z,
+            x_t,
+            t_expanded,
+            logpos_z,
+            momentum,
+            device(repeat(M, 1, 1, S, 1)),
+            η,
+            logpos_withgrad,
+            model,
+            ps,
+            st,
+        )
+
+        compiled_autoMALA_step = Reactant.@compile autoMALA_step(
+            log_a,
+            log_b,
+            z,
+            ∇z,
+            x_t,
+            t_expanded,
+            logpos_z,
+            momentum,
+            device(repeat(M, 1, 1, S, 1)),
+            logpos_withgrad,
+            model,
+            ps,
+            st,
+            η,
+            Δη,
+            η_min,
+            η_max,
+            model.ε,
+            seq,
+        )
+    end
 
     return autoMALA_sampler(
         compiled_llhood,

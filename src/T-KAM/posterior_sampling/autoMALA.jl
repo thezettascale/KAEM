@@ -260,7 +260,6 @@ function initialize_autoMALA_sampler(
     z_hq = reshape(z_hq, Q, P, S, num_temps)
     z_fq = U.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    ∇z_hq = Enzyme.make_zero(z_hq)
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     seq = model.lkhood.seq_length > 1
@@ -281,7 +280,7 @@ function initialize_autoMALA_sampler(
     if compile_mlir
         compiled_4D_value_and_grad = Reactant.@compile autoMALA_value_and_grad_4D(
             z_hq,
-            Enzyme.make_zero(∇z_hq),
+            Enzyme.make_zero(z_hq),
             x_t,
             t_expanded,
             model,
@@ -292,7 +291,7 @@ function initialize_autoMALA_sampler(
         )
         compiled_value_and_grad = Reactant.@compile autoMALA_value_and_grad(
             z_hq[:, :, :, 1],
-            Enzyme.make_zero(∇z_hq[:, :, :, 1]),
+            Enzyme.make_zero(z_hq[:, :, :, 1]),
             x_single,
             t_expanded[:, 1],
             model,
@@ -303,7 +302,6 @@ function initialize_autoMALA_sampler(
 
     function logpos_withgrad(
         z_i::AbstractArray{T},
-        ∇z_i::AbstractArray{T},
         x_i::AbstractArray{T},
         t_k::AbstractArray{T},
         m,
@@ -312,7 +310,7 @@ function initialize_autoMALA_sampler(
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
         logpos, ∇z_k, st_ebm, st_gen =
-            fcn(z_i, Enzyme.make_zero(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
+            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
@@ -320,7 +318,7 @@ function initialize_autoMALA_sampler(
     end
 
     compiled_llhood = log_likelihood_MALA
-    logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
+    logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st)
     compiled_leapfrog = leapfrop_proposal
     compiled_autoMALA_step = autoMALA_step
 
@@ -418,7 +416,6 @@ function autoMALA_sample(
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    ∇z_hq = Enzyme.make_zero(z_hq)
     z_copy = similar(z_hq[:, :, :, 1])
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
@@ -454,7 +451,7 @@ function autoMALA_sample(
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
         logpos_z, ∇z_fq, st =
-            sampler.logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
+            sampler.logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st)
 
         if burn_in < sampler.N
             burn_in += 1
@@ -472,6 +469,8 @@ function autoMALA_sample(
                 ps,
                 st,
             )
+            z_hq = T.(z_fq)
+
         else
             ẑ, η_prop, η_prime, reversible, log_r, st = sampler.compiled_autoMALA_step(
                 log_a,
@@ -504,7 +503,6 @@ function autoMALA_sample(
             num_acceptances .= num_acceptances .+ accept
 
             z_hq = T.(z_fq)
-            ∇z_hq = T.(∇z_fq)
 
             # Replica exchange Monte Carlo
             if i % sampler.RE_frequency == 0 && num_temps > 1
@@ -535,7 +533,7 @@ function autoMALA_sample(
                         z_copy .= z_hq[:, :, :, t]
                         z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
                         z_hq[:, :, :, t+1] .= z_copy
-                        z_hq = full_quant.(z_hq)
+                        z_fq = full_quant.(z_hq)
                     end
                 end
             end

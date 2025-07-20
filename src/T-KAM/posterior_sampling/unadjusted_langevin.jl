@@ -100,7 +100,6 @@ function initialize_ULA_sampler(
 
     z_hq = T.(z)
     ∇z_fq = Enzyme.make_zero(z) |> device
-    ∇z_hq = T.(∇z_fq)
 
     ll =
         (z_i, x_i, l, ps_gen, st_gen) ->
@@ -113,7 +112,7 @@ function initialize_ULA_sampler(
             Reactant.@compile ll(z_hq[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
         compiled_logpos_grad = Reactant.@compile logpos_grad(
             z_hq,
-            Enzyme.make_zero(∇z_hq),
+            Enzyme.make_zero(z_hq),
             x,
             temps,
             model,
@@ -190,7 +189,6 @@ function ULA_sample(
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    ∇z_hq = Enzyme.make_zero(z_hq)
     z_copy = similar(z_hq[:, :, :, 1])
 
     # Pre-allocate noise
@@ -203,7 +201,7 @@ function ULA_sample(
             full_quant.(
                 sampler.compiled_logpos_grad(
                     z_hq,
-                    Enzyme.make_zero(∇z_hq),
+                    Enzyme.make_zero(z_hq),
                     x,
                     temps,
                     model,
@@ -215,7 +213,6 @@ function ULA_sample(
 
         z_fq += η .* ∇z_fq .+ sqrt(2 * η) .* ξ
 
-        ∇z_hq = T.(∇z_fq)
         z_hq = T.(z_fq)
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
@@ -246,6 +243,7 @@ function ULA_sample(
                     z_copy .= z_hq[:, :, :, t]
                     z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
                     z_hq[:, :, :, t+1] .= z_copy
+                    z_fq = full_quant.(z_hq)
                 end
             end
         end

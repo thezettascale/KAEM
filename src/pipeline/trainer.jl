@@ -180,7 +180,7 @@ function train!(t::T_KAM_trainer)
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
-    grads = half_quant.(Enzyme.make_zero(half_quant.(t.ps)))
+    grads = Enzyme.make_zero(half_quant.(t.ps))
 
     loss_file = t.model.file_loc * "loss.csv"
 

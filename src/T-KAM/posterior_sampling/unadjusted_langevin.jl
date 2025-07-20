@@ -49,7 +49,7 @@ function logpos_grad(
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
-        Enzyme.Const(Lux.trainmode(st)),
+        Enzyme.Const(st),
         Enzyme.Const(T(!prior_sampling_bool)),
     )
 

@@ -41,7 +41,7 @@ function test_model_derivative()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = prep_model(model, ps, st, x_test)
     ∇ = Enzyme.make_zero(ps)
-    
+
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) != 0
     @test !any(isnan, ∇)

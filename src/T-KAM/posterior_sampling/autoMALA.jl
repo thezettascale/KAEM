@@ -274,6 +274,33 @@ function initialize_autoMALA_sampler(
     log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
+    compiled_4D_value_and_grad = autoMALA_value_and_grad_4D
+    compiled_value_and_grad = autoMALA_value_and_grad
+    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
+
+    if compile_mlir
+        compiled_4D_value_and_grad = Reactant.@compile autoMALA_value_and_grad_4D(
+            z_hq,
+            Enzyme.make_zero(∇z_hq),
+            x_t,
+            t_expanded,
+            model,
+            ps,
+            st,
+            num_temps,
+            seq,
+        )
+        compiled_value_and_grad = Reactant.@compile autoMALA_value_and_grad(
+            z_hq[:, :, :, 1],
+            Enzyme.make_zero(∇z_hq[:, :, :, 1]),
+            x_single,
+            t_expanded[:, 1],
+            model,
+            ps,
+            st,
+        )
+    end
+
     function logpos_withgrad(
         z_i::AbstractArray{T},
         ∇z_i::AbstractArray{T},
@@ -283,9 +310,9 @@ function initialize_autoMALA_sampler(
         p::ComponentArray{T},
         st_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
-        fcn = ndims(z_i) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
+        fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
         logpos, ∇z_k, st_ebm, st_gen =
-            fcn(z_i, ∇z_i, x_i, t_k, m, p, st_i, num_temps, seq)
+            fcn(z_i, Enzyme.make_zero(∇z_i), x_i, t_k, m, p, st_i, num_temps, seq)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
@@ -298,7 +325,6 @@ function initialize_autoMALA_sampler(
     compiled_autoMALA_step = autoMALA_step
 
     if compile_mlir
-        x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
         compiled_llhood = Reactant.@compile log_likelihood_MALA(
             z_hq[:, :, :, 1],
             x_single,

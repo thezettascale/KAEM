@@ -113,7 +113,7 @@ function initialize_ULA_sampler(
             Reactant.@compile ll(z_hq[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
         compiled_logpos_grad = Reactant.@compile logpos_grad(
             z_hq,
-            ∇z_hq,
+            Enzyme.make_zero(∇z_hq),
             x,
             temps,
             model,
@@ -203,7 +203,7 @@ function ULA_sample(
             full_quant.(
                 sampler.compiled_logpos_grad(
                     z_hq,
-                    ∇z_hq,
+                    Enzyme.make_zero(∇z_hq),
                     x,
                     temps,
                     model,

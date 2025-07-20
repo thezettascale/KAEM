@@ -221,7 +221,7 @@ function train!(t::T_KAM_trainer)
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
         loss, grads, st_ebm, st_gen = t.model.loss_fcn(
             half_quant(t.ps),
-            grads,
+            Enzyme.make_zero(grads),
             Lux.trainmode(t.st),
             t.model,
             t.x;

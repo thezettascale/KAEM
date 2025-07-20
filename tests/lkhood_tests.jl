@@ -76,7 +76,7 @@ function test_grad_llhood()
     end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse), 
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
         closure, 
         Enzyme.Active,
         Enzyme.Const(z),
@@ -88,7 +88,6 @@ function test_grad_llhood()
 
     @test !all(iszero, grads)
     @test !any(isnan, grads)
-    println(grads)
 end
 
 function test_cnn_generate()

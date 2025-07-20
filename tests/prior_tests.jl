@@ -53,7 +53,7 @@ function test_grad_prior()
     end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
         closure,
         Enzyme.Active,
         Enzyme.Const(z_test),

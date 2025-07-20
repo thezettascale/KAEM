@@ -40,7 +40,7 @@ function logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant}
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
         Enzyme.Active,
         Enzyme.Duplicated(T.(z_i), ∇z),

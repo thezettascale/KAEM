@@ -98,7 +98,7 @@ function autoMALA_value_and_grad_4D(
             sum(first(autoMALA_logpos_4D(z, x, temps, model, p, s, n, sequence)))
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         fcn,
         Enzyme.Active,
         Enzyme.Duplicated(T.(z_i), ∇z),
@@ -133,7 +133,7 @@ function autoMALA_value_and_grad(
             sum(first(autoMALA_logpos(z, x, temps, model, p, s, n)))
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         fcn,
         Enzyme.Active,
         Enzyme.Duplicated(T.(z_i), ∇z),

@@ -50,7 +50,7 @@ function logpos_grad(
         Enzyme.Const(m),
         Enzyme.Const(ps),
         Enzyme.Const(st),
-        Enzyme.Const(T(!prior_sampling_bool)),
+        Enzyme.Const(prior_sampling_bool),
     )
 
     any(isnan, ∇z) && error("∇z is NaN")

@@ -23,18 +23,27 @@ function unadjusted_logpos(
     m,
     ps::ComponentArray{T},
     st::NamedTuple,
-    not_prior::T, # Boolean
+    prior_sampling_bool::Bool,
 )::T where {T<:half_quant}
     tot = zero(T)
-    st_ebm, st_gen = st.ebm, st.gen
 
     for k in eachindex(temps)
-        lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-        tot = tot + sum(lp)
-
-        ll, st_gen =
-            log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot = tot + sum(temps[k] .* not_prior .* ll)
+        lp = sum(first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)))
+        ll =
+            prior_sampling_bool ? zero(T) :
+            sum(
+                temps[k] .* first(
+                    log_likelihood_MALA(
+                        z_i[:, :, :, k],
+                        x,
+                        m.lkhood,
+                        ps.gen,
+                        st_gen;
+                        ε = m.ε,
+                    ),
+                ),
+            )
+        tot = tot + lp + ll
     end
 
     return tot * m.loss_scaling

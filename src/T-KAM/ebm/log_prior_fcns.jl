@@ -44,7 +44,7 @@ function prior_fwd(
 
     for i = 1:ebm.depth
 
-        z, st_new = ebm.fcns_qp[i](z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
+        z, st_new = ebm.Lux.apply(prior.fcns_qp[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)

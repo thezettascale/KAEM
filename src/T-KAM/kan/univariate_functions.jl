@@ -1,6 +1,6 @@
 module UnivariateFunctions
 
-export univariate_function, init_function, fwd, activation_mapping
+export univariate_function, init_function, activation_mapping
 
 using CUDA, KernelAbstractions, Accessors, ComponentArrays
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
@@ -187,12 +187,11 @@ function Lux.initialstates(
            (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
 end
 
-function fwd(
-    l,
+function (l::univariate_function{T,U})(
+    x::AbstractArray{T},
     ps::ComponentArray{T},
     st::NamedTuple,
-    x::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Forward pass for the univariate function.
 
@@ -207,7 +206,7 @@ function fwd(
     """
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     y = l.coef2curve(x, st.grid, ps.coef, τ)
-    return l.basis_mul(l, ps, st, x, y)
+    return l.basis_mul(l, ps, st, x, y), st
 end
 
 end

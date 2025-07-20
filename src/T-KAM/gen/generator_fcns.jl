@@ -9,7 +9,7 @@ using NNlib: softmax, batched_mul
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
 using .Utils: half_quant, full_quant, device, set_state!, symbol_map
-using .UnivariateFunctions: fwd
+using .UnivariateFunctions
 
 function KAN_fwd(
     lkhood,
@@ -36,7 +36,7 @@ function KAN_fwd(
 
     # KAN functions
     for i = 1:lkhood.depth
-        z = fwd(lkhood.Φ_fcns[i], ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]], z)
+        z, st_new = lkhood.Φ_fcns[i](z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if lkhood.layernorm_bool && i < lkhood.depth

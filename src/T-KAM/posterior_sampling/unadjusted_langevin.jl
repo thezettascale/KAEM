@@ -52,7 +52,6 @@ function logpos_grad(
         Enzyme.Const(T(!prior_sampling_bool)),
     )
     any(isnan, ∇z) && error("∇z is NaN")
-    error(∇z)
     return ∇z
 end
 
@@ -204,8 +203,6 @@ function ULA_sample(
                     sampler.prior_sampling_bool,
                 ),
             ) / loss_scaling
-
-        # all(iszero, ∇z) && error("∇z is zero")
 
         z += η .* ∇z .+ sqrt(2 * η) .* ξ
 

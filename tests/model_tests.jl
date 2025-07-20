@@ -29,9 +29,8 @@ function test_ps_derivative()
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
 
-    @test norm(∇) > 0
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
-    println(∇)
 end
 
 function test_grid_update()
@@ -62,9 +61,8 @@ function test_mala_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
-    @test norm(∇) > 0
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
-    println(∇)
 end
 
 function test_cnn_loss()
@@ -80,10 +78,9 @@ function test_cnn_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
-    @test norm(∇) > 0
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
-    println(∇)
 end
 
 function test_seq_loss()
@@ -100,9 +97,8 @@ function test_seq_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
-    @test norm(∇) > 0
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
-    println(∇)
 end
 
 @testset "T-KAM Tests" begin

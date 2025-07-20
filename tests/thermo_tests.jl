@@ -42,9 +42,8 @@ function test_model_derivative()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
-    @test norm(∇) > 0
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
-    println(∇)
 end
 
 @testset "Thermodynamic Integration Tests" begin

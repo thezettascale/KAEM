@@ -191,6 +191,7 @@ function init_prior_sampler(
     if model.prior.ula
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
+        compile_mlir = parse(Bool, retrieve(conf, "TRAINING", "MLIR_compile"))
 
         sampler_struct = initialize_ULA_sampler(
             ps,
@@ -201,6 +202,7 @@ function init_prior_sampler(
             N = num_steps,
             num_samples = size(x)[end],
             prior_sampling_bool = true,
+            compile_mlir = compile_mlir,
             rng = rng,
         )
 
@@ -239,6 +241,7 @@ function init_posterior_sampler(
 
     # Importance sampling or MALA
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
+    compile_mlir = parse(Bool, retrieve(conf, "TRAINING", "MLIR_compile"))
 
     if (model.MALA && !(model.N_t > 1)) || model.prior.ula
         sampler_struct =
@@ -255,6 +258,7 @@ function init_posterior_sampler(
                 η_max = η_minmax[2],
                 seq = model.lkhood.seq_length > 1,
                 RE_frequency = replica_exchange_frequency,
+                compile_mlir = compile_mlir,
                 rng = rng,
             ) :
             initialize_ULA_sampler(
@@ -265,6 +269,7 @@ function init_posterior_sampler(
                 N = num_steps,
                 num_samples = size(x)[end],
                 RE_frequency = replica_exchange_frequency,
+                compile_mlir = compile_mlir,
                 rng = rng,
             )
         sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
@@ -274,11 +279,11 @@ function init_posterior_sampler(
             (m, x, ps, st, rng) ->
                 sample_function(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
 
-        loss_struct = initialize_langevin_loss(ps, Lux.trainmode(st), model, x; rng = rng)
+        loss_struct = initialize_langevin_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+                langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -305,6 +310,7 @@ function init_posterior_sampler(
                 η_max = η_minmax[2],
                 seq = model.lkhood.seq_length > 1,
                 RE_frequency = replica_exchange_frequency,
+                compile_mlir = compile_mlir,
                 rng = rng,
             ) :
             initialize_ULA_sampler(
@@ -316,6 +322,7 @@ function init_posterior_sampler(
                 N = num_steps,
                 num_samples = size(x)[end],
                 RE_frequency = replica_exchange_frequency,
+                compile_mlir = compile_mlir,
                 rng = rng,
             )
         sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
@@ -332,18 +339,18 @@ function init_posterior_sampler(
                 rng = rng,
             )
 
-        loss_struct = initialize_thermo_loss(ps, Lux.trainmode(st), model, x; rng = rng)
+        loss_struct = initialize_thermo_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+                thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
-        loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; rng = rng)
+        loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
+                importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
 
         println("Posterior sampler: IS")
     end

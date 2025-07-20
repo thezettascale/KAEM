@@ -31,11 +31,9 @@ function unadjusted_logpos(
     for k in eachindex(temps)
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
         tot += sum(lp)
-        if !prior_sampling_bool
-            ll, st_gen =
-                log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-            tot += sum(temps[k] .* ll)
-        end
+        ll, st_gen =
+            log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
+        tot += sum(temps[k] .* ll) * !prior_sampling_bool
     end
 
     return tot * m.loss_scaling

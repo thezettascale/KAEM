@@ -41,20 +41,17 @@ function marginal_llhood(
     )
     logllhood, st_gen =
         log_likelihood_MALA(z_posterior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-    contrastive_div = mean(logprior_pos)
 
-    if m.prior.contrastive_div
-        logprior, st_ebm = m.prior.lp_fcn(
+    logprior, st_ebm = m.prior.lp_fcn(
             z_prior,
             m.prior,
             ps.ebm,
             st_ebm;
             ε = m.ε,
             normalize = !m.prior.contrastive_div,
-        )
-        contrastive_div -= mean(logprior)
-    end
+    )
 
+    contrastive_div = mean(logprior_pos) - m.prior.contrastive_div * mean(logprior)
     return -(contrastive_div + mean(logllhood))*m.loss_scaling, st_ebm, st_gen
 end
 

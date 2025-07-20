@@ -50,7 +50,7 @@ function marginal_llhood(
     end
 
     # MLE estimator
-    logprior, st_ebm = m.prior.lp_fcn(
+    logprior_pos, st_ebm = m.prior.lp_fcn(
         z_posterior[:, :, :, num_temps-1],
         m.prior,
         ps.ebm,
@@ -58,24 +58,20 @@ function marginal_llhood(
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
-    contrastive_div = mean(logprior)
 
-    if m.prior.contrastive_div
-        logprior, st_ebm = m.prior.lp_fcn(
-            z_prior,
-            m.prior,
-            ps.ebm,
-            st_ebm;
-            ε = m.ε,
-            normalize = !m.prior.contrastive_div,
-        )
-        contrastive_div -= mean(logprior)
-    end
+    logprior, st_ebm = m.prior.lp_fcn(
+        z_prior,
+        m.prior,
+        ps.ebm,
+        st_ebm;
+        ε = m.ε,
+        normalize = !m.prior.contrastive_div,
+    )
+    contrastive_div = mean(logprior_pos) - m.prior.contrastive_div * mean(logprior)
 
     logllhood, st_gen =
         log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
     log_ss += mean(logllhood .* Δt[1])
-
     return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen
 end
 

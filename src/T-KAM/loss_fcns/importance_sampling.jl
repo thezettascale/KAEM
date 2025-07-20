@@ -138,27 +138,27 @@ function initialize_importance_loss(
     ∇ = Enzyme.make_zero(ps)
     z, st_ebm, st_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, Lux.testmode(st), model, x; rng = rng)
-    compiled_loss = Reactant.@compile marginal_llhood(
-        ps,
-        z,
-        x,
-        weights_resampled,
-        resampled_idxs,
-        model,
-        st_ebm,
-        st_gen,
-    )
-    compiled_grad = Reactant.@compile grad_importance_llhood(
-        ps,
-        ∇,
-        z,
-        x,
-        weights_resampled,
-        resampled_idxs,
-        model,
-        Lux.trainmode(st_ebm),
-        Lux.trainmode(st_gen),
-    )
+    # compiled_loss = Reactant.@compile marginal_llhood(
+    #     ps,
+    #     z,
+    #     x,
+    #     weights_resampled,
+    #     resampled_idxs,
+    #     model,
+    #     st_ebm,
+    #     st_gen,
+    # )
+    # compiled_grad = Reactant.@compile grad_importance_llhood(
+    #     ps,
+    #     ∇,
+    #     z,
+    #     x,
+    #     weights_resampled,
+    #     resampled_idxs,
+    #     model,
+    #     Lux.trainmode(st_ebm),
+    #     Lux.trainmode(st_gen),
+    # )
     return ImportanceLoss(marginal_llhood, grad_importance_llhood)
 end
 

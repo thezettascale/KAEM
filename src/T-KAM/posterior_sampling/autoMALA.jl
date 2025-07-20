@@ -273,13 +273,14 @@ function initialize_autoMALA_sampler(
     dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
 
     x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
-    compiled_llhood = Reactant.@compile log_likelihood_MALA(
-        z[:, :, :, 1],
-        x_single,
-        model.lkhood,
-        ps.gen,
-        st.gen,
-    )
+    # compiled_llhood = Reactant.@compile log_likelihood_MALA(
+    #     z[:, :, :, 1],
+    #     x_single,
+    #     model.lkhood,
+    #     ps.gen,
+    #     st.gen,
+    # )
+    compiled_llhood = log_likelihood_MALA
 
     function logpos_withgrad(
         z_i::AbstractArray{U},
@@ -303,42 +304,45 @@ function initialize_autoMALA_sampler(
 
     logpos_z, ∇z, st = logpos_withgrad(z, ∇z, x_t, t_expanded, model, ps, st)
 
-    compiled_leapfrog = Reactant.@compile leapfrop_proposal(
-        z,
-        ∇z,
-        x_t,
-        t_expanded,
-        logpos_z,
-        momentum,
-        device(repeat(M, 1, 1, S, 1)),
-        η,
-        logpos_withgrad,
-        model,
-        ps,
-        st,
-    )
+    compiled_leapfrog = leapfrop_proposal
+    compiled_autoMALA_step = autoMALA_step
+    
+    # compiled_leapfrog = Reactant.@compile leapfrop_proposal(
+    #     z,
+    #     ∇z,
+    #     x_t,
+    #     t_expanded,
+    #     logpos_z,
+    #     momentum,
+    #     device(repeat(M, 1, 1, S, 1)),
+    #     η,
+    #     logpos_withgrad,
+    #     model,
+    #     ps,
+    #     st,
+    # )
 
-    compiled_autoMALA_step = Reactant.@compile autoMALA_step(
-        log_a,
-        log_b,
-        z,
-        ∇z,
-        x_t,
-        t_expanded,
-        logpos_z,
-        momentum,
-        device(repeat(M, 1, 1, S, 1)),
-        logpos_withgrad,
-        model,
-        ps,
-        st,
-        η,
-        Δη,
-        η_min,
-        η_max,
-        model.ε,
-        seq,
-    )
+    # compiled_autoMALA_step = Reactant.@compile autoMALA_step(
+    #     log_a,
+    #     log_b,
+    #     z,
+    #     ∇z,
+    #     x_t,
+    #     t_expanded,
+    #     logpos_z,
+    #     momentum,
+    #     device(repeat(M, 1, 1, S, 1)),
+    #     logpos_withgrad,
+    #     model,
+    #     ps,
+    #     st,
+    #     η,
+    #     Δη,
+    #     η_min,
+    #     η_max,
+    #     model.ε,
+    #     seq,
+    # )
 
     return autoMALA_sampler(
         compiled_llhood,

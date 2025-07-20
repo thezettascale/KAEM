@@ -48,6 +48,6 @@ function test_model_derivative()
 end
 
 @testset "Thermodynamic Integration Tests" begin
-    # test_posterior_sampling()
+    test_posterior_sampling()
     test_model_derivative()
 end

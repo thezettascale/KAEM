@@ -28,7 +28,7 @@ function unadjusted_logpos(
     tot = zero(T)
 
     for k in eachindex(temps)
-        lp = sum(first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)))
+        lp = sum(first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st.ebm; ε = m.ε)))
         ll =
             prior_sampling_bool ? zero(T) :
             sum(
@@ -38,7 +38,7 @@ function unadjusted_logpos(
                         x,
                         m.lkhood,
                         ps.gen,
-                        st_gen;
+                        st.gen;
                         ε = m.ε,
                     ),
                 ),
@@ -88,9 +88,9 @@ function autoMALA_logpos_reduced_4D(
 
     for k = 1:num_temps
         x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε))
+        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st.ebm; ε = m.ε))
         ll = first(
-            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε),
+            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st.gen; ε = m.ε),
         )
         tot = tot + sum(lp) + sum(t[:, k] .* ll)
     end

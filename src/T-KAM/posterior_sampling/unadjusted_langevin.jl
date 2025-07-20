@@ -39,11 +39,12 @@ function logpos_grad(
     st::NamedTuple,
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant}
-    CUDA.@fastmath Enzyme.autodiff(
+    
+CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
-        Enzyme.Active(zero(T)),
-        Enzyme.Duplicated(T.(z_i), T.(∇z)),
+        Enzyme.Active,
+        Enzyme.Duplicated(z_i, ∇z),
         Enzyme.Const(x),
         Enzyme.Const(t),
         Enzyme.Const(m),
@@ -51,6 +52,7 @@ function logpos_grad(
         Enzyme.Const(Lux.trainmode(st)),
         Enzyme.Const(T(!prior_sampling_bool)),
     )
+
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
     return ∇z
@@ -212,7 +214,6 @@ function ULA_sample(
             ) ./ loss_scaling
 
         z_fq += η .* ∇z_fq .+ sqrt(2 * η) .* ξ
-        println("norm of ∇z: ", norm(∇z_fq))
 
         ∇z_hq = T.(∇z_fq)
         z_hq = T.(z_fq)

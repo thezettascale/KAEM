@@ -17,7 +17,6 @@ using .GeneratorModel: log_likelihood_MALA
 
 ### ULA ### 
 function unadjusted_logpos(
-    tot::T,
     z_i::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
@@ -26,6 +25,7 @@ function unadjusted_logpos(
     st::NamedTuple,
     not_prior::T, # Boolean
 )::T where {T<:half_quant}
+    tot = zero(T)
     st_ebm, st_gen = st.ebm, st.gen
 
     for k in eachindex(temps)
@@ -34,7 +34,7 @@ function unadjusted_logpos(
 
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot = tot + sum(ll) * not_prior
+        tot = tot + temps[k] * sum(ll) * not_prior
     end
 
     return tot * m.loss_scaling
@@ -66,7 +66,6 @@ function autoMALA_logpos_value_4D(
 end
 
 function autoMALA_logpos_reduced_4D(
-    tot::T,
     z_i::AbstractArray{T},
     x_i::AbstractArray{T},
     t::AbstractArray{T},
@@ -76,6 +75,7 @@ function autoMALA_logpos_reduced_4D(
     num_temps::Int,
     seq::Bool,
 )::T where {T<:half_quant}
+    tot = zero(T)
     st_ebm, st_gen = st_i.ebm, st_i.gen
 
     for k = 1:num_temps
@@ -104,7 +104,7 @@ function autoMALA_value_and_grad_4D(
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         autoMALA_logpos_reduced_4D,
-        Enzyme.Active(zero(T)),
+        Enzyme.Active,
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x_i),
         Enzyme.Const(t),

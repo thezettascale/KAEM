@@ -85,13 +85,13 @@ function autoMALA_logpos_reduced_4D(
     seq::Bool,
 )::T where {T<:half_quant}
     tot = zero(T)
-    st_ebm, st_gen = st_i.ebm, st_i.gen
 
     for k = 1:num_temps
         x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-        lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-        ll, st_gen =
-            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε)
+        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε))
+        ll = first(
+            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε),
+        )
         tot = tot + sum(lp) + sum(t[:, k] .* ll)
     end
 

@@ -25,18 +25,17 @@ function unadjusted_logpos(
     st::NamedTuple,
     prior_sampling_bool::Bool = false,
 )::T where {T<:half_quant}
-    tot = zero(T)
+    tot = zeros(T, length(temps))
     st_ebm, st_gen = st.ebm, st.gen
 
     for k in eachindex(temps)
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-        tot += sum(lp)
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot += sum(temps[k] .* ll) * !prior_sampling_bool
+        tot[k] = sum(temps[k] .* ll) * !prior_sampling_bool + sum(lp)
     end
 
-    return tot * m.loss_scaling
+    return sum(tot) * m.loss_scaling
 end
 
 ### autoMALA ###
@@ -50,7 +49,7 @@ function autoMALA_logpos_4D(
     num_temps::Int,
     seq::Bool,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    logpos = zeros(T, size(z_i, 3), 0) |> device
+    logpos = zeros(T, size(z_i, 3), num_temps) |> device
     st_ebm, st_gen = st_i.ebm, st_i.gen
 
     for k = 1:num_temps
@@ -58,7 +57,7 @@ function autoMALA_logpos_4D(
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        logpos = hcat(logpos, lp + t[:, k] .* ll)
+        logpos[:, k] = lp + t[:, k] .* ll
     end
 
     return logpos .* m.loss_scaling, st_ebm, st_gen

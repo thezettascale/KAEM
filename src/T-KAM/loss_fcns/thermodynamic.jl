@@ -34,7 +34,7 @@ function marginal_llhood(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     num_temps = length(temps)
     Δt = temps[2:end] - temps[1:(end-1)]
-    log_ss = zero(T)
+    log_ss = zeros(T, num_temps-1)
 
     # Steppingstone estimator
     for k = 1:(num_temps-2)
@@ -46,7 +46,7 @@ function marginal_llhood(
             st_gen;
             ε = m.ε,
         )
-        log_ss += mean(logllhood .* Δt[k+1])
+        log_ss[k] = mean(logllhood .* Δt[k+1])
     end
 
     # MLE estimator
@@ -71,8 +71,8 @@ function marginal_llhood(
 
     logllhood, st_gen =
         log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-    log_ss += mean(logllhood .* Δt[1])
-    return -(log_ss + contrastive_div) * m.loss_scaling, st_ebm, st_gen
+    steppingstone_loss = mean(logllhood .* Δt[1]) + sum(log_ss)
+    return -(steppingstone_loss + contrastive_div) * m.loss_scaling, st_ebm, st_gen
 end
 
 function grad_thermo_llhood(

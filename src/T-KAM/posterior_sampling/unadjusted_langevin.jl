@@ -49,7 +49,7 @@ function logpos_grad(
         Enzyme.Const(m),
         Enzyme.Const(ps),
         Enzyme.Const(Lux.trainmode(st)),
-        Enzyme.Const(prior_sampling_bool),
+        Enzyme.Const(T(!prior_sampling_bool)),
     )
     any(isnan, ∇z) && error("∇z is NaN")
     return ∇z
@@ -101,7 +101,7 @@ function initialize_ULA_sampler(
     # compiled_llhood = Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
 
     # compiled_logpos_grad =
-    #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, T(!prior_sampling_bool))
+    #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
 
     compiled_llhood = ll
     compiled_logpos_grad = logpos_grad
@@ -189,7 +189,7 @@ function ULA_sample(
                     model,
                     ps,
                     st,
-                    T(!sampler.prior_sampling_bool),
+                    sampler.prior_sampling_bool,
                 ),
             ) / loss_scaling
 

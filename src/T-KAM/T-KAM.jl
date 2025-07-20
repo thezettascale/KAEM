@@ -283,7 +283,7 @@ function init_posterior_sampler(
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
+                langevin_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
     elseif model.N_t > 1
@@ -343,14 +343,14 @@ function init_posterior_sampler(
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
+                thermodynamic_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
         loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
-                importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; compile_mlir = compile_mlir, rng = rng)
+                importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)
 
         println("Posterior sampler: IS")
     end

@@ -49,15 +49,14 @@ function prior_fwd(
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
 
-        if ebm.layernorm_bool && i < ebm.depth
-            z, st_new = Lux.apply(
-                ebm.layernorms[i],
-                z,
-                ps.layernorm[i],
-                st.layernorm[i],
-            )
-            @reset st.layernorm[i] = st_new
-        end
+        z, st_new = (ebm.layernorm_bool && i < ebm.depth) ? Lux.apply(
+            ebm.layernorms[i],
+            z,
+            ps.layernorm[i],
+            st.layernorm[i],
+        ) : (z, st)
+        
+        st.layernorm[i] = st_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)

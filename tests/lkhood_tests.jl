@@ -11,7 +11,7 @@ include("../src/utils.jl")
 using .EBM_Model: init_EbmModel, EbmModel
 using .GeneratorModel
 using .Utils: device, half_quant, full_quant
-using .GeneratorModel: log_likelihood_IS
+using .GeneratorModel: log_likelihood_IS, log_likelihood_MALA
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
@@ -90,6 +90,38 @@ function test_grad_llhood()
     @test !any(isnan, grads)
 end
 
+function test_mala_grad_llhood()
+    Random.seed!(42)
+    lkhood = init_GenModel(conf, (32, 32, 1))
+    gen_ps, gen_st = Lux.setup(Random.default_rng(), lkhood)
+
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
+    st = (ebm = ebm_st, gen = gen_st) |> device
+
+    x = randn(half_quant, 32, 32, 1, b_size) |> device
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
+    grads = Enzyme.make_zero(ps.gen)
+
+    closure = (z_i, x_i, ll, ps_gen, st_gen) -> begin
+        logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
+        return sum(logllhood)
+    end
+
+    CUDA.@fastmath Enzyme.autodiff(
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
+        closure, 
+        Enzyme.Active,
+        Enzyme.Const(z),
+        Enzyme.Const(x),
+        Enzyme.Const(lkhood),
+        Enzyme.Duplicated(ps.gen, grads),
+        Enzyme.Const(st.gen),
+    )
+
+    @test !all(iszero, grads)
+    @test !any(isnan, grads)
+end
+
 function test_cnn_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
@@ -104,6 +136,39 @@ function test_cnn_generate()
     @test size(x) == (32, 32, out_dim, b_size)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
+end
+
+function test_cnn_grad_llhood()
+    Random.seed!(42)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    lkhood = init_GenModel(conf, (32, 32, out_dim))
+    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+
+    ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray |> device
+    st = (ebm = ebm_st, gen = gen_st) |> device
+
+    x = randn(half_quant, 32, 32, out_dim, b_size) |> device
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
+    grads = Enzyme.make_zero(ps.gen)
+
+    closure = (z_i, x_i, ll, ps_gen, st_gen) -> begin
+        logllhood, _ = log_likelihood_MALA(z_i, x_i, ll, ps_gen, st_gen)
+        return sum(logllhood)
+    end
+
+    CUDA.@fastmath Enzyme.autodiff(
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)), 
+        closure, 
+        Enzyme.Active,
+        Enzyme.Const(z),
+        Enzyme.Const(x),
+        Enzyme.Const(lkhood),
+        Enzyme.Duplicated(ps.gen, grads),
+        Enzyme.Const(st.gen),
+    )
+
+    @test !all(iszero, grads)
+    @test !any(isnan, grads)
 end
 
 function test_seq_generate()
@@ -127,6 +192,8 @@ end
     test_generate()
     test_logllhood()
     test_grad_llhood()
+    test_mala_grad_llhood()
+    test_cnn_grad_llhood()
     test_cnn_generate()
     test_seq_generate()
 end

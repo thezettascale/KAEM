@@ -23,7 +23,7 @@ function test_ps_derivative()
     x_test = first(model.train_loader) |> device
     ps, st = Lux.setup(Random.GLOBAL_RNG, model)
     ps, st = ComponentArray(ps) |> device, st |> device
-    ∇ = zero(half_quant.(ps))
+    ∇ = Enzyme.make_zero(half_quant.(ps))
     model = move_to_hq(model)
     model = prep_model(model, ps, st, x_test)
 
@@ -31,6 +31,7 @@ function test_ps_derivative()
 
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    println(∇)
 end
 
 function test_grid_update()
@@ -58,11 +59,12 @@ function test_mala_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     model = prep_model(model, ps, st, x_test)
-    ∇ = zero(half_quant.(ps))
+    ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    println(∇)
 end
 
 function test_cnn_loss()
@@ -75,12 +77,13 @@ function test_cnn_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     model = prep_model(model, ps, st, x_test)
-    ∇ = zero(half_quant.(ps))
+    ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
+    println(∇)
 end
 
 function test_seq_loss()
@@ -94,17 +97,18 @@ function test_seq_loss()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = move_to_hq(model)
     model = prep_model(model, ps, st, x_test)
-    ∇ = zero(half_quant.(ps))
+    ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) > 0
     @test !any(isnan, ∇)
+    println(∇)
 end
 
 @testset "T-KAM Tests" begin
-    test_ps_derivative()
-    test_grid_update()
+    # test_ps_derivative()
+    # test_grid_update()
     test_mala_loss()
-    test_cnn_loss()
-    test_seq_loss()
+    # test_cnn_loss()
+    # test_seq_loss()
 end

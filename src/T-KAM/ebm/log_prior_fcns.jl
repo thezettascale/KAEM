@@ -12,11 +12,12 @@ using CUDA,
     Random,
     Tullio,
     ComponentArrays
+
 using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, half_quant, full_quant, fq, set_state!, symbol_map
+using .Utils: device, half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
 
 function prior_fwd(
@@ -40,7 +41,6 @@ function prior_fwd(
     """
 
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
-    new_st = Dict()
 
     for i = 1:ebm.depth
 
@@ -56,11 +56,10 @@ function prior_fwd(
                 ps.layernorm[i],
                 st.layernorm[i],
             )
-            new_st[symbol_map[i]] = st_new
+            @reset st.layernorm[i] = st_new
         end
     end
 
-    set_state!(st, new_st)
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st
 end

@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, set_state!, symbol_map
+export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, symbol_map
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
 using CUDA, LuxCUDA, KernelAbstractions
@@ -38,12 +38,6 @@ end
 
 function removeNeg(x; ε = half_quant(1e-4))
     return ifelse.(x .< ε, ε, x) |> device
-end
-
-function set_state!(st, dict)
-    for (k, v) in dict
-        @reset st[k] = v
-    end
 end
 
 # Num layers must be flexible, yet static, so this is used to index into params/state

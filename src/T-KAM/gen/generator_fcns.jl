@@ -8,7 +8,7 @@ using NNlib: softmax, batched_mul
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device, set_state!, symbol_map
+using .Utils: half_quant, full_quant, device, symbol_map
 using .UnivariateFunctions
 
 function KAN_fwd(
@@ -32,7 +32,6 @@ function KAN_fwd(
     """
     num_samples = size(z)[end]
     z = dropdims(sum(z, dims = 2), dims = 2)
-    layernorm_st = Dict()
 
     # KAN functions
     for i = 1:lkhood.depth
@@ -46,11 +45,10 @@ function KAN_fwd(
                 ps.layernorm[symbol_map[i]],
                 st.layernorm[symbol_map[i]],
             )
-            layernorm_st[symbol_map[i]] = st_new
+            @reset st.layernorm[i] = st_new
         end
     end
-
-    set_state!(st.layernorm, layernorm_st)
+        
     return reshape(z, lkhood.x_shape..., num_samples), st
 end
 
@@ -74,13 +72,11 @@ function CNN_fwd(
         The generated data.
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
-    fcn_st = Dict()
-    batchnorm_st = Dict()
 
     for i = 1:lkhood.depth-1
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
-        fcn_st[symbol_map[i]] = st_new
+        @reset st.fcn[symbol_map[i]] = st_new
 
         if lkhood.batchnorm_bool
             z, st_new = Lux.apply(
@@ -89,7 +85,7 @@ function CNN_fwd(
                 ps.batchnorm[symbol_map[i]],
                 st.batchnorm[symbol_map[i]],
             )
-            batchnorm_st[symbol_map[i]] = st_new
+            @reset st.batchnorm[symbol_map[i]] = st_new
         end
     end
 
@@ -99,10 +95,8 @@ function CNN_fwd(
         ps.fcn[symbol_map[lkhood.depth]],
         st.fcn[symbol_map[lkhood.depth]],
     )
-    fcn_st[symbol_map[lkhood.depth]] = st_new
+    @reset st.fcn[symbol_map[lkhood.depth]] = st_new
 
-    set_state!(st.fcn, fcn_st)
-    set_state!(st.batchnorm, batchnorm_st)
     return z, st
 end
 
@@ -156,16 +150,13 @@ function SEQ_fwd(
         The generated data. 
     """
     z = sum(z, dims = 2)
-    fcn_st = Dict()
-    layernorm_st = Dict()
-    attention_st = Dict()
 
     # Projection
     z, st_new = Lux.apply(lkhood.Φ_fcns[1], z, ps.fcn[:a], st.fcn[:a])
-    fcn_st[:a] = st_new
+    @reset st.fcn[:a] = st_new
     z, st_new =
         Lux.apply(lkhood.layernorms[1], z, ps.layernorm[:a], st.layernorm[:a])
-    layernorm_st[:a] = st_new
+    @reset st.layernorm[:a] = st_new
 
     z_prev = z
     for t = 2:lkhood.seq_length
@@ -173,13 +164,13 @@ function SEQ_fwd(
         # Self-attention
         Q, st_new =
             Lux.apply(lkhood.attention.Q, z, ps.attention[:Q], st.attention[:Q])
-        attention_st[:Q] = st_new
+        @reset st.attention[:Q] = st_new
         K, st_new =
             Lux.apply(lkhood.attention.K, z, ps.attention[:K], st.attention[:K]) 
-        attention_st[:K] = st_new
+        @reset st.attention[:K] = st_new
         V, st_new =
             Lux.apply(lkhood.attention.V, z, ps.attention[:V], st.attention[:V])
-        attention_st[:V] = st_new
+        @reset st.attention[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z .+ attn
@@ -187,14 +178,14 @@ function SEQ_fwd(
         # Feed forward
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[:b], st.fcn[:b])
-        fcn_st[:b] = st_new
+        @reset st.fcn[:b] = st_new
         z, st_new = Lux.apply(
             lkhood.layernorms[2],
             z[:, end:end, :],
             ps.layernorm[:b],
             st.layernorm[:b],
         )
-        layernorm_st[:b] = st_new
+        @reset st.layernorm[:b] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
@@ -202,11 +193,8 @@ function SEQ_fwd(
 
     # Output layer
     z, st_new = Lux.apply(lkhood.Φ_fcns[3], z, ps.fcn[:c], st.fcn[:c])
-    fcn_st[:c] = st_new
+    @reset st.fcn[:c] = st_new
 
-    set_state!(st.fcn, fcn_st)
-    set_state!(st.layernorm, layernorm_st)  
-    set_state!(st.attention, attention_st)
     return z, st
 end
 

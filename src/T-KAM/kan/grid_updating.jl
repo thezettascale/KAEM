@@ -120,7 +120,7 @@ function update_model_grid(
             @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
 
             z, _ = Lux.apply(
-                prior.fcns_qp[i],
+                model.prior.fcns_qp[i],
                 z,
                 ps.ebm.fcn[symbol_map[i]],
                 st.ebm.fcn[symbol_map[i]],

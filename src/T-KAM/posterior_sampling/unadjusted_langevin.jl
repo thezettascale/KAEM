@@ -42,7 +42,7 @@ function logpos_grad(
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
-        Enzyme.Active,
+        Enzyme.Active(zero(T)),
         Enzyme.Duplicated(T.(z_i), ∇z),
         Enzyme.Const(x),
         Enzyme.Const(t),
@@ -51,7 +51,7 @@ function logpos_grad(
         Enzyme.Const(Lux.trainmode(st)),
         Enzyme.Const(prior_sampling_bool),
     )
-    println("norm of ∇z: ", norm(∇z))
+    any(isnan, ∇z) && error("∇z is NaN")
     return ∇z
 end
 
@@ -101,7 +101,7 @@ function initialize_ULA_sampler(
     # compiled_llhood = Reactant.@compile ll(z[:, :, :, 1], x, model.lkhood, ps.gen, st.gen)
 
     # compiled_logpos_grad =
-    #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, prior_sampling_bool)
+    #     Reactant.@compile logpos_grad(z, ∇z, x, temps, model, ps, st, T(!prior_sampling_bool))
 
     compiled_llhood = ll
     compiled_logpos_grad = logpos_grad
@@ -189,7 +189,7 @@ function ULA_sample(
                     model,
                     ps,
                     st,
-                    sampler.prior_sampling_bool,
+                    T(!sampler.prior_sampling_bool),
                 ),
             ) / loss_scaling
 

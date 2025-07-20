@@ -30,11 +30,11 @@ function unadjusted_logpos(
 
     for k in eachindex(temps)
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-        tot += sum(lp)
+        tot = tot + sum(lp)
 
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot += sum(ll) * not_prior
+        tot = tot + sum(ll) * not_prior
     end
 
     return tot * m.loss_scaling
@@ -83,7 +83,7 @@ function autoMALA_logpos_reduced_4D(
         lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
         ll, st_gen =
             log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        tot += sum(lp) + sum(t[:, k] .* ll)
+        tot = tot + sum(lp) + sum(t[:, k] .* ll)
     end
 
     return tot * m.loss_scaling
@@ -169,7 +169,7 @@ function autoMALA_value_and_grad(
 
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
-    
+
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i, num_temps)
     return logpos, ∇z, st_ebm, st_gen

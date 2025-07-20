@@ -228,8 +228,7 @@ end
 
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(
-        symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for
-        i = 1:prior.depth
+        symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
     layernorm_ps = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0

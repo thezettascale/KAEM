@@ -306,7 +306,7 @@ function initialize_autoMALA_sampler(
 
     compiled_leapfrog = leapfrop_proposal
     compiled_autoMALA_step = autoMALA_step
-    
+
     # compiled_leapfrog = Reactant.@compile leapfrop_proposal(
     #     z,
     #     ∇z,

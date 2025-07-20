@@ -279,7 +279,14 @@ function init_posterior_sampler(
             (m, x, ps, st, rng) ->
                 sample_function(sampler_struct, m, ps, Lux.testmode(st), x; rng = rng)
 
-        loss_struct = initialize_langevin_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
+        loss_struct = initialize_langevin_loss(
+            ps,
+            Lux.trainmode(st),
+            model,
+            x;
+            compile_mlir = compile_mlir,
+            rng = rng,
+        )
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
@@ -339,7 +346,14 @@ function init_posterior_sampler(
                 rng = rng,
             )
 
-        loss_struct = initialize_thermo_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
+        loss_struct = initialize_thermo_loss(
+            ps,
+            Lux.trainmode(st),
+            model,
+            x;
+            compile_mlir = compile_mlir,
+            rng = rng,
+        )
 
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
@@ -347,7 +361,14 @@ function init_posterior_sampler(
 
         println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
     else
-        loss_struct = initialize_importance_loss(ps, Lux.trainmode(st), model, x; compile_mlir = compile_mlir, rng = rng)
+        loss_struct = initialize_importance_loss(
+            ps,
+            Lux.trainmode(st),
+            model,
+            x;
+            compile_mlir = compile_mlir,
+            rng = rng,
+        )
         @reset model.loss_fcn =
             (p, ∇, s, m, x_i) ->
                 importance_loss(loss_struct, p, ∇, Lux.trainmode(s), m, x_i; rng = rng)

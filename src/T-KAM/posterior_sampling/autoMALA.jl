@@ -414,7 +414,7 @@ function autoMALA_sample(
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)
-    
+
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
@@ -453,7 +453,8 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z_fq, st = sampler.logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
+        logpos_z, ∇z_fq, st =
+            sampler.logpos_withgrad(z_hq, ∇z_hq, x_t, t_expanded, model, ps, st)
 
         if burn_in < sampler.N
             burn_in += 1

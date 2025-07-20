@@ -34,7 +34,7 @@ function marginal_llhood(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     num_temps = length(temps)
     Δt = temps[2:end] - temps[1:(end-1)]
-    log_ss = zeros(T, num_temps-1)
+    log_ss = zero(T)
 
     # Steppingstone estimator
     for k = 1:(num_temps-2)
@@ -46,7 +46,7 @@ function marginal_llhood(
             st_gen;
             ε = m.ε,
         )
-        log_ss[k] = mean(logllhood .* Δt[k+1])
+        log_ss = log_ss + mean(logllhood .* Δt[k+1])
     end
 
     # MLE estimator
@@ -71,7 +71,7 @@ function marginal_llhood(
 
     logllhood, st_gen =
         log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_gen; ε = m.ε)
-    steppingstone_loss = mean(logllhood .* Δt[1]) + sum(log_ss)
+    steppingstone_loss = mean(logllhood .* Δt[1]) + log_ss
     return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * m.loss_scaling,
     st_ebm,
     st_gen

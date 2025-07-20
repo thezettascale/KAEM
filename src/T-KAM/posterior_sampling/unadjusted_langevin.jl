@@ -39,8 +39,8 @@ function logpos_grad(
     st::NamedTuple,
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant}
-    
-CUDA.@fastmath Enzyme.autodiff(
+
+    CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
         Enzyme.Active,
@@ -186,11 +186,11 @@ function ULA_sample(
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     S = sampler.prior_sampling_bool ? size(z_hq)[end] : S
     z_hq = reshape(z_hq, Q, P, S, num_temps)
-    
+
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
-    ∇z_fq = Enzyme.make_zero(z_fq) 
-    ∇z_hq = Enzyme.make_zero(z_hq) 
+    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_hq = Enzyme.make_zero(z_hq)
     z_copy = similar(z_hq[:, :, :, 1])
 
     # Pre-allocate noise

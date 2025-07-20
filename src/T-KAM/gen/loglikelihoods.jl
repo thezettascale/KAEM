@@ -40,24 +40,20 @@ end
 function cross_entropy_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T},
-    noise::AbstractArray{T};
     ε::T = eps(half_quant),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
-    x̂ = act_fcn(x̂ .+ noise)
-    ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
+    ll = log.(act_fcn(x̂) .+ ε) .* x ./ size(x, 1)
     return dropdims(sum(ll; dims = (1, 2)); dims = (1, 2))
 end
 
 function l2_MALA(
     x::AbstractArray{T},
     x̂::AbstractArray{T},
-    noise::AbstractArray{T};
     ε::T = eps(half_quant),
     act_fcn::Function = sigmoid,
 )::AbstractArray{T} where {T<:half_quant}
-    x̂ = act_fcn(x̂ .+ noise)
-    ll = (x - x̂) .^ 2
+    ll = (x - act_fcn(x̂)) .^ 2
     return -dropdims(sum(ll; dims = (1, 2, 3)); dims = (1, 2, 3))
 end
 
@@ -67,10 +63,8 @@ function log_likelihood_IS(
     x::AbstractArray{T},
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple;
-    noise::AbstractArray{T} = device(
-        zeros(T, lkhood.x_shape..., size(z)[end], size(x)[end]),
-    ),
+    st::NamedTuple,
+    noise::AbstractArray{T};
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -104,7 +98,6 @@ function log_likelihood_MALA(
     lkhood,
     ps::ComponentArray{T},
     st::NamedTuple;
-    noise::AbstractArray{T} = device(zeros(T, size(x))),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -122,11 +115,10 @@ function log_likelihood_MALA(
         The unnormalized log-likelihood.
     """
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
-    noise = lkhood.σ_llhood * noise
     ll =
         lkhood.seq_length > 1 ?
-        cross_entropy_MALA(x, x̂, noise; ε = ε, act_fcn = lkhood.output_activation) :
-        l2_MALA(x, x̂, noise; ε = ε)
+        cross_entropy_MALA(x, x̂; ε = ε, act_fcn = lkhood.output_activation) :
+        l2_MALA(x, x̂; ε = ε)
     ll = ll ./ (2*lkhood.σ_llhood^2)
     return ll, st
 end

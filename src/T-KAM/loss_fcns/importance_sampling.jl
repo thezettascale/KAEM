@@ -32,8 +32,7 @@ function sample_importance(
 } where {T<:half_quant}
     z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
     noise = device(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
-    logllhood, st_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen; ε = m.ε, noise = noise)
+    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen, noise; ε = m.ε)
     weights = softmax(full_quant.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)
@@ -64,7 +63,8 @@ function marginal_llhood(
     resampled_idxs::AbstractArray{Int},
     m,
     st_ebm::NamedTuple,
-    st_gen::NamedTuple;
+    st_gen::NamedTuple,
+    zero_vec::AbstractArray{T},
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     logprior, st_ebm = m.prior.lp_fcn(
         z,
@@ -75,7 +75,7 @@ function marginal_llhood(
         normalize = !m.prior.contrastive_div,
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen; ε = m.ε)
+    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen, zero_vec; ε = m.ε)
 
     B, S = size(x)[end], size(z)[end]
     marginal_llhood = @zeros(B, S)
@@ -98,12 +98,13 @@ function grad_importance_llhood(
     resampled_idxs::AbstractArray{Int},
     model,
     st_ebm::NamedTuple,
-    st_gen::NamedTuple;
+    st_gen::NamedTuple,
+    zero_vec::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     f =
-        (p, z_i, x_i, w, r, m, se, sg) -> begin
-            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg))
+        (p, z_i, x_i, w, r, m, se, sg, zv) -> begin
+            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg, zv))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -118,6 +119,7 @@ function grad_importance_llhood(
         Enzyme.Const(model),
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
+        Enzyme.Const(zero_vec),
     )
 
     return ∇, st_ebm, st_gen
@@ -126,6 +128,7 @@ end
 struct ImportanceLoss
     compiled_loss::Any
     compiled_grad::Any
+    zero_vec::AbstractArray{T}
 end
 
 function initialize_importance_loss(
@@ -142,6 +145,8 @@ function initialize_importance_loss(
     compiled_loss = marginal_llhood
     compiled_grad = grad_importance_llhood
 
+    zero_vec = device(zeros(T, model.lkhood.x_shape..., size(z)[end], size(x)[end]))
+
     if compile_mlir
         compiled_loss = Reactant.@compile marginal_llhood(
             ps,
@@ -152,6 +157,7 @@ function initialize_importance_loss(
             model,
             st_ebm,
             st_gen,
+            zero_vec,
         )
         compiled_grad = Reactant.@compile grad_importance_llhood(
             ps,
@@ -163,10 +169,11 @@ function initialize_importance_loss(
             model,
             Lux.trainmode(st_ebm),
             Lux.trainmode(st_gen),
+            zero_vec,
         )
     end
 
-    return ImportanceLoss(compiled_loss, compiled_grad)
+    return ImportanceLoss(compiled_loss, compiled_grad, zero_vec)
 end
 
 function importance_loss(
@@ -180,6 +187,7 @@ function importance_loss(
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     z, st_ebm, st_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, Lux.testmode(st), model, x; rng = rng)
+
     ∇, st_ebm, st_gen = l.compiled_grad(
         ps,
         ∇,
@@ -190,9 +198,19 @@ function importance_loss(
         model,
         Lux.trainmode(st_ebm),
         Lux.trainmode(st_gen),
+        l.zero_vec,
     )
-    loss, st_ebm, st_gen =
-        l.compiled_loss(ps, z, x, weights_resampled, resampled_idxs, model, st_ebm, st_gen)
+    loss, st_ebm, st_gen = l.compiled_loss(
+        ps,
+        z,
+        x,
+        weights_resampled,
+        resampled_idxs,
+        model,
+        st_ebm,
+        st_gen,
+        l.zero_vec,
+    )
     return loss, ∇, st_ebm, st_gen
 end
 

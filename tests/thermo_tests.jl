@@ -15,6 +15,7 @@ conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "4")
 out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
+commit!(conf, "TRAINING", "MLIR_compile", "true")
 
 function test_posterior_sampling()
     Random.seed!(42)
@@ -39,8 +40,8 @@ function test_model_derivative()
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = prep_model(model, ps, st, x_test)
-    ∇ = Enzyme.make_zero(half_quant.(ps))
-
+    ∇ = Enzyme.make_zero(ps)
+    
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) != 0
     @test !any(isnan, ∇)

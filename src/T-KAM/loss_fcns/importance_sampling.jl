@@ -128,7 +128,7 @@ end
 struct ImportanceLoss
     compiled_loss::Any
     compiled_grad::Any
-    zero_vec::AbstractArray{T}
+    zero_vec::AbstractArray{half_quant}
 end
 
 function initialize_importance_loss(

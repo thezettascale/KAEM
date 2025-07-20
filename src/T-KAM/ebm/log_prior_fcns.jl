@@ -55,8 +55,8 @@ function prior_fwd(
             ps.layernorm[i],
             st.layernorm[i],
         ) : (z, st)
-        
-        st.layernorm[i] = st_new
+
+        (ebm.layernorm_bool && i < ebm.depth) && @reset st.layernorm[i] = st_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)

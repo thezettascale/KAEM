@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -15,7 +15,6 @@ conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "4")
 out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
-# commit!(conf, "TRAINING", "MLIR_compile", "true")
 
 function test_posterior_sampling()
     Random.seed!(42)

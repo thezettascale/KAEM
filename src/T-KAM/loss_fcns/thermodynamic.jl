@@ -19,7 +19,8 @@ function sample_thermo(
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
     z, st = m.posterior_sample(m, x, temps[2:end], ps, st, rng)
-    return z, temps, st
+    Δt = device(temps[2:end] - temps[1:(end-1)])
+    return z, Δt, st
 end
 
 function marginal_llhood(
@@ -27,27 +28,24 @@ function marginal_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    temps::AbstractVector{T},
+    Δt::AbstractVector{T},
     m,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    num_temps = length(temps)
-    Δt = temps[2:end] - temps[1:(end-1)]
+    Q, P, S, num_temps = size(z_posterior)
     log_ss = zero(T)
 
     # Steppingstone estimator
-    for k = 1:(num_temps-2)
-        logllhood, st_gen = log_likelihood_MALA(
-            z_posterior[:, :, :, k],
-            x,
-            m.lkhood,
-            ps.gen,
-            st_gen;
-            ε = m.ε,
-        )
-        log_ss = log_ss + mean(logllhood .* Δt[k+1])
-    end
+    ll, st_gen = log_likelihood_MALA(
+        reshape(z_posterior, Q, P, S*num_temps),
+        x,
+        m.lkhood,
+        ps.gen,
+        st_gen;
+        ε = m.ε,
+    )
+    log_ss = sum(mean(reshape(ll, S, num_temps) .* Δt; dims = 2))
 
     # MLE estimator
     logprior_pos, st_ebm = m.prior.lp_fcn(
@@ -83,7 +81,7 @@ function grad_thermo_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    temps::AbstractVector{T},
+    Δt::AbstractVector{T},
     model,
     st_ebm::NamedTuple,
     st_gen::NamedTuple;
@@ -101,7 +99,7 @@ function grad_thermo_llhood(
         Enzyme.Const(z_posterior),
         Enzyme.Const(z_prior),
         Enzyme.Const(x),
-        Enzyme.Const(temps),
+        Enzyme.Const(Δt),
         Enzyme.Const(model),
         Enzyme.Const(st_ebm),
         Enzyme.Const(st_gen),
@@ -124,7 +122,7 @@ function initialize_thermo_loss(
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
-    z_posterior, temps, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
+    z_posterior, Δt, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
     compiled_loss = marginal_llhood
@@ -136,7 +134,7 @@ function initialize_thermo_loss(
             z_posterior,
             z_prior,
             x,
-            temps,
+            Δt,
             model,
             Lux.testmode(st_ebm),
             Lux.testmode(st_gen),
@@ -147,7 +145,7 @@ function initialize_thermo_loss(
             z_posterior,
             z_prior,
             x,
-            temps,
+            Δt,
             model,
             Lux.trainmode(st_ebm),
             Lux.trainmode(st_gen),
@@ -166,7 +164,7 @@ function thermodynamic_loss(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, temps, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
+    z_posterior, Δt, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 
@@ -176,7 +174,7 @@ function thermodynamic_loss(
         z_posterior,
         z_prior,
         x,
-        temps,
+        Δt,
         model,
         Lux.trainmode(st_ebm),
         Lux.trainmode(st_gen),
@@ -186,7 +184,7 @@ function thermodynamic_loss(
         z_posterior,
         z_prior,
         x,
-        temps,
+        Δt,
         model,
         Lux.testmode(st_ebm),
         Lux.testmode(st_gen),

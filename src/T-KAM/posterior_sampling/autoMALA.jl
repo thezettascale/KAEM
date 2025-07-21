@@ -307,7 +307,8 @@ function initialize_autoMALA_sampler(
         st_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
-        logpos, ∇z_k, st_ebm, st_gen = fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i, num_temps)
+        logpos, ∇z_k, st_ebm, st_gen =
+            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i, num_temps)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 

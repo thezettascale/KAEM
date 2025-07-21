@@ -74,7 +74,7 @@ function autoMALA_value_and_grad_4D(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int
+    num_temps::Int,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     x_expanded =
@@ -126,8 +126,7 @@ function autoMALA_value_and_grad(
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
-        (z, x, temps, model, p, s) ->
-            sum(first(autoMALA_logpos(z, x, temps, model, p, s)))
+        (z, x, temps, model, p, s) -> sum(first(autoMALA_logpos(z, x, temps, model, p, s)))
 
     x_expanded =
         ndims(x_i) == 4 ? repeat(x_i, 1, 1, 1, num_temps) : repeat(x_i, 1, 1, num_temps)

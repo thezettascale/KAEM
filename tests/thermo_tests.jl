@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -39,7 +39,7 @@ function test_model_derivative()
     ps, st = Lux.setup(Random.default_rng(), model)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = prep_model(model, ps, st, x_test)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
     @test norm(∇) != 0

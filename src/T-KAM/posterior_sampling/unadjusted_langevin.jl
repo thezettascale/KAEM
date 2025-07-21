@@ -222,7 +222,6 @@ function ULA_sample(
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
             for t = 1:(num_temps-1)
 
-                println("Finding llhoods")
                 z_t = z_hq[:, :, :, t]
                 z_t1 = z_hq[:, :, :, t+1]
 
@@ -231,7 +230,6 @@ function ULA_sample(
                 ll_t1, st_gen =
                     sampler.compiled_llhood(z_t1, x, model.lkhood, ps.gen, st_gen;)
 
-                printlnk("global criterion")
                 log_swap_ratio = dropdims(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,
@@ -241,7 +239,6 @@ function ULA_sample(
 
                 # Swap population if likelihood of population in new temperature is higher on average
                 if swap
-                    println("swapping")
                     z_copy = z_t
                     z_hq[:, :, :, t] .= z_t1
                     z_hq[:, :, :, t+1] .= z_copy

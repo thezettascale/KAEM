@@ -170,7 +170,7 @@ function ULA_sample(
     # Initialize from prior
     z_hq = begin
         if model.prior.ula && sampler.prior_sampling_bool
-            z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
+            z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             z = device(z)
         else
             z, st_ebm = model.prior.sample_z(model, size(x)[end]*length(temps), ps, st, rng)
@@ -198,7 +198,7 @@ function ULA_sample(
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, num_temps, sampler.N)) |> device
+    log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> device
 
     for i = 1:sampler.N
         ξ = device(noise[:, :, :, :, i])
@@ -222,8 +222,8 @@ function ULA_sample(
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
             for t = 1:(num_temps-1)
 
-                z_t = z_hq[:, :, :, t]
-                z_t1 = z_hq[:, :, :, t+1]
+                z_t = copy(z_hq[:, :, :, t])
+                z_t1 = copy(z_hq[:, :, :, t+1])
 
                 ll_t, st_gen =
                     sampler.compiled_llhood(z_t, x, model.lkhood, ps.gen, st_gen;)
@@ -234,16 +234,14 @@ function ULA_sample(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,
                 )
-                swap = log_u_swap[t, i] < mean(log_swap_ratio)
+                swap = T(log_u_swap[t, i] < mean(log_swap_ratio))
                 @reset st.gen = st_gen
 
                 # Swap population if likelihood of population in new temperature is higher on average
-                if swap
-                    z_copy = z_t
-                    z_hq[:, :, :, t] .= z_t1
-                    z_hq[:, :, :, t+1] .= z_copy
-                    z_fq = full_quant.(z_hq)
-                end
+                z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+                z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+                z_fq = full_quant.(z_hq)
+
             end
         end
     end

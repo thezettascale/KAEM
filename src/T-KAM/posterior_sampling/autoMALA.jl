@@ -1,4 +1,4 @@
-module autoMALA_sampling
+    module autoMALA_sampling
 
 export initialize_autoMALA_sampler, autoMALA_sample
 
@@ -431,7 +431,7 @@ function autoMALA_sample(
     log_u = log.(rand(rng, num_temps, sampler.N)) |> device
     ratio_bounds =
         log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
-    log_u_swap = log.(rand(rng, full_quant, S, num_temps, sampler.N)) |> device
+    log_u_swap = log.(rand(rng, full_quant, S, num_temps-1, sampler.N)) |> device
 
     num_acceptances = zeros(Int, S, num_temps) |> device
     mean_η = zeros(full_quant, S, num_temps) |> device
@@ -507,24 +507,21 @@ function autoMALA_sample(
                 for t = 1:(num_temps-1)
 
                     # Global swap criterion
-                    z_t = z_hq[:, :, :, t]
-                    z_t1 = z_hq[:, :, :, t+1]
+                    z_t = copy(z_hq[:, :, :, t])
+                    z_t1 = copy(z_hq[:, :, :, t+1])
                     ll_t, st_gen =
                         sampler.compiled_llhood(z_t, x, model.lkhood, ps.gen, st.gen)
                     ll_t1, st_gen =
                         sampler.compiled_llhood(z_t1, x, model.lkhood, ps.gen, st_gen)
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
-                    swap = log_u_swap[t, i] < mean(log_swap_ratio)
+                    swap = T(log_u_swap[t, i] < mean(log_swap_ratio))
                     @reset st.gen = st_gen
 
                     # Swap population if likelihood of population in new temperature is higher on average
-                    if swap
-                        z_copy = z_t
-                        z_hq[:, :, :, t] .= z_t1
-                        z_hq[:, :, :, t+1] .= z_copy
-                        z_fq = full_quant.(z_hq)
-                    end
+                    z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+                    z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+                    z_fq = full_quant.(z_hq)
                 end
             end
         end

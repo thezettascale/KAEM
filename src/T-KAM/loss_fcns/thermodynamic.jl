@@ -45,7 +45,7 @@ function marginal_llhood(
         st_gen;
         ε = m.ε,
     )
-    log_ss = sum(mean(reshape(ll, S, num_temps) .* Δt; dims = 2))
+    log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
 
     # MLE estimator
     logprior_pos, st_ebm = m.prior.lp_fcn(

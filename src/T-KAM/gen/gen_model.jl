@@ -35,10 +35,10 @@ const resampler_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::Vector{Any}
-    layernorms::Vector{Any}
-    batchnorms::Vector{Any}
-    attention::Vector{Any}
+    Φ_fcns::Vector
+    layernorms::Vector
+    batchnorms::Vector
+    attention::Vector
     layernorm_bool::Bool
     batchnorm_bool::Bool
     depth::Int

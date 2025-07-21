@@ -62,7 +62,7 @@ const quad_map =
 
 struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     fcns_qp::Vector{Any}
-    layernorms::Tuple
+    layernorms::Vector{Any}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -134,7 +134,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         end
 
     functions = []
-    layernorms_temp = []
+    layernorms = []
     for i in eachindex(widths[1:(end-1)])
         base_scale = (
             μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
@@ -165,13 +165,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         push!(functions, func)
 
         if (layernorm_bool && i < length(widths)-1)
-            push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
+            push!(layernorms, Lux.LayerNorm(widths[i+1]))
         end
-    end
-
-    layernorms = ()
-    if layernorm_bool && length(layernorms_temp) > 0
-        layernorms = ntuple(i -> layernorms_temp[i], length(widths)-1)
     end
 
     ula = length(widths) > 2

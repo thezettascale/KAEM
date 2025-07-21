@@ -4,6 +4,8 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
+Enzyme.Compiler.VERBOSE_ERRORS[] = true
+
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")
 using .EBM_Model: EbmModel, init_EbmModel

@@ -3,50 +3,78 @@ module LogLikelihoods
 export cross_entropy_IS,
     l2_IS, cross_entropy_MALA, l2_MALA, log_likelihood_IS, log_likelihood_MALA
 
-using CUDA, KernelAbstractions, ComponentArrays, Random
+using CUDA, KernelAbstractions, ComponentArrays, Random, ParallelStencil
 using NNlib: softmax, sigmoid
 
 include("../../utils.jl")
 using .Utils: half_quant, full_quant
 
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
+
 ## Fcns for model with Importance Sampling ##
-function cross_entropy_IS(
+@parallel_indices (b, s) function cross_entropy_IS!(
+    ll::AbstractArray{T},
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
-    ε::T = eps(T),
-) where {T<:half_quant}
-    log_x̂ = log.(x̂ .+ ε)
-    ll = permutedims(log_x̂, [1, 2, 4, 3]) .* x
-    ll = dropdims(sum(ll, dims = (1, 2)), dims = (1, 2)) # One-hot encoded cross-entropy
-    return ll ./ size(x̂, 1)
+    x̂::AbstractArray{T},
+    ε::T,
+    scale::T,
+)::Nothing where {T<:half_quant}
+    D, seq_length, acc = size(x)[1:2]..., zero(T)
+    for d = 1:D, t = 1:seq_length
+        acc = acc + log(x̂[d, t, s, b] + ε) * x[d, t, b]
+    end
+    ll[b, s] = acc / D / scale
+    return nothing
 end
 
-function l2_IS(
+@parallel_indices (b, s) function l2_IS!(
+    ll::AbstractArray{T},
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
-    ε::T = eps(T),
-) where {T<:half_quant}
-    ll = (x .- permutedims(x̂, [1, 2, 3, 5, 4])) .^ 2
-    return -dropdims(sum(ll, dims = (1, 2, 3)); dims = (1, 2, 3))
+    x̂::AbstractArray{T},
+    ε::T,
+    scale::T,
+)::Nothing where {T<:half_quant}
+    W, H, C, acc = size(x)[1:3]..., zero(T)
+    for w = 1:W, h = 1:H, c = 1:C
+        acc = acc + (x[w, h, c, b] - x̂[w, h, c, s, b]) ^ 2
+    end
+    ll[b, s] = - acc / scale
+    return nothing
 end
 
-## Fcns for model with Langevin methods
-function cross_entropy_MALA(
+## Fcns for model with Langevin methods ##
+@parallel_indices (b) function cross_entropy_MALA!(
+    ll::AbstractArray{T},
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
-    ε::T = eps(half_quant),
-) where {T<:half_quant}
-    ll = log.(x̂ .+ ε) .* x ./ size(x, 1)
-    return dropdims(sum(ll; dims = (1, 2)); dims = (1, 2))
+    x̂::AbstractArray{T},
+    ε::T,
+    scale::T,
+)::Nothing where {T<:half_quant}
+    D, seq_length, acc = size(x)[1:2]..., zero(T)
+    for d = 1:D, t = 1:seq_length
+        acc = acc + log(x̂[d, t, b] + ε) * x[d, t, b]
+    end
+    ll[b] = acc / D / scale
+    return nothing
 end
 
-function l2_MALA(
+@parallel_indices (b) function l2_MALA!(
+    ll::AbstractArray{T},
     x::AbstractArray{T},
-    x̂::AbstractArray{T};
-    ε::T = eps(half_quant),
-) where {T<:half_quant}
-    ll = (x - x̂) .^ 2
-    return -dropdims(sum(ll; dims = (1, 2, 3)); dims = (1, 2, 3))
+    x̂::AbstractArray{T},
+    ε::T,
+    scale::T,
+)::Nothing where {T<:half_quant}
+    W, H, C, acc = size(x)[1:3]..., zero(T)
+    for w = 1:W, h = 1:H, c = 1:C
+        acc = acc + (x[w, h, c, b] - x̂[w, h, c, b]) ^ 2
+    end
+    ll[b] = - acc / scale
+    return nothing
 end
 
 ## Log-likelihood functions ##
@@ -74,13 +102,15 @@ function log_likelihood_IS(
     Returns:
         The unnormalized log-likelihood.
     """
+    B, S = size(x)[end], size(z)[end]
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
     noise = lkhood.σ_llhood * noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
-    ll =
-        lkhood.seq_length > 1 ? cross_entropy_IS(x, x̂_noised; ε = ε) :
-        l2_IS(x, x̂_noised; ε = ε)
-    return ll ./ (2*lkhood.σ_llhood^2), st
+
+    ll = @zeros(B, S)
+    stencil = lkhood.seq_length > 1 ? cross_entropy_IS! : l2_IS!
+    @parallel (1:B, 1:S) stencil(ll, x, x̂_noised, ε, 2*lkhood.σ_llhood^2)
+    return ll, st
 end
 
 function log_likelihood_MALA(
@@ -105,12 +135,14 @@ function log_likelihood_MALA(
     Returns:
         The unnormalized log-likelihood.
     """
+    B = size(x)[end]
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
     x̂_act = lkhood.output_activation(x̂)
-    ll =
-        lkhood.seq_length > 1 ? cross_entropy_MALA(x, x̂_act; ε = ε) :
-        l2_MALA(x, x̂_act; ε = ε)
-    return ll ./ (2*lkhood.σ_llhood^2), st
+
+    ll = @zeros(B)
+    stencil = lkhood.seq_length > 1 ? cross_entropy_MALA! : l2_MALA!
+    @parallel (1:B) stencil(ll, x, x̂_act, ε, 2*lkhood.σ_llhood^2)
+    return ll, st
 end
 
 end

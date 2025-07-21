@@ -1,5 +1,7 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Enzyme, CUDA
 
+Enzyme.Compiler.VERBOSE_ERRORS[] = true
+
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"

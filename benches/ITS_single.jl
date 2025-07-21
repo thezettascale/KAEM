@@ -37,7 +37,7 @@ function setup_model(N_t)
     ps, st = ComponentArray(ps) |> device, st |> device
     model = prep_model(model)
 
-    return model, ps, st
+    return model, half_quant.(ps), st
 end
 
 function benchmark_prior(model, ps, st)

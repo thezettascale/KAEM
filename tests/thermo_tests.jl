@@ -25,7 +25,7 @@ function test_posterior_sampling()
     ps, st = ComponentArray(ps) |> device, st |> device
     model = prep_model(model, ps, st, x_test)
 
-    z_posterior, temps, st = sample_thermo(ps, st, model, x_test)
+    z_posterior, temps, st = sample_thermo(half_quant.(ps), st, model, x_test)
     @test size(z_posterior) == (10, 5, 10, 4)
     @test size(temps) == (5,)
     @test !any(isnan, z_posterior)

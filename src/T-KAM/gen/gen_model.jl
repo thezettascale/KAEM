@@ -38,7 +38,7 @@ struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     Φ_fcns::Vector{Any}
     layernorms::Vector{Any}
     batchnorms::Vector{Any}
-    attention::NamedTuple
+    attention::Vector{Any}
     layernorm_bool::Bool
     batchnorm_bool::Bool
     depth::Int

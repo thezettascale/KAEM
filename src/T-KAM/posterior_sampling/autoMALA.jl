@@ -61,6 +61,7 @@ function select_step_size(
     η_init::AbstractArray{U},
     Δη::U,
     logpos_withgrad::Function,
+    compiled_leapfrog::Function,
     model,
     ps::ComponentArray{T},
     st::NamedTuple;
@@ -77,7 +78,7 @@ function select_step_size(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrop_proposal(
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = compiled_leapfrog(
         z,
         ∇z,
         x,
@@ -106,7 +107,7 @@ function select_step_size(
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st =
-            leapfrop_proposal(
+            compiled_leapfrog(
                 z[:, :, active_chains],
                 ∇z[:, :, active_chains],
                 x_active,
@@ -227,7 +228,6 @@ struct autoMALA_sampler{U<:full_quant}
     compiled_llhood::Any
     compiled_leapfrog::Any
     logpos_withgrad::Any
-    compiled_autoMALA_step::Any
     N::Int
     N_unadjusted::Int
     Δη::U
@@ -318,7 +318,6 @@ function initialize_autoMALA_sampler(
     compiled_llhood = log_likelihood_MALA
     logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st)
     compiled_leapfrog = leapfrop_proposal
-    compiled_autoMALA_step = autoMALA_step
 
     if compile_mlir
         compiled_llhood = Reactant.@compile log_likelihood_MALA(
@@ -343,35 +342,12 @@ function initialize_autoMALA_sampler(
             ps,
             st,
         )
-
-        compiled_autoMALA_step = Reactant.@compile autoMALA_step(
-            log_a,
-            log_b,
-            z_fq,
-            ∇z_fq,
-            x_t,
-            t_expanded,
-            logpos_z,
-            momentum,
-            device(repeat(M, 1, 1, S, 1)),
-            logpos_withgrad,
-            model,
-            ps,
-            st,
-            η,
-            Δη,
-            η_min,
-            η_max,
-            model.ε,
-            seq,
-        )
     end
 
     return autoMALA_sampler(
         compiled_llhood,
         compiled_leapfrog,
         logpos_withgrad,
-        compiled_autoMALA_step,
         N,
         N_unadjusted,
         Δη,
@@ -470,7 +446,7 @@ function autoMALA_sample(
             z_hq = T.(z_fq)
 
         else
-            ẑ, η_prop, η_prime, reversible, log_r, st = sampler.compiled_autoMALA_step(
+            ẑ, η_prop, η_prime, reversible, log_r, st = autoMALA_step(
                 log_a,
                 log_b,
                 z_fq,
@@ -481,6 +457,7 @@ function autoMALA_sample(
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
                 sampler.logpos_withgrad,
+                sampler.compiled_leapfrog,
                 model,
                 ps,
                 st,
@@ -525,8 +502,6 @@ function autoMALA_sample(
                 end
             end
         end
-
-
     end
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)

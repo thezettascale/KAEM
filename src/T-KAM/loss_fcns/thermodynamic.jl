@@ -37,9 +37,10 @@ function marginal_llhood(
     log_ss = zero(T)
 
     # Steppingstone estimator
+    x_rep = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
     ll, st_gen = log_likelihood_MALA(
         reshape(z_posterior, Q, P, S*num_temps),
-        x,
+        x_rep,
         m.lkhood,
         ps.gen,
         st_gen;

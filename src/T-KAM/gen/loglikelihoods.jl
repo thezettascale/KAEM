@@ -135,7 +135,7 @@ function log_likelihood_MALA(
     Returns:
         The unnormalized log-likelihood.
     """
-    B = size(x)[end]
+    B = size(z)[end]
     x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
     x̂_act = lkhood.output_activation(x̂)
 

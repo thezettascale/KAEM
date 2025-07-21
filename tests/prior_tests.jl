@@ -25,7 +25,7 @@ end
 
 wrap = PriorWrapper(EBM)
 
-ps = (ebm = ps, gen = ps) |> ComponentArray |> device
+ps = (ebm = ps, gen = ps) |> ComponentArray .|> half_quant |> device
 st = (ebm = st, gen = st) |> device
 
 function test_shapes()

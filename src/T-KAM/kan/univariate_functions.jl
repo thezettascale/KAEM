@@ -90,7 +90,7 @@ function init_function(
     init_τ::U = one(full_quant),
     τ_trainable::Bool = true,
 ) where {T<:half_quant,U<:full_quant}
-    spline_degree = spline_function == "B-spline" ? spline_degree : 0
+    spline_degree = (spline_function == "B-spline" || spline_function == "Cheby") ? spline_degree : 0
     grid_size = spline_function == "Cheby" ? 1 : grid_size
     grid =
         spline_function == "FFT" ? collect(T, 0:grid_size) :
@@ -167,7 +167,7 @@ function Lux.initialparameters(
 
     if l.spline_string == "Cheby"
         return (
-            coef = glorot_normal(rng, full_quant, l.in_dim, l.out_dim, l.spline_degree) .*
+            coef = glorot_normal(rng, full_quant, l.in_dim, l.out_dim, l.spline_degree + 1) .*
                    (1 / (l.in_dim * (l.spline_degree + 1))),
             basis_τ = l.init_τ,
         )

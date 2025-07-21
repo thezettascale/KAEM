@@ -401,12 +401,13 @@ end
 
 function prep_model(
     model::T_KAM,
-    ps::ComponentArray{T},
+    ps::ComponentArray,
     st::NamedTuple,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     model = move_to_hq(model)
+    ps = T.(ps)
     model = init_prior_sampler(model, ps, st, x, model.conf; rng = rng)
     model = init_posterior_sampler(model, ps, st, x, model.conf; rng = rng)
     return model

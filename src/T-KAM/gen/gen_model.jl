@@ -289,9 +289,9 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
     attention_ps = (a = zero(T))
     if lkhood.seq_length > 1
         attention_ps = (
-            Q = Lux.initialparameters(rng, lkhood.attention.Q),
-            K = Lux.initialparameters(rng, lkhood.attention.K),
-            V = Lux.initialparameters(rng, lkhood.attention.V),
+            Q = Lux.initialparameters(rng, lkhood.attention[1]),
+            K = Lux.initialparameters(rng, lkhood.attention[2]),
+            V = Lux.initialparameters(rng, lkhood.attention[3]),
         )
     end
 
@@ -327,9 +327,9 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     attention_st = (a = zero(T))
     if lkhood.seq_length > 1
         attention_st = (
-            Q = Lux.initialstates(rng, lkhood.attention.Q) |> hq,
-            K = Lux.initialstates(rng, lkhood.attention.K) |> hq,
-            V = Lux.initialstates(rng, lkhood.attention.V) |> hq,
+            Q = Lux.initialstates(rng, lkhood.attention[1]) |> hq,
+            K = Lux.initialstates(rng, lkhood.attention[2]) |> hq,
+            V = Lux.initialstates(rng, lkhood.attention[3]) |> hq,
         )
     end
 

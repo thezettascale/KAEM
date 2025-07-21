@@ -41,8 +41,6 @@ function autoMALA_logpos_value_4D(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int,
-    seq::Bool,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     Q, P, S, num_temps = size(z_i)
     z_reshaped = reshape(z_i, Q, P, S*num_temps)
@@ -59,8 +57,6 @@ function autoMALA_logpos_reduced_4D(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int,
-    seq::Bool,
 )::T where {T<:half_quant}
     Q, P, S, num_temps = size(z_i)
     z_reshaped = reshape(z_i, Q, P, S*num_temps)
@@ -78,8 +74,6 @@ function autoMALA_value_and_grad_4D(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int,
-    seq::Bool,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -92,15 +86,13 @@ function autoMALA_value_and_grad_4D(
         Enzyme.Const(m),
         Enzyme.Const(ps),
         Enzyme.Const(st_i),
-        Enzyme.Const(num_temps),
-        Enzyme.Const(seq),
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos_value_4D(z_i, x_i, t, m, ps, st_i, num_temps, seq)
+        CUDA.@fastmath autoMALA_logpos_value_4D(z_i, x_i, t, m, ps, st_i)
     return logpos, ∇z, st_ebm, st_gen
 end
 
@@ -111,7 +103,6 @@ function autoMALA_logpos(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     st_ebm, st_gen = st_i.ebm, st_i.gen
     lp, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
@@ -127,8 +118,6 @@ function autoMALA_value_and_grad(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
-    num_temps::Int,
-    seq::Bool,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
@@ -145,14 +134,13 @@ function autoMALA_value_and_grad(
         Enzyme.Const(m),
         Enzyme.Const(ps),
         Enzyme.Const(st_i),
-        Enzyme.Const(num_temps),
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i, num_temps)
+        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i)
     return logpos, ∇z, st_ebm, st_gen
 end
 

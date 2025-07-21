@@ -110,7 +110,7 @@ function log_prior_univar(
 
     # Pre-allocate
     log_p = dropdims(sum(zero(T) .* z; dims=(1,2)); dims=(1,2))
-    log_z = dropdims(sum(zero(T) .* z; dims=3); dims=3)
+    log_Z = dropdims(sum(zero(T) .* z; dims=3); dims=3)
 
     if normalize && !ebm.ula
         norm, _, st = ebm.quad(ebm, ps, st)

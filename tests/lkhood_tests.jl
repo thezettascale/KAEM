@@ -73,8 +73,8 @@ function test_grad_llhood()
     grads = Enzyme.make_zero(ps.gen)
 
     closure =
-        (z_i, x_i, ll, ps_gen, st_gen) -> begin
-            logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen, noise)
+        (z_i, x_i, ll, ps_gen, st_gen, n) -> begin
+            logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen, n)
             return sum(logllhood)
         end
 
@@ -87,6 +87,7 @@ function test_grad_llhood()
         Enzyme.Const(lkhood),
         Enzyme.Duplicated(ps.gen, grads),
         Enzyme.Const(st.gen),
+        Enzyme.Const(noise),
     )
 
     @test !all(iszero, grads)

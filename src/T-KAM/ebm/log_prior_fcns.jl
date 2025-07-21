@@ -112,10 +112,9 @@ function log_prior_univar(
     log_p = dropdims(sum(zero(T) .* z; dims = (1, 2)); dims = (1, 2))
     log_Z = dropdims(sum(zero(T) .* z; dims = 3); dims = 3)
 
-    if normalize && !ebm.ula
-        norm, _, st = ebm.quad(ebm, ps, st)
-        log_Z = log.(dropdims(sum(norm; dims = 3); dims = 3) .+ ε)
-    end
+    log_Z =
+        (normalize && !ebm.ula) ?
+        log.(dropdims(sum(first(ebm.quad(ebm, ps, st)); dims = 3); dims = 3) .+ ε) : log_Z
 
     for q = 1:size(z, 1)
         log_Zq = view(log_Z, q, :)
@@ -163,12 +162,15 @@ function log_prior_mix(
     # Energy functions of each component, q -> p
     f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
 
-    log_z = zero(T) .* z
-    if normalize
-        norm, _, st = ebm.quad(ebm, ps, st)
-        log_Z =
-            reshape(log.(dropdims(sum(norm; dims = 3); dims = 3) .+ ε), ebm.q_size, 1, S)
-    end
+    log_Z = zero(T) .* z
+    log_Z =
+        normalize ?
+        reshape(
+            log.(dropdims(sum(first(ebm.quad(ebm, ps, st)); dims = 3); dims = 3) .+ ε),
+            ebm.q_size,
+            1,
+            S,
+        ) : log_Z
 
     # Unnormalized or normalized log-probability
     logprob = f + log_απ

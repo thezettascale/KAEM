@@ -307,8 +307,7 @@ function initialize_autoMALA_sampler(
         st_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
-        logpos, ∇z_k, st_ebm, st_gen =
-            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i)
+        logpos, ∇z_k, st_ebm, st_gen = fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i)
         @reset st_i.ebm = st_ebm
         @reset st_i.gen = st_gen
 
@@ -507,22 +506,12 @@ function autoMALA_sample(
                 for t = 1:(num_temps-1)
 
                     # Global swap criterion
-                    z_t .= z_hq[:, :, :, t]
-                    z_t1 .= z_hq[:, :, :, t+1]
-                    ll_t, st_gen = sampler.compiled_llhood(
-                        z_t,
-                        x,
-                        model.lkhood,
-                        ps.gen,
-                        st.gen,
-                    )
-                    ll_t1, st_gen = sampler.compiled_llhood(
-                        z_t1,
-                        x,
-                        model.lkhood,
-                        ps.gen,
-                        st_gen,
-                    )
+                    z_t = z_hq[:, :, :, t]
+                    z_t1 = z_hq[:, :, :, t+1]
+                    ll_t, st_gen =
+                        sampler.compiled_llhood(z_t, x, model.lkhood, ps.gen, st.gen)
+                    ll_t1, st_gen =
+                        sampler.compiled_llhood(z_t1, x, model.lkhood, ps.gen, st_gen)
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
                     swap = log_u_swap[t, i] < mean(log_swap_ratio)
@@ -530,7 +519,7 @@ function autoMALA_sample(
 
                     # Swap population if likelihood of population in new temperature is higher on average
                     if swap
-                        z_copy .= z_t
+                        z_copy = z_t
                         z_hq[:, :, :, t] .= z_t1
                         z_hq[:, :, :, t+1] .= z_copy
                         z_fq = full_quant.(z_hq)

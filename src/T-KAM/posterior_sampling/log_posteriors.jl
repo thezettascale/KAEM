@@ -76,12 +76,15 @@ function autoMALA_value_and_grad_4D(
     st_i::NamedTuple,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
+    x_expanded =
+        ndims(x_i) == 4 ? repeat(x_i, 1, 1, 1, size(t, 2)) : repeat(x_i, 1, 1, size(t, 2))
+
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         autoMALA_logpos_reduced_4D,
         Enzyme.Active,
         Enzyme.Duplicated(z_i, ∇z),
-        Enzyme.Const(x_i),
+        Enzyme.Const(x_expanded),
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
@@ -118,18 +121,22 @@ function autoMALA_value_and_grad(
     m,
     ps::ComponentArray{T},
     st_i::NamedTuple,
+    num_temps::Int,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
         (z, x, temps, model, p, s, n) ->
             sum(first(autoMALA_logpos(z, x, temps, model, p, s, n)))
 
+    x_expanded =
+        ndims(x_i) == 4 ? repeat(x_i, 1, 1, 1, num_temps) : repeat(x_i, 1, 1, num_temps)
+
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         fcn,
         Enzyme.Active,
         Enzyme.Duplicated(z_i, ∇z),
-        Enzyme.Const(x_i),
+        Enzyme.Const(x_expanded),
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
@@ -139,8 +146,7 @@ function autoMALA_value_and_grad(
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
 
-    logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i)
+    logpos, st_ebm, st_gen = CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i)
     return logpos, ∇z, st_ebm, st_gen
 end
 

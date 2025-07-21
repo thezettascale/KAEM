@@ -40,12 +40,15 @@ function logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant}
 
+    # Expand for log_likelihood
+    x_expanded = ndims(x) == 4 ? repeat(x, 1, 1, 1, length(t)) : repeat(x, 1, 1, length(t))
+
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
         Enzyme.Active,
         Enzyme.Duplicated(z_i, ∇z),
-        Enzyme.Const(x),
+        Enzyme.Const(x_expanded),
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
@@ -223,20 +226,10 @@ function ULA_sample(
                 z_t = z_hq[:, :, :, t]
                 z_t1 = z_hq[:, :, :, t+1]
 
-                ll_t, st_gen = sampler.compiled_llhood(
-                    z_t,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_gen;
-                )
-                ll_t1, st_gen = sampler.compiled_llhood(
-                    z_t1,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_gen;
-                )
+                ll_t, st_gen =
+                    sampler.compiled_llhood(z_t, x, model.lkhood, ps.gen, st_gen;)
+                ll_t1, st_gen =
+                    sampler.compiled_llhood(z_t1, x, model.lkhood, ps.gen, st_gen;)
 
                 printlnk("global criterion")
                 log_swap_ratio = dropdims(

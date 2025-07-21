@@ -114,7 +114,7 @@ function initialize_ULA_sampler(
             z_hq,
             Enzyme.make_zero(z_hq),
             x,
-            temps,
+            device(temps),
             model,
             ps,
             st,
@@ -185,11 +185,13 @@ function ULA_sample(
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     S = sampler.prior_sampling_bool ? size(z_hq)[end] : S
     z_hq = reshape(z_hq, Q, P, S, num_temps)
+    temps_gpu = device(temps)
 
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    z_copy = similar(z_hq[:, :, :, 1])
+    z_copy = similar(z_hq[:, :, :, 1]) |> device
+    z_t, z_t1 = z_copy, z_copy
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
@@ -203,7 +205,7 @@ function ULA_sample(
                     z_hq,
                     Enzyme.make_zero(z_hq),
                     x,
-                    temps,
+                    temps_gpu,
                     model,
                     ps,
                     st,
@@ -216,20 +218,27 @@ function ULA_sample(
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
             for t = 1:(num_temps-1)
+
+                println("Finding llhoods")
+                z_t = z_hq[:, :, :, t]
+                z_t1 = z_hq[:, :, :, t+1]
+
                 ll_t, st_gen = sampler.compiled_llhood(
-                    z_hq[:, :, :, t],
+                    z_t,
                     x,
                     model.lkhood,
                     ps.gen,
                     st_gen;
                 )
                 ll_t1, st_gen = sampler.compiled_llhood(
-                    z_hq[:, :, :, t+1],
+                    z_t1,
                     x,
                     model.lkhood,
                     ps.gen,
                     st_gen;
                 )
+
+                printlnk("global criterion")
                 log_swap_ratio = dropdims(
                     sum((temps[t+1] - temps[t]) .* (ll_t - ll_t1); dims = 1);
                     dims = 1,
@@ -239,8 +248,9 @@ function ULA_sample(
 
                 # Swap population if likelihood of population in new temperature is higher on average
                 if swap
-                    z_copy .= z_hq[:, :, :, t]
-                    z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
+                    println("swapping")
+                    z_copy = z_t
+                    z_hq[:, :, :, t] .= z_t1
                     z_hq[:, :, :, t+1] .= z_copy
                     z_fq = full_quant.(z_hq)
                 end

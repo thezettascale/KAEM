@@ -25,28 +25,12 @@ function unadjusted_logpos(
     st::NamedTuple,
     prior_sampling_bool::Bool,
 )::T where {T<:half_quant}
-    tot = zero(T)
-
-    for k in eachindex(temps)
-        lp = sum(first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st.ebm; ε = m.ε)))
-        ll =
-            prior_sampling_bool ? zero(T) :
-            sum(
-                temps[k] .* first(
-                    log_likelihood_MALA(
-                        z_i[:, :, :, k],
-                        x,
-                        m.lkhood,
-                        ps.gen,
-                        st.gen;
-                        ε = m.ε,
-                    ),
-                ),
-            )
-        tot = tot + lp + ll
-    end
-
-    return tot * m.loss_scaling
+    Q, P, S, num_temps = size(z_i)
+    z_reshaped = reshape(z_i, Q, P, S*num_temps)
+    lp = sum(first(m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st.ebm; ε = m.ε)))
+    ll = first(log_likelihood_MALA(z_reshaped, x, m.lkhood, ps.gen, st.gen; ε = m.ε))
+    tempered_ll = sum(temps .* reshape(ll, num_temps, S))
+    return (lp + tempered_ll) * m.loss_scaling
 end
 
 ### autoMALA ###
@@ -60,18 +44,12 @@ function autoMALA_logpos_value_4D(
     num_temps::Int,
     seq::Bool,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    logpos = zeros(T, size(z_i, 3), 0) |> device
-    st_ebm, st_gen = st_i.ebm, st_i.gen
-
-    for k = 1:num_temps
-        x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-        lp, st_ebm = m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_ebm; ε = m.ε)
-        ll, st_gen =
-            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_gen; ε = m.ε)
-        logpos = hcat(logpos, lp + t[:, k] .* ll)
-    end
-
-    return logpos .* m.loss_scaling
+    Q, P, S, num_temps = size(z_i)
+    z_reshaped = reshape(z_i, Q, P, S*num_temps)
+    lp, st_ebm = m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st_i.ebm; ε = m.ε)
+    ll, st_gen = log_likelihood_MALA(z_reshaped, x_i, m.lkhood, ps.gen, st_i.gen; ε = m.ε)
+    logpos = reshape(lp, S, num_temps) + t .* reshape(ll, S, num_temps)
+    return logpos .* m.loss_scaling, st_ebm, st_gen
 end
 
 function autoMALA_logpos_reduced_4D(
@@ -84,18 +62,12 @@ function autoMALA_logpos_reduced_4D(
     num_temps::Int,
     seq::Bool,
 )::T where {T<:half_quant}
-    tot = zero(T)
-
-    for k = 1:num_temps
-        x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_i.ebm; ε = m.ε))
-        ll = first(
-            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_i.gen; ε = m.ε),
-        )
-        tot = tot + sum(lp) + sum(t[:, k] .* ll)
-    end
-
-    return tot * m.loss_scaling
+    Q, P, S, num_temps = size(z_i)
+    z_reshaped = reshape(z_i, Q, P, S*num_temps)
+    lp = sum(first(m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st_i.ebm; ε = m.ε)))
+    ll = first(log_likelihood_MALA(z_reshaped, x_i, m.lkhood, ps.gen, st_i.gen; ε = m.ε))
+    tempered_ll = sum(t .* reshape(ll, S, num_temps))
+    return (lp + tempered_ll) * m.loss_scaling
 end
 
 function autoMALA_value_and_grad_4D(

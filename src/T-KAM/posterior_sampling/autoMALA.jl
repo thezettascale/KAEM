@@ -416,7 +416,8 @@ function autoMALA_sample(
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    z_copy = similar(z_hq[:, :, :, 1])
+    z_copy = similar(z_hq[:, :, :, 1]) |> device
+    z_t, z_t1 = z_copy, z_copy
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
@@ -508,15 +509,17 @@ function autoMALA_sample(
                 for t = 1:(num_temps-1)
 
                     # Global swap criterion
+                    z_t .= z_hq[:, :, :, t]
+                    z_t1 .= z_hq[:, :, :, t+1]
                     ll_t, st_gen = sampler.compiled_llhood(
-                        z_hq[:, :, :, t],
+                        z_t,
                         x,
                         model.lkhood,
                         ps.gen,
                         st.gen,
                     )
                     ll_t1, st_gen = sampler.compiled_llhood(
-                        z_hq[:, :, :, t+1],
+                        z_t1,
                         x,
                         model.lkhood,
                         ps.gen,
@@ -529,8 +532,8 @@ function autoMALA_sample(
 
                     # Swap population if likelihood of population in new temperature is higher on average
                     if swap
-                        z_copy .= z_hq[:, :, :, t]
-                        z_hq[:, :, :, t] .= z_hq[:, :, :, t+1]
+                        z_copy .= z_t
+                        z_hq[:, :, :, t] .= z_t1
                         z_hq[:, :, :, t+1] .= z_copy
                         z_fq = full_quant.(z_hq)
                     end

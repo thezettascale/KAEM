@@ -119,8 +119,8 @@ function log_prior_univar(
     for q = 1:size(z, 1)
         log_Zq = view(log_Z, q, :)
         f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q, :, :] .+ log_π0[q, :, :]
-        log_p = log_p .+ dropdims(sum(lp .- log_Zq; dims = 1); dims = 1)
+        lp = f[q, :, :] + log_π0[q, :, :]
+        log_p = log_p + dropdims(sum(lp .- log_Zq; dims = 1); dims = 1)
     end
     return log_p, st
 end

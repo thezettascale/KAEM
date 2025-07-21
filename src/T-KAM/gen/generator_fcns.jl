@@ -164,11 +164,11 @@ function SEQ_fwd(
     for t = 2:lkhood.seq_length
 
         # Self-attention
-        Q, st_new = Lux.apply(lkhood.attention.Q, z, ps.attention[:Q], st.attention[:Q])
+        Q, st_new = Lux.apply(lkhood.attention[1], z, ps.attention[:Q], st.attention[:Q])
         @reset st.attention[:Q] = st_new
-        K, st_new = Lux.apply(lkhood.attention.K, z, ps.attention[:K], st.attention[:K])
+        K, st_new = Lux.apply(lkhood.attention[2], z, ps.attention[:K], st.attention[:K])
         @reset st.attention[:K] = st_new
-        V, st_new = Lux.apply(lkhood.attention.V, z, ps.attention[:V], st.attention[:V])
+        V, st_new = Lux.apply(lkhood.attention[3], z, ps.attention[:V], st.attention[:V])
         @reset st.attention[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)

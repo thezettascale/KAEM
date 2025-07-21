@@ -36,8 +36,8 @@ const resampler_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     Φ_fcns::Vector{Any}
-    layernorms::Tuple
-    batchnorms::Tuple
+    layernorms::Vector{Any}
+    batchnorms::Vector{Any}
     attention::NamedTuple
     layernorm_bool::Bool
     batchnorm_bool::Bool
@@ -150,12 +150,9 @@ function init_GenModel(
         )
 
     Φ_functions = []
-    layernorms_temp = []
-    batchnorms_temp = []
-
-    layernorms = ()
-    batchnorms = ()
-    attention = NamedTuple()
+    layernorms = []
+    batchnorms = []
+    attention = []
 
     if CNN
         channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
@@ -203,10 +200,6 @@ function init_GenModel(
             ),
         )
 
-        if batchnorm_bool && length(batchnorms_temp) > 0
-            batchnorms = ntuple(i -> batchnorms_temp[i], length(batchnorms_temp))
-        end
-
         depth = length(Φ_functions)
 
     elseif sequence_length > 1
@@ -221,12 +214,12 @@ function init_GenModel(
         push!(Φ_functions, Lux.Dense(q_size => d_model))
         push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
 
-        # Query, Key, Value
-        attention = (
-            Q = Lux.Dense(d_model => d_model),
-            K = Lux.Dense(d_model => d_model),
-            V = Lux.Dense(d_model => d_model),
-        )
+        # Query, Key, Value - self-attention
+        attention = [
+            Lux.Dense(d_model => d_model),
+            Lux.Dense(d_model => d_model),
+            Lux.Dense(d_model => d_model),
+        ]
 
         # Feed forward
         push!(Φ_functions, Lux.Dense(d_model => d_model))
@@ -235,8 +228,6 @@ function init_GenModel(
         # Output layer
         push!(Φ_functions, Lux.Dense(d_model => output_dim))
         depth = 3
-
-        layernorms = ntuple(i -> layernorms_temp[i], 2)
     else
         for i in eachindex(widths[1:(end-1)])
             base_scale = (
@@ -251,10 +242,6 @@ function init_GenModel(
             if (layernorm_bool && i < depth)
                 push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
             end
-        end
-
-        if layernorm_bool && length(layernorms_temp) > 0
-            layernorms = ntuple(i -> layernorms_temp[i], depth-1)
         end
     end
 

@@ -109,8 +109,8 @@ function log_prior_univar(
         log.(ebm.π_pdf(z, ε) .+ ε)
 
     # Pre-allocate
-    log_p = dropdims(sum(zero(T) .* z; dims = (1, 2)); dims = (1, 2))
-    log_Z = dropdims(sum(zero(T) .* z; dims = 3); dims = 3)
+    log_p = zero(T) .* z[1, 1, :]
+    log_Z = zero(T) .* z[:, :, 1]
 
     log_Z =
         (normalize && !ebm.ula) ?

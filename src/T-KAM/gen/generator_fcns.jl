@@ -3,13 +3,19 @@ module GeneratorFCNs
 export KAN_fwd, CNN_fwd, SEQ_fwd
 
 using CUDA, KernelAbstractions, Accessors, Tullio, ComponentArrays
-using Lux, LuxCUDA
+using Lux, LuxCUDA, ParallelStencil
 using NNlib: softmax, batched_mul
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 using .UnivariateFunctions
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
 
 function KAN_fwd(
     lkhood,
@@ -103,35 +109,50 @@ function CNN_fwd(
     return z, st
 end
 
+@parallel_indices (d, t, b) function scaled_dot_prod!(
+    QK::AbstractArray{T},
+    Q::AbstractArray{T},
+    K::AbstractArray{T},
+    scale::T,
+    d_model::Int,
+) where {T<:half_quant}
+    acc = zero(T)
+    for i = 1:d_model
+        acc = acc + Q[d, t, b] * K[d, i, b]
+    end
+    QK[t, i, b] = acc / scale
+    return nothing
+end
+
+@parallel_indices (d, t, b) function value_kernel!(
+    out::AbstractArray{T},
+    QK::AbstractArray{T},
+    V::AbstractArray{T},
+    I::Int,
+) where {T<:half_quant}
+    acc = zero(T)
+    for i = 1:I
+        acc = acc + QK[t, i, b] * V[d, i, b]
+    end
+    out[d, t, b] = acc
+    return nothing
+end
+
 function scaled_dot_product_attention(
     Q::AbstractArray{T},
     K::AbstractArray{T},
     V::AbstractArray{T},
     d_model::Int,
 ) where {T<:half_quant}
-    scale = sqrt(T(d_model))
     D, L, B = size(Q)
-    _, I, _ = size(K)
+    I = size(K, 2)
+    scale = sqrt(T(d_model))
 
-    # 1. Compute QK: (T, I, B)
-    Qt = permutedims(Q, (2, 1, 3))
-    Kt = permutedims(K, (2, 1, 3))
-    Qt_ = reshape(Qt, L, 1, D, B)
-    Kt_ = reshape(Kt, 1, I, D, B)
-    QK = sum(Qt_ .* Kt_, dims = 3)
-    QK = dropdims(QK, dims = 3) ./ scale
-
-    # 2. Softmax over I (keys) dimension
-    QK_max = maximum(QK, dims = 2)
-    QK_exp = exp.(QK .- QK_max)
-    QK_softmax = QK_exp ./ sum(QK_exp, dims = 2)
-
-    # 3. Weighted sum: out[d, t, b] = sum_i QK_softmax[t, i, b] * V[d, i, b]
-    QK_broad = reshape(QK_softmax, 1, L, I, B)
-    V_broad = reshape(V, D, 1, I, B)
-    out = sum(QK_broad .* V_broad, dims = 3)
-    out = dropdims(out, dims = 3)
-    return out
+    QK = @zeros(L, I, B)
+    @parallel (1:D, 1:L, 1:B) scaled_dot_prod!(QK, Q, K, scale, d_model)
+    QK = softmax(QK, dims = 2)
+    @parallel (1:D, 1:L, 1:B) value_kernel!(Q, QK, V, I)
+    return Q
 end
 
 function SEQ_fwd(
@@ -172,7 +193,7 @@ function SEQ_fwd(
         @reset st.attention[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
-        z = z .+ attn
+        z = z + attn
 
         # Feed forward
         z, st_new = Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[:b], st.fcn[:b])

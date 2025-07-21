@@ -3,12 +3,18 @@ module UnivariateFunctions
 export univariate_function, init_function, activation_mapping
 
 using CUDA, KernelAbstractions, Accessors, ComponentArrays
-using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
+using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 include("spline_bases.jl")
 include("../../utils.jl")
 using .spline_functions
 using .Utils: device, half_quant, full_quant
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
 
 const SplineBasis_mapping = Dict(
     "B-spline" => B_spline_basis,
@@ -51,28 +57,6 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     basis_mul::Function
     coef2curve::Function
     curve2coef::Function
-end
-
-function ChebyMUL(
-    l,
-    ps::ComponentArray{T},
-    st::NamedTuple,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    return y .* st.mask
-end
-
-function SplineMUL(
-    l,
-    ps::ComponentArray{T},
-    st::NamedTuple,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    I, O, B = size(y)
-    base = l.base_activation(x)
-    return ps.w_base .* reshape(base, I, 1, B) .+ ps.w_sp .* y .* st.mask
 end
 
 function init_function(
@@ -191,6 +175,50 @@ function Lux.initialstates(
     mask = ones(half_quant, l.in_dim, l.out_dim)
     return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
            (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
+end
+
+## Stencils much faster than broadcast ##
+@parallel function mask_mul!(
+    y::AbstractArray{T},
+    mask::AbstractArray{T},
+) where {T<:half_quant}
+    @all(y) = @all(y) * @all(mask)
+    return nothing
+end
+
+function ChebyMUL(
+    l,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant}
+    @parallel mask_mul!(y, st.mask)
+    return y
+end
+
+@parallel_indices (i, o, b) function spl_kernel!(
+    y::AbstractArray{T},
+    x::AbstractArray{T},
+    w_base::AbstractArray{T},
+    w_sp::AbstractArray{T},
+    mask::AbstractArray{T},
+) where {T<:half_quant}
+    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b] * mask[i, o]
+    return nothing
+end
+
+function SplineMUL(
+    l,
+    ps::ComponentArray{T},
+    st::NamedTuple,
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant}
+    I, O, B = size(y)
+    base = l.base_activation(x)
+    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp, st.mask)
+    return y
 end
 
 function (l::univariate_function{T,U})(

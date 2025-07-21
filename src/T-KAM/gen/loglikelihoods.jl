@@ -7,7 +7,7 @@ using CUDA, KernelAbstractions, ComponentArrays, Random
 using NNlib: softmax, sigmoid
 
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device
+using .Utils: half_quant, full_quant
 
 ## Fcns for model with Importance Sampling ##
 function cross_entropy_IS(

@@ -54,7 +54,8 @@ function test_logllhood()
 
     x = randn(half_quant, 32, 32, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    logllhood, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen)
+    noise = randn(half_quant, 32, 32, 1, b_size, b_size) |> device
+    logllhood, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen, noise)
     @test size(logllhood) == (b_size, b_size)
 end
 
@@ -68,11 +69,12 @@ function test_grad_llhood()
 
     x = randn(half_quant, 32, 32, 1, b_size) |> device
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
+    noise = randn(half_quant, 32, 32, 1, b_size, b_size) |> device
     grads = Enzyme.make_zero(ps.gen)
 
     closure =
         (z_i, x_i, ll, ps_gen, st_gen) -> begin
-            logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen)
+            logllhood, _ = log_likelihood_IS(z_i, x_i, ll, ps_gen, st_gen, noise)
             return sum(logllhood)
         end
 

@@ -17,7 +17,7 @@ using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-using .Utils: device, half_quant, full_quant, fq, symbol_map
+using .Utils: half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
 
 function prior_fwd(
@@ -108,8 +108,9 @@ function log_prior_univar(
         ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) :
         log.(ebm.π_pdf(z, ε) .+ ε)
 
-    log_p = zeros(T, size(z)[end]) |> device
-    log_Z = zeros(T, size(z)[1:2]...) |> device
+    # Pre-allocate
+    log_p = dropdims(sum(zero(T) .* z; dims=(1,2); dims=(1,2)))
+    log_z = dropdims(sum(zero(T) .* z; dims=3; dims=3))
 
     if normalize && !ebm.ula
         norm, _, st = ebm.quad(ebm, ps, st)
@@ -162,12 +163,11 @@ function log_prior_mix(
     # Energy functions of each component, q -> p
     f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
 
-    log_Z = zeros(T, size(z)) |> device
+    log_z = zero(T) .* z
     if normalize
         norm, _, st = ebm.quad(ebm, ps, st)
         log_Z =
-            reshape(log.(dropdims(sum(norm; dims = 3); dims = 3) .+ ε), ebm.q_size, 1, S) |>
-            device
+            reshape(log.(dropdims(sum(norm; dims = 3); dims = 3) .+ ε), ebm.q_size, 1, S)
     end
 
     # Unnormalized or normalized log-probability

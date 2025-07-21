@@ -22,37 +22,31 @@ using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq, sym
 using .LogPriorFCNs
 using .InverseTransformSampling
 
-function uniform_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
-    return half_quant.((z .>= zero(half_quant)) .* (z .<= one(half_quant))) |> device
+function uniform_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+    return T.((z .>= zero(T)) .* (z .<= one(T)))
 end
 
-function gaussian_pdf(
-    z::AbstractArray{full_quant},
-    ε::full_quant,
-)::AbstractArray{half_quant}
-    return half_quant(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
+function gaussian_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+    return T(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
 end
 
-function lognormal_pdf(
-    z::AbstractArray{full_quant},
-    ε::full_quant,
-)::AbstractArray{half_quant}
-    return exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* half_quant(sqrt(2π)) .+ ε)
+function lognormal_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+    return exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* T(sqrt(2π)) .+ ε)
 end
 
 function learnable_gaussian_pdf(
-    z::AbstractArray{full_quant},
-    ps::ComponentArray{full_quant},
-    ε::full_quant,
-)::AbstractArray{half_quant}
-    return one(half_quant) ./ (
-        abs.(ps.dist.π_σ .* half_quant(sqrt(2π)) .+ ε) .*
+    z::AbstractArray{T},
+    ps::ComponentArray{T},
+    ε::T,
+)::AbstractArray{T} where {T<:half_quant}
+    return one(T) ./ (
+        abs.(ps.dist.π_σ .* T(sqrt(2π)) .+ ε) .*
         exp.(-(z .- ps.dist.π_μ .^ 2) ./ (2 .* (ps.dist.π_σ .^ 2) .+ ε))
     )
 end
 
-function ebm_pdf(z::AbstractArray{full_quant}, ε::full_quant)::AbstractArray{half_quant}
-    return ones(half_quant, size(z)) .- ε |> device
+function ebm_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+    return (zero(T) .* z .+ one(T)) .- ε
 end
 
 const prior_pdf = Dict(

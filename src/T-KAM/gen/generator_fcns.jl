@@ -8,7 +8,7 @@ using NNlib: softmax, batched_mul
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-using .Utils: half_quant, full_quant, device, symbol_map
+using .Utils: half_quant, full_quant, symbol_map
 using .UnivariateFunctions
 
 function KAN_fwd(

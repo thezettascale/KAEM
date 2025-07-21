@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -43,7 +43,7 @@ function test_grid_update()
 
     size_grid = size(st.ebm.fcn[:a].grid)
     x = first(model.train_loader) |> device
-    model, ps, st = update_model_grid(model, x, ps, Lux.testmode(st))
+    model, ps, st = update_model_grid(model, x, half_quant.(ps), Lux.testmode(st))
     @test all(size(st.ebm.fcn[:a].grid) .== size_grid)
     @test !any(isnan, ps)
 end

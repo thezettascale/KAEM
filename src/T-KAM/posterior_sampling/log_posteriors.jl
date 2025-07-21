@@ -88,9 +88,9 @@ function autoMALA_logpos_reduced_4D(
 
     for k = 1:num_temps
         x_k = seq ? x_i[:, :, :, k] : x_i[:, :, :, :, k]
-        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st.ebm; ε = m.ε))
+        lp = first(m.prior.lp_fcn(z_i[:, :, :, k], m.prior, ps.ebm, st_i.ebm; ε = m.ε))
         ll = first(
-            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st.gen; ε = m.ε),
+            log_likelihood_MALA(z_i[:, :, :, k], x_k, m.lkhood, ps.gen, st_i.gen; ε = m.ε),
         )
         tot = tot + sum(lp) + sum(t[:, k] .* ll)
     end
@@ -119,7 +119,7 @@ function autoMALA_value_and_grad_4D(
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
-        Enzyme.Const(Lux.trainmode(st_i)),
+        Enzyme.Const(st_i),
         Enzyme.Const(num_temps),
         Enzyme.Const(seq),
     )
@@ -172,7 +172,7 @@ function autoMALA_value_and_grad(
         Enzyme.Const(t),
         Enzyme.Const(m),
         Enzyme.Const(ps),
-        Enzyme.Const(Lux.trainmode(st_i)),
+        Enzyme.Const(st_i),
         Enzyme.Const(num_temps),
     )
 

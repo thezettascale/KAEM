@@ -212,7 +212,7 @@ function init_GenModel(
 
         # Projection
         push!(Φ_functions, Lux.Dense(q_size => d_model))
-        push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
+        push!(layernorms, Lux.LayerNorm((d_model, 1), gelu))
 
         # Query, Key, Value - self-attention
         attention = [
@@ -223,7 +223,7 @@ function init_GenModel(
 
         # Feed forward
         push!(Φ_functions, Lux.Dense(d_model => d_model))
-        push!(layernorms_temp, Lux.LayerNorm((d_model, 1), gelu))
+        push!(layernorms, Lux.LayerNorm((d_model, 1), gelu))
 
         # Output layer
         push!(Φ_functions, Lux.Dense(d_model => output_dim))
@@ -240,7 +240,7 @@ function init_GenModel(
             push!(Φ_functions, initialize_function(widths[i], widths[i+1], base_scale))
 
             if (layernorm_bool && i < depth)
-                push!(layernorms_temp, Lux.LayerNorm(widths[i+1]))
+                push!(layernorms, Lux.LayerNorm(widths[i+1]))
             end
         end
     end

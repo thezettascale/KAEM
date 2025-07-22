@@ -1,4 +1,4 @@
-    module autoMALA_sampling
+module autoMALA_sampling
 
 export initialize_autoMALA_sampler, autoMALA_sample
 

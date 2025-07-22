@@ -3,7 +3,7 @@ module UnivariateFunctions
 export univariate_function, init_function, activation_mapping
 
 using CUDA, KernelAbstractions, Accessors, ComponentArrays
-using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil, ParallelStencil.FiniteDifferences2D
+using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
 
 include("spline_bases.jl")
 include("../../utils.jl")
@@ -178,11 +178,11 @@ function Lux.initialstates(
 end
 
 ## Stencils much faster than broadcast ##
-@parallel function mask_mul!(
+@parallel_indices (i, o, b) function mask_mul!(
     y::AbstractArray{T},
     mask::AbstractArray{T},
 ) where {T<:half_quant}
-    @all(y) = @all(y) * @all(mask)
+    y[i, o, b] = y[i, o, b] * mask[i, o]
     return nothing
 end
 
@@ -193,7 +193,8 @@ function ChebyMUL(
     x::AbstractArray{T},
     y::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    @parallel mask_mul!(y, st.mask)
+    I, O, B = size(y)
+    @parallel (1:I, 1:O, 1:B) mask_mul!(y, st.mask)
     return y
 end
 

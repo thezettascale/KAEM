@@ -39,10 +39,12 @@ function trapezium_quadrature(
     f_grid = st.fcn[:a].grid
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
+    I, O = size(f_grid)
+    π_grid = @zeros(I, O, 1)
+    @parallel (1:I, 1:O, 1:1) ebm.π_pdf!(π_grid, f_grid, ε, ps.dist.π_μ, ps.dist.π_σ)
     π_grid =
-        ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(f_grid', ps, ε) :
-        ebm.π_pdf(f_grid, ε)
-    π_grid = ebm.prior_type == "learnable_gaussian" ? π_grid' : π_grid
+        ebm.prior_type == "learnable_gaussian" ? dropdims(π_grid, dims = 3)' :
+        dropdims(π_grid, dims = 3)
 
     # Energy function of each component
     f_grid, st = prior_fwd(ebm, ps, st, f_grid)
@@ -96,10 +98,13 @@ function gausslegendre_quadrature(
 
     nodes, weights = get_gausslegendre(ebm, ps, st)
     grid = nodes
+
+    I, O = size(nodes)
+    π_nodes = @zeros(I, O, 1)
+    @parallel (1:I, 1:O, 1:1) ebm.π_pdf!(π_nodes, nodes, ε, ps.dist.π_μ, ps.dist.π_σ)
     π_nodes =
-        ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(nodes', ps, ε) :
-        ebm.π_pdf(nodes, ε)
-    π_nodes = ebm.prior_type == "learnable_gaussian" ? π_nodes' : π_nodes
+        ebm.prior_type == "learnable_gaussian" ? dropdims(π_nodes, dims = 3)' :
+        dropdims(π_nodes, dims = 3)
 
     # Energy function of each component
     nodes, st = prior_fwd(ebm, ps, st, nodes)

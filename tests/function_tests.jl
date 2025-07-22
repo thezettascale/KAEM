@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -71,4 +71,5 @@ end
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
+    test_derivative()
 end

@@ -13,49 +13,16 @@ using ConfParser,
     LinearAlgebra,
     ComponentArrays
 
-include("log_prior_fcns.jl")
 include("../kan/univariate_functions.jl")
-include("inverse_transform.jl")
 include("../../utils.jl")
+include("log_prior_fcns.jl")
+include("inverse_transform.jl")
+include("ref_priors.jl")
 using .UnivariateFunctions
 using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
 using .LogPriorFCNs
 using .InverseTransformSampling
-
-function uniform_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    return T.((z .>= zero(T)) .* (z .<= one(T)))
-end
-
-function gaussian_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    return T(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
-end
-
-function lognormal_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    return exp.(-(log.(z .+ ε)) .^ 2 ./ 2) ./ (z .* T(sqrt(2π)) .+ ε)
-end
-
-function learnable_gaussian_pdf(
-    z::AbstractArray{T},
-    ps::ComponentArray{T},
-    ε::T,
-)::AbstractArray{T} where {T<:half_quant}
-    return one(T) ./ (
-        abs.(ps.dist.π_σ .* T(sqrt(2π)) .+ ε) .*
-        exp.(-(z .- ps.dist.π_μ .^ 2) ./ (2 .* (ps.dist.π_σ .^ 2) .+ ε))
-    )
-end
-
-function ebm_pdf(z::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    return (zero(T) .* z .+ one(T)) .- ε
-end
-
-const prior_pdf = Dict(
-    "uniform" => uniform_pdf,
-    "gaussian" => gaussian_pdf,
-    "lognormal" => lognormal_pdf,
-    "ebm" => ebm_pdf,
-    "learnable_gaussian" => learnable_gaussian_pdf,
-)
+using .RefPriors: prior_pdf
 
 const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
@@ -66,7 +33,7 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf::Function
+    π_pdf!::Function
     sample_z::Function
     p_size::Int
     q_size::Int
@@ -229,11 +196,11 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:h
 
     prior_ps = (
         π_μ = prior.prior_type == "learnable_gaussian" ?
-              zeros(half_quant, 1, prior.p_size) : zero(T),
+              zeros(half_quant, prior.p_size) : [zero(T)],
         π_σ = prior.prior_type == "learnable_gaussian" ?
-              ones(half_quant, 1, prior.p_size) : zero(T),
+              ones(half_quant, prior.p_size) : [zero(T)],
         α = prior.mixture_model ?
-            glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : zero(T),
+            glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : [zero(T)],
     )
 
     return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)

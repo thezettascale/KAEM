@@ -11,7 +11,8 @@ using CUDA,
     Accessors,
     Random,
     Tullio,
-    ComponentArrays
+    ComponentArrays,
+    ParallelStencil
 
 using NNlib: softmax
 
@@ -19,6 +20,12 @@ include("../../utils.jl")
 include("../kan/univariate_functions.jl")
 using .Utils: half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
 
 function prior_fwd(
     ebm,
@@ -69,12 +76,26 @@ function log_prior_ula(
     ε::T = eps(half_quant),
     normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
-    log_π0 =
-        ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) :
-        log.(ebm.π_pdf(z, ε) .+ ε)
+    Q, P, S = size(z)
+    log_π0 = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
+    @. log_π0 = log(log_π0 + ε)
     log_π0 = dropdims(sum(log_π0; dims = 1); dims = 1)
     f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st
+end
+
+@parallel_indices (q, p) function log_norm_kernel!(
+    log_Z::AbstractArray{T},
+    norm::AbstractArray{T},
+    ε::T,
+)::Nothing where {T<:half_quant}
+    G, acc = size(norm, 3), zero(T)
+    for g = 1:G
+        acc = acc + norm[q, p, g]
+    end
+    log_Z[q, p] = log(acc + ε)
+    return nothing
 end
 
 function log_prior_univar(
@@ -104,24 +125,28 @@ function log_prior_univar(
         The updated states of the ebm-prior.
     """
 
-    log_π0 =
-        ebm.prior_type == "learnable_gaussian" ? log.(ebm.π_pdf(z, ps, ε) .+ ε) :
-        log.(ebm.π_pdf(z, ε) .+ ε)
+    Q, P, S = size(z)
+    log_π0 = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
+    @. log_π0 = log(log_π0 + ε)
 
     # Pre-allocate
-    log_p = zero(T) .* z[1, 1, :]
-    log_Z = zero(T) .* z[:, :, 1]
+    log_p = @zeros(S)
+    log_Z = @zeros(Q, P)
 
-    log_Z =
-        (normalize && !ebm.ula) ?
-        log.(dropdims(sum(first(ebm.quad(ebm, ps, st)); dims = 3); dims = 3) .+ ε) : log_Z
+    (normalize && !ebm.ula) &&
+        @parallel (1:Q, 1:P) log_norm_kernel!(log_Z, first(ebm.quad(ebm, ps, st)), ε)
 
     for q = 1:size(z, 1)
-        log_Zq = view(log_Z, q, :)
-        f, st = prior_fwd(ebm, ps, st, z[q, :, :])
-        lp = f[q, :, :] + log_π0[q, :, :]
+        log_Zq = @view log_Z[q, :]
+        zview = @view z[q, :, :]
+        f, st = prior_fwd(ebm, ps, st, zview)
+        lp = @view f[q, :, :]
+        log_π0q = @view log_π0[q, :, :]
+        @. lp = lp + log_π0q
         log_p = log_p + dropdims(sum(lp .- log_Zq; dims = 1); dims = 1)
     end
+
     return log_p, st
 end
 
@@ -152,31 +177,25 @@ function log_prior_mix(
         The updated states of the mixture ebm-prior.
     """
 
-    S = size(z, 2)
+    Q, P, S = size(z)
 
     # Mixture proportions and prior
     alpha = softmax(ps.dist.α; dims = 2)
-    π_0 = ebm.prior_type == "learnable_gaussian" ? ebm.π_pdf(z, ps, ε) : ebm.π_pdf(z, ε)
-    log_απ = log.(reshape(alpha, size(alpha)..., 1) .* π_0 .+ ε)
+    log_απ = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_απ, z, ε, ps.dist.π_μ, ps.dist.π_σ)
+    @. log_απ = log(log_απ * alpha + ε)
 
     # Energy functions of each component, q -> p
     f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
 
-    log_Z = zero(T) .* z
-    log_Z =
-        normalize ?
-        reshape(
-            log.(dropdims(sum(first(ebm.quad(ebm, ps, st)); dims = 3); dims = 3) .+ ε),
-            ebm.q_size,
-            1,
-            S,
-        ) : log_Z
+    log_Z = @zeros(Q, P, S)
+    normalize &&
+        @parallel (1:Q, 1:P, 1:S) log_norm_kernel!(log_Z, first(ebm.quad(ebm, ps, st)), ε)
 
     # Unnormalized or normalized log-probability
-    logprob = f + log_απ
-    logprob = logprob .- log_Z
-    l1_reg = ebm.λ * sum(abs.(ps.dist.α))
-    return dropdims(sum(logprob; dims = (1, 2)); dims = (1, 2)) .+ l1_reg, st
+    @. f = f + log_απ
+    @. f = f - log_Z
+    return dropdims(sum(f; dims = (1, 2)); dims = (1, 2)) .+ ebm.λ * abs(ps.dist.α), st
 end
 
 end

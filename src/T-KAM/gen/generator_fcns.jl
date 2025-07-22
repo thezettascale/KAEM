@@ -109,7 +109,7 @@ function CNN_fwd(
     return z, st
 end
 
-@parallel_indices (d, t, b) function scaled_dot_prod!(
+@parallel_indices (t, i, b) function scaled_dot_prod!(
     QK::AbstractArray{T},
     Q::AbstractArray{T},
     K::AbstractArray{T},
@@ -117,7 +117,7 @@ end
     d_model::Int,
 ) where {T<:half_quant}
     acc = zero(T)
-    for i = 1:d_model
+    for d = 1:d_model
         acc = acc + Q[d, t, b] * K[d, i, b]
     end
     QK[t, i, b] = acc / scale
@@ -149,7 +149,7 @@ function scaled_dot_product_attention(
     scale = sqrt(T(d_model))
 
     QK = @zeros(L, I, B)
-    @parallel (1:D, 1:L, 1:B) scaled_dot_prod!(QK, Q, K, scale, d_model)
+    @parallel (1:L, 1:I, 1:B) scaled_dot_prod!(QK, Q, K, scale, d_model)
     QK = softmax(QK, dims = 2)
     @parallel (1:D, 1:L, 1:B) value_kernel!(Q, QK, V, I)
     return Q

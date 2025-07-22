@@ -92,7 +92,8 @@ function update_model_grid(
     if model.update_prior_grid
 
         if model.N_t > 1
-            temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            temps =
+                collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
             z = first(model.posterior_sample(model, x, temps, ps, st, rng))
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sample(model, x, ps, st, rng))
@@ -103,13 +104,14 @@ function update_model_grid(
         sampled_bool = true
 
         # If Cheby or FFT, need to update domain for inverse transform sampling
-        if model.prior.fcns_qp[1].spline_string == "FFT" || model.prior.fcns_qp[1].spline_string == "Cheby"
+        if model.prior.fcns_qp[1].spline_string == "FFT" ||
+           model.prior.fcns_qp[1].spline_string == "Cheby"
             if (model.MALA || model.N_t > 1 || model.prior.ula)
                 new_domain = (minimum(z), maximum(z))
                 @reset model.prior.fcns_qp[1].grid_range = new_domain
             end
 
-        # Otherwise use KAN grid updating
+            # Otherwise use KAN grid updating
         else
             Q, P = (
                 (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
@@ -135,7 +137,9 @@ function update_model_grid(
                     ps.ebm.fcn[symbol_map[i]],
                     st.ebm.fcn[symbol_map[i]],
                 )
-                z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
+                z =
+                    i == 1 ? reshape(z, size(z, 2), :) :
+                    dropdims(sum(z, dims = 1); dims = 1)
 
                 if model.prior.layernorm_bool && i < model.prior.depth
                     z, st_ebm = Lux.apply(
@@ -156,7 +160,8 @@ function update_model_grid(
 
     if !sampled_bool
         if model.N_t > 1
-            temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            temps =
+                collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
             z = first(model.posterior_sample(model, x, temps, ps, st, rng))
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sample(model, x, ps, st, rng))

@@ -12,7 +12,7 @@ function position_update(
     momentum::AbstractArray{U},
     ∇z::AbstractArray{U},
     M::AbstractArray{U},
-    η::AbstractArray{U}
+    η::AbstractArray{U},
 )::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     ηr = reshape(η, 1, 1, size(η)...)
     y = @. momentum + (ηr / 2) * ∇z / M
@@ -24,7 +24,7 @@ function momentum_update!(
     y::AbstractArray{U},
     ∇ẑ::AbstractArray{U},
     M::AbstractArray{U},
-    η::AbstractArray{U}
+    η::AbstractArray{U},
 )::Nothing where {U<:full_quant}
     ηr = reshape(η, 1, 1, size(η)...)
     @. y + (ηr / 2) * ∇ẑ / M

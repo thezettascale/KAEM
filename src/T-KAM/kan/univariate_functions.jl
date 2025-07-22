@@ -82,7 +82,9 @@ function init_function(
         range(grid_range[1], grid_range[2], length = grid_size + 1)
     grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
     grid = repeat(grid, in_dim, 1)
-    grid = !(spline_function == "Cheby" || spline_function == "FFT") ? extend_grid(grid; k_extend = spline_degree) : grid
+    grid =
+        !(spline_function == "Cheby" || spline_function == "FFT") ?
+        extend_grid(grid; k_extend = spline_degree) : grid
     σ_base = any(isnan.(σ_base)) ? ones(U, in_dim, out_dim) : σ_base
     base_activation =
         get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))

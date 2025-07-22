@@ -86,55 +86,66 @@ function update_model_grid(
         The updated model.
         The updated params.
     """
-    ps = ps .|> T
 
-    temps =
-        model.N_t > 1 ?
-        collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end] :
-        [one(T)]
-
+    z = nothing
+    z_sampled = false
     if model.update_prior_grid
 
-        z, _ = (
-            (model.MALA || model.N_t > 1) ?
-            model.posterior_sample(model, x, temps, ps, st, rng) :
-            model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng)
-        )
+        if model.N_t > 1
+            temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            z = first(model.posterior_sample(model, x, temps, ps, st, rng))
+        elseif model.prior.ula || model.MALA
+            z = first(model.posterior_sample(model, x, ps, st, rng))
+        else
+            z = first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
+        end
 
-        Q, P = (
-            (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
-            size(z)[1:2]
-        )
-        z = reshape(z, P, Q, :)
-        B = size(z, 3)
-        z = reshape(z, P, Q*B)
+        z_sampled = true
 
-        for i = 1:model.prior.depth
-            new_grid, new_coef = update_fcn_grid(
-                model.prior.fcns_qp[i],
-                ps.ebm.fcn[symbol_map[i]],
-                st.ebm.fcn[symbol_map[i]],
-                z,
+        # If Cheby or FFT, need to update domain for inverse transform sampling
+        if model.prior.fcns_qp[1].spline_string == "FFT" || model.prior.fcns_qp[1].spline_string == "Cheby"
+            if (model.MALA || model.N_t > 1 || model.prior.ula)
+                new_domain = (minimum(z), maximum(z))
+                @reset model.prior.fcns_qp[1].grid_range = new_domain
+            end
+
+        # Otherwise use KAN grid updating
+        else
+            Q, P = (
+                (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
+                size(z)[1:2]
             )
-            @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
-            @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
+            z = reshape(z, P, Q, :)
+            B = size(z, 3)
+            z = reshape(z, P, Q*B)
 
-            z, _ = Lux.apply(
-                model.prior.fcns_qp[i],
-                z,
-                ps.ebm.fcn[symbol_map[i]],
-                st.ebm.fcn[symbol_map[i]],
-            )
-            z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
-
-            if model.prior.layernorm_bool && i < model.prior.depth
-                z, st_ebm = Lux.apply(
-                    model.prior.layernorms[i],
+            for i = 1:model.prior.depth
+                new_grid, new_coef = update_fcn_grid(
+                    model.prior.fcns_qp[i],
+                    ps.ebm.fcn[symbol_map[i]],
+                    st.ebm.fcn[symbol_map[i]],
                     z,
-                    ps.ebm.layernorm[symbol_map[i]],
-                    st.ebm.layernorm[symbol_map[i]],
                 )
-                @reset st.ebm.layernorm[symbol_map[i]] = st_ebm
+                @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
+                @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
+
+                z, _ = Lux.apply(
+                    model.prior.fcns_qp[i],
+                    z,
+                    ps.ebm.fcn[symbol_map[i]],
+                    st.ebm.fcn[symbol_map[i]],
+                )
+                z = i == 1 ? reshape(z, size(z, 2), :) : dropdims(sum(z, dims = 1); dims = 1)
+
+                if model.prior.layernorm_bool && i < model.prior.depth
+                    z, st_ebm = Lux.apply(
+                        model.prior.layernorms[i],
+                        z,
+                        ps.ebm.layernorm[symbol_map[i]],
+                        st.ebm.layernorm[symbol_map[i]],
+                    )
+                    @reset st.ebm.layernorm[symbol_map[i]] = st_ebm
+                end
             end
         end
     end
@@ -143,11 +154,16 @@ function update_model_grid(
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) &&
         return model, T.(ps), st
 
-    z, _ = (
-        (model.MALA || model.N_t > 1) ?
-        model.posterior_sample(model, x, temps, ps, st, rng) :
-        model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng)
-    )
+    if !z_sampled
+        if model.N_t > 1
+            temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            z = first(model.posterior_sample(model, x, temps, ps, st, rng))
+        elseif model.prior.ula || model.MALA
+            z = first(model.posterior_sample(model, x, ps, st, rng))
+        else
+            z = first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
+        end
+    end
 
     z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims = 2); dims = 2)
 

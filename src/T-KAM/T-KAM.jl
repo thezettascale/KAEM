@@ -110,23 +110,8 @@ function init_T_KAM(
         (seq ? size(dataset, 1) : size(dataset, 1) * size(dataset, 2))
     )
 
-    prior_fcn = retrieve(conf, "EbmModel", "spline_function")
-    if prior_fcn == "FFT"
-        update_prior_grid = false
-        commit!(conf, "EbmModel", "layer_norm", "true")
-    end
-
     lkhood_fcn = retrieve(conf, "GeneratorModel", "spline_function")
-    if lkhood_fcn == "FFT"
-        update_llhood_grid = false
-        commit!(conf, "GeneratorModel", "layer_norm", "true")
-    end
-
-    if prior_fcn == "Cheby"
-        update_prior_grid = false
-    end
-
-    if lkhood_fcn == "Cheby" || cnn
+    if lkhood_fcn == "FFT" || lkhood_fcn == "Cheby" || cnn
         update_llhood_grid = false
     end
 

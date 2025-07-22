@@ -10,7 +10,7 @@ export extend_grid,
     FFT_basis,
     Cheby_basis
 
-using CUDA, KernelAbstractions, Tullio, ParallelStencil
+using CUDA, ParallelStencil
 using LinearAlgebra, NNlib
 
 include("../../utils.jl")

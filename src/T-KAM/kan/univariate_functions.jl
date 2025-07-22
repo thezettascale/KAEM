@@ -2,7 +2,7 @@ module UnivariateFunctions
 
 export univariate_function, init_function, activation_mapping
 
-using CUDA, KernelAbstractions, Accessors, ComponentArrays
+using CUDA, Accessors, ComponentArrays
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
 
 include("spline_bases.jl")

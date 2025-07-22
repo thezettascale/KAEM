@@ -1,6 +1,6 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme, ParallelStencil.AD
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -48,12 +48,13 @@ function test_derivative()
     grads_ps = Enzyme.make_zero(ps)
     grads_x = Enzyme.make_zero(x)
 
-    diff_fcn = (fcn, z, p, s) -> begin
-        sum(first(Lux.apply(fcn, z, p, s)))
+    function diff_fcn(fcn, z, p, s)
+        result = Lux.apply(fcn, z, p, s)
+        return sum(first(result))
     end
 
-    Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
+    AD.autodiff_deferred!(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         diff_fcn,
         Enzyme.Active,
         Enzyme.Const(f),

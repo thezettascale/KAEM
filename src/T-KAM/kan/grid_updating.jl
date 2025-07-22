@@ -88,7 +88,7 @@ function update_model_grid(
     """
 
     z = nothing
-    z_sampled = false
+    sampled_bool = false
     if model.update_prior_grid
 
         if model.N_t > 1
@@ -100,7 +100,7 @@ function update_model_grid(
             z = first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
         end
 
-        z_sampled = true
+        sampled_bool = true
 
         # If Cheby or FFT, need to update domain for inverse transform sampling
         if model.prior.fcns_qp[1].spline_string == "FFT" || model.prior.fcns_qp[1].spline_string == "Cheby"
@@ -154,7 +154,7 @@ function update_model_grid(
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) &&
         return model, T.(ps), st
 
-    if !z_sampled
+    if !sampled_bool
         if model.N_t > 1
             temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
             z = first(model.posterior_sample(model, x, temps, ps, st, rng))

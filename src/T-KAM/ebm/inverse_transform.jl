@@ -84,8 +84,7 @@ function get_gausslegendre(
 
     nodes, weights = device(ebm.nodes), device(ebm.weights)
     @. nodes = (a + b) / 2 + (b - a) / 2 * nodes
-    weights = (b - a) ./ 2 .* weights
-    return nodes, weights
+    return nodes, (b - a) ./ 2 .* weights
 end
 
 function gausslegendre_quadrature(

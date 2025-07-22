@@ -80,7 +80,7 @@ function residual_resampler(
     Returns:
         - The resampled indices.
     """
-    # Number times to replicate each sample, (convert to FP64 because stability issues)
+    # Number times to replicate each sample
     integer_counts = Int.(floor.(weights .* N))
     num_remaining = dropdims(N .- sum(integer_counts, dims = 2); dims = 2)
 

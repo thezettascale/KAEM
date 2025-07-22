@@ -82,8 +82,9 @@ function get_gausslegendre(
         b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> device
     end
 
-    nodes = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(ebm.nodes)
-    weights = (b - a) ./ 2 .* device(ebm.weights)
+    nodes, weights = device(ebm.nodes), device(ebm.weights)
+    @. nodes = (a + b) / 2 + (b - a) / 2 * nodes
+    @. weights = (b - a) / 2 * weights
     return nodes, weights
 end
 
@@ -223,7 +224,7 @@ function sample_univariate(
     )
 
     rand_vals = device(rand(rng, full_quant, 1, ebm.p_size, num_samples))
-    rand_vals = rand_vals .* cdf[:, :, end]
+    @. rand_vals = rand_vals * cdf[:, :, end]
     z = @zeros(ebm.q_size, ebm.p_size, num_samples)
     @parallel (1:ebm.q_size, 1:ebm.p_size, 1:num_samples) interp_kernel!(
         z,
@@ -285,7 +286,6 @@ function sample_mixture(
 
     cdf, grid, st = ebm.quad(ebm, ps, st, mask)
     grid_size = size(grid, 2)
-    grid = full_quant.(grid)
 
     cdf = cat(
         device(zeros(full_quant, ebm.q_size, num_samples, 1)), # Add 0 to start of CDF
@@ -294,13 +294,13 @@ function sample_mixture(
     )
 
     rand_vals = device(rand(rng, full_quant, ebm.q_size, num_samples))
-    rand_vals = rand_vals .* cdf[:, :, end]
+    @. rand_vals = rand_vals * cdf[:, :, end]
 
     z = @zeros(ebm.q_size, 1, num_samples)
     @parallel (1:ebm.q_size, 1:num_samples) interp_kernel_mixture!(
         z,
         cdf,
-        grid,
+        full_quant.(grid),
         rand_vals,
         grid_size,
     )

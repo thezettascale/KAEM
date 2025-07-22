@@ -30,9 +30,9 @@ function build_preconditioner!(
     ::IdentityPreconditioner,
     std_devs::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{T} where {T}
+)::Nothing where {T}
     fill!(dest, one(T))
-    return dest
+    return nothing
 end
 
 # Diagonal preconditioning
@@ -41,9 +41,9 @@ function build_preconditioner!(
     ::DiagonalPreconditioner,
     std_devs::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{T} where {T}
+)::Nothing where {T}
     @. dest = ifelse(iszero(std_devs), one(T), one(T) / std_devs)
-    return dest
+    return nothing
 end
 
 # Mixed diagonal preconditioning
@@ -52,7 +52,7 @@ function build_preconditioner!(
     prec::MixDiagonalPreconditioner,
     std_devs::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{T} where {T}
+)::Nothing where {T}
     u = rand(rng, T)
 
     if u ≤ prec.p0
@@ -67,7 +67,7 @@ function build_preconditioner!(
         rmix = one(T) - mix
         @. dest = ifelse(iszero(std_devs), one(T), mix + rmix / std_devs)
     end
-    return dest
+    return nothing
 end
 
 function init_mass_matrix(
@@ -76,9 +76,7 @@ function init_mass_matrix(
 )::AbstractArray{U} where {U<:full_quant}
     Q, P, S = size(z)
     Σ = diag(cov(reshape(z, Q*P, S)'))
-
     β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> U
-
     Σ_AM = sqrt.(β .* (1 ./ Σ) .+ (1 - β))
     return reshape(Σ_AM, Q, P)
 end
@@ -92,12 +90,10 @@ function sample_momentum(
 )::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
     Q, P, S = size(z)
 
-    # Compute M^{1/2}
+    # Initialize M^{1/2}
     z_reshaped = reshape(z, Q*P, S)
     μ = mean(z_reshaped, dims = 2)
     Σ = sqrt.(@views sum((z_reshaped .- μ) .^ 2, dims = 2) ./ (S-1))
-
-    # Initialize mass matrix (M^{1/2})
     build_preconditioner!(reshape(M, Q*P), preconditioner, vec(Σ); rng = rng)
 
     # Sample y ~ N(0,I) directly (transformed momentum)

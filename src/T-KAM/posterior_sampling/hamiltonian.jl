@@ -12,21 +12,23 @@ function position_update(
     momentum::AbstractArray{U},
     ∇z::AbstractArray{U},
     M::AbstractArray{U},
-    η::AbstractArray{U},
+    η::AbstractArray{U}
 )::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
-    η = reshape(η, 1, 1, size(η)...)
-    y = momentum .+ (η ./ 2) .* ∇z ./ M
-    ẑ = z .+ η .* y ./ M
-    return y, ẑ
+    ηr = reshape(η, 1, 1, size(η)...)
+    y = @. momentum + (ηr / 2) * ∇z / M
+    @. z = z + ηr * y / M
+    return y, z
 end
 
-function momentum_update(
+function momentum_update!(
     y::AbstractArray{U},
     ∇ẑ::AbstractArray{U},
     M::AbstractArray{U},
-    η::AbstractArray{U},
-)::AbstractArray{U} where {U<:full_quant}
-    return y .+ (reshape(η, 1, 1, size(η)...) ./ 2) .* ∇ẑ ./ M
+    η::AbstractArray{U}
+)::Nothing where {U<:full_quant}
+    ηr = reshape(η, 1, 1, size(η)...)
+    @. y + (ηr / 2) * ∇ẑ / M
+    return nothing
 end
 
 function leapfrop_proposal(
@@ -63,7 +65,7 @@ function leapfrop_proposal(
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), x, temps, model, ps, st)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    p = momentum_update(p, ∇ẑ, M, η)
+    momentum_update!(p, ∇ẑ, M, η)
 
     # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)

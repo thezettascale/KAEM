@@ -20,7 +20,7 @@ for test_file in $TEST_FILES; do
     echo "Running $test_file..."
     echo "=========================================="
     
-    if julia --project=. --threads=auto "$test_file"; then
+    if julia --project=. --threads=auto --gcthreads=1 "$test_file"; then
         echo "✓ PASSED: $test_file"
         PASSED_TESTS+=("$test_file")
     else

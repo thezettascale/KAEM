@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 

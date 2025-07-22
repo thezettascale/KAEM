@@ -20,7 +20,7 @@ mkdir -p benches/results
 for bench_file in $BENCH_FILES; do
     echo "Running $bench_file..."
     echo "=========================================="
-    julia --project=. --threads=auto "$bench_file"
+    julia --project=. --threads=auto --gcthreads=1 "$bench_file"
     echo "=========================================="
     echo ""
 done

@@ -222,8 +222,7 @@ function sample_univariate(
         dims = 3,
     )
 
-    rand_vals = device(rand(rng, full_quant, 1, ebm.p_size, num_samples))
-    @. rand_vals = rand_vals * cdf[:, :, end]
+    rand_vals = device(rand(rng, full_quant, 1, ebm.p_size, num_samples)) .* cdf[:, :, end]
     z = @zeros(ebm.q_size, ebm.p_size, num_samples)
     @parallel (1:ebm.q_size, 1:ebm.p_size, 1:num_samples) interp_kernel!(
         z,
@@ -292,8 +291,7 @@ function sample_mixture(
         dims = 3,
     )
 
-    rand_vals = device(rand(rng, full_quant, ebm.q_size, num_samples))
-    @. rand_vals = rand_vals * cdf[:, :, end]
+    rand_vals = device(rand(rng, full_quant, ebm.q_size, num_samples)) .* cdf[:, :, end]
 
     z = @zeros(ebm.q_size, 1, num_samples)
     @parallel (1:ebm.q_size, 1:num_samples) interp_kernel_mixture!(

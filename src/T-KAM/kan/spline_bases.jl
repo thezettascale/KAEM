@@ -60,15 +60,8 @@ end
     denom1 = t_gk - t_g
     denom2 = t_gp1k - t_gp
 
-    term1 = zero(T)
-    term2 = zero(T)
-
-    if denom1 != 0
-        term1 = (xi - t_g) / denom1 * B1
-    end
-    if denom2 != 0
-        term2 = (t_gp1k - xi) / denom2 * B2
-    end
+    term1 = denom1 != 0 ? (xi - t_g) / denom1 * B1 : zero(T)
+    term2 = denom2 != 0 ? (t_gp1k - xi) / denom2 * B2 : zero(T)
 
     B[i, g, s, k+1] = term1 + term2
     return nothing
@@ -168,7 +161,7 @@ end
     coef::AbstractArray{T},
 ) where {T<:half_quant}
     acc = zero(T)
-    for g = 1:size(spl, 2)
+    @inbounds for g = 1:size(spl, 2)
         acc = acc + spl[i, g, s] * coef[i, o, g]
     end
     y[i, o, s] = acc
@@ -226,7 +219,7 @@ end
     odd_coef::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     acc = zero(T)
-    for g = 1:size(even, 2)
+    @inbounds for g = 1:size(even, 2)
         acc = acc + even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
     end
     y[i, o, s] = acc

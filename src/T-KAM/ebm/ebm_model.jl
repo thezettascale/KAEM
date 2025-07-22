@@ -147,7 +147,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
-    weights = half_quant.(weights)'
+    weights = half_quant.(weights')
 
     lp_fcn = begin
         if mixture_model && !ula

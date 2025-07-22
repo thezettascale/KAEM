@@ -14,7 +14,7 @@ using CUDA, KernelAbstractions, Tullio, ParallelStencil
 using LinearAlgebra, NNlib
 
 include("../../utils.jl")
-using .Utils: removeNaN, device, half_quant, full_quant
+using .Utils: removeNaN, device, half_quant, full_quant, hq
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)
@@ -38,7 +38,7 @@ end
     x::AbstractArray{T},
     grid::AbstractArray{T},
 )::Nothing where {T<:half_quant}
-    B[i, g, s, 1] = T(x[i, s] >= grid[i, g] && x[i, s] < grid[i, g+1])
+    B[i, g, s, 1] = x[i, s] >= grid[i, g] && x[i, s] < grid[i, g+1] |> hq
     return nothing
 end
 
@@ -143,11 +143,10 @@ end
 @parallel_indices (i, d, s) function Cheby_kernel!(
     B::AbstractArray{T},
     x::AbstractArray{T},
-    lin::AbstractArray{T},
     σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     z = NNlib.tanh_fast(x[i, s] / σ[1])
-    B[i, d, s] = cos(lin[d] * acos(z))
+    B[i, d, s] = cos((d-1) * acos(z))
     return nothing
 end
 
@@ -159,8 +158,7 @@ function Cheby_basis(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, degree+1, S)
-    lin = collect(T, 0:degree) |> device
-    @parallel (1:I, 1:(degree+1), 1:S) Cheby_kernel!(B, x, lin, σ)
+    @parallel (1:I, 1:(degree+1), 1:S) Cheby_kernel!(B, x, σ)
     return B
 end
 
@@ -202,7 +200,7 @@ end
     σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     freq = x[i, s] * grid[i, g]
-    freq = T(2π) * freq * σ[1]
+    freq = 2π * freq * σ[1]
     even[i, g, s] = cos(freq)
     odd[i, g, s] = sin(freq)
     return nothing

@@ -132,7 +132,7 @@ The following optimisations are in place:
 If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
 
 ```bash
-export LD_LIBRARY_PATH := $(HOME)/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:$(LD_LIBRARY_PATH)
+export LD_LIBRARY_PATH=$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:$LD_LIBRARY_PATH
 ```
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

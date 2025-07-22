@@ -3,7 +3,7 @@ module Utils
 export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, symbol_map
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
-using CUDA, LuxCUDA, KernelAbstractions
+using CUDA, LuxCUDA, KernelAbstractions, Enzyme.EnzymeRules
 
 if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     Reactant.set_default_backend("gpu")
@@ -42,5 +42,9 @@ end
 
 # Num layers must be flexible, yet static, so this is used to index into params/state
 const symbol_map = (:a, :b, :c, :d, :e, :f, :g, :h, :i)
+
+EnzymeRules.inactive(::typeof(device), args...) = nothing
+EnzymeRules.inactive(::typeof(half_quant), args...) = nothing
+EnzymeRules.inactive(::typeof(full_quant), args...) = nothing
 
 end

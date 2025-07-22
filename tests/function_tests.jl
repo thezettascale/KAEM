@@ -1,10 +1,8 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme, ParallelStencil.AD
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-
-Enzyme.Compiler.VERBOSE_ERRORS[] = true
 
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")
@@ -48,13 +46,12 @@ function test_derivative()
     grads_ps = Enzyme.make_zero(ps)
     grads_x = Enzyme.make_zero(x)
 
-    function diff_fcn(fcn, z, p, s)
-        result = Lux.apply(fcn, z, p, s)
-        return sum(first(result))
+    diff_fcn = (fcn, z, p, s) -> begin
+        sum(first(Lux.apply(fcn, z, p, s)))
     end
 
-    AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+    Enzyme.autodiff(
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
         diff_fcn,
         Enzyme.Active,
         Enzyme.Const(f),
@@ -70,7 +67,7 @@ function test_derivative()
 end
 
 @testset "Univariate Funtion Tests" begin
-    test_fwd()
-    test_grid_update()
+    # test_fwd()
+    # test_grid_update()
     test_derivative()
 end

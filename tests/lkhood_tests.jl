@@ -1,11 +1,9 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Enzyme, CUDA
 
-Enzyme.Compiler.VERBOSE_ERRORS[] = true
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/T-KAM/gen/gen_model.jl")
 include("../src/T-KAM/gen/loglikelihoods.jl")

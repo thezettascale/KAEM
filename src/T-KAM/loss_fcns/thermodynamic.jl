@@ -41,7 +41,7 @@ function marginal_llhood(
 
     # Steppingstone estimator
     x_rep = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
-    ll, st_gen = log_likelihood_MALA(
+    ll, st_lux_gen = log_likelihood_MALA(
         reshape(z_posterior, Q, P, S*num_temps),
         x_rep,
         model.lkhood,
@@ -53,7 +53,7 @@ function marginal_llhood(
     log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
 
     # MLE estimator
-    logprior_pos, st_ebm = m.prior.lp_fcn(
+    logprior_pos, st_lux_ebm = model.prior.lp_fcn(
         z_posterior[:, :, :, num_temps-1],
         model.prior,
         ps.ebm,
@@ -63,7 +63,7 @@ function marginal_llhood(
         normalize = !model.prior.contrastive_div,
     )
 
-    logprior, st_ebm = m.prior.lp_fcn(
+    logprior, st_lux_ebm = model.prior.lp_fcn(
         z_prior,
         model.prior,
         ps.ebm,
@@ -74,7 +74,7 @@ function marginal_llhood(
     )
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
 
-    logllhood, st_gen = log_likelihood_MALA(
+    logllhood, st_lux_gen = log_likelihood_MALA(
         z_prior[:, :, :, 1],
         x,
         model.lkhood,
@@ -85,8 +85,8 @@ function marginal_llhood(
     )
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
     return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * model.loss_scaling,
-    st_ebm,
-    st_gen
+    st_lux_ebm,
+    st_lux_gen
 end
 
 function grad_thermo_llhood(

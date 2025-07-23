@@ -154,6 +154,7 @@ function initialize_thermo_loss(
             x,
             Δt,
             model,
+            st_kan,
             Lux.testmode(st_ebm),
             Lux.testmode(st_gen),
         )
@@ -165,6 +166,7 @@ function initialize_thermo_loss(
             x,
             Δt,
             model,
+            st_kan,
             Lux.trainmode(st_ebm),
             Lux.trainmode(st_gen),
         )

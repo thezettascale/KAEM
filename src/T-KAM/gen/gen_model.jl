@@ -2,7 +2,7 @@ module GeneratorModel
 
 export GenModel,
     init_GenModel,
-    generate_from_z,
+    generator,
     importance_resampler,
     log_likelihood_IS,
     log_likelihood_MALA
@@ -12,18 +12,21 @@ using ConfParser,
     Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 
-include("../kan/univariate_functions.jl")
 include("../ebm/ebm_model.jl")
-include("resamplers.jl")
-include("generator_fcns.jl")
-include("loglikelihoods.jl")
 include("../../utils.jl")
+include("resamplers.jl")
+include("loglikelihoods.jl")
+include("models/kan.jl")
+include("models/cnn.jl")
+include("models/decoder.jl")
 using .UnivariateFunctions
 using .Utils: device, half_quant, full_quant, hq, fq, symbol_map
 using .EBM_Model
 using .WeightResamplers
-using .GeneratorFCNs
 using .LogLikelihoods
+using .KAN_Model
+using .CNN_Model
+using .Transformer_Model
 
 const output_activation_mapping =
     Dict("tanh" => tanh_fast, "sigmoid" => sigmoid_fast, "none" => identity)
@@ -34,23 +37,21 @@ const resampler_map = Dict(
     "stratified" => stratified_resampler,
 )
 
+const gen_model_map = Dict(
+    "KAN" => init_KAN_Generator,
+    "CNN" => init_CNN_Generator,
+    "SEQ" => init_Decoder_Generator,
+)
+
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    Φ_fcns::Vector
-    layernorms::Vector
-    batchnorms::Vector
-    attention::Vector
-    layernorm_bool::Bool
-    batchnorm_bool::Bool
-    depth::Int
+    generator::Union{KAN_Generator,CNN_Generator,SEQ_Generator}
     out_size::Int
     σ_llhood::T
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
     resample_z::Function
-    generate_from_z::Function
     CNN::Bool
-    seq_length::Int
-    d_model::Int
+    SEQ::Bool
 end
 
 function init_GenModel(
@@ -58,54 +59,9 @@ function init_GenModel(
     x_shape::Tuple{Vararg{Int}};
     rng::AbstractRNG = Random.default_rng(),
 )
-
-    prior_widths = (
-        try
-            parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
-        end
-    )
-
-    q_size = length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
-
-    widths = (
-        try
-            parse.(Int, retrieve(conf, "GeneratorModel", "widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "GeneratorModel", "widths"), ","))
-        end
-    )
-
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
 
-    output_dim =
-        CNN ? last(x_shape) : (sequence_length > 1 ? first(x_shape) : prod(x_shape))
-
-    widths = (widths..., output_dim)
-    first(widths) !== q_size && (error(
-        "First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.",
-        widths,
-        " != ",
-        q_size,
-    ))
-
-    spline_degree = parse(Int, retrieve(conf, "GeneratorModel", "spline_degree"))
-    layernorm_bool = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
-    base_activation = retrieve(conf, "GeneratorModel", "base_activation")
-    spline_function = retrieve(conf, "GeneratorModel", "spline_function")
-    grid_size = parse(Int, retrieve(conf, "GeneratorModel", "grid_size"))
-    grid_update_ratio =
-        parse(half_quant, retrieve(conf, "GeneratorModel", "grid_update_ratio"))
-    grid_range = parse.(half_quant, retrieve(conf, "GeneratorModel", "grid_range"))
-    ε_scale = parse(half_quant, retrieve(conf, "GeneratorModel", "ε_scale"))
-    μ_scale = parse(full_quant, retrieve(conf, "GeneratorModel", "μ_scale"))
-    σ_base = parse(full_quant, retrieve(conf, "GeneratorModel", "σ_base"))
-    σ_spline = parse(full_quant, retrieve(conf, "GeneratorModel", "σ_spline"))
-    init_τ = parse(full_quant, retrieve(conf, "GeneratorModel", "init_τ"))
-    τ_trainable = parse(Bool, retrieve(conf, "GeneratorModel", "τ_trainable"))
-    τ_trainable = spline_function == "B-spline" ? false : τ_trainable
     gen_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_variance"))
     ESS_threshold =
         parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
@@ -123,175 +79,60 @@ function init_GenModel(
             resampler = resampler,
             verbose = verbose,
         )
-    generate_fcn = KAN_fwd
 
     output_activation =
         sequence_length > 1 ? (x -> softmax(x, dims = 1)) :
         get(output_activation_mapping, output_act, identity)
 
-    depth = length(widths)-1
-    d_model = 0
-
-    initialize_function =
-        (in_dim, out_dim, base_scale) -> init_function(
-            in_dim,
-            out_dim;
-            spline_degree = spline_degree,
-            base_activation = base_activation,
-            spline_function = spline_function,
-            grid_size = grid_size,
-            grid_update_ratio = grid_update_ratio,
-            grid_range = Tuple(grid_range),
-            ε_scale = ε_scale,
-            σ_base = base_scale,
-            σ_spline = σ_spline,
-            init_τ = init_τ,
-            τ_trainable = τ_trainable,
-        )
-
-    Φ_functions = []
-    layernorms = []
-    batchnorms = []
-    attention = []
+    gen_type = "KAN"
 
     if CNN
-        channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
-        hidden_c = (q_size, channels...)
-        depth = length(hidden_c)-1
-        strides = parse.(Int, retrieve(conf, "CNN", "strides"))
-        k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
-        paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
-        act = activation_mapping[retrieve(conf, "CNN", "activation")]
-        batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
-        generate_fcn = CNN_fwd
-        layernorm_bool = false
-
-        length(strides) != length(hidden_c) &&
-            (error("Number of strides must be equal to the number of hidden layers + 1."))
-        length(k_size) != length(hidden_c) && (error(
-            "Number of kernel sizes must be equal to the number of hidden layers + 1.",
-        ))
-        length(paddings) != length(hidden_c) &&
-            (error("Number of paddings must be equal to the number of hidden layers + 1."))
-
-        for i in eachindex(hidden_c[1:(end-1)])
-            push!(
-                Φ_functions,
-                Lux.ConvTranspose(
-                    (k_size[i], k_size[i]),
-                    hidden_c[i] => hidden_c[i+1],
-                    identity;
-                    stride = strides[i],
-                    pad = paddings[i],
-                ),
-            )
-            if batchnorm_bool
-                push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
-            end
-        end
-        push!(
-            Φ_functions,
-            Lux.ConvTranspose(
-                (k_size[end], k_size[end]),
-                hidden_c[end] => output_dim,
-                identity;
-                stride = strides[end],
-                pad = paddings[end],
-            ),
-        )
-
-        depth = length(Φ_functions)
-
+        gen_type = "CNN"
     elseif sequence_length > 1
-
-        act = gelu
-        generate_fcn = SEQ_fwd
-
-        # Single block Transformer decoder
-        d_model = parse(Int, retrieve(conf, "SEQ", "d_model"))
-
-        # Projection
-        push!(Φ_functions, Lux.Dense(q_size => d_model))
-        push!(layernorms, Lux.LayerNorm((d_model, 1), gelu))
-
-        # Query, Key, Value - self-attention
-        attention = [
-            Lux.Dense(d_model => d_model),
-            Lux.Dense(d_model => d_model),
-            Lux.Dense(d_model => d_model),
-        ]
-
-        # Feed forward
-        push!(Φ_functions, Lux.Dense(d_model => d_model))
-        push!(layernorms, Lux.LayerNorm((d_model, 1), gelu))
-
-        # Output layer
-        push!(Φ_functions, Lux.Dense(d_model => output_dim))
-        depth = 3
-    else
-        for i in eachindex(widths[1:(end-1)])
-            base_scale = (
-                μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
-                σ_base .* (
-                    randn(rng, full_quant, widths[i], widths[i+1]) .* full_quant(2) .-
-                    one(full_quant)
-                ) .* (one(full_quant) / √(full_quant(widths[i])))
-            )
-            push!(Φ_functions, initialize_function(widths[i], widths[i+1], base_scale))
-
-            if (layernorm_bool && i < depth)
-                push!(layernorms, Lux.LayerNorm(widths[i+1]))
-            end
-        end
+        gen_type = "SEQ"
     end
 
+    generator_initializer = get(gen_model_map, gen_type, init_KAN_Generator)
+    generator = generator_initializer(conf, x_shape, rng)
+
     return GenModel(
-        Φ_functions,
-        layernorms,
-        batchnorms,
-        attention,
-        layernorm_bool,
-        batchnorm_bool,
-        depth,
-        output_dim,
+        generator,
         gen_var,
         output_activation,
         x_shape,
         resample_fcn,
-        generate_fcn,
         CNN,
-        sequence_length,
-        d_model,
+        sequence_length > 1,
     )
 end
 
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(
-        symbol_map[i] => Lux.initialparameters(rng, lkhood.Φ_fcns[i]) for
-        i in eachindex(lkhood.Φ_fcns)
+        symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.Φ_fcns[i]) for
+        i in eachindex(lkhood.generator.Φ_fcns)
     )
     layernorm_ps = (a = zero(T))
-    if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
+    if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.layernorms[i]) for
-            i in eachindex(lkhood.layernorms)
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i]) for
+            i in eachindex(lkhood.generator.layernorms)
         )
     end
 
     batchnorm_ps = (a = zero(T))
-    if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
+    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.batchnorms[i]) for
-            i in eachindex(lkhood.batchnorms)
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i]) for
+            i in eachindex(lkhood.generator.batchnorms)
         )
     end
 
     attention_ps = (a = zero(T))
-    if lkhood.seq_length > 1
+    if lkhood.SEQ
         attention_ps = (
-            Q = Lux.initialparameters(rng, lkhood.attention[1]),
-            K = Lux.initialparameters(rng, lkhood.attention[2]),
-            V = Lux.initialparameters(rng, lkhood.attention[3]),
+            Q = Lux.initialparameters(rng, lkhood.generator.attention[1]),
+            K = Lux.initialparameters(rng, lkhood.generator.attention[2]),
+            V = Lux.initialparameters(rng, lkhood.generator.attention[3]),
         )
     end
 
@@ -305,36 +146,36 @@ end
 
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(
-        symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for
-        i in eachindex(lkhood.Φ_fcns)
+        symbol_map[i] => Lux.initialstates(rng, lkhood.generator.Φ_fcns[i]) |> hq for
+        i in eachindex(lkhood.generator.Φ_fcns)
     )
 
     st_lyrnorm = (a = zero(T), b = zero(T))
-    if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
+    if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
-            symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for
-            i in eachindex(lkhood.layernorms)
+            symbol_map[i] => Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
+            i in eachindex(lkhood.generator.layernorms)
         )
     end
 
     batchnorm_st = (a = zero(T))
-    if lkhood.batchnorm_bool && length(lkhood.batchnorms) > 0
+    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_st = NamedTuple(
-            symbol_map[i] => Lux.initialstates(rng, lkhood.batchnorms[i]) |> hq for
-            i in eachindex(lkhood.batchnorms)
+            symbol_map[i] => Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for
+            i in eachindex(lkhood.generator.batchnorms)
         )
     end
 
     attention_st = (a = zero(T))
-    if lkhood.seq_length > 1
+    if lkhood.SEQ
         attention_st = (
-            Q = Lux.initialstates(rng, lkhood.attention[1]) |> hq,
-            K = Lux.initialstates(rng, lkhood.attention[2]) |> hq,
-            V = Lux.initialstates(rng, lkhood.attention[3]) |> hq,
+            Q = Lux.initialstates(rng, lkhood.generator.attention[1]) |> hq,
+            K = Lux.initialstates(rng, lkhood.generator.attention[2]) |> hq,
+            V = Lux.initialstates(rng, lkhood.generator.attention[3]) |> hq,
         )
     end
 
-    if lkhood.CNN || lkhood.seq_length > 1
+    if lkhood.CNN || lkhood.SEQ
         return (a = one(T), b = one(T)),
         (
             fcn = fcn_st,

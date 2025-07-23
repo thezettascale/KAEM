@@ -104,12 +104,12 @@ function log_likelihood_IS(
         The unnormalized log-likelihood.
     """
     B, S = size(x)[end], size(z)[end]
-    x̂, st = lkhood.generate_from_z(lkhood, ps, kan_st, st_lux, z)
+    x̂, st = lkhood.generator(ps, kan_st, st_lux, z)
     noise = lkhood.σ_llhood * noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
 
     ll = @zeros(B, S)
-    stencil = lkhood.seq_length > 1 ? cross_entropy_IS! : l2_IS!
+    stencil = lkhood.SEQ ? cross_entropy_IS! : l2_IS!
     @parallel (1:B, 1:S) stencil(ll, x, x̂_noised, ε, 2*lkhood.σ_llhood^2)
     return ll, st
 end
@@ -138,11 +138,11 @@ function log_likelihood_MALA(
         The unnormalized log-likelihood.
     """
     B = size(z)[end]
-    x̂, st_lux = lkhood.generate_from_z(lkhood, ps, kan_st, st_lux, z)
+    x̂, st_lux = lkhood.generator(ps, kan_st, st_lux, z)
     x̂_act = lkhood.output_activation(x̂)
 
     ll = @zeros(B)
-    stencil = lkhood.seq_length > 1 ? cross_entropy_MALA! : l2_MALA!
+    stencil = lkhood.SEQ ? cross_entropy_MALA! : l2_MALA!
     @parallel (1:B) stencil(ll, x, x̂_act, ε, 2*lkhood.σ_llhood^2)
     return ll, st_lux
 end

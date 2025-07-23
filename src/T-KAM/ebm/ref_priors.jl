@@ -15,13 +15,13 @@ end
 
 struct UniformPrior end
 struct GaussianPrior end
-struct LogNormalPrior 
+struct LogNormalPrior
     ε::half_quant
 end
-struct LearnableGaussianPrior 
+struct LearnableGaussianPrior
     ε::half_quant
 end
-struct EbmPrior 
+struct EbmPrior
     ε::half_quant
 end
 
@@ -103,7 +103,7 @@ function (prior::LogNormalPrior)(
     π_σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:size(z,1), 1:size(z,2), 1:size(z,3)) lognormal_pdf!(pdf, z, prior.ε)
+    @parallel (1:size(z, 1), 1:size(z, 2), 1:size(z, 3)) lognormal_pdf!(pdf, z, prior.ε)
     return nothing
 end
 
@@ -124,7 +124,7 @@ function (prior::EbmPrior)(
     π_μ::AbstractArray{T},
     π_σ::AbstractArray{T},
 ) where {T<:half_quant}
-    @parallel (1:size(z,1), 1:size(z,2), 1:size(z,3)) ebm_pdf!(pdf, z, prior.ε)
+    @parallel (1:size(z, 1), 1:size(z, 2), 1:size(z, 3)) ebm_pdf!(pdf, z, prior.ε)
     return nothing
 end
 

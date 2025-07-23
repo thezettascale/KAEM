@@ -144,7 +144,10 @@ function initialize_ULA_sampler(
                 prior_sampling_bool,
             )
         catch e
-            @warn "Reactant compilation failed, falling back to non-compiled version" exception=(e, catch_backtrace())
+            @warn "Reactant compilation failed, falling back to non-compiled version" exception=(
+                e,
+                catch_backtrace(),
+            )
             compiled_llhood = ll
             compiled_logpos_grad = logpos_grad
         end

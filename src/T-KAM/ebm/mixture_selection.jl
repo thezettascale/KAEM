@@ -5,10 +5,7 @@ export choose_component
 
 using NNlib: softmax
 using Flux: onehotbatch
-using CUDA,
-    LinearAlgebra,
-    Random,
-    ParallelStencil
+using CUDA, LinearAlgebra, Random, ParallelStencil
 
 include("../../utils.jl")
 using .Utils: device, half_quant, full_quant, fq

@@ -178,7 +178,7 @@ function update_model_grid(
     end
 
     # Only update if KAN-type generator requires
-    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) &&
+    (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.SEQ) &&
         return model, T.(ps), kan_st, st_lux
 
     if !sampled_bool
@@ -206,7 +206,7 @@ function update_model_grid(
 
     for i = 1:model.lkhood.depth
         new_grid, new_coef = update_fcn_grid(
-            model.lkhood.Φ_fcns[i],
+            model.lkhood.generator.Φ_fcns[i],
             ps.gen.fcn[symbol_map[i]],
             kan_st.gen[symbol_map[i]],
             z,
@@ -215,15 +215,15 @@ function update_model_grid(
         @reset kan_st.gen[symbol_map[i]].grid = new_grid
 
         scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
-        model.lkhood.Φ_fcns[i].spline_string == "RBF" &&
-            @reset model.lkhood.Φ_fcns[i].basis_function.scale = scale
+        model.lkhood.generator.Φ_fcns[i].spline_string == "RBF" &&
+            @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale = scale
 
-        z = model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
+        z = model.lkhood.generator.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
-        if model.lkhood.layernorm_bool && i < model.lkhood.depth
+        if model.lkhood.generator.layer_norm_bool && i < model.lkhood.depth
             z, st_gen = Lux.apply(
-                model.lkhood.layernorms[i],
+                model.lkhood.generator.layernorms[i],
                 z,
                 ps.gen.layernorm[symbol_map[i]],
                 st_lux.gen.layernorm[symbol_map[i]],

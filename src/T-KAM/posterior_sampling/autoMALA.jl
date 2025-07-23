@@ -108,21 +108,22 @@ function select_step_size(
 
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
-        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux = leapfrog(
-            z[:, :, active_chains],
-            ∇z[:, :, active_chains],
-            x_active,
-            temps[active_chains],
-            logpos_z[active_chains],
-            momentum[:, :, active_chains],
-            M[:, :, active_chains],
-            η_init[active_chains],
-            logpos_withgrad,
-            model,
-            ps,
-            st_kan,
-            st_lux,
-        )
+        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux =
+            leapfrog(
+                z[:, :, active_chains],
+                ∇z[:, :, active_chains],
+                x_active,
+                temps[active_chains],
+                logpos_z[active_chains],
+                momentum[:, :, active_chains],
+                M[:, :, active_chains],
+                η_init[active_chains],
+                logpos_withgrad,
+                model,
+                ps,
+                st_kan,
+                st_lux,
+            )
 
         ẑ[:, :, active_chains] .= ẑ_active
         logpos_ẑ[active_chains] .= logpos_ẑ_active

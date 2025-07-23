@@ -207,7 +207,7 @@ end
         end
         idx = j + 1
     end
-    
+
     idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
     z[q, 1, b] =

@@ -88,9 +88,9 @@ end
 
 @parallel_indices (q, p, s) function stable_log!(
     log_pdf::AbstractArray{T},
-    ε::T
+    ε::T,
 )::Nothing where {T<:half_quant}
-    log_pdf[q,p,s] = log(log_pdf[q,p,s] + ε)
+    log_pdf[q, p, s] = log(log_pdf[q, p, s] + ε)
     return nothing
 end
 
@@ -150,10 +150,10 @@ function log_prior_univar(
         ε,
     )
 
-    for q in 1:Q
+    for q = 1:Q
         f, st = prior_fwd(ebm, ps, st_kan, st_lyrnorm, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
-        log_p += dropdims(sum(lp; dims=1); dims=1)
+        log_p += dropdims(sum(lp; dims = 1); dims = 1)
     end
 
     return log_p, st_lyrnorm
@@ -181,9 +181,9 @@ end
 @parallel_indices (q, p, s) function stable_logalpha!(
     log_pdf::AbstractArray{T},
     alpha::AbstractArray{T},
-    ε::T
+    ε::T,
 )::Nothing where {T<:half_quant}
-    log_pdf[q,p,s] = log(log_pdf[q,p,s] + alpha[q,p] + ε)
+    log_pdf[q, p, s] = log(log_pdf[q, p, s] + alpha[q, p] + ε)
     return nothing
 end
 

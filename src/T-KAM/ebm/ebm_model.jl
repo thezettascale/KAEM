@@ -33,7 +33,7 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf!
+    π_pdf!::Any
     sample_z::Function
     p_size::Int
     q_size::Int

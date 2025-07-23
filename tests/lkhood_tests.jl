@@ -44,7 +44,7 @@ function test_generate()
     st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z)
+    x, _ = lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (32, 32, 1, b_size)
 end
 
@@ -77,7 +77,7 @@ function test_cnn_generate()
     st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    x = first(lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z))
+    x = first(lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z))
     @test size(x) == (32, 32, out_dim, b_size)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -96,7 +96,7 @@ function test_seq_generate()
     st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z)
+    x, _ = lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (lkhood.out_size, 8, b_size)
 
     commit!(conf, "SEQ", "sequence_length", "1")

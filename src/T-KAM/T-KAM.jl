@@ -73,8 +73,7 @@ function generate_batch(
     """
     ps = ps .|> half_quant
     z, st_ebm = model.prior.sample_z(model, num_samples, ps, kan_st, st_lux, rng)
-    x̂, st_gen =
-        model.lkhood.generate_from_z(model.lkhood, ps.gen, st_lux.gen, kan_st.gen, z)
+    x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
     noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
     return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end
@@ -256,7 +255,7 @@ function init_posterior_sampler(
                 Δη = Δη,
                 η_min = η_minmax[1],
                 η_max = η_minmax[2],
-                seq = model.lkhood.seq_length > 1,
+                seq = model.lkhood.SEQ,
                 RE_frequency = replica_exchange_frequency,
                 compile_mlir = compile_mlir,
                 rng = rng,
@@ -329,7 +328,7 @@ function init_posterior_sampler(
                 Δη = Δη,
                 η_min = η_minmax[1],
                 η_max = η_minmax[2],
-                seq = model.lkhood.seq_length > 1,
+                seq = model.lkhood.SEQ,
                 RE_frequency = replica_exchange_frequency,
                 compile_mlir = compile_mlir,
                 rng = rng,

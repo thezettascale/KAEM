@@ -1,5 +1,5 @@
 """Warning: this script will not carry over optimizer state 
-or updated seed - only the current model and parameters/lux_state."""
+or updated seed - only the current model and parameters/st_luxate."""
 
 using JLD2, Lux, LuxCUDA, CUDA, ComponentArrays, ConfParser, Random
 

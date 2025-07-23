@@ -12,15 +12,17 @@ using .Utils: device, half_quant, full_quant, hq
 
 function sample_thermo(
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     m,
-    x::AbstractArray{T};
+    x::AbstractArray{T},
+    train_idx::Int,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
-    temps = st.temps
-    z, st = m.posterior_sample(m, x, temps[2:end], ps, st, rng)
+    temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
+    z, st_lux = m.posterior_sample(m, x, temps[2:end], ps, st_kan, st_lux, rng)
     Δt = device(temps[2:end] - temps[1:(end-1)])
-    return z, Δt, st
+    return z, Δt, st_lux
 end
 
 function marginal_llhood(
@@ -123,7 +125,7 @@ function initialize_thermo_loss(
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
-    z_posterior, Δt, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
+    z_posterior, Δt, st = sample_thermo(ps, Lux.testmode(st), model, x, 1; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
     compiled_loss = marginal_llhood
@@ -163,9 +165,11 @@ function thermodynamic_loss(
     st::NamedTuple,
     model,
     x::AbstractArray{T};
+    train_idx::Int,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, Δt, st = sample_thermo(ps, Lux.testmode(st), model, x; rng = rng)
+    z_posterior, Δt, st =
+        sample_thermo(ps, Lux.testmode(st), model, x, train_idx; rng = rng)
     st_ebm, st_gen = st.ebm, st.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, Lux.testmode(st), rng)
 

@@ -43,7 +43,8 @@ function leapfrop_proposal(
     logpos_withgrad::Function,
     model,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
 )::Tuple{
     AbstractArray{U},
     AbstractArray{U},
@@ -62,7 +63,7 @@ function leapfrop_proposal(
     p, ẑ = position_update(z, momentum, ∇z, M, η)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), x, temps, model, ps, st)
+    logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
     momentum_update!(p, ∇ẑ, M, η)

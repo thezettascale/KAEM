@@ -160,10 +160,8 @@ function Lux.initialparameters(
     elseif !(l.spline_string == "Cheby")
         ε =
             (
-                (
-                    rand(rng, T, l.in_dim, l.out_dim, l.grid_size + 1) .-
-                    T(0.5)
-                ) .* l.ε_scale ./ l.grid_size
+                (rand(rng, T, l.in_dim, l.out_dim, l.grid_size + 1) .- T(0.5)) .*
+                l.ε_scale ./ l.grid_size
             ) |> device
         coef = cpu_device()(
             l.curve2coef(
@@ -177,13 +175,8 @@ function Lux.initialparameters(
 
     if l.spline_string == "Cheby"
         return (
-            coef = glorot_normal(
-                rng,
-                U,
-                l.in_dim,
-                l.out_dim,
-                l.spline_degree + 1,
-            ) .* (1 / (l.in_dim * (l.spline_degree + 1))),
+            coef = glorot_normal(rng, U, l.in_dim, l.out_dim, l.spline_degree + 1) .*
+                   (1 / (l.in_dim * (l.spline_degree + 1))),
             basis_τ = l.init_τ,
         )
     else
@@ -198,8 +191,8 @@ function Lux.initialstates(
     rng::AbstractRNG,
     l::univariate_function{T,U},
 ) where {T<:half_quant,U<:full_quant}
-    return (grid = U.(cpu_device()(l.init_grid)), basis_τ = U.(l.init_τ))
-           
+    return (grid = U.(cpu_device()(l.init_grid)), basis_τ = l.init_τ)
+
 end
 
 function (l::univariate_function{T,U})(

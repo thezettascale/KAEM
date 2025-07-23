@@ -92,11 +92,11 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
 
     sample_function =
-        (m, n, p, s, rng) -> begin
+        (m, n, p, kan_st, st_lux, rng) -> begin
             if mixture_model
-                sample_mixture(m.prior, n, p.ebm, Lux.testmode(s.ebm); rng = rng, ε = eps)
+                sample_mixture(m.prior, n, p.ebm, st_lux.ebm, kan_st.ebm; rng = rng, ε = eps)
             else
-                sample_univariate(m.prior, n, p.ebm, Lux.testmode(s.ebm); rng = rng, ε = eps)
+                sample_univariate(m.prior, n, p.ebm, st_lux.ebm, kan_st.ebm; rng = rng, ε = eps)
             end
         end
 
@@ -210,15 +210,16 @@ function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    layernorm_st = (a = zero(T))
+    st_lyrnorm = (a = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
-        layernorm_st = NamedTuple(
+        st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
             i = 1:(prior.depth-1)
         )
     end
 
-    return (fcn = fcn_st, layernorm = layernorm_st)
+    # KAN states are meant to be a ComponentArray - return separately
+    return fcn_st, st_lyrnorm
 end
 
 end

@@ -19,7 +19,8 @@ end
 
 function sample_importance(
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     m,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
@@ -30,9 +31,10 @@ function sample_importance(
     AbstractArray{T},
     AbstractArray{Int},
 } where {T<:half_quant}
-    z, st_ebm = m.prior.sample_z(m, m.IS_samples, ps, st, rng)
+    z, st_lux_ebm = m.prior.sample_z(m, m.IS_samples, ps, st_kan, st_lux, rng)
     noise = device(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
-    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st.gen, noise; ε = m.ε)
+    logllhood, st_lux_gen =
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = m.ε)
     weights = softmax(full_quant.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)
@@ -40,7 +42,7 @@ function sample_importance(
         reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
         dims = 2,
     )
-    return z, st_ebm, st_gen, weights_resampled, resampled_idxs
+    return z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs
 end
 
 @parallel_indices (b, s) function resampled_kernel!(
@@ -62,20 +64,23 @@ function marginal_llhood(
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
     m,
-    st_ebm::NamedTuple,
-    st_gen::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux_ebm::NamedTuple,
+    st_lux_gen::NamedTuple,
     zero_vec::AbstractArray{T},
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    logprior, st_ebm = m.prior.lp_fcn(
+    logprior, st_lux_ebm = m.prior.lp_fcn(
         z,
         m.prior,
         ps.ebm,
-        st_ebm;
+        st_kan.ebm,
+        st_lux_ebm;
         ε = m.ε,
         normalize = !m.prior.contrastive_div,
     )
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    logllhood, st_gen = log_likelihood_IS(z, x, m.lkhood, ps.gen, st_gen, zero_vec; ε = m.ε)
+    logllhood, st_gen =
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, zero_vec; ε = m.ε)
 
     B, S = size(x)[end], size(z)[end]
     marginal_llhood = @zeros(B, S)
@@ -86,7 +91,9 @@ function marginal_llhood(
         logllhood,
         resampled_idxs,
     )
-    return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling, st_ebm, st_gen
+    return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling,
+    st_lux_ebm,
+    st_lux_gen
 end
 
 function grad_importance_llhood(
@@ -97,14 +104,15 @@ function grad_importance_llhood(
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
     model,
-    st_ebm::NamedTuple,
-    st_gen::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux_ebm::NamedTuple,
+    st_lux_gen::NamedTuple,
     zero_vec::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     f =
-        (p, z_i, x_i, w, r, m, se, sg, zv) -> begin
-            first(marginal_llhood(p, z_i, x_i, w, r, m, se, sg, zv))
+        (p, z_i, x_i, w, r, m, sk, se, sg, zv) -> begin
+            first(marginal_llhood(p, z_i, x_i, w, r, m, sk, se, sg, zv))
         end
 
     CUDA.@fastmath Enzyme.autodiff(
@@ -117,12 +125,13 @@ function grad_importance_llhood(
         Enzyme.Const(weights_resampled),
         Enzyme.Const(resampled_idxs),
         Enzyme.Const(model),
-        Enzyme.Const(st_ebm),
-        Enzyme.Const(st_gen),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux_ebm),
+        Enzyme.Const(st_lux_gen),
         Enzyme.Const(zero_vec),
     )
 
-    return ∇, st_ebm, st_gen
+    return ∇, st_lux_ebm, st_lux_gen
 end
 
 struct ImportanceLoss
@@ -133,15 +142,16 @@ end
 
 function initialize_importance_loss(
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     model,
     x::AbstractArray{T};
     compile_mlir::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
-    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
-        sample_importance(ps, Lux.testmode(st), model, x; rng = rng)
+    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
+        sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
     compiled_loss = marginal_llhood
     compiled_grad = grad_importance_llhood
 
@@ -155,8 +165,9 @@ function initialize_importance_loss(
             weights_resampled,
             resampled_idxs,
             model,
-            Lux.testmode(st_ebm),
-            Lux.testmode(st_gen),
+            st_kan,
+            Lux.testmode(st_lux_ebm),
+            Lux.testmode(st_lux_gen),
             zero_vec,
         )
         compiled_grad = Reactant.@compile grad_importance_llhood(
@@ -167,8 +178,9 @@ function initialize_importance_loss(
             weights_resampled,
             resampled_idxs,
             model,
-            Lux.trainmode(st_ebm),
-            Lux.trainmode(st_gen),
+            st_kan,
+            Lux.trainmode(st_lux_ebm),
+            Lux.trainmode(st_lux_gen),
             zero_vec,
         )
     end
@@ -180,15 +192,17 @@ function importance_loss(
     l,
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     model,
     x::AbstractArray{T};
+    train_idx::Int,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z, st_ebm, st_gen, weights_resampled, resampled_idxs =
-        sample_importance(ps, Lux.testmode(st), model, x; rng = rng)
+    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
+        sample_importance(ps, st_kan, st_lux, model, x; rng = rng)
 
-    ∇, st_ebm, st_gen = l.compiled_grad(
+    ∇, st_lux_ebm, st_lux_gen = l.compiled_grad(
         ps,
         ∇,
         z,
@@ -196,22 +210,24 @@ function importance_loss(
         weights_resampled,
         resampled_idxs,
         model,
-        Lux.trainmode(st_ebm),
-        Lux.trainmode(st_gen),
+        st_kan,
+        Lux.trainmode(st_lux_ebm),
+        Lux.trainmode(st_lux_gen),
         l.zero_vec,
     )
-    loss, st_ebm, st_gen = l.compiled_loss(
+    loss, st_lux_ebm, st_lux_gen = l.compiled_loss(
         ps,
         z,
         x,
         weights_resampled,
         resampled_idxs,
         model,
-        Lux.testmode(st_ebm),
-        Lux.testmode(st_gen),
+        st_kan,
+        Lux.testmode(st_lux_ebm),
+        Lux.testmode(st_lux_gen),
         l.zero_vec,
     )
-    return loss, ∇, st_ebm, st_gen
+    return loss, ∇, st_lux_ebm, st_lux_gen
 end
 
 end

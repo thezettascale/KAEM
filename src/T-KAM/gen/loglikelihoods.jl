@@ -83,7 +83,8 @@ function log_likelihood_IS(
     x::AbstractArray{T},
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    kan_st::ComponentArray{T},
+    st_lux::NamedTuple,
     noise::AbstractArray{T};
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -103,7 +104,7 @@ function log_likelihood_IS(
         The unnormalized log-likelihood.
     """
     B, S = size(x)[end], size(z)[end]
-    x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
+    x̂, st = lkhood.generate_from_z(lkhood, ps, kan_st, st_lux, z)
     noise = lkhood.σ_llhood * noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
 
@@ -118,7 +119,8 @@ function log_likelihood_MALA(
     x::AbstractArray{T},
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    kan_st::ComponentArray{T},
+    st_lux::NamedTuple;
     ε::T = eps(half_quant),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -136,13 +138,13 @@ function log_likelihood_MALA(
         The unnormalized log-likelihood.
     """
     B = size(z)[end]
-    x̂, st = lkhood.generate_from_z(lkhood, ps, st, z)
+    x̂, st_lux = lkhood.generate_from_z(lkhood, ps, kan_st, st_lux, z)
     x̂_act = lkhood.output_activation(x̂)
 
     ll = @zeros(B)
     stencil = lkhood.seq_length > 1 ? cross_entropy_MALA! : l2_MALA!
     @parallel (1:B) stencil(ll, x, x̂_act, ε, 2*lkhood.σ_llhood^2)
-    return ll, st
+    return ll, st_lux
 end
 
 end

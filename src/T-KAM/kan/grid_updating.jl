@@ -31,8 +31,8 @@ function update_fcn_grid(
     Args:
         l: The univariate function layer.
         ps: The parameters of the layer.
-        st: The state of the layer.
-        x_p: The input of size (b, i).
+        st: The state of the KAN layer.
+        x_p: The input of size (i, num_samples).
 
     Returns:
         new_grid: The updated grid.
@@ -69,9 +69,11 @@ function update_model_grid(
     model,
     x::AbstractArray{T},
     ps::ComponentArray{T},
-    st::NamedTuple,
+    kan_st::ComponentArray{T},
+    st_lux::NamedTuple,
+    temps::AbstractArray{T},
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{Any,ComponentArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{Any,ComponentArray{T},ComponentArray{T},NamedTuple} where {T<:half_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 
@@ -79,12 +81,16 @@ function update_model_grid(
         model: The model.
         x: Data samples.
         ps: The parameters of the model.
-        st: The states of the model.
+        kan_st: The states of the KAN model.
+        st_lux: The states of the Lux model.
+        temps: The temperatures for thermodynamic models.
         rng: The random number generator.
 
     Returns:
         The updated model.
         The updated params.
+        The updated KAN states.
+        The updated Lux states. 
     """
 
     z = nothing
@@ -92,12 +98,22 @@ function update_model_grid(
     if model.update_prior_grid
 
         if model.N_t > 1
-            temps = st.temps[2:end]
-            z = first(model.posterior_sample(model, x, temps, ps, st, rng))
+            z = first(
+                model.posterior_sample(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+            )
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sample(model, x, ps, st, rng))
+            z = first(model.posterior_sample(model, x, ps, kan_st, st_lux, rng))
         else
-            z = first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
+            z = first(
+                model.prior.sample_z(
+                    model,
+                    model.grid_updates_samples,
+                    ps,
+                    kan_st,
+                    st_lux,
+                    rng,
+                ),
+            )
         end
 
         sampled_bool = true
@@ -124,17 +140,16 @@ function update_model_grid(
                 new_grid, new_coef = update_fcn_grid(
                     model.prior.fcns_qp[i],
                     ps.ebm.fcn[symbol_map[i]],
-                    st.ebm.fcn[symbol_map[i]],
+                    kan_st.ebm[symbol_map[i]],
                     z,
                 )
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
-                @reset st.ebm.fcn[symbol_map[i]].grid = new_grid
+                @reset kan_st.ebm[symbol_map[i]].grid = new_grid
 
-                z, _ = Lux.apply(
-                    model.prior.fcns_qp[i],
+                z = model.prior.fcns_qp[i](
                     z,
                     ps.ebm.fcn[symbol_map[i]],
-                    st.ebm.fcn[symbol_map[i]],
+                    kan_st.ebm[symbol_map[i]],
                 )
                 z =
                     i == 1 ? reshape(z, size(z, 2), :) :
@@ -145,9 +160,9 @@ function update_model_grid(
                         model.prior.layernorms[i],
                         z,
                         ps.ebm.layernorm[symbol_map[i]],
-                        st.ebm.layernorm[symbol_map[i]],
+                        st_lux.ebm.layernorm[symbol_map[i]],
                     )
-                    @reset st.ebm.layernorm[symbol_map[i]] = st_ebm
+                    @reset st_lux.ebm.layernorm[symbol_map[i]] = st_ebm
                 end
             end
         end
@@ -155,16 +170,26 @@ function update_model_grid(
 
     # Only update if KAN-type generator requires
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.seq_length > 1) &&
-        return model, T.(ps), st
+        return model, T.(ps), kan_st, st_lux
 
     if !sampled_bool
         if model.N_t > 1
-            temps = st.temps[2:end]
-            z = first(model.posterior_sample(model, x, temps, ps, st, rng))
+            z = first(
+                model.posterior_sample(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+            )
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sample(model, x, ps, st, rng))
+            z = first(model.posterior_sample(model, x, ps, kan_st, st_lux, rng))
         else
-            z = first(model.prior.sample_z(model, model.grid_updates_samples, ps, st, rng))
+            z = first(
+                model.prior.sample_z(
+                    model,
+                    model.grid_updates_samples,
+                    ps,
+                    kan_st,
+                    st_lux,
+                    rng,
+                ),
+            )
         end
     end
 
@@ -174,14 +199,13 @@ function update_model_grid(
         new_grid, new_coef = update_fcn_grid(
             model.lkhood.Φ_fcns[i],
             ps.gen.fcn[symbol_map[i]],
-            st.gen.fcn[symbol_map[i]],
+            kan_st.gen[symbol_map[i]],
             z,
         )
         @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
-        @reset st.gen.fcn[symbol_map[i]].grid = new_grid
+        @reset kan_st.gen[symbol_map[i]].grid = new_grid
 
-        z, _ =
-            model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], st.gen.fcn[symbol_map[i]])
+        z = model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if model.lkhood.layernorm_bool && i < model.lkhood.depth
@@ -189,13 +213,13 @@ function update_model_grid(
                 model.lkhood.layernorms[i],
                 z,
                 ps.gen.layernorm[symbol_map[i]],
-                st.gen.layernorm[symbol_map[i]],
+                st_lux.gen.layernorm[symbol_map[i]],
             )
-            @reset st.gen.layernorm[symbol_map[i]] = st_gen
+            @reset st_lux.gen.layernorm[symbol_map[i]] = st_gen
         end
     end
 
-    return model, T.(ps), st
+    return model, T.(ps), kan_st, st_lux
 end
 
 end

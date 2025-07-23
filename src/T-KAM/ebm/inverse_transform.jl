@@ -29,14 +29,15 @@ end
 function trapezium_quadrature(
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple;
     ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{<:half_quant},Nothing} = nothing,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
 
     # Evaluate prior on grid [0,1]
-    f_grid = st.fcn[:a].grid
+    f_grid = st_kan[:a].grid
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     I, O = size(f_grid)
@@ -47,7 +48,7 @@ function trapezium_quadrature(
         dropdims(π_grid, dims = 3)
 
     # Energy function of each component
-    f_grid, st = prior_fwd(ebm, ps, st, f_grid)
+    f_grid, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, f_grid)
     Q, P, G = size(f_grid)
 
     # Choose component if mixture model else use all
@@ -62,17 +63,17 @@ function trapezium_quadrature(
     # CDF by trapezium rule for integration; 1/2 * (u(z_{i-1}) + u(z_i)) * Δx
     exp_fg = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
     @tullio trapz[q, p, g] := (Δg[p, g] * exp_fg[q, p, g]) / 2
-    return trapz, st[1].grid, st
+    return trapz, st_kan[:a].grid, st_lyrnorm_new
 end
 
 function get_gausslegendre(
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     """Get Gauss-Legendre nodes and weights for prior's domain"""
 
-    a, b = minimum(st.fcn[:a].grid; dims = 2), maximum(st.fcn[:a].grid; dims = 2)
+    a, b = minimum(st_kan[:a].grid; dims = 2), maximum(st_kan[:a].grid; dims = 2)
 
     no_grid =
         (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
@@ -90,13 +91,14 @@ end
 function gausslegendre_quadrature(
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple;
     ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{T},Nothing} = nothing,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
-    nodes, weights = get_gausslegendre(ebm, ps, st)
+    nodes, weights = get_gausslegendre(ebm, ps, st_kan)
     grid = nodes
 
     I, O = size(nodes)
@@ -107,7 +109,7 @@ function gausslegendre_quadrature(
         dropdims(π_nodes, dims = 3)
 
     # Energy function of each component
-    nodes, st = prior_fwd(ebm, ps, st, nodes)
+    nodes, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, nodes)
     Q, P, G = size(nodes)
 
     # Choose component if mixture model else use all
@@ -115,10 +117,10 @@ function gausslegendre_quadrature(
         @tullio trapz[q, b, g] :=
             (exp(nodes[q, p, g]) * π_nodes[q, g] * component_mask[q, p, b])
         @tullio trapz[q, b, g] = trapz[q, b, g] * weights[q, g]
-        return trapz, grid, st
+        return trapz, grid, st_lyrnorm_new
     else
         @tullio trapz[q, p, g] := (exp(nodes[q, p, g]) * π_nodes[p, g]) * weights[p, g]
-        return trapz, grid, st
+        return trapz, grid, st_lyrnorm_new
     end
 end
 
@@ -207,12 +209,13 @@ function sample_univariate(
     ebm,
     num_samples::Int,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
 
-    cdf, grid, st = ebm.quad(ebm, ps, st, nothing)
+    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm, nothing)
     grid_size = size(grid, 2)
     grid = full_quant.(grid)
 
@@ -231,7 +234,7 @@ function sample_univariate(
         rand_vals,
         grid_size,
     )
-    return T.(z), st
+    return T.(z), st_lyrnorm_new
 end
 
 @parallel_indices (q, b) function interp_kernel_mixture!(
@@ -263,7 +266,8 @@ function sample_mixture(
     ebm,
     num_samples::Int,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -282,7 +286,7 @@ function sample_mixture(
     """
     mask = choose_component(ps.α, num_samples, ebm.q_size, ebm.p_size; rng = rng)
 
-    cdf, grid, st = ebm.quad(ebm, ps, st, mask)
+    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm, mask)
     grid_size = size(grid, 2)
 
     cdf = cat(
@@ -301,7 +305,7 @@ function sample_mixture(
         rand_vals,
         grid_size,
     )
-    return T.(z), st
+    return T.(z), st_lyrnorm_new
 end
 
 end

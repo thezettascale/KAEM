@@ -18,7 +18,8 @@ q_size = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 
 Random.seed!(42)
 EBM = init_EbmModel(conf)
-ps, st = Lux.setup(Random.GLOBAL_RNG, EBM)
+ps = Lux.initialparameters(Random.GLOBAL_RNG, EBM)
+st_lyrnorm, st_kan = Lux.initialstates(Random.GLOBAL_RNG, EBM)
 
 struct PriorWrapper{T<:EbmModel{Float32}}
     prior::T
@@ -27,7 +28,8 @@ end
 wrap = PriorWrapper(EBM)
 
 ps = (ebm = ps, gen = ps) |> ComponentArray .|> half_quant |> device
-st = (ebm = st, gen = st) |> device
+st_lux = (ebm = st_lyrnorm, gen = st_lyrnorm) |> device
+kan_st = (ebm = st_kan, gen = st_kan) |> ComponentArray .|> half_quant |> device
 
 function test_shapes()
     @test prior.p_size == p_size
@@ -35,13 +37,15 @@ function test_shapes()
 end
 
 function test_sampling()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
+    z_test =
+        first(wrap.prior.sample_z(wrap, b_size, ps, kan_st, st_lux, Random.default_rng()))
     @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
 function test_log_prior()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st.ebm))
+    z_test =
+        first(wrap.prior.sample_z(wrap, b_size, ps, kan_st, st_lux, Random.default_rng()))
+    log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st_lux.ebm, kan_st.ebm))
     @test size(log_p) == (b_size,)
 end
 

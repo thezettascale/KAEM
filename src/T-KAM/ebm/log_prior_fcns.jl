@@ -30,7 +30,8 @@ end
 function prior_fwd(
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -50,29 +51,30 @@ function prior_fwd(
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
 
     for i = 1:ebm.depth
+        z = ebm.fcns_qp[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
 
-        z, st_new =
-            Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
 
-        z, st_new =
+        z, st_lyrnorm_new =
             (ebm.layernorm_bool && i < ebm.depth) ?
-            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st.layernorm[i]) : (z, st)
+            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
+            (z, st_lyrnorm)
 
-        (ebm.layernorm_bool && i < ebm.depth) && @reset st.layernorm[i] = st_new
+        (ebm.layernorm_bool && i < ebm.depth) && @reset st_lyrnorm[i] = st_lyrnorm_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
-    return z, st
+    return z, st_lyrnorm
 end
 
 function log_prior_ula(
     z::AbstractArray{T},
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple,
     ε::T = eps(half_quant),
     normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -81,8 +83,8 @@ function log_prior_ula(
     @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
     @. log_π0 = log(log_π0 + ε)
     log_π0 = dropdims(sum(log_π0; dims = 1); dims = 1)
-    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
-    return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st
+    f, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
+    return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
 end
 
 @parallel_indices (q, p) function log_norm_kernel!(
@@ -102,7 +104,8 @@ function log_prior_univar(
     z::AbstractArray{T},
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple;
     ε::T = eps(half_quant),
     normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -140,21 +143,22 @@ function log_prior_univar(
     for q = 1:size(z, 1)
         log_Zq = @view log_Z[q, :]
         zview = @view z[q, :, :]
-        f, st = prior_fwd(ebm, ps, st, zview)
+        f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, zview)
         lp = @view f[q, :, :]
         log_π0q = @view log_π0[q, :, :]
         @. lp = lp + log_π0q
         log_p = log_p + dropdims(sum(lp .- log_Zq; dims = 1); dims = 1)
     end
 
-    return log_p, st
+    return log_p, st_lyrnorm
 end
 
 function log_prior_mix(
     z::AbstractArray{T},
     ebm,
     ps::ComponentArray{T},
-    st::NamedTuple;
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple,
     ε::T = eps(half_quant),
     normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -186,7 +190,7 @@ function log_prior_mix(
     @. log_απ = log(log_απ * alpha + ε)
 
     # Energy functions of each component, q -> p
-    f, st = prior_fwd(ebm, ps, st, dropdims(z; dims = 2))
+    f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
 
     log_Z = @zeros(Q, P, S)
     normalize &&
@@ -195,7 +199,8 @@ function log_prior_mix(
     # Unnormalized or normalized log-probability
     @. f = f + log_απ
     @. f = f - log_Z
-    return dropdims(sum(f; dims = (1, 2)); dims = (1, 2)) .+ ebm.λ * abs(ps.dist.α), st
+    return dropdims(sum(f; dims = (1, 2)); dims = (1, 2)) .+ ebm.λ * abs(ps.dist.α),
+    st_lyrnorm
 end
 
 end

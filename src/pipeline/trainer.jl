@@ -25,7 +25,8 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     o::opt
     dataset_name::AbstractString
     ps::ComponentArray
-    st::NamedTuple
+    st_kan::ComponentArray
+    st_lux::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any,Int}
     x::AbstractArray{T}
@@ -128,7 +129,7 @@ function init_trainer(
     model = init_T_KAM(dataset, conf, x_shape; file_loc = file_loc, rng = rng)
     x, loader_state = iterate(model.train_loader)
     x = device(x)
-    model, params, state = prep_model(model, x; rng = rng)
+    model, params, st_kan, st_lux = prep_model(model, x; rng = rng)
 
     optimizer = create_opt(conf)
     grid_update_frequency =
@@ -154,7 +155,8 @@ function init_trainer(
         optimizer,
         dataset_name,
         params,
-        state,
+        st_kan,
+        st_lux,
         N_epochs,
         loader_state,
         x,
@@ -173,7 +175,6 @@ end
 function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
     # (Move off GPU)
-    @reset t.st.η_init = t.st.η_init |> cpu_device()
     loss_scaling = t.model.loss_scaling |> full_quant
 
     num_batches = length(t.model.train_loader)
@@ -200,17 +201,20 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
         # Grid updating for likelihood model
         if (
-            train_idx == 1 ||
-            (train_idx - t.last_grid_update >= t.grid_update_frequency)
+            train_idx == 1 || (train_idx - t.last_grid_update >= t.grid_update_frequency)
         ) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.st =
-                update_model_grid(t.model, t.x, t.ps, Lux.testmode(t.st); rng = t.rng)
+            t.model, t.ps, t.st_kan, t.st_lux = update_model_grid(
+                t.model,
+                t.x,
+                t.ps,
+                t.st_kan,
+                Lux.testmode(t.st_lux);
+                rng = t.rng,
+            )
             t.grid_update_frequency =
                 train_idx > 1 ?
-                floor(
-                    t.grid_update_frequency *
-                    (2 - t.model.grid_update_decay)^train_idx,
-                ) : t.grid_update_frequency
+                floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^train_idx) :
+                t.grid_update_frequency
             t.last_grid_update = train_idx
             grid_updated = 1
 
@@ -221,15 +225,17 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         loss, grads, st_ebm, st_gen = t.model.loss_fcn(
             half_quant(t.ps),
             Enzyme.make_zero(grads),
-            Lux.trainmode(t.st),
+            t.st_kan,
+            Lux.trainmode(t.st_lux),
             t.model,
-            t.x;
+            t.x,
+            train_idx,
             rng = t.rng,
         )
         t.loss = full_quant(loss) / loss_scaling
         copy!(G, full_quant.(grads) ./ loss_scaling)
-        @reset t.st.ebm = st_ebm
-        @reset t.st.gen = st_gen
+        @reset t.st_lux.ebm = st_ebm
+        @reset t.st_lux.gen = st_gen
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
         t.model.verbose && println("Iter: $(train_idx), Grad norm: $(norm(G))")
@@ -251,12 +257,13 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 x_gen, st_ebm, st_gen = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
-                    Lux.testmode(t.st),
+                    t.st_kan,
+                    Lux.testmode(t.st_lux),
                     size(x)[end];
                     rng = t.rng,
                 )
-                @reset t.st.ebm = st_ebm
-                @reset t.st.gen = st_gen
+                @reset t.st_lux.ebm = st_ebm
+                @reset t.st_lux.gen = st_gen
                 x_gen = x_gen .|> full_quant
 
                 # MSE loss between pixels for images, and max index for logits
@@ -286,7 +293,8 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             (t.checkpoint_every > 0 && epoch % t.checkpoint_every) == 0 && jldsave(
                 t.model.file_loc * "ckpt_epoch_$(epoch).jld2";
                 params = t.ps |> cpu_device(),
-                state = t.st |> cpu_device(),
+                kan_state = t.st_kan |> cpu_device(),
+                lux_state = t.st_lux |> cpu_device(),
                 rng = t.rng,
             )
 
@@ -300,12 +308,13 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 batch, st_ebm, st_gen = CUDA.@fastmath generate_batch(
                     t.model,
                     t.ps,
-                    Lux.testmode(t.st),
+                    t.st_kan,
+                    Lux.testmode(t.st_lux),
                     t.batch_size_for_gen;
                     rng = t.rng,
                 )
-                @reset t.st.ebm = st_ebm
-                @reset t.st.gen = st_gen
+                @reset t.st_lux.ebm = st_ebm
+                @reset t.st_lux.gen = st_gen
                 gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
             end
 
@@ -327,7 +336,6 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         end
 
         train_idx += 1
-        t.st = next_temp(t.model, t.st, train_idx)
 
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state =
@@ -404,7 +412,8 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     t.save_model && jldsave(
         t.model.file_loc * "saved_model.jld2";
         params = t.ps |> cpu_device(),
-        state = t.st |> cpu_device(),
+        kan_state = t.st_kan |> cpu_device(),
+        lux_state = t.st_lux |> cpu_device(),
         train_idx = train_idx,
     )
 end

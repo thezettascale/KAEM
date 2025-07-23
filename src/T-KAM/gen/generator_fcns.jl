@@ -20,7 +20,8 @@ end
 function KAN_fwd(
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -41,29 +42,29 @@ function KAN_fwd(
 
     # KAN functions
     for i = 1:lkhood.depth
-        z, st_new =
-            Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
+        z = lkhood.Φ_fcns[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
-        z, st_new =
+        z, st_lyrnorm_new =
             (lkhood.layernorm_bool && i < lkhood.depth) ?
             Lux.apply(
                 lkhood.layernorms[i],
                 z,
                 ps.layernorm[symbol_map[i]],
-                st.layernorm[symbol_map[i]],
-            ) : (z, st)
+                st_lyrnorm[symbol_map[i]],
+            ) : (z, st_lyrnorm)
         (lkhood.layernorm_bool && i < lkhood.depth) &&
-            @reset st.layernorm[symbol_map[i]] = st_new
+            @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
     end
 
-    return reshape(z, lkhood.x_shape..., num_samples), st
+    return reshape(z, lkhood.x_shape..., num_samples), st_lyrnorm
 end
 
 function CNN_fwd(
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::T,
+    st_lux::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -83,8 +84,8 @@ function CNN_fwd(
 
     for i = 1:(lkhood.depth-1)
         z, st_new =
-            Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st.fcn[symbol_map[i]])
-        @reset st.fcn[symbol_map[i]] = st_new
+            Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
+        @reset st_lux.fcn[symbol_map[i]] = st_new
 
         z, st_new =
             (lkhood.batchnorm_bool && i < lkhood.depth) ?
@@ -92,21 +93,21 @@ function CNN_fwd(
                 lkhood.batchnorms[i],
                 z,
                 ps.batchnorm[symbol_map[i]],
-                st.batchnorm[symbol_map[i]],
-            ) : (z, st)
+                st_lux.batchnorm[symbol_map[i]],
+            ) : (z, st_lux)
         (lkhood.batchnorm_bool && i < lkhood.depth) &&
-            @reset st.batchnorm[symbol_map[i]] = st_new
+            @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
 
     z, st_new = Lux.apply(
         lkhood.Φ_fcns[lkhood.depth],
         z,
         ps.fcn[symbol_map[lkhood.depth]],
-        st.fcn[symbol_map[lkhood.depth]],
+        st_lux.fcn[symbol_map[lkhood.depth]],
     )
-    @reset st.fcn[symbol_map[lkhood.depth]] = st_new
+    @reset st_lux.fcn[symbol_map[lkhood.depth]] = st_new
 
-    return z, st
+    return z, st_lux
 end
 
 @parallel_indices (t, i, b) function scaled_dot_prod!(
@@ -158,7 +159,8 @@ end
 function SEQ_fwd(
     lkhood,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::T,
+    st_lux::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
@@ -176,45 +178,48 @@ function SEQ_fwd(
     z = sum(z, dims = 2)
 
     # Projection
-    z, st_new = Lux.apply(lkhood.Φ_fcns[1], z, ps.fcn[:a], st.fcn[:a])
-    @reset st.fcn[:a] = st_new
-    z, st_new = Lux.apply(lkhood.layernorms[1], z, ps.layernorm[:a], st.layernorm[:a])
-    @reset st.layernorm[:a] = st_new
+    z, st_new = Lux.apply(lkhood.Φ_fcns[1], z, ps.fcn[:a], st_lux.fcn[:a])
+    @reset st_lux.fcn[:a] = st_new
+    z, st_new = Lux.apply(lkhood.layernorms[1], z, ps.layernorm[:a], st_lux.layernorm[:a])
+    @reset st_lux.layernorm[:a] = st_new
 
     z_prev = z
     for t = 2:lkhood.seq_length
 
         # Self-attention
-        Q, st_new = Lux.apply(lkhood.attention[1], z, ps.attention[:Q], st.attention[:Q])
-        @reset st.attention[:Q] = st_new
-        K, st_new = Lux.apply(lkhood.attention[2], z, ps.attention[:K], st.attention[:K])
-        @reset st.attention[:K] = st_new
-        V, st_new = Lux.apply(lkhood.attention[3], z, ps.attention[:V], st.attention[:V])
-        @reset st.attention[:V] = st_new
+        Q, st_new =
+            Lux.apply(lkhood.attention[1], z, ps.attention[:Q], st_lux.attention[:Q])
+        @reset st_lux.attention[:Q] = st_new
+        K, st_new =
+            Lux.apply(lkhood.attention[2], z, ps.attention[:K], st_lux.attention[:K])
+        @reset st_lux.attention[:K] = st_new
+        V, st_new =
+            Lux.apply(lkhood.attention[3], z, ps.attention[:V], st_lux.attention[:V])
+        @reset st_lux.attention[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, lkhood.d_model)
         z = z + attn
 
         # Feed forward
-        z, st_new = Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[:b], st.fcn[:b])
-        @reset st.fcn[:b] = st_new
+        z, st_new = Lux.apply(lkhood.Φ_fcns[2], z, ps.fcn[:b], st_lux.fcn[:b])
+        @reset st_lux.fcn[:b] = st_new
         z, st_new = Lux.apply(
             lkhood.layernorms[2],
             z[:, end:end, :],
             ps.layernorm[:b],
-            st.layernorm[:b],
+            st_lux.layernorm[:b],
         )
-        @reset st.layernorm[:b] = st_new
+        @reset st_lux.layernorm[:b] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
     end
 
     # Output layer
-    z, st_new = Lux.apply(lkhood.Φ_fcns[3], z, ps.fcn[:c], st.fcn[:c])
-    @reset st.fcn[:c] = st_new
+    z, st_new = Lux.apply(lkhood.Φ_fcns[3], z, ps.fcn[:c], st_lux.fcn[:c])
+    @reset st_lux.fcn[:c] = st_new
 
-    return z, st
+    return z, st_lux
 end
 
 end

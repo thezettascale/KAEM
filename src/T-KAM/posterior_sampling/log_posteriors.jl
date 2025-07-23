@@ -17,136 +17,203 @@ using .GeneratorModel: log_likelihood_MALA
 
 ### ULA ### 
 function unadjusted_logpos(
-    z_i::AbstractArray{T},
+    z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    m,
+    model,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     prior_sampling_bool::Bool,
 )::T where {T<:half_quant}
-    Q, P, S, num_temps = size(z_i)
-    z_reshaped = reshape(z_i, Q, P, S*num_temps)
-    lp = sum(first(m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st.ebm; ε = m.ε)))
-    ll = first(log_likelihood_MALA(z_reshaped, x, m.lkhood, ps.gen, st.gen; ε = m.ε))
+    Q, P, S, num_temps = size(z)
+    z_reshaped = reshape(z, Q, P, S*num_temps)
+    lp = sum(
+        first(
+            model.prior.lp_fcn(
+                z_reshaped,
+                model.prior,
+                ps.ebm,
+                st_kan.ebm,
+                st_lux.ebm;
+                ε = model.ε,
+            ),
+        ),
+    )
+    ll = first(
+        log_likelihood_MALA(
+            z_reshaped,
+            x,
+            model.lkhood,
+            ps.gen,
+            st_kan.gen,
+            st_lux.gen;
+            ε = model.ε,
+        ),
+    )
     tempered_ll = sum(temps .* reshape(ll, num_temps, S))
-    return (lp + tempered_ll) * m.loss_scaling
+    return (lp + tempered_ll) * model.loss_scaling
 end
 
 ### autoMALA ###
 function autoMALA_logpos_value_4D(
-    z_i::AbstractArray{T},
-    x_i::AbstractArray{T},
-    t::AbstractArray{T},
-    m,
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
     ps::ComponentArray{T},
-    st_i::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    Q, P, S, num_temps = size(z_i)
-    z_reshaped = reshape(z_i, Q, P, S*num_temps)
-    lp, st_ebm = m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st_i.ebm; ε = m.ε)
-    ll, st_gen = log_likelihood_MALA(z_reshaped, x_i, m.lkhood, ps.gen, st_i.gen; ε = m.ε)
-    logpos = reshape(lp, S, num_temps) + t .* reshape(ll, S, num_temps)
-    return logpos .* m.loss_scaling, st_ebm, st_gen
+    Q, P, S, num_temps = size(z)
+    z_reshaped = reshape(z, Q, P, S*num_temps)
+    lp, st_ebm = model.prior.lp_fcn(
+        z_reshaped,
+        model.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_lux.ebm;
+        ε = model.ε,
+    )
+    ll, st_gen = log_likelihood_MALA(
+        z_reshaped,
+        x,
+        model.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux.gen;
+        ε = model.ε,
+    )
+    logpos = reshape(lp, S, num_temps) + temps .* reshape(ll, S, num_temps)
+    return logpos .* model.loss_scaling, st_ebm, st_gen
 end
 
 function autoMALA_logpos_reduced_4D(
-    z_i::AbstractArray{T},
-    x_i::AbstractArray{T},
-    t::AbstractArray{T},
-    m,
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
     ps::ComponentArray{T},
-    st_i::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
 )::T where {T<:half_quant}
-    Q, P, S, num_temps = size(z_i)
-    z_reshaped = reshape(z_i, Q, P, S*num_temps)
-    lp = sum(first(m.prior.lp_fcn(z_reshaped, m.prior, ps.ebm, st_i.ebm; ε = m.ε)))
-    ll = first(log_likelihood_MALA(z_reshaped, x_i, m.lkhood, ps.gen, st_i.gen; ε = m.ε))
-    tempered_ll = sum(t .* reshape(ll, S, num_temps))
-    return (lp + tempered_ll) * m.loss_scaling
+    Q, P, S, num_temps = size(z)
+    z_reshaped = reshape(z, Q, P, S*num_temps)
+    lp = sum(
+        first(
+            model.prior.lp_fcn(
+                z_reshaped,
+                model.prior,
+                ps.ebm,
+                st_kan.ebm,
+                st_lux.ebm;
+                ε = model.ε,
+            ),
+        ),
+    )
+    ll = first(
+        log_likelihood_MALA(
+            z_reshaped,
+            x,
+            model.lkhood,
+            ps.gen,
+            st_kan.gen,
+            st_lux.gen;
+            ε = model.ε,
+        ),
+    )
+    tempered_ll = sum(temps .* reshape(ll, S, num_temps))
+    return (lp + tempered_ll) * model.loss_scaling
 end
 
 function autoMALA_value_and_grad_4D(
-    z_i::AbstractArray{T},
+    z::AbstractArray{T},
     ∇z::AbstractArray{T},
-    x_i::AbstractArray{T},
-    t::AbstractArray{T},
-    m,
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
     ps::ComponentArray{T},
-    st_i::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     num_temps::Int,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    x_expanded =
-        ndims(x_i) == 4 ? repeat(x_i, 1, 1, 1, num_temps) : repeat(x_i, 1, 1, num_temps)
+    x_expanded = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.Reverse,
         autoMALA_logpos_reduced_4D,
         Enzyme.Active,
-        Enzyme.Duplicated(z_i, ∇z),
+        Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),
-        Enzyme.Const(t),
-        Enzyme.Const(m),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
         Enzyme.Const(ps),
-        Enzyme.Const(st_i),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos_value_4D(z_i, x_i, t, m, ps, st_i)
+        CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, m, ps, st_kan, st_lux)
     return logpos, ∇z, st_ebm, st_gen
 end
 
 function autoMALA_logpos(
-    z_i::AbstractArray{T},
-    x_i::AbstractArray{T},
-    t::AbstractArray{T},
-    m,
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
     ps::ComponentArray{T},
-    st_i::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    st_ebm, st_gen = st_i.ebm, st_i.gen
-    lp, st_ebm = m.prior.lp_fcn(z_i, m.prior, ps.ebm, st_ebm; ε = m.ε)
-    ll, st_gen = log_likelihood_MALA(z_i, x_i, m.lkhood, ps.gen, st_gen; ε = m.ε)
-    return (lp + t .* ll) .* m.loss_scaling, st_ebm, st_gen
+    st_ebm, st_gen = st_kan.ebm, st_lux.gen
+    lp, st_ebm =
+        model.prior.lp_fcn(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm; ε = model.ε)
+    ll, st_gen =
+        log_likelihood_MALA(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen; ε = model.ε)
+    return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
 end
 
 function autoMALA_value_and_grad(
-    z_i::AbstractArray{T},
+    z::AbstractArray{T},
     ∇z::AbstractArray{T},
-    x_i::AbstractArray{T},
-    t::AbstractArray{T},
-    m,
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
     ps::ComponentArray{T},
-    st_i::NamedTuple,
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
     num_temps::Int,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     fcn =
-        (z, x, temps, model, p, s) -> sum(first(autoMALA_logpos(z, x, temps, model, p, s)))
+        (z_i, x_i, t, m, p, ks, ls) ->
+            sum(first(autoMALA_logpos(z_i, x_i, t, m, p, ks, ls)))
 
-    x_expanded =
-        ndims(x_i) == 4 ? repeat(x_i, 1, 1, 1, num_temps) : repeat(x_i, 1, 1, num_temps)
+    x_expanded = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.Reverse,
         fcn,
         Enzyme.Active,
-        Enzyme.Duplicated(z_i, ∇z),
+        Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),
-        Enzyme.Const(t),
-        Enzyme.Const(m),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
         Enzyme.Const(ps),
-        Enzyme.Const(st_i),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
     )
 
     any(isnan, ∇z) && error("∇z is NaN")
     all(iszero, ∇z) && error("∇z is zero")
 
-    logpos, st_ebm, st_gen = CUDA.@fastmath autoMALA_logpos(z_i, x_i, t, m, ps, st_i)
+    logpos, st_ebm, st_gen =
+        CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)
     return logpos, ∇z, st_ebm, st_gen
 end
 

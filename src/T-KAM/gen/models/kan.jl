@@ -11,12 +11,12 @@ using .Utils: half_quant, full_quant, symbol_map
 using .UnivariateFunctions
 
 struct KAN_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
-    depth::Any
-    Φ_fcns::Any
-    layernorms::Any
-    layernorm_bool::Any
-    batchnorm_bool::Any
-    x_shape::Any
+    depth::Int
+    Φ_fcns::Vector{Any}
+    layernorms::Vector{Any}
+    layernorm_bool::Bool
+    batchnorm_bool::Bool
+    x_shape::Tuple
 end
 
 function init_KAN_Generator(
@@ -51,7 +51,7 @@ function init_KAN_Generator(
         q_size,
     ))
 
-    spline_degree = parse(Int, retrieve(conf, "KAN", "spline_degree"))
+    spline_degree = parse(Int, retrieve(conf, "GeneratorModel", "spline_degree"))
     layernorm_bool = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
     base_activation = retrieve(conf, "GeneratorModel", "base_activation")
     spline_function = retrieve(conf, "GeneratorModel", "spline_function")
@@ -60,6 +60,7 @@ function init_KAN_Generator(
         parse(half_quant, retrieve(conf, "GeneratorModel", "grid_update_ratio"))
     grid_range = parse.(half_quant, retrieve(conf, "GeneratorModel", "grid_range"))
     ε_scale = parse(half_quant, retrieve(conf, "GeneratorModel", "ε_scale"))
+    μ_scale = parse(full_quant, retrieve(conf, "GeneratorModel", "μ_scale"))
     σ_base = parse(full_quant, retrieve(conf, "GeneratorModel", "σ_base"))
     σ_spline = parse(full_quant, retrieve(conf, "GeneratorModel", "σ_spline"))
     init_τ = parse(full_quant, retrieve(conf, "GeneratorModel", "init_τ"))

@@ -8,11 +8,11 @@ include("../../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 
 struct CNN_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
-    depth::Any
-    Φ_fcns::Any
-    batchnorms::Any
-    batchnorm_bool::Any
-    layer_norm_bool::Any
+    depth::Int
+    Φ_fcns::Vector{Any}
+    batchnorms::Vector{Any}
+    batchnorm_bool::Bool
+    layer_norm_bool::Bool
 end
 
 function init_CNN_Generator(

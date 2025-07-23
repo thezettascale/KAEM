@@ -61,14 +61,14 @@ function scaled_dot_product_attention(
 end
 
 struct SEQ_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
-    depth::Any
-    Φ_fcns::Any
-    layernorms::Any
-    attention::Any
-    seq_length::Any
-    d_model::Any
-    layer_norm_bool::Any
-    batchnorm_bool::Any
+    depth::Int
+    Φ_fcns::Vector{Any}
+    layernorms::Vector{Any}
+    attention::Vector{Any}
+    seq_length::Int
+    d_model::Int
+    layer_norm_bool::Bool
+    batchnorm_bool::Bool
 end
 
 function init_SEQ_Generator(

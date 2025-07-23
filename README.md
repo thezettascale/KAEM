@@ -95,17 +95,20 @@ model = init_T_KAM(
 # Parse config to setup sampling and training criterions
 x, loader_state = iterate(model.train_loader)
 x = device(x)
-model, ps, st = prep_model(model, x; rng = rng) 
+model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
 
 # Training loss/grads are Reactant.jl compiled
 grads = Enzyme.make_zero(ps) # or zero(ps)
+train_idx, rng = 1, MersenneTwister(1)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
       ps,
       grads,
-      Lux.trainmode(st),
+      st_kan,
+      st_lux,
       model,
-      x;
-      rng=Random.default_rng()
+      x,
+      train_idx, # Only affects temperature scheduling in thermo model
+      rng
 )
 
 # States reset with Accessors.jl:

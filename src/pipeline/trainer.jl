@@ -226,7 +226,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             half_quant(t.ps),
             Enzyme.make_zero(grads),
             t.st_kan,
-            Lux.trainmode(t.st_lux),
+            t.st_lux,
             t.model,
             t.x,
             train_idx,

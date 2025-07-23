@@ -158,7 +158,7 @@ function langevin_loss(
     st_lux::NamedTuple,
     model,
     x::AbstractArray{T};
-    train_idx::Int,
+    train_idx::Int=1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     z_posterior, st_new =

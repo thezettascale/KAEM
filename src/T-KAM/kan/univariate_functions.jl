@@ -191,7 +191,7 @@ function Lux.initialstates(
     rng::AbstractRNG,
     l::univariate_function{T,U},
 ) where {T<:half_quant,U<:full_quant}
-    return (grid = U.(cpu_device()(l.init_grid)), basis_τ = l.init_τ)
+    return (grid = T.(cpu_device()(l.init_grid)), basis_τ = T.(l.init_τ))
 
 end
 

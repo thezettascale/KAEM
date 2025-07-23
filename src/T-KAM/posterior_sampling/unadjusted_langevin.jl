@@ -13,7 +13,8 @@ using CUDA,
     Statistics,
     Enzyme,
     ComponentArrays,
-    Reactant
+    Reactant,
+    Logging
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -122,25 +123,35 @@ function initialize_ULA_sampler(
     compiled_llhood = ll
     compiled_logpos_grad = logpos_grad
     if compile_mlir
-        compiled_llhood = Reactant.@compile ll(
-            z_hq[:, :, :, 1],
-            x,
-            model.lkhood,
-            ps.gen,
-            st_kan.gen,
-            st_lux.gen,
-        )
-        compiled_logpos_grad = Reactant.@compile logpos_grad(
-            z_hq,
-            Enzyme.make_zero(z_hq),
-            x,
-            device(temps),
-            model,
-            ps,
-            st_kan,
-            st_lux,
-            prior_sampling_bool,
-        )
+        try
+            compiled_llhood = Reactant.@compile ll(
+                z_hq[:, :, :, 1],
+                x,
+                model.lkhood,
+                ps.gen,
+                st_kan.gen,
+                st_lux.gen,
+            )
+            compiled_logpos_grad = Reactant.@compile logpos_grad(
+                z_hq,
+                Enzyme.make_zero(z_hq),
+                x,
+                device(temps),
+                model,
+                ps,
+                st_kan,
+                st_lux,
+                prior_sampling_bool,
+            )
+        catch e
+            @warn "Reactant compilation failed, falling back to non-compiled version" exception=(e, catch_backtrace())
+            compiled_llhood = ll
+            compiled_logpos_grad = logpos_grad
+        end
+    else
+        # Ensure we're using the non-compiled versions when compile_mlir = false
+        compiled_llhood = ll
+        compiled_logpos_grad = logpos_grad
     end
 
     return ULA_sampler(

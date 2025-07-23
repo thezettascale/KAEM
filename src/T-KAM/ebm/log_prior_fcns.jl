@@ -22,9 +22,9 @@ using .Utils: half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+    @init_parallel_stencil(CUDA, half_quant, 3)
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    @init_parallel_stencil(Threads, half_quant, 3)
 end
 
 function prior_fwd(
@@ -87,6 +87,14 @@ function log_prior_ula(
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
 end
 
+@parallel_indices (q, p, s) function stable_log!(
+    log_pdf::AbstractArray{T},
+    ε::T
+)::Nothing where {T<:half_quant}
+    log_pdf[q,p,s] = log(log_pdf[q,p,s] + ε)
+    return nothing
+end
+
 @parallel_indices (q, p) function log_norm_kernel!(
     log_Z::AbstractArray{T},
     norm::AbstractArray{T},
@@ -131,7 +139,7 @@ function log_prior_univar(
     Q, P, S = size(z)
     log_π0 = @zeros(Q, P, S)
     @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
-    @. log_π0 = log(log_π0 + ε)
+    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
 
     # Pre-allocate
     log_p = @zeros(S)
@@ -143,14 +151,10 @@ function log_prior_univar(
         ε,
     )
 
-    for q = 1:size(z, 1)
-        log_Zq = @view log_Z[q, :]
-        zview = @view z[q, :, :]
-        f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, zview)
-        lp = @view f[q, :, :]
-        log_π0q = @view log_π0[q, :, :]
-        @. lp = lp + log_π0q
-        log_p = log_p + dropdims(sum(lp .- log_Zq; dims = 1); dims = 1)
+    for q in 1:Q
+        f, st = prior_fwd(ebm, ps, st, z[q, :, :])
+        lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
+        log_p += dropdims(sum(lp; dims=1); dims=1)
     end
 
     return log_p, st_lyrnorm
@@ -172,6 +176,15 @@ end
         end
     end
     logprob[s] = acc
+    return nothing
+end
+
+@parallel_indices (q, p, s) function stable_logalpha!(
+    log_pdf::AbstractArray{T},
+    alpha::AbstractArray{T},
+    ε::T
+)::Nothing where {T<:half_quant}
+    log_pdf[q,p,s] = log(log_pdf[q,p,s] + alpha[q,p] + ε)
     return nothing
 end
 
@@ -209,7 +222,7 @@ function log_prior_mix(
     alpha = softmax(ps.dist.α; dims = 2)
     log_απ = @zeros(Q, P, S)
     @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_απ, z, ε, ps.dist.π_μ, ps.dist.π_σ)
-    @. log_απ = log(log_απ * alpha + ε)
+    @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))

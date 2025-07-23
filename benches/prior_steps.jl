@@ -1,7 +1,7 @@
 using BenchmarkTools,
     ConfParser, Lux, Enzyme, Random, CUDA, ComponentArrays, CSV, DataFrames
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 

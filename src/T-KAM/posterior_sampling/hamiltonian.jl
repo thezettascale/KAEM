@@ -93,7 +93,7 @@ function leapfrop_proposal(
     ẑ = @zeros(size(z))
 
     # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
-    if ndims(η) == 1
+    if ndims(z) == 3
         @parallel (1:Q, 1:P, 1:S) position_update_3D!(p, ẑ, momentum, ∇z, M, η)
     else
         @parallel (1:Q, 1:P, 1:S, 1:num_temps) position_update_4D!(p, ẑ, momentum, ∇z, M, η)
@@ -103,7 +103,7 @@ function leapfrop_proposal(
     logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    if ndims(η) == 1
+    if ndims(z) == 3
         @parallel (1:Q, 1:P, 1:S) momentum_update_3D!(p, ∇ẑ, M, η)
     else
         @parallel (1:Q, 1:P, 1:S, 1:num_temps) momentum_update_4D!(p, ∇ẑ, M, η)

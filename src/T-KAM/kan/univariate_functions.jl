@@ -18,7 +18,7 @@ end
 
 const SplineBasis_mapping = Dict(
     "B-spline" => degree -> B_spline_basis(degree),
-    "RBF" => scale -> RBF_basis(half_quant(scale)),
+    "RBF" => scale -> RBF_basis(scale),
     "RSWAF" => degree -> RSWAF_basis(),
     "FFT" => degree -> FFT_basis(),
     "Cheby" => degree -> Cheby_basis(degree),

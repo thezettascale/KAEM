@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 

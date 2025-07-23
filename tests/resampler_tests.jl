@@ -1,7 +1,7 @@
 using Test, Random, LinearAlgebra
 using NNlib: softmax
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 

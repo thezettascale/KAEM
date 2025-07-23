@@ -179,7 +179,7 @@ function Lux.initialparameters(
     end
 end
 
-# If GPU, return NamedTuple of CuPtrs, which will not work for Enzyme/Reactant GPU - must convert to ComponentArray
+# NamedTuple of CuPtrs, which will not work for Enzyme/Reactant GPU - must convert to ComponentArray
 function Lux.initialstates(
     rng::AbstractRNG,
     l::univariate_function{T,U},

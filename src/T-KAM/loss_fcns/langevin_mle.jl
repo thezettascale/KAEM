@@ -52,7 +52,7 @@ function marginal_llhood(
         ε = model.ε,
     )
 
-    logprior, st_ebm = m.prior.lp_fcn(
+    logprior, st_ebm = model.prior.lp_fcn(
         z_prior,
         model.prior,
         ps.ebm,

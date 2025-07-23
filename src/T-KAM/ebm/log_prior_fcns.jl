@@ -152,7 +152,7 @@ function log_prior_univar(
     )
 
     for q in 1:Q
-        f, st = prior_fwd(ebm, ps, st, z[q, :, :])
+        f, st = prior_fwd(ebm, ps, st_kan, st_lyrnorm, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
         log_p += dropdims(sum(lp; dims=1); dims=1)
     end

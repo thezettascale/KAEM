@@ -13,8 +13,7 @@ using CUDA,
     Statistics,
     Enzyme,
     ComponentArrays,
-    Reactant,
-    ParallelStencil
+    Reactant
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
@@ -22,12 +21,6 @@ include("log_posteriors.jl")
 using .Utils: device, half_quant, full_quant, fq
 using .GeneratorModel: log_likelihood_MALA
 using .LogPosteriors: unadjusted_logpos
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
-else
-    @init_parallel_stencil(Threads, full_quant, 3)
-end
 
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -80,16 +73,6 @@ struct ULA_sampler{U<:full_quant}
     η::U
 end
 
-@parallel_indices (q, p, s, t) function update_z!(
-    z_fq::AbstractArray{T},
-    ∇z_fq::AbstractArray{T},
-    η::U,
-    sqrt_2η::U,
-    ξ::AbstractArray{T},
-)::Nothing where {T<:half_quant}
-    z_fq[q, p, s, t] = z_fq[q, p, s, t] + η * ∇z_fq[q, p, s, t] + sqrt_2η * ξ[q, p, s, t]
-    return nothing
-end
 
 function initialize_ULA_sampler(
     ps::ComponentArray{T},
@@ -260,7 +243,7 @@ function ULA_sample(
                 ),
             ) ./ loss_scaling
 
-        @parallel (1:Q, 1:P, 1:S, 1:num_temps) update_z!(z_fq, ∇z_fq, η, sqrt_2η, ξ)
+        @. z_fq += η * ∇z_fq + sqrt_2η * ξ
         z_hq = T.(z_fq)
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

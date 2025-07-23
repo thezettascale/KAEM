@@ -193,10 +193,10 @@ function thermodynamic_loss(
         train_idx = train_idx,
         rng = rng,
     )
-    st_ebm, st_gen = st_lux.ebm, st_lux.gen
+    st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
 
-    ∇, st_ebm, st_gen = l.compiled_grad(
+    ∇, st_lux_ebm, st_lux_gen = l.compiled_grad(
         ps,
         ∇,
         z_posterior,
@@ -208,7 +208,7 @@ function thermodynamic_loss(
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
     )
-    loss, st_ebm, st_gen = l.compiled_loss(
+    loss, st_lux_ebm, st_lux_gen = l.compiled_loss(
         ps,
         z_posterior,
         z_prior,
@@ -219,7 +219,7 @@ function thermodynamic_loss(
         Lux.testmode(st_lux_ebm),
         Lux.testmode(st_lux_gen),
     )
-    return loss, ∇, st_ebm, st_gen
+    return loss, ∇, st_lux_ebm, st_lux_gen
 end
 
 end

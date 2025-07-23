@@ -80,8 +80,8 @@ function grad_langevin_llhood(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     f =
-        (p, post_i, prior_i, x_i, m, sk, se, sg, zv) -> begin
-            first(marginal_llhood(p, post_i, prior_i, x_i, m, sk, se, sg, zv))
+        (p, post_i, prior_i, x_i, m, sk, se, sg) -> begin
+            first(marginal_llhood(p, post_i, prior_i, x_i, m, sk, se, sg))
         end
 
     CUDA.@fastmath Enzyme.autodiff(

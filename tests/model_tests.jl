@@ -38,6 +38,7 @@ function test_grid_update()
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
     model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
 
     size_grid = size(st_kan.ebm[:a].grid)
     x = first(model.train_loader) |> device

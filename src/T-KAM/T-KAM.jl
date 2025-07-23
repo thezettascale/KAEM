@@ -456,7 +456,7 @@ function prep_model(
         ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
 
     model = move_to_hq(model)
-    ps_hq, st_kan = ps |> hq, st_kan |> hq
+    ps_hq, st_kan = T.(ps), T.(st_kan)
     model = init_prior_sampler(model, ps_hq, st_kan, st_lux, x, model.conf; rng = rng)
     model = init_posterior_sampler(model, ps_hq, st_kan, st_lux, x, model.conf; rng = rng)
     return model, ps, st_kan, st_lux

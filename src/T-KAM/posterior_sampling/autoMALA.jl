@@ -61,7 +61,7 @@ function select_step_size(
     η_init::AbstractArray{U},
     Δη::U,
     logpos_withgrad::Function,
-    compiled_leapfrog::Function,
+    leapfrog::Function,
     model,
     ps::ComponentArray{T},
     st::NamedTuple;
@@ -78,7 +78,7 @@ function select_step_size(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = compiled_leapfrog(
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrog(
         z,
         ∇z,
         x,
@@ -107,7 +107,7 @@ function select_step_size(
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st =
-            compiled_leapfrog(
+            leapfrog(
                 z[:, :, active_chains],
                 ∇z[:, :, active_chains],
                 x_active,
@@ -226,7 +226,6 @@ end
 
 struct autoMALA_sampler{U<:full_quant}
     compiled_llhood::Any
-    compiled_leapfrog::Any
     logpos_withgrad::Any
     N::Int
     N_unadjusted::Int
@@ -317,7 +316,6 @@ function initialize_autoMALA_sampler(
 
     compiled_llhood = log_likelihood_MALA
     logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st)
-    compiled_leapfrog = leapfrop_proposal
 
     if compile_mlir
         compiled_llhood = Reactant.@compile log_likelihood_MALA(
@@ -327,26 +325,10 @@ function initialize_autoMALA_sampler(
             ps.gen,
             st.gen,
         )
-
-        compiled_leapfrog = Reactant.@compile leapfrop_proposal(
-            z_fq,
-            ∇z_fq,
-            x_t,
-            t_expanded,
-            logpos_z,
-            momentum,
-            device(repeat(M, 1, 1, S, 1)),
-            η,
-            logpos_withgrad,
-            model,
-            ps,
-            st,
-        )
     end
 
     return autoMALA_sampler(
         compiled_llhood,
-        compiled_leapfrog,
         logpos_withgrad,
         N,
         N_unadjusted,
@@ -429,7 +411,7 @@ function autoMALA_sample(
 
         if burn_in < sampler.N
             burn_in += 1
-            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st = sampler.compiled_leapfrog(
+            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrog(
                 z_fq,
                 ∇z_fq,
                 x_t,
@@ -457,7 +439,7 @@ function autoMALA_sample(
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
                 sampler.logpos_withgrad,
-                sampler.compiled_leapfrog,
+                sampler.leapfrog,
                 model,
                 ps,
                 st,

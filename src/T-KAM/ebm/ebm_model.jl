@@ -59,7 +59,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )
 
     spline_degree = parse(Int, retrieve(conf, "EbmModel", "spline_degree"))
-    layernorm_bool = parse(Bool, retrieve(conf, "EbmModel", "layer_norm"))
+    layernorm_bool = parse(Bool, retrieve(conf, "EbmModel", "layernorm"))
     base_activation = retrieve(conf, "EbmModel", "base_activation")
     spline_function = retrieve(conf, "EbmModel", "spline_function")
     grid_size = parse(Int, retrieve(conf, "EbmModel", "grid_size"))

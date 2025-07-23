@@ -52,7 +52,7 @@ function init_KAN_Generator(
     ))
 
     spline_degree = parse(Int, retrieve(conf, "GeneratorModel", "spline_degree"))
-    layernorm_bool = parse(Bool, retrieve(conf, "GeneratorModel", "layer_norm"))
+    layernorm_bool = parse(Bool, retrieve(conf, "GeneratorModel", "layernorm"))
     base_activation = retrieve(conf, "GeneratorModel", "base_activation")
     spline_function = retrieve(conf, "GeneratorModel", "spline_function")
     grid_size = parse(Int, retrieve(conf, "GeneratorModel", "grid_size"))

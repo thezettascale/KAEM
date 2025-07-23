@@ -75,8 +75,8 @@ function update_model_grid(
     x::AbstractArray{T},
     ps::ComponentArray{T},
     kan_st::ComponentArray{T},
-    st_lux::NamedTuple,
-    temps::AbstractArray{T},
+    st_lux::NamedTuple;
+    temps::AbstractArray{T} = [one(T)],
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{Any,ComponentArray{T},ComponentArray{T},NamedTuple} where {T<:half_quant}
     """

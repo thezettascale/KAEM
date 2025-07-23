@@ -14,6 +14,8 @@ else
     @init_parallel_stencil(Threads, full_quant, 3)
 end
 
+### Potential hread divergence on GPU for resampler searchsortedfirsts
+
 @parallel_indices (b) function residual_kernel!(
     idxs::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},

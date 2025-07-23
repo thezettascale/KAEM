@@ -132,6 +132,8 @@ end
 )::Nothing where {U<:full_quant}
     idx = p_size
     val = rand_vals[q, b]
+
+    # Potential thread divergence on GPU
     for j = 1:p_size
         if α[q, j] >= val
             idx = j
@@ -183,7 +185,7 @@ end
     rv = rand_vals[q, p, b]
     idx = 1
 
-    # Manual searchsortedfirst over cdf[q, p, :]
+    # Manual searchsortedfirst over cdf[q, p, :] - potential thread divergence on GPU
     for j = 1:grid_size
         if cdf[q, p, j] >= rv
             idx = j
@@ -246,6 +248,8 @@ end
 )::Nothing where {T<:half_quant}
     rv = rand_vals[q, b]
     idx = 1
+
+    # Manual searchsortedfirst over cdf[q, b, :] - potential thread divergence on GPU
     for j = 1:grid_size
         if cdf[q, b, j] >= rv
             idx = j
@@ -253,6 +257,7 @@ end
         end
         idx = j + 1
     end
+    
     idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
     z[q, 1, b] =

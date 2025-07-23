@@ -4,7 +4,7 @@ export CNN_Generator, init_CNN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
-include("../../utils.jl")
+include("../../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 
 struct CNN_Generator{T<:half_quant} <: Lux.AbstractLuxLayer

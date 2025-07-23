@@ -5,7 +5,7 @@ export Decoder_Generator, init_Decoder_Generator
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser, ParallelStencil
 using NNlib: softmax, gelu
 
-include("../../utils.jl")
+include("../../../utils.jl")
 using .Utils: half_quant, full_quant
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))

@@ -82,7 +82,7 @@ function CNN_fwd(
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
 
-    for i = 1:(lkhood.depth-1)
+    for i = 1:(lkhood.depth)
         z, st_new =
             Lux.apply(lkhood.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
         @reset st_lux.fcn[symbol_map[i]] = st_new
@@ -96,16 +96,8 @@ function CNN_fwd(
                 st_lux.batchnorm[symbol_map[i]],
             ) : (z, st_lux)
         (lkhood.batchnorm_bool && i < lkhood.depth) &&
-            @reset st_lux.batchnorm[symbol_map[i]] = st_new
+        (lkhood.batchnorm_bool && i < lkhood.depth) && @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
-
-    z, st_new = Lux.apply(
-        lkhood.Φ_fcns[lkhood.depth],
-        z,
-        ps.fcn[symbol_map[lkhood.depth]],
-        st_lux.fcn[symbol_map[lkhood.depth]],
-    )
-    @reset st_lux.fcn[symbol_map[lkhood.depth]] = st_new
 
     return z, st_lux
 end

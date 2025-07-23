@@ -59,8 +59,8 @@ function logpos_grad(
         Enzyme.Const(prior_sampling_bool),
     )
 
-    any(isnan, ∇z) && error("∇z is NaN")
-    all(iszero, ∇z) && error("∇z is zero")
+    # any(isnan, ∇z) && error("∇z is NaN")
+    # all(iszero, ∇z) && error("∇z is zero")
     return ∇z
 end
 

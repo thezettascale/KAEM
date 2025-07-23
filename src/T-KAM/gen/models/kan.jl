@@ -5,7 +5,7 @@ export KAN_Generator, init_KAN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
-include("../kan/univariate_functions.jl")
+include("../../kan/univariate_functions.jl")
 include("../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 using .UnivariateFunctions

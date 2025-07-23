@@ -102,8 +102,8 @@ function grad_thermo_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     f =
-        (p, post_i, prior_i, x_i, t, m, se, sg) -> begin
-            first(marginal_llhood(p, post_i, prior_i, x_i, t, m, se, sg))
+        (p, post_i, prior_i, x_i, t, m, sk, se, sg) -> begin
+            first(marginal_llhood(p, post_i, prior_i, x_i, t, m, sk, se, sg))
         end
 
     CUDA.@fastmath Enzyme.autodiff(

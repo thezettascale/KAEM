@@ -39,11 +39,11 @@ function test_grid_update()
     x_test = first(model.train_loader) |> device
     model, ps, st_kan, st_lux = prep_model(model, x_test)
 
-    size_grid = size(st_kan.ebm.fcn[:a].grid)
+    size_grid = size(st_kan.ebm[:a].grid)
     x = first(model.train_loader) |> device
     model, ps, st_kan, st_lux =
         update_model_grid(model, x, ps, Lux.testmode(st_kan), Lux.testmode(st_lux))
-    @test all(size(st_kan.ebm.fcn[:a].grid) .== size_grid)
+    @test all(size(st_kan.ebm[:a].grid) .== size_grid)
     @test !any(isnan, ps)
 end
 

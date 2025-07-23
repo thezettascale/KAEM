@@ -14,13 +14,13 @@ function sample_thermo(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    m,
+    model,
     x::AbstractArray{T};
     train_idx::Int=1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
-    z, st_lux = m.posterior_sample(m, x, temps[2:end], ps, st_kan, st_lux, rng)
+    z, st_lux = model.posterior_sample(model, x, temps[2:end], ps, st_kan, st_lux, rng)
     Δt = device(temps[2:end] - temps[1:(end-1)])
     return z, Δt, st_lux
 end
@@ -31,7 +31,7 @@ function marginal_llhood(
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
     Δt::AbstractVector{T},
-    m,
+    model,
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
@@ -44,40 +44,40 @@ function marginal_llhood(
     ll, st_gen = log_likelihood_MALA(
         reshape(z_posterior, Q, P, S*num_temps),
         x_rep,
-        m.lkhood,
+        model.lkhood,
         ps.gen,
         st_kan.gen,
         st_lux_gen;
-        ε = m.ε,
+        ε = model.ε,
     )
     log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
 
     # MLE estimator
     logprior_pos, st_ebm = m.prior.lp_fcn(
         z_posterior[:, :, :, num_temps-1],
-        m.prior,
+        model.prior,
         ps.ebm,
         st_kan.ebm,
         st_lux_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
+        ε = model.ε,
+        normalize = !model.prior.contrastive_div,
     )
 
     logprior, st_ebm = m.prior.lp_fcn(
         z_prior,
-        m.prior,
+        model.prior,
         ps.ebm,
         st_kan.ebm,
         st_lux_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
+        ε = model.ε,
+        normalize = !model.prior.contrastive_div,
     )
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
+    ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
 
     logllhood, st_gen =
-        log_likelihood_MALA(z_prior[:, :, :, 1], x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen; ε = m.ε)
+        log_likelihood_MALA(z_prior[:, :, :, 1], x, model.lkhood, ps.gen, st_kan.gen, st_lux_gen; ε = model.ε)
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
-    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * m.loss_scaling,
+    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * model.loss_scaling,
     st_ebm,
     st_gen
 end

@@ -14,11 +14,11 @@ function sample_langevin(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    m,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
-    z, st_lux, = m.posterior_sample(m, x, ps, st_kan, st_lux, rng)
+    z, st_lux, = model.posterior_sample(model, x, ps, st_kan, st_lux, rng)
     return z[:, :, :, 1], st_lux
 end
 
@@ -27,42 +27,42 @@ function marginal_llhood(
     z_posterior::AbstractArray{T},
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
-    m,
+    model,
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
-    logprior_pos, st_ebm = m.prior.lp_fcn(
+    logprior_pos, st_ebm = model.prior.lp_fcn(
         z_posterior,
-        m.prior,
+        model.prior,
         ps.ebm,
         st_kan.ebm,
         st_lux_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
+        ε = model.ε,
+        normalize = !model.prior.contrastive_div,
     )
     logllhood, st_lux_gen = log_likelihood_MALA(
         z_posterior,
         x,
-        m.lkhood,
+        model.lkhood,
         ps.gen,
         st_kan.gen,
         st_lux_gen;
-        ε = m.ε,
+        ε = model.ε,
     )
 
     logprior, st_ebm = m.prior.lp_fcn(
         z_prior,
-        m.prior,
+        model.prior,
         ps.ebm,
         st_kan.ebm,
         st_lux_ebm;
-        ε = m.ε,
-        normalize = !m.prior.contrastive_div,
+        ε = model.ε,
+        normalize = !model.prior.contrastive_div,
     )
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
-    return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*m.loss_scaling,
+    ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
+    return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*model.loss_scaling,
     st_lux_ebm,
     st_lux_gen
 end

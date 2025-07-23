@@ -13,12 +13,21 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
+struct UniformPrior end
+struct GaussianPrior end
+struct LogNormalPrior 
+    ε::half_quant
+end
+struct LearnableGaussianPrior 
+    ε::half_quant
+end
+struct EbmPrior 
+    ε::half_quant
+end
+
 @parallel_indices (q, p, b) function uniform_pdf!(
     pdf::AbstractArray{T},
     z::AbstractArray{T},
-    ε::T,
-    _π_μ::AbstractArray{T},
-    _π_σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     pdf[q, p, b] = T((z[q, p, b] >= zero(T)) * (z[q, p, b] <= one(T)))
     return nothing
@@ -27,9 +36,6 @@ end
 @parallel_indices (q, p, b) function gaussian_pdf!(
     pdf::AbstractArray{T},
     z::AbstractArray{T},
-    ε::T,
-    _π_μ::AbstractArray{T},
-    _π_σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     pdf[q, p, b] = T(1 / sqrt(2π)) * exp(-z[q, p, b]^2 / 2)
     return nothing
@@ -39,8 +45,6 @@ end
     pdf::AbstractArray{T},
     z::AbstractArray{T},
     ε::T,
-    _π_μ::AbstractArray{T},
-    _π_σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     pdf[q, p, b] = exp(-(log(z[q, p, b] + ε))^2 / 2) / (z[q, p, b] * T(sqrt(2π)) + ε)
     return nothing
@@ -65,19 +69,71 @@ end
     pdf::AbstractArray{T},
     z::AbstractArray{T},
     ε::T,
-    _π_μ::AbstractArray{T},
-    _π_σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     pdf[q, p, b] = one(T) - ε # Minus eps to counter + eps in stable log
     return nothing
 end
 
+function (::UniformPrior)(
+    pdf::AbstractArray{T},
+    z::AbstractArray{T},
+    π_μ::AbstractArray{T},
+    π_σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    Q, P, S = size(z)
+    @parallel (1:Q, 1:P, 1:S) uniform_pdf!(pdf, z)
+    return nothing
+end
+
+function (::GaussianPrior)(
+    pdf::AbstractArray{T},
+    z::AbstractArray{T},
+    π_μ::AbstractArray{T},
+    π_σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    Q, P, S = size(z)
+    @parallel (1:Q, 1:P, 1:S) gaussian_pdf!(pdf, z)
+    return nothing
+end
+
+function (prior::LogNormalPrior)(
+    pdf::AbstractArray{T},
+    z::AbstractArray{T},
+    π_μ::AbstractArray{T},
+    π_σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    Q, P, S = size(z)
+    @parallel (1:size(z,1), 1:size(z,2), 1:size(z,3)) lognormal_pdf!(pdf, z, prior.ε)
+    return nothing
+end
+
+function (prior::LearnableGaussianPrior)(
+    pdf::AbstractArray{T},
+    z::AbstractArray{T},
+    π_μ::AbstractArray{T},
+    π_σ::AbstractArray{T},
+)::Nothing where {T<:half_quant}
+    Q, P, S = size(z)
+    @parallel (1:Q, 1:P, 1:S) learnable_gaussian_pdf!(pdf, z, prior.ε, π_μ, π_σ)
+    return nothing
+end
+
+function (prior::EbmPrior)(
+    pdf::AbstractArray{T},
+    z::AbstractArray{T},
+    π_μ::AbstractArray{T},
+    π_σ::AbstractArray{T},
+) where {T<:half_quant}
+    @parallel (1:size(z,1), 1:size(z,2), 1:size(z,3)) ebm_pdf!(pdf, z, prior.ε)
+    return nothing
+end
+
 const prior_pdf = Dict(
-    "uniform" => uniform_pdf!,
-    "gaussian" => gaussian_pdf!,
-    "lognormal" => lognormal_pdf!,
-    "ebm" => ebm_pdf!,
-    "learnable_gaussian" => learnable_gaussian_pdf!,
+    "uniform" => ε -> UniformPrior(),
+    "gaussian" => ε -> GaussianPrior(),
+    "lognormal" => ε -> LogNormalPrior(ε),
+    "ebm" => ε -> EbmPrior(ε),
+    "learnable_gaussian" => ε -> LearnableGaussianPrior(ε),
 )
 
 end

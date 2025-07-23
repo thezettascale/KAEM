@@ -80,9 +80,8 @@ function log_prior_ula(
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     Q, P, S = size(z)
     log_π0 = @zeros(Q, P, S)
-    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
-    @. log_π0 = log(log_π0 + ε)
-    log_π0 = dropdims(sum(log_π0; dims = 1); dims = 1)
+    ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
+    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
     f, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
 end
@@ -138,7 +137,7 @@ function log_prior_univar(
 
     Q, P, S = size(z)
     log_π0 = @zeros(Q, P, S)
-    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_π0, z, ε, ps.dist.π_μ, ps.dist.π_σ)
+    ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
     @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
 
     # Pre-allocate
@@ -221,7 +220,7 @@ function log_prior_mix(
     # Mixture proportions and prior
     alpha = softmax(ps.dist.α; dims = 2)
     log_απ = @zeros(Q, P, S)
-    @parallel (1:Q, 1:P, 1:S) ebm.π_pdf!(log_απ, z, ε, ps.dist.π_μ, ps.dist.π_σ)
+    ebm.π_pdf!(log_απ, z, ps.dist.π_μ, ps.dist.π_σ)
     @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
 
     # Energy functions of each component, q -> p

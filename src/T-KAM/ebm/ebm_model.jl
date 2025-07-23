@@ -33,7 +33,7 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf!::Function
+    π_pdf!
     sample_z::Function
     p_size::Int
     q_size::Int
@@ -160,13 +160,15 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         end
     end
 
+    ref_initializer = get(prior_pdf, prior_type, prior_pdf["uniform"])
+
     return EbmModel(
         functions,
         layernorms,
         layernorm_bool,
         length(widths)-1,
         prior_type,
-        get(prior_pdf, prior_type, (z, ε) -> ones(half_quant, size(z))),
+        ref_initializer(eps),
         sample_function,
         P,
         Q,

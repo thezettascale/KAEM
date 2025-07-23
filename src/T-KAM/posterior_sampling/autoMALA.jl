@@ -271,7 +271,7 @@ function initialize_autoMALA_sampler(
     ∇z_fq = Enzyme.make_zero(z_fq)
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
-    seq = model.lkhood.seq_length > 1
+    seq = model.lkhood.SEQ
     x_t = seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     M = zeros(U, Q, P, 1, num_temps) |> device

@@ -223,7 +223,7 @@ function ULA_sample(
 
     η = sampler.η
     sqrt_2η = sqrt(2 * η)
-    seq = model.lkhood.seq_length > 1
+    seq = model.lkhood.SEQ
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     S = sampler.prior_sampling_bool ? size(z_hq)[end] : S

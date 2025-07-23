@@ -181,10 +181,11 @@ end
 
 ## Stencils much faster than broadcast ##
 @parallel_indices (i, o, b) function mask_mul!(
+    out::AbstractArray{T},
     y::AbstractArray{T},
     mask::AbstractArray{T},
 ) where {T<:half_quant}
-    y[i, o, b] = y[i, o, b] * mask[i, o]
+    out[i, o, b] = y[i, o, b] * mask[i, o]
     return nothing
 end
 
@@ -196,18 +197,20 @@ function ChebyMUL(
     y::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, O, B = size(y)
-    @parallel (1:I, 1:O, 1:B) mask_mul!(y, st.mask)
-    return y
+    out = @zeros(I, O, B)
+    @parallel (1:I, 1:O, 1:B) mask_mul!(out, y, st.mask)
+    return out  
 end
 
 @parallel_indices (i, o, b) function spl_kernel!(
+    out::AbstractArray{T},
     y::AbstractArray{T},
     x::AbstractArray{T},
     w_base::AbstractArray{T},
     w_sp::AbstractArray{T},
     mask::AbstractArray{T},
 ) where {T<:half_quant}
-    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b] * mask[i, o]
+    out[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b] * mask[i, o]
     return nothing
 end
 
@@ -220,8 +223,9 @@ function SplineMUL(
 )::AbstractArray{T} where {T<:half_quant}
     I, O, B = size(y)
     base = l.base_activation(x)
-    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp, st.mask)
-    return y
+    out = @zeros(I, O, B)
+    @parallel (1:I, 1:O, 1:B) spl_kernel!(out, y, base, ps.w_base, ps.w_sp, st.mask)
+    return out
 end
 
 function (l::univariate_function{T,U})(

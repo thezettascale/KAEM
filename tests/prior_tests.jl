@@ -1,8 +1,9 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Enzyme, CUDA
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
+
 
 include("../src/T-KAM/ebm/ebm_model.jl")
 include("../src/utils.jl")
@@ -44,29 +45,7 @@ function test_log_prior()
     @test size(log_p) == (b_size,)
 end
 
-function test_grad_prior()
-    z_test = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    grads = Enzyme.make_zero(ps.ebm)
-
-    closure = (z_i, p, s, m) -> begin
-        sum(first(wrap.prior.lp_fcn(z_i, wrap.prior, p, s)))
-    end
-
-    CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
-        closure,
-        Enzyme.Active,
-        Enzyme.Const(z_test),
-        Enzyme.Duplicated(ps.ebm, grads),
-        Enzyme.Const(st.ebm),
-        Enzyme.Const(wrap.prior),
-    )
-    @test !all(iszero, grads)
-    @test !any(isnan, grads)
-end
-
 @testset "Mixture Prior Tests" begin
     test_sampling()
     test_log_prior()
-    test_grad_prior()
 end

@@ -178,7 +178,6 @@ function coef2curve_Spline(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     G = basis_function == Cheby_basis ? k : G
-    spl = @zeros(I, G, S)
     y = @zeros(I, O, S)
     spl = basis_function(x_eval, grid, σ; degree = k)
     @parallel (1:I, 1:O, 1:S) spline_mul!(y, spl, coef)

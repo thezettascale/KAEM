@@ -10,7 +10,7 @@ include("../../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 using .UnivariateFunctions
 
-struct KAN_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
+struct KAN_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Vector{Any}
     layernorms::Vector{Any}

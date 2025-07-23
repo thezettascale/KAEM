@@ -7,7 +7,7 @@ using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 include("../../../utils.jl")
 using .Utils: half_quant, full_quant, symbol_map
 
-struct CNN_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
+struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Vector{Any}
     batchnorms::Vector{Any}

@@ -218,7 +218,11 @@ function update_model_grid(
         model.lkhood.generator.Φ_fcns[i].spline_string == "RBF" &&
             @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale = scale
 
-        z = model.lkhood.generator.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
+        z = model.lkhood.generator.Φ_fcns[i](
+            z,
+            ps.gen.fcn[symbol_map[i]],
+            kan_st.gen[symbol_map[i]],
+        )
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         if model.lkhood.generator.layer_norm_bool && i < model.lkhood.generator.depth

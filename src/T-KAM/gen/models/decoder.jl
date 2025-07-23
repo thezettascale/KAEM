@@ -60,7 +60,7 @@ function scaled_dot_product_attention(
     return Q
 end
 
-struct SEQ_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
+struct SEQ_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Vector{Any}
     layernorms::Vector{Any}

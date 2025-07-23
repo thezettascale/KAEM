@@ -1,11 +1,7 @@
 module GeneratorModel
 
 export GenModel,
-    init_GenModel,
-    generator,
-    importance_resampler,
-    log_likelihood_IS,
-    log_likelihood_MALA
+    init_GenModel, generator, importance_resampler, log_likelihood_IS, log_likelihood_MALA
 
 using CUDA, KernelAbstractions
 using ConfParser,
@@ -43,7 +39,7 @@ const gen_model_map = Dict(
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    generator::Union{KAN_Generator,CNN_Generator,SEQ_Generator}
+    generator::Any
     out_size::Int
     σ_llhood::T
     output_activation::Function
@@ -94,7 +90,7 @@ function init_GenModel(
     generator_initializer = get(gen_model_map, gen_type, init_KAN_Generator)
     generator = generator_initializer(conf, x_shape, rng)
 
-    return GenModel(
+    return GenModel{half_quant}(
         generator,
         gen_var,
         output_activation,
@@ -113,16 +109,16 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
     layernorm_ps = (a = zero(T))
     if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i]) for
-            i in eachindex(lkhood.generator.layernorms)
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
+            for i in eachindex(lkhood.generator.layernorms)
         )
     end
 
     batchnorm_ps = (a = zero(T))
     if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i]) for
-            i in eachindex(lkhood.generator.batchnorms)
+            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
+            for i in eachindex(lkhood.generator.batchnorms)
         )
     end
 
@@ -152,7 +148,8 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     st_lyrnorm = (a = zero(T), b = zero(T))
     if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
-            symbol_map[i] => Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
+            symbol_map[i] =>
+                Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
             i in eachindex(lkhood.generator.layernorms)
         )
     end
@@ -160,7 +157,8 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     batchnorm_st = (a = zero(T))
     if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_st = NamedTuple(
-            symbol_map[i] => Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for
+            symbol_map[i] =>
+                Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for
             i in eachindex(lkhood.generator.batchnorms)
         )
     end

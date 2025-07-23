@@ -1,6 +1,6 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, move_to_hq, prep_model
+export T_KAM, init_T_KAM, generate_batch, move_to_hq, prep_model, next_temp
 
 using CUDA, KernelAbstractions, Enzyme
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
@@ -284,7 +284,7 @@ function init_posterior_sampler(
             Int,
             retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
         )
-        temps = collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])
+        temps = st.temps
 
         sampler_struct =
             autoMALA_bool ?
@@ -398,6 +398,13 @@ function prep_model(
     return model
 end
 
+function next_temp(model::T_KAM, st::NamedTuple, idx::Int)
+    if model.N_t > 1
+        @reset st.temps = collect(T, [(k / model.N_t)^model.p[idx] for k = 0:model.N_t])
+    end
+    return st
+end
+
 function init_from_file(file_loc::AbstractString, ckpt::Int)
     """Load a model from a checkpoint file."""
     saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
@@ -427,7 +434,8 @@ function Lux.initialstates(
         gen = Lux.initialstates(rng, model.lkhood),
         η_init = model.N_t > 1 ? repeat([η_init], model.max_samples, model.N_t) :
                  fill(η_init, model.max_samples, 1),
-        train_idx = 1,
+        temps = model.N_t > 1 ? collect(U, collect(T, [(k / model.N_t)^model.p[1] for k = 0:model.N_t])) :
+                 [one(T)],
     )
 end
 

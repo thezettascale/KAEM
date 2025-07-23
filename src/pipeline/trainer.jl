@@ -170,10 +170,9 @@ function init_trainer(
     )
 end
 
-function train!(t::T_KAM_trainer)
+function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
     # (Move off GPU)
-    @reset t.st.train_idx = t.st.train_idx |> cpu_device()
     @reset t.st.η_init = t.st.η_init |> cpu_device()
     loss_scaling = t.model.loss_scaling |> full_quant
 
@@ -201,21 +200,21 @@ function train!(t::T_KAM_trainer)
 
         # Grid updating for likelihood model
         if (
-            t.st.train_idx == 1 ||
-            (t.st.train_idx - t.last_grid_update >= t.grid_update_frequency)
+            train_idx == 1 ||
+            (train_idx - t.last_grid_update >= t.grid_update_frequency)
         ) && (t.model.update_llhood_grid || t.model.update_prior_grid)
             t.model, t.ps, t.st =
                 update_model_grid(t.model, t.x, t.ps, Lux.testmode(t.st); rng = t.rng)
             t.grid_update_frequency =
-                t.st.train_idx > 1 ?
+                train_idx > 1 ?
                 floor(
                     t.grid_update_frequency *
-                    (2 - t.model.grid_update_decay)^t.st.train_idx,
+                    (2 - t.model.grid_update_decay)^train_idx,
                 ) : t.grid_update_frequency
-            t.last_grid_update = t.st.train_idx
+            t.last_grid_update = train_idx
             grid_updated = 1
 
-            t.model.verbose && println("Iter: $(t.st.train_idx), Grid updated")
+            t.model.verbose && println("Iter: $(train_idx), Grid updated")
         end
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
@@ -233,7 +232,7 @@ function train!(t::T_KAM_trainer)
         @reset t.st.gen = st_gen
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
-        t.model.verbose && println("Iter: $(t.st.train_idx), Grad norm: $(norm(G))")
+        t.model.verbose && println("Iter: $(train_idx), Grad norm: $(norm(G))")
         return G
     end
 
@@ -245,7 +244,7 @@ function train!(t::T_KAM_trainer)
         train_loss += t.loss
 
         # After one epoch, calculate test loss and log to CSV
-        if t.st.train_idx % num_batches == 0 || t.st.train_idx == 1
+        if train_idx % num_batches == 0 || train_idx == 1
 
             test_loss = 0
             for x in t.model.test_loader
@@ -274,7 +273,7 @@ function train!(t::T_KAM_trainer)
             train_loss = train_loss / num_batches
             test_loss /= length(t.model.test_loader)
             now_time = time() - start_time
-            epoch = t.st.train_idx == 1 ? 0 : fld(t.st.train_idx, num_batches)
+            epoch = train_idx == 1 ? 0 : fld(train_idx, num_batches)
 
             m.verbose && println(
                 "Epoch: $(epoch), Train Loss: $(train_loss), Test Loss: $(test_loss)",
@@ -327,11 +326,12 @@ function train!(t::T_KAM_trainer)
 
         end
 
-        @reset t.st.train_idx += 1
+        train_idx += 1
+        t.st = next_temp(t.model, t.st, train_idx)
 
         # Iterate loader, reset to first batch when epoch ends
         x, t.train_loader_state =
-            (t.st.train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
+            (train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
         t.x = device(x)
         return loss
@@ -405,6 +405,7 @@ function train!(t::T_KAM_trainer)
         t.model.file_loc * "saved_model.jld2";
         params = t.ps |> cpu_device(),
         state = t.st |> cpu_device(),
+        train_idx = train_idx,
     )
 end
 

@@ -92,8 +92,7 @@ function update_model_grid(
     if model.update_prior_grid
 
         if model.N_t > 1
-            temps =
-                collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            temps = st.temps[2:end]
             z = first(model.posterior_sample(model, x, temps, ps, st, rng))
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sample(model, x, ps, st, rng))
@@ -160,8 +159,7 @@ function update_model_grid(
 
     if !sampled_bool
         if model.N_t > 1
-            temps =
-                collect(T, [(k / model.N_t)^model.p[st.train_idx] for k = 0:model.N_t])[2:end]
+            temps = st.temps[2:end]
             z = first(model.posterior_sample(model, x, temps, ps, st, rng))
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sample(model, x, ps, st, rng))

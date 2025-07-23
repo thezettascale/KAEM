@@ -17,7 +17,7 @@ function sample_thermo(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
-    temps = collect(T, [(k / m.N_t)^m.p[st.train_idx] for k = 0:m.N_t])
+    temps = st.temps
     z, st = m.posterior_sample(m, x, temps[2:end], ps, st, rng)
     Δt = device(temps[2:end] - temps[1:(end-1)])
     return z, Δt, st

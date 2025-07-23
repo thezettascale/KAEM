@@ -8,25 +8,13 @@ include("../../utils.jl")
 using .Utils: full_quant, half_quant
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+    @init_parallel_stencil(CUDA, full_quant, 4)
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    @init_parallel_stencil(Threads, full_quant, 4)
 end
 
-@parallel_indices (q, p, s) function position_update_3D!(
-    p::AbstractArray{U},
-    ẑ::AbstractArray{U},
-    momentum::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    M::AbstractArray{U},
-    η::AbstractArray{U},
-)::Nothing where {U<:full_quant}
-    p[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇z[q, p, s] / M[q, p, s]
-    ẑ[q, p, s] = ẑ[q, p, s] + η[s] * p[q, p, s] / M[q, p, s]
-    return nothing
-end
-
-@parallel_indices (q, p, s, t) function position_update_4D!(
+# Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
+@parallel_indices (q, p, s, t) function position_update!(
     p::AbstractArray{U},
     ẑ::AbstractArray{U},
     momentum::AbstractArray{U},
@@ -39,17 +27,8 @@ end
     return nothing
 end
 
-@parallel_indices (q, p, s) function momentum_update_3D!(
-    p::AbstractArray{U},
-    ∇ẑ::AbstractArray{U},
-    M::AbstractArray{U},
-    η::AbstractArray{U},
-)::Nothing where {U<:full_quant}
-    p[q, p, s] = p[q, p, s] + (η[s] / 2) * ∇ẑ[q, p, s] / M[q, p, s]
-    return nothing
-end
-
-@parallel_indices (q, p, s, t) function momentum_update_4D!(
+# Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
+@parallel_indices (q, p, s, t) function momentum_update!(
     p::AbstractArray{U},
     ∇ẑ::AbstractArray{U},
     M::AbstractArray{U},
@@ -87,26 +66,22 @@ function leapfrop_proposal(
     x'(x,y*)  = x  + eps M^{-1/2}y*
     y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
     """
-    num_temps = ndims(η) == 1 ? 1 : size(η, 2)
     Q, P, S = size(z)[1:3]...
-    p = @zeros(size(z))
-    ẑ = @zeros(size(z))
 
-    # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
-    if ndims(z) == 3 || num_temps == 1
-        @parallel (1:Q, 1:P, 1:S) position_update_3D!(p, ẑ, momentum, ∇z, M, η)
+    if ndims(z) == 3
+        p = @zeros(Q, P, S, 1)
+        ẑ = @zeros(Q, P, S, 1)
+        @parallel (1:Q, 1:P, 1:S, 1:1) position_update!(p, ẑ, momentum[:,:,:,:], ∇z[:,:,:,:], M[:,:,:,:], η[:,:])
+        logpos_ẑ, ∇ẑ, st_kan, st_lux = logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
+        @parallel (1:Q, 1:P, 1:S, 1:1) momentum_update!(p, ∇ẑ, M[:,:,:,:], η[:,:])
+        ẑ, logpos_ẑ, ∇ẑ, -p = ẑ[:,:,:,1], logpos_ẑ[:,1], ∇ẑ[:,:,:,1], p[:,:,:,1]
     else
-        @parallel (1:Q, 1:P, 1:S, 1:num_temps) position_update_4D!(p, ẑ, momentum, ∇z, M, η)
-    end
-
-    # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st = logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
-
-    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    if ndims(z) == 3 || num_temps == 1
-        @parallel (1:Q, 1:P, 1:S) momentum_update_3D!(p, ∇ẑ, M, η)
-    else
-        @parallel (1:Q, 1:P, 1:S, 1:num_temps) momentum_update_4D!(p, ∇ẑ, M, η)
+        num_temps = size(η, 2)
+        p = @zeros(Q, P, S, num_temps)
+        ẑ = @zeros(Q, P, S, num_temps)
+        @parallel (1:Q, 1:P, 1:S, 1:num_temps) position_update!(p, ẑ, momentum, ∇z, M, η)
+        logpos_ẑ, ∇ẑ, st_kan, st_lux = logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
+        @parallel (1:Q, 1:P, 1:S, 1:num_temps) momentum_update!(p, ∇ẑ, M, η)
     end
 
     # Hamiltonian difference for transformed momentum
@@ -118,7 +93,7 @@ function leapfrop_proposal(
             dims = (1, 2),
         ) ./ 2
 
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st_kan, st_lux
 end
 
 end

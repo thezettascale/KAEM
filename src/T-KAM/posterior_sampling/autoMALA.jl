@@ -79,7 +79,7 @@ function select_step_size(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st = leapfrog(
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux = leapfrog(
         z,
         ∇z,
         x,
@@ -108,7 +108,7 @@ function select_step_size(
 
         x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
-        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st = leapfrog(
+        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux = leapfrog(
             z[:, :, active_chains],
             ∇z[:, :, active_chains],
             x_active,
@@ -148,7 +148,7 @@ function select_step_size(
 
     # Reduce step size for chains that initially had too high acceptance with safety check
     η_init = safe_step_size_update(η_init, -1 .* geq_bool, Δη)
-    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_kan, st_lux
 end
 
 function autoMALA_step(
@@ -181,7 +181,7 @@ function autoMALA_step(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, _ = select_step_size(
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st_kan, st_lux = select_step_size(
         log_a,
         log_b,
         z,
@@ -203,7 +203,7 @@ function autoMALA_step(
         seq = seq,
     )
 
-    z_rev, _, _, _, η_prime, _, st = select_step_size(
+    z_rev, _, _, _, η_prime, _, st_kan, st_lux = select_step_size(
         log_a,
         log_b,
         ẑ,
@@ -226,7 +226,7 @@ function autoMALA_step(
     )
 
     reversible = check_reversibility(z, z_rev, η, η_prime; tol = ε)
-    return ẑ, η, η_prime, reversible, log_r, st
+    return ẑ, η, η_prime, reversible, log_r, st_kan, st_lux
 end
 
 struct autoMALA_sampler{U<:full_quant}
@@ -314,19 +314,21 @@ function initialize_autoMALA_sampler(
         t_k::AbstractArray{T},
         m,
         p::ComponentArray{T},
-        st_i::NamedTuple,
+        st_kan_i::ComponentArray{T},
+        st_lux_i::NamedTuple,
     )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
         fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
         logpos, ∇z_k, st_ebm, st_gen =
-            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_i, num_temps)
-        @reset st_i.ebm = st_ebm
-        @reset st_i.gen = st_gen
+            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_kan_i, st_lux_i, num_temps)
+        @reset st_kan_i.ebm = st_ebm
+        @reset st_lux_i.gen = st_gen
 
-        return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_i
+        return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_kan_i, st_lux_i
     end
 
     compiled_llhood = log_likelihood_MALA
-    logpos_z, ∇z_fq, st = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
+    logpos_z, ∇z_fq, st_kan, st_lux =
+        logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
 
     if compile_mlir
         compiled_llhood = Reactant.@compile log_likelihood_MALA(
@@ -421,12 +423,12 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z_fq, st =
+        logpos_z, ∇z_fq, st_kan, st_lux =
             sampler.logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
 
         if burn_in < sampler.N
             burn_in += 1
-            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux = leapfrog(
+            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux = leapfrog(
                 z_fq,
                 ∇z_fq,
                 x_t,
@@ -444,7 +446,7 @@ function autoMALA_sample(
             z_hq = T.(z_fq)
 
         else
-            ẑ, η_prop, η_prime, reversible, log_r, st_lux = autoMALA_step(
+            ẑ, η_prop, η_prime, reversible, log_r, st_kan, st_lux = autoMALA_step(
                 log_a,
                 log_b,
                 z_fq,

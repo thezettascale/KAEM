@@ -204,7 +204,7 @@ function update_model_grid(
 
     z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims = 2); dims = 2)
 
-    for i = 1:model.lkhood.depth
+    for i = 1:model.lkhood.generator.depth
         new_grid, new_coef = update_fcn_grid(
             model.lkhood.generator.Φ_fcns[i],
             ps.gen.fcn[symbol_map[i]],
@@ -221,7 +221,7 @@ function update_model_grid(
         z = model.lkhood.generator.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
-        if model.lkhood.generator.layer_norm_bool && i < model.lkhood.depth
+        if model.lkhood.generator.layer_norm_bool && i < model.lkhood.generator.depth
             z, st_gen = Lux.apply(
                 model.lkhood.generator.layernorms[i],
                 z,

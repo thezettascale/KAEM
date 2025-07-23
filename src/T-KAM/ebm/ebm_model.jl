@@ -185,6 +185,47 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )
 end
 
+function (ebm::EbmModel)(
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lyrnorm::NamedTuple,
+    z::AbstractArray{T},
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+    """
+    Forward pass through the ebm-prior, returning the energy function.
+
+    Args:
+        ebm: The ebm-prior.
+        ps: The parameters of the ebm-prior.
+        st: The states of the ebm-prior.
+        z: The component-wise latent samples to evaulate the measure on, (q, num_samples) or (p, num_samples)
+
+    Returns:
+        f: The energy function, (num_samples,) or (q, p, num_samples)
+        st: The updated states of the ebm-prior.
+    """
+
+    mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
+
+    for i = 1:ebm.depth
+        z = ebm.fcns_qp[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+
+        z =
+            (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
+            dropdims(sum(z, dims = 1); dims = 1)
+
+        z, st_lyrnorm_new =
+            (ebm.layernorm_bool && i < ebm.depth) ?
+            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
+            (z, st_lyrnorm)
+
+        (ebm.layernorm_bool && i < ebm.depth) && @reset st_lyrnorm[i] = st_lyrnorm_new
+    end
+
+    z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
+    return z, st_lyrnorm
+end
+
 function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth

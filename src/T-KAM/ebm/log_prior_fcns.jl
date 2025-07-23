@@ -1,6 +1,6 @@
 module LogPriorFCNs
 
-export prior_fwd, log_prior_univar, log_prior_ula, log_prior_mix
+export log_prior_univar, log_prior_ula, log_prior_mix
 
 using CUDA,
     KernelAbstractions,
@@ -27,48 +27,6 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-function prior_fwd(
-    ebm,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lyrnorm::NamedTuple,
-    z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
-    """
-    Forward pass through the ebm-prior, returning the energy function.
-
-    Args:
-        ebm: The ebm-prior.
-        ps: The parameters of the ebm-prior.
-        st: The states of the ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (q, num_samples) or (p, num_samples)
-
-    Returns:
-        f: The energy function, (num_samples,) or (q, p, num_samples)
-        st: The updated states of the ebm-prior.
-    """
-
-    mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
-
-    for i = 1:ebm.depth
-        z = ebm.fcns_qp[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
-
-        z =
-            (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
-            dropdims(sum(z, dims = 1); dims = 1)
-
-        z, st_lyrnorm_new =
-            (ebm.layernorm_bool && i < ebm.depth) ?
-            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
-            (z, st_lyrnorm)
-
-        (ebm.layernorm_bool && i < ebm.depth) && @reset st_lyrnorm[i] = st_lyrnorm_new
-    end
-
-    z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
-    return z, st_lyrnorm
-end
-
 function log_prior_ula(
     z::AbstractArray{T},
     ebm,
@@ -82,7 +40,7 @@ function log_prior_ula(
     log_π0 = @zeros(Q, P, S)
     ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
     @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
-    f, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
+    f, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
 end
 
@@ -151,7 +109,7 @@ function log_prior_univar(
     )
 
     for q = 1:Q
-        f, st = prior_fwd(ebm, ps, st_kan, st_lyrnorm, z[q, :, :])
+        f, st = ebm(ps, st_kan, st_lyrnorm, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
         log_p += dropdims(sum(lp; dims = 1); dims = 1)
     end
@@ -224,7 +182,7 @@ function log_prior_mix(
     @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
 
     # Energy functions of each component, q -> p
-    f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
+    f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
 
     log_Z = @zeros(Q, P)
     normalize && @parallel (1:Q, 1:P) log_norm_kernel!(

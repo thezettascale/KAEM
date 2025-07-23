@@ -19,7 +19,6 @@ include("loglikelihoods.jl")
 include("models/kan.jl")
 include("models/cnn.jl")
 include("models/decoder.jl")
-using .UnivariateFunctions
 using .Utils: device, half_quant, full_quant, hq, fq, symbol_map
 using .EBM_Model
 using .WeightResamplers
@@ -40,7 +39,7 @@ const resampler_map = Dict(
 const gen_model_map = Dict(
     "KAN" => init_KAN_Generator,
     "CNN" => init_CNN_Generator,
-    "SEQ" => init_Decoder_Generator,
+    "SEQ" => init_SEQ_Generator,
 )
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer

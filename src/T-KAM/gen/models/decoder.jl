@@ -1,6 +1,6 @@
 module Transformer_Model
 
-export Decoder_Generator, init_Decoder_Generator
+export SEQ_Generator, init_SEQ_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser, ParallelStencil
 using NNlib: softmax, gelu
@@ -71,7 +71,7 @@ struct SEQ_Generator{T<:half_quant} <: Lux.AbstractLuxLayer
     batchnorm_bool::Any
 end
 
-function init_Decoder_Generator(
+function init_SEQ_Generator(
     conf::ConfParse,
     x_shape::Tuple,
     rng::AbstractRNG = Random.default_rng(),
@@ -130,7 +130,7 @@ function init_Decoder_Generator(
     push!(Φ_functions, Lux.Dense(d_model => first(x_shape)))
     depth = 3
 
-    return Decoder_Generator(
+    return SEQ_Generator(
         depth,
         Φ_functions,
         layernorms,

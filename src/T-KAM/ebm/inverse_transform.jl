@@ -15,10 +15,8 @@ using CUDA,
     ParallelStencil
 
 include("../../utils.jl")
-include("log_prior_fcns.jl")
 include("mixture_selection.jl")
 using .Utils: device, half_quant, full_quant, fq
-using .LogPriorFCNs: prior_fwd
 using .MixtureChoice
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
@@ -49,7 +47,7 @@ function trapezium_quadrature(
         dropdims(π_grid, dims = 3)
 
     # Energy function of each component
-    f_grid, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, f_grid)
+    f_grid, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, f_grid)
     Q, P, G = size(f_grid)
 
     # Choose component if mixture model else use all
@@ -110,7 +108,7 @@ function gausslegendre_quadrature(
         dropdims(π_nodes, dims = 3)
 
     # Energy function of each component
-    nodes, st_lyrnorm_new = prior_fwd(ebm, ps, st_kan, st_lyrnorm, nodes)
+    nodes, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, nodes)
     Q, P, G = size(nodes)
 
     # Choose component if mixture model else use all

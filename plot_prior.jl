@@ -21,7 +21,6 @@ include("src/utils.jl")
 using .T_KAM_model
 using .trainer
 using .Utils: device, half_quant, hq
-using .EBM_Model: prior_fwd
 
 for fcn_type in ["RBF", "FFT"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
@@ -73,7 +72,7 @@ for fcn_type in ["RBF", "FFT"]
                 prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) :
                 prior.π_pdf(z)
 
-            f, st = prior_fwd(prior, ps, st, z)
+            f, st = prior(ps, st, z)
             f = exp.(f) .* permutedims(π_0[:, :, :], (3, 1, 2))
             z, f, π_0 = z |> cpu_device(),
             softmax(f; dims = 3) |> cpu_device(),

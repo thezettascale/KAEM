@@ -12,7 +12,7 @@ struct CNN_Generator <: Lux.AbstractLuxLayer
     Φ_fcns::Vector{Any}
     batchnorms::Vector{Any}
     batchnorm_bool::Bool
-    layer_norm_bool::Bool
+    layernorm_bool::Bool
 end
 
 function init_CNN_Generator(

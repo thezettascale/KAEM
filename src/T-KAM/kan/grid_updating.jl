@@ -225,7 +225,7 @@ function update_model_grid(
         )
         z = dropdims(sum(z, dims = 1); dims = 1)
 
-        if model.lkhood.generator.layer_norm_bool && i < model.lkhood.generator.depth
+        if model.lkhood.generator.layernorm_bool && i < model.lkhood.generator.depth
             z, st_gen = Lux.apply(
                 model.lkhood.generator.layernorms[i],
                 z,

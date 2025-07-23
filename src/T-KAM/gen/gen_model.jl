@@ -40,7 +40,6 @@ const gen_model_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     generator::Any
-    out_size::Int
     σ_llhood::T
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
@@ -90,7 +89,7 @@ function init_GenModel(
     generator_initializer = get(gen_model_map, gen_type, init_KAN_Generator)
     generator = generator_initializer(conf, x_shape, rng)
 
-    return GenModel{half_quant}(
+    return GenModel(
         generator,
         gen_var,
         output_activation,
@@ -107,7 +106,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
         i in eachindex(lkhood.generator.Φ_fcns)
     )
     layernorm_ps = (a = zero(T))
-    if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
+    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
             for i in eachindex(lkhood.generator.layernorms)
@@ -146,7 +145,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     )
 
     st_lyrnorm = (a = zero(T), b = zero(T))
-    if lkhood.generator.layer_norm_bool && length(lkhood.generator.layernorms) > 0
+    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for

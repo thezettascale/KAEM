@@ -67,7 +67,7 @@ struct SEQ_Generator <: Lux.AbstractLuxLayer
     attention::Vector{Any}
     seq_length::Int
     d_model::Int
-    layer_norm_bool::Bool
+    layernorm_bool::Bool
     batchnorm_bool::Bool
 end
 

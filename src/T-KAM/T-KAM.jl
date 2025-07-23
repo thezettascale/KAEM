@@ -292,7 +292,7 @@ function init_posterior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx) -> langevin_loss(
+            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> langevin_loss(
                 loss_struct,
                 p,
                 ∇,
@@ -374,7 +374,7 @@ function init_posterior_sampler(
         )
 
         @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx) -> thermodynamic_loss(
+            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> thermodynamic_loss(
                 loss_struct,
                 p,
                 ∇,
@@ -398,7 +398,7 @@ function init_posterior_sampler(
             rng = rng,
         )
         @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx) -> importance_loss(
+            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> importance_loss(
                 loss_struct,
                 p,
                 ∇,

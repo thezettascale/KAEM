@@ -1,9 +1,8 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
-
 
 include("../src/T-KAM/T-KAM.jl")
 include("../src/T-KAM/loss_fcns/thermodynamic.jl")
@@ -24,7 +23,8 @@ function test_posterior_sampling()
     x_test = first(model.train_loader) |> device
     model, ps, st_kan, st_lux = prep_model(model, x_test)
 
-    z_posterior, temps, st_lux = sample_thermo(ps, st_kan, st_lux, model, x_test, 1)
+    z_posterior, temps, st_lux =
+        sample_thermo(ps, st_kan, st_lux, model, x_test, 1, Random.default_rng())
     @test size(z_posterior) == (10, 5, 10, 4)
     @test size(temps) == (4,)
     @test !any(isnan, z_posterior)
@@ -38,7 +38,8 @@ function test_model_derivative()
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
-    loss, ∇, st_ebm, st_gen = model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1)
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end

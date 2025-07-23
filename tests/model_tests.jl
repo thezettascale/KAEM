@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -25,7 +25,7 @@ function test_ps_derivative()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1)
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
 
     @test norm(∇) != 0
     @test !any(isnan, ∇)
@@ -40,13 +40,8 @@ function test_grid_update()
 
     size_grid = size(st.ebm.fcn[:a].grid)
     x = first(model.train_loader) |> device
-    model, ps, st_kan, st_lux = update_model_grid(
-        model,
-        x,
-        ps,
-        Lux.testmode(st_kan),
-        Lux.testmode(st_lux),
-    )
+    model, ps, st_kan, st_lux =
+        update_model_grid(model, x, ps, Lux.testmode(st_kan), Lux.testmode(st_lux))
     @test all(size(st_kan.ebm.fcn[:a].grid) .== size_grid)
     @test !any(isnan, ps)
 end
@@ -61,7 +56,7 @@ function test_mala_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1)
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end
@@ -76,7 +71,7 @@ function test_cnn_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1)
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -93,7 +88,7 @@ function test_seq_loss()
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1)
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end

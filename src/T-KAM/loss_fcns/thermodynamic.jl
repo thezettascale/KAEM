@@ -15,8 +15,8 @@ function sample_thermo(
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     m,
-    x::AbstractArray{T},
-    train_idx::Int,
+    x::AbstractArray{T};
+    train_idx::Int=1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
@@ -100,7 +100,7 @@ function grad_thermo_llhood(
         end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
@@ -132,7 +132,7 @@ function initialize_thermo_loss(
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
     ∇ = Enzyme.make_zero(ps)
-    z_posterior, Δt, st_lux = sample_thermo(ps, st_kan, st_lux, model, x, 1; rng = rng)
+    z_posterior, Δt, st_lux = sample_thermo(ps, st_kan, st_lux, model, x; train_idx = 1, rng = rng)
     st_ebm, st_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
     compiled_loss = marginal_llhood
@@ -177,7 +177,7 @@ function thermodynamic_loss(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
     z_posterior, Δt, st_lux =
-        sample_thermo(ps, st_kan, Lux.testmode(st_lux), model, x, train_idx; rng = rng)
+        sample_thermo(ps, st_kan, Lux.testmode(st_lux), model, x; train_idx = train_idx, rng = rng)
     st_ebm, st_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
 

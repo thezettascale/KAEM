@@ -46,7 +46,7 @@ function logpos_grad(
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),

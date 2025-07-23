@@ -54,7 +54,7 @@ function test_derivative()
     end
 
     Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.set_runtime_activity(Enzyme.set_runtime_activity(Enzyme.Reverse)),
         diff_fcn,
         Enzyme.Active,
         Enzyme.Const(f),

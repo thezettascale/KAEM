@@ -37,7 +37,9 @@ struct B_spline_basis
     degree::Int
 end
 
-struct RBF_basis end
+struct RBF_basis
+    scale::T
+end
 
 struct RSWAF_basis end
 
@@ -118,8 +120,7 @@ function (b::RBF_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
-    scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
-    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ, scale)
+    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ, b.scale)
     return B
 end
 

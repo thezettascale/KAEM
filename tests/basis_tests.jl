@@ -46,7 +46,8 @@ function test_RBF_basis()
     grid = rand(half_quant, i, g) |> device
     coef = rand(half_quant, i, o, g) |> device
 
-    basis_function = RBF_basis()
+    scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
+    basis_function = RBF_basis(scale)
 
     y = coef2curve_Spline(basis_function, x_eval, grid, coef, σ)
     @test size(y) == (i, o, b)

@@ -24,8 +24,15 @@ function test_posterior_sampling()
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
-    z_posterior, temps, st_lux =
-        sample_thermo(ps, st_kan, st_lux, model, x_test; train_idx = 1, rng = Random.default_rng())
+    z_posterior, temps, st_lux = sample_thermo(
+        ps,
+        st_kan,
+        st_lux,
+        model,
+        x_test;
+        train_idx = 1,
+        rng = Random.default_rng(),
+    )
     @test size(z_posterior) == (10, 5, 10, 4)
     @test size(temps) == (4,)
     @test !any(isnan, z_posterior)

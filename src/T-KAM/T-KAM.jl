@@ -452,7 +452,8 @@ function prep_model(
 ) where {T<:half_quant}
     ps = Lux.initialparameters(rng, model)
     st_kan, st_lux = Lux.initialstates(rng, model)
-    ps, st_kan, st_lux = ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
+    ps, st_kan, st_lux =
+        ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
 
     model = move_to_hq(model)
     ps_hq, st_kan = ps |> hq, st_kan |> hq

@@ -33,6 +33,20 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     return grid
 end
 
+struct B_spline_basis
+    degree::Int
+end
+
+struct RBF_basis end
+
+struct RSWAF_basis end
+
+struct Cheby_basis
+    degree::Int
+end
+
+struct FFT_basis end
+
 @parallel_indices (i, g, s) function B_spline_deg0!(
     B::AbstractArray{T},
     x::AbstractArray{T},
@@ -67,23 +81,23 @@ end
     return nothing
 end
 
-function B_spline_basis(
+function (b::B_spline_basis)(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3,
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    B = @zeros(I, G-1, S, degree+1)
+    B = @zeros(I, G-1, S, b.degree+1)
     @parallel (1:I, 1:(G-1), 1:S) B_spline_deg0!(B, x, grid)
 
-    for k = 1:degree
+    for k = 1:b.degree
         gmax = G - k - 1
         @parallel (1:I, 1:gmax, 1:S) B_spline_degk!(B, x, grid, k)
     end
 
-    return B[:, 1:(G-degree-1), :, degree+1]
+    return B[:, 1:(G-b.degree-1), :, b.degree+1]
 end
+
 
 @parallel_indices (i, g, s) function RBF_kernel!(
     B::AbstractArray{T},
@@ -97,11 +111,10 @@ end
     return nothing
 end
 
-function RBF_basis(
+function (b::RBF_basis)(
     x::AbstractArray{T},
     grid::AbstractArray{T},
-    σ::AbstractArray{T};
-    degree::Int = 3,
+    σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
@@ -121,11 +134,10 @@ end
     return nothing
 end
 
-function RSWAF_basis(
+function (b::RSWAF_basis)(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    degree::Int = 3,
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
@@ -143,15 +155,14 @@ end
     return nothing
 end
 
-function Cheby_basis(
+function (b::Cheby_basis)(
     x::AbstractArray{T},
     grid::AbstractArray{T},
-    σ::AbstractArray{T};
-    degree::Int = 3,
+    σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    B = @zeros(I, degree+1, S)
-    @parallel (1:I, 1:(degree+1), 1:S) Cheby_kernel!(B, x, σ)
+    B = @zeros(I, b.degree+1, S)
+    @parallel (1:I, 1:(b.degree+1), 1:S) Cheby_kernel!(B, x, σ)
     return B
 end
 
@@ -169,17 +180,16 @@ end
 end
 
 function coef2curve_Spline(
+    b,
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},
-    σ::AbstractArray{T};
-    k::Int = 3,
-    basis_function::Function = RBF_basis,
+    σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
-    G = basis_function == Cheby_basis ? k : G
+    G = b == Cheby_basis ? b.degree : G
     y = @zeros(I, O, S)
-    spl = basis_function(x_eval, grid, σ; degree = k)
+    spl = b(x_eval, grid, σ)
     @parallel (1:I, 1:O, 1:S) spline_mul!(y, spl, coef)
     return y
 end
@@ -198,7 +208,7 @@ end
     return nothing
 end
 
-function FFT_basis(
+function (b::FFT_basis)(
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T},
@@ -226,26 +236,26 @@ end
 end
 
 function coef2curve_FFT(
+    b,
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[3:4]...
-    even, odd = FFT_basis(x_eval, grid, σ)
+    even, odd = b(x_eval, grid, σ)
     y = @zeros(I, O, S)
     @parallel (1:I, 1:O, 1:S) FFT_mul!(y, even, odd, coef[1, :, :, :], coef[2, :, :, :])
     return y
 end
 
 function curve2coef(
+    b,
     x::AbstractArray{T},
     y::AbstractArray{T},
     grid::AbstractArray{T},
-    σ::AbstractArray{T};
-    k::Int = 3,
+    σ::AbstractArray{T},
     ε::U = full_quant(1.0f-4),
-    basis_function::Function = B_spline_basis,
 )::AbstractArray{U} where {T<:half_quant,U<:full_quant}
     """
     Convert B-spline curves to B-spline coefficients using least squares.
@@ -262,7 +272,7 @@ function curve2coef(
     """
     J, S, O = size(x)..., size(y, 2)
 
-    B = basis_function(x, grid, σ; degree = k) .|> full_quant
+    B = b(x, grid, σ) .|> full_quant
     G = size(B, 2)
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid

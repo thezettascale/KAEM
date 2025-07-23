@@ -17,11 +17,11 @@ else
 end
 
 const SplineBasis_mapping = Dict(
-    "B-spline" => B_spline_basis,
-    "RBF" => RBF_basis,
-    "RSWAF" => RSWAF_basis,
-    "FFT" => FFT_basis,
-    "Cheby" => Cheby_basis,
+    "B-spline" => degree -> B_spline_basis(degree),
+    "RBF" => degree -> RBF_basis(),
+    "RSWAF" => degree -> RSWAF_basis(),
+    "FFT" => degree -> FFT_basis(),
+    "Cheby" => degree -> Cheby_basis(degree),
 )
 
 const activation_mapping = Dict(
@@ -42,9 +42,10 @@ const activation_mapping = Dict(
 struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
-    spline_degree::Int
-    base_activation::Function
+    base_activation::Any
+    basis_function::Any
     spline_string::String
+    spline_degree::Int
     init_grid::AbstractArray{T}
     grid_size::Int
     grid_update_ratio::T
@@ -54,9 +55,6 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     σ_spline::U
     init_τ::AbstractArray{U}
     τ_trainable::Bool
-    basis_mul::Function
-    coef2curve::Function
-    curve2coef::Function
 end
 
 ## Stencils much faster than broadcast ##
@@ -112,22 +110,15 @@ function init_function(
     base_activation =
         get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
 
-    basis_fcn = get(SplineBasis_mapping, spline_function, B_spline_basis)
-    basis_mul = spline_function == "Cheby" ? (l, ps, x, y) -> y : SplineMUL
-    coef2curve_fcn =
-        basis_fcn == FFT_basis ? (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ) :
-        (x, g, c, σ) ->
-            coef2curve_Spline(x, g, c, σ; k = spline_degree, basis_function = basis_fcn)
-    curve2coef_fcn =
-        (x, y, g, σ) ->
-            curve2coef(x, y, g, σ; k = spline_degree, basis_function = basis_fcn)
+    basis_fcn = get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
 
     return univariate_function(
         in_dim,
         out_dim,
-        spline_degree,
         base_activation,
+        basis_fcn(spline_degree),
         spline_function,
+        spline_degree,
         grid,
         grid_size,
         grid_update_ratio,
@@ -137,9 +128,6 @@ function init_function(
         σ_spline,
         [init_τ],
         τ_trainable,
-        basis_mul,
-        coef2curve_fcn,
-        curve2coef_fcn,
     )
 end
 
@@ -164,7 +152,8 @@ function Lux.initialparameters(
                 l.ε_scale ./ l.grid_size
             ) |> device
         coef = cpu_device()(
-            l.curve2coef(
+            curve2coef(
+                l.basis_function,
                 l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
                 ε,
                 l.init_grid,
@@ -198,11 +187,15 @@ end
 function (l::univariate_function{T,U})(
     x::AbstractArray{T},
     ps::ComponentArray{T},
-    st::ComponentArray{T}, # Note! Unlike standard Lux, states are a ComponentArray
+    st::ComponentArray{T}, # Unlike standard Lux, states are a ComponentArray
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
     basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
-    y = l.coef2curve(x, st.grid, ps.coef, basis_τ)
-    return l.basis_mul(l, ps, x, y)
+    y =
+        l.spline_string == "FFT" ?
+        coef2curve_FFT(l.basis_function, x, st.grid, ps.coef, basis_τ) :
+        coef2curve_Spline(l.basis_function, x, st.grid, ps.coef, basis_τ)
+    l.spline_string == "Cheby" && return y
+    return SplineMUL(l, ps, x, y)
 end
 
 end

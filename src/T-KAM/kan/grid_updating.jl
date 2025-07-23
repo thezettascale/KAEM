@@ -15,7 +15,7 @@ using CUDA,
 include("spline_bases.jl")
 include("univariate_functions.jl")
 include("../../utils.jl")
-using .spline_functions: extend_grid
+using .spline_functions: extend_grid, coef2curve_FFT, coef2curve_Spline, curve2coef
 using .UnivariateFunctions
 using .Utils: half_quant, full_quant, device, symbol_map
 
@@ -43,7 +43,10 @@ function update_fcn_grid(
     τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
 
     x_sort = sort(x, dims = 2)
-    y = l.coef2curve(x_sort, st.grid, coef, τ) .|> half_quant
+    y =
+        l.spline_string == "FFT" ?
+        coef2curve_FFT(l.basis_function, x_sort, st.grid, coef, τ) :
+        coef2curve_Spline(l.basis_function, x_sort, st.grid, coef, τ) .|> half_quant
 
     # Adaptive grid - concentrate grid points around regions of higher density
     num_interval = size(st.grid, 2) - 2*l.spline_degree - 1
@@ -60,7 +63,9 @@ function update_fcn_grid(
     # Grid is a convex combination of the uniform and adaptive grid
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend = l.spline_degree)
-    new_coef = l.curve2coef(x_sort, y, new_grid, τ)
+    new_coef =
+        l.spline_string == "FFT" ? curve2coef(l.basis_function, x_sort, y, new_grid, τ) :
+        curve2coef(l.basis_function, x_sort, y, new_grid, τ)
 
     return new_grid, new_coef
 end

@@ -141,8 +141,8 @@ function initialize_thermo_loss(
     ∇ = Enzyme.make_zero(ps)
     z_posterior, Δt, st_lux =
         sample_thermo(ps, st_kan, st_lux, model, x; train_idx = 1, rng = rng)
-    st_ebm, st_gen = st_lux.ebm, st_lux.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
+    st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
+    z_prior, st_lux_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
     compiled_loss = marginal_llhood
     compiled_grad = grad_thermo_llhood
 
@@ -155,8 +155,8 @@ function initialize_thermo_loss(
             Δt,
             model,
             st_kan,
-            Lux.testmode(st_ebm),
-            Lux.testmode(st_gen),
+            Lux.testmode(st_lux_ebm),
+            Lux.testmode(st_lux_gen),
         )
         compiled_grad = Reactant.@compile grad_thermo_llhood(
             ps,
@@ -167,8 +167,8 @@ function initialize_thermo_loss(
             Δt,
             model,
             st_kan,
-            Lux.trainmode(st_ebm),
-            Lux.trainmode(st_gen),
+            Lux.trainmode(st_lux_ebm),
+            Lux.trainmode(st_lux_gen),
         )
     end
 

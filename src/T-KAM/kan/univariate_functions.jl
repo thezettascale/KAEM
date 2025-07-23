@@ -59,6 +59,29 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     curve2coef::Function
 end
 
+## Stencils much faster than broadcast ##
+@parallel_indices (i, o, b) function spl_kernel!(
+    y::AbstractArray{T},
+    x::AbstractArray{T},
+    w_base::AbstractArray{T},
+    w_sp::AbstractArray{T},
+) where {T<:half_quant}
+    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b]
+    return nothing
+end
+
+function SplineMUL(
+    l::univariate_function{T,full_quant},
+    ps::ComponentArray{T},
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant}
+    I, O, B = size(y)
+    base = l.base_activation(x)
+    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp)
+    return y
+end
+
 function init_function(
     in_dim::Int,
     out_dim::Int;
@@ -90,7 +113,7 @@ function init_function(
         get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
 
     basis_fcn = get(SplineBasis_mapping, spline_function, B_spline_basis)
-    basis_mul = spline_function == "Cheby" ? ChebyMUL : SplineMUL
+    basis_mul = spline_function == "Cheby" ? (l, ps, x, y) -> y : SplineMUL
     coef2curve_fcn =
         basis_fcn == FFT_basis ? (x, g, c, σ) -> coef2curve_FFT(x, g, c, σ) :
         (x, g, c, σ) ->
@@ -125,21 +148,21 @@ function Lux.initialparameters(
     l::univariate_function{T,U},
 ) where {T<:half_quant,U<:full_quant}
 
-    w_base = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_base
-    w_sp = glorot_normal(rng, full_quant, l.in_dim, l.out_dim) .* l.σ_spline
+    w_base = glorot_normal(rng, U, l.in_dim, l.out_dim) .* l.σ_base
+    w_sp = glorot_normal(rng, U, l.in_dim, l.out_dim) .* l.σ_spline
 
     coef = nothing
     if l.spline_string == "FFT"
-        grid_norm_factor = collect(1:(l.grid_size+1)) .^ 2
+        grid_norm_factor = collect(U, 1:(l.grid_size+1)) .^ 2
         coef =
-            glorot_normal(rng, full_quant, 2, l.in_dim, l.out_dim, l.grid_size+1) ./
+            glorot_normal(rng, U, 2, l.in_dim, l.out_dim, l.grid_size+1) ./
             (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:, :, :, :], [2, 3, 4, 1]))
     elseif !(l.spline_string == "Cheby")
         ε =
             (
                 (
-                    rand(rng, half_quant, l.in_dim, l.out_dim, l.grid_size + 1) .-
-                    half_quant(0.5)
+                    rand(rng, T, l.in_dim, l.out_dim, l.grid_size + 1) .-
+                    T(0.5)
                 ) .* l.ε_scale ./ l.grid_size
             ) |> device
         coef = cpu_device()(
@@ -147,7 +170,7 @@ function Lux.initialparameters(
                 l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
                 ε,
                 l.init_grid,
-                device(half_quant.(l.init_τ)),
+                device(T.(l.init_τ)),
             ),
         )
     end
@@ -156,7 +179,7 @@ function Lux.initialparameters(
         return (
             coef = glorot_normal(
                 rng,
-                full_quant,
+                U,
                 l.in_dim,
                 l.out_dim,
                 l.spline_degree + 1,
@@ -170,84 +193,23 @@ function Lux.initialparameters(
     end
 end
 
+# If GPU, return NamedTuple of CuPtrs, which will not work for Enzyme/Reactant GPU - must convert to ComponentArray
 function Lux.initialstates(
     rng::AbstractRNG,
     l::univariate_function{T,U},
 ) where {T<:half_quant,U<:full_quant}
-    mask = ones(half_quant, l.in_dim, l.out_dim)
-    return l.τ_trainable ? (mask = mask, grid = l.init_grid) :
-           (mask = mask, grid = l.init_grid, basis_τ = half_quant.(l.init_τ))
-end
-
-## Stencils much faster than broadcast ##
-@parallel_indices (i, o, b) function mask_mul!(
-    out::AbstractArray{T},
-    y::AbstractArray{T},
-    mask::AbstractArray{T},
-) where {T<:half_quant}
-    out[i, o, b] = y[i, o, b] * mask[i, o]
-    return nothing
-end
-
-function ChebyMUL(
-    l,
-    ps::ComponentArray{T},
-    st::NamedTuple,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    I, O, B = size(y)
-    out = @zeros(I, O, B)
-    @parallel (1:I, 1:O, 1:B) mask_mul!(out, y, st.mask)
-    return out  
-end
-
-@parallel_indices (i, o, b) function spl_kernel!(
-    out::AbstractArray{T},
-    y::AbstractArray{T},
-    x::AbstractArray{T},
-    w_base::AbstractArray{T},
-    w_sp::AbstractArray{T},
-    mask::AbstractArray{T},
-) where {T<:half_quant}
-    out[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b] * mask[i, o]
-    return nothing
-end
-
-function SplineMUL(
-    l,
-    ps::ComponentArray{T},
-    st::NamedTuple,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    I, O, B = size(y)
-    base = l.base_activation(x)
-    out = @zeros(I, O, B)
-    @parallel (1:I, 1:O, 1:B) spl_kernel!(out, y, base, ps.w_base, ps.w_sp, st.mask)
-    return out
+    return (grid = U.(cpu_device()(l.init_grid)), basis_τ = U.(l.init_τ))
+           
 end
 
 function (l::univariate_function{T,U})(
     x::AbstractArray{T},
     ps::ComponentArray{T},
-    st::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
-    """
-    Forward pass for the univariate function.
-
-    Args:
-        l: The univariate function layer.
-        ps: The parameters of the layer.
-        st: The states of the layer.
-        x_p: The input, (b, i).
-
-    Returns:
-        The output, (b, i, o), containing all fcn_{q,p}(x_p)
-    """
-    τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
-    y = l.coef2curve(x, st.grid, ps.coef, τ)
-    return l.basis_mul(l, ps, st, x, y), st
+    st::ComponentArray{T}, # Note! Unlike standard Lux, states are a ComponentArray
+)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+    basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
+    y = l.coef2curve(x, st.grid, ps.coef, basis_τ)
+    return l.basis_mul(l, ps, x, y)
 end
 
 end

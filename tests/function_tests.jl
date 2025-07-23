@@ -1,6 +1,6 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -20,9 +20,10 @@ function test_fwd()
 
     Random.seed!(42)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> ComponentArray |> device, st |> device
+    ps = ps |> ComponentArray |> device
+    st = st |> ComponentArray |> device
 
-    y, st = Lux.apply(f, x, ps, st)
+    y = f(x, ps, st)
     @test size(y) == (5, 2, 3)
 end
 
@@ -31,14 +32,43 @@ function test_grid_update()
     x = rand(half_quant, 5, 3) |> device
     f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> ComponentArray |> device, st |> device
+    ps = ps |> ComponentArray |> device
+    st = st |> ComponentArray |> device
 
-    y, st = Lux.apply(f, x, ps, st)
+    y = f(x, ps, st)
     grid, coef = update_fcn_grid(f, ps, st, x)
     @test size(grid) == (5, 12)
+end
+
+function test_derivative()
+    Random.seed!(42)
+    x = rand(half_quant, 5, 3) |> device
+    f = init_function(5, 2)
+    ps, st = Lux.setup(Random.GLOBAL_RNG, f)
+    ps = ps |> ComponentArray |> device
+    st = st |> ComponentArray |> device
+
+    ∇ = Enzyme.make_zero(x)
+    diff_fcn = (fcn, z, p, s) -> begin
+        sum(fcn(z, p, s))
+    end
+
+    Enzyme.autodiff(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        diff_fcn,
+        Enzyme.Active,
+        Enzyme.Const(f),
+        Enzyme.Duplicated(x, ∇),
+        Enzyme.Const(ps),
+        Enzyme.Const(st),
+    )
+
+    @test !all(iszero, ∇)
+    @test !any(isnan, ∇)
 end
 
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
+    test_derivative()
 end

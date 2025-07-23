@@ -22,7 +22,7 @@ using .Utils: half_quant, full_quant, device, symbol_map
 function update_fcn_grid(
     l,
     ps::ComponentArray{T},
-    st::NamedTuple,
+    st::ComponentArray{T},
     x::AbstractArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{full_quant}} where {T<:half_quant}
     """

@@ -92,11 +92,11 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
 
     sample_function =
-        (m, n, p, kan_st, st_lux, rng) -> begin
+        (m, n, p, st_kan, st_lux, rng) -> begin
             if mixture_model
-                sample_mixture(m.prior, n, p.ebm, st_lux.ebm, kan_st.ebm; rng = rng, ε = eps)
+                sample_mixture(m.prior, n, p.ebm, st_kan.ebm, st_lux.ebm; rng = rng, ε = eps)
             else
-                sample_univariate(m.prior, n, p.ebm, st_lux.ebm, kan_st.ebm; rng = rng, ε = eps)
+                sample_univariate(m.prior, n, p.ebm, st_kan.ebm, st_lux.ebm; rng = rng, ε = eps)
             end
         end
 
@@ -142,7 +142,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
     quad_fcn = get(quad_map, quad_type, gausslegendre_quadrature)
-    quadrature_method = (m, p, s, mask) -> quad_fcn(m, p, s; ε = eps, component_mask = mask)
+    quadrature_method =
+        (m, p, sk, sl, mask) -> quad_fcn(m, p, sk, sl; ε = eps, component_mask = mask)
 
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
@@ -210,7 +211,7 @@ function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    st_lyrnorm = (a = zero(T))
+    st_lyrnorm = (a = zero(T), b = zero(T))
     if prior.layernorm_bool && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for

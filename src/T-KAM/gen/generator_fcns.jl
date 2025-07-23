@@ -63,7 +63,7 @@ end
 function CNN_fwd(
     lkhood,
     ps::ComponentArray{T},
-    st_kan::T,
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -159,7 +159,7 @@ end
 function SEQ_fwd(
     lkhood,
     ps::ComponentArray{T},
-    st_kan::T,
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     z::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}

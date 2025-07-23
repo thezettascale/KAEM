@@ -23,7 +23,8 @@ z_dim = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 
 Random.seed!(42)
 EBM = init_EbmModel(conf)
-ebm_ps, ebm_st = Lux.setup(Random.GLOBAL_RNG, EBM)
+ebm_ps = Lux.initialparameters(Random.GLOBAL_RNG, EBM)
+ebm_st_kan, ebm_st_lux = Lux.initialstates(Random.GLOBAL_RNG, EBM)
 
 struct PriorWrapper{T<:EbmModel{Float32}}
     prior::T
@@ -35,28 +36,32 @@ function test_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
     lkhood = init_GenModel(conf, (32, 32, 1))
-    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+    gen_ps = Lux.initialparameters(Random.GLOBAL_RNG, lkhood)
+    gen_st_kan, gen_st_lux = Lux.initialstates(Random.GLOBAL_RNG, lkhood)
 
     ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray .|> half_quant |> device
-    st = (ebm = ebm_st, gen = gen_st) |> device
+    st_kan = (ebm = ebm_st_kan, gen = gen_st_kan) |> ComponentArray .|> half_quant |> device
+    st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
-    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st.gen, z)
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
+    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (32, 32, 1, b_size)
 end
 
 function test_logllhood()
     Random.seed!(42)
     lkhood = init_GenModel(conf, (32, 32, 1))
-    gen_ps, gen_st = Lux.setup(Random.default_rng(), lkhood)
+    gen_ps = Lux.initialparameters(Random.GLOBAL_RNG, lkhood)
+    gen_st_kan, gen_st_lux = Lux.initialstates(Random.GLOBAL_RNG, lkhood)
 
     ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray .|> half_quant |> device
-    st = (ebm = ebm_st, gen = gen_st) |> device
+    st_kan = (ebm = ebm_st_kan, gen = gen_st_kan) |> ComponentArray .|> half_quant |> device
+    st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
     x = randn(half_quant, 32, 32, 1, b_size) |> device
-    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
     noise = randn(half_quant, 32, 32, 1, b_size, b_size) |> device
-    logllhood, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st.gen, noise)
+    logllhood, _ = log_likelihood_IS(z, x, lkhood, ps.gen, st_kan.gen, st_lux.gen, noise)
     @test size(logllhood) == (b_size, b_size)
 end
 
@@ -64,13 +69,15 @@ function test_cnn_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     lkhood = init_GenModel(conf, (32, 32, out_dim))
-    gen_ps, gen_st = Lux.setup(Random.GLOBAL_RNG, lkhood)
+    gen_ps = Lux.initialparameters(Random.GLOBAL_RNG, lkhood)
+    gen_st_kan, gen_st_lux = Lux.initialstates(Random.GLOBAL_RNG, lkhood)
 
     ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray .|> half_quant |> device
-    st = (ebm = ebm_st, gen = gen_st) |> device
+    st_kan = (ebm = ebm_st_kan, gen = gen_st_kan) |> ComponentArray .|> half_quant |> device
+    st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
-    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
+    x = first(lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z))
     @test size(x) == (32, 32, out_dim, b_size)
 
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -81,13 +88,15 @@ function test_seq_generate()
     commit!(conf, "SEQ", "sequence_length", "8")
 
     lkhood = init_GenModel(conf, (out_dim, 8))
-    gen_ps, gen_st = Lux.setup(Random.default_rng(), lkhood)
+    gen_ps = Lux.initialparameters(Random.GLOBAL_RNG, lkhood)
+    gen_st_kan, gen_st_lux = Lux.initialstates(Random.GLOBAL_RNG, lkhood)
 
     ps = (ebm = ebm_ps, gen = gen_ps) |> ComponentArray .|> half_quant |> device
-    st = (ebm = ebm_st, gen = gen_st) |> device
+    st_kan = (ebm = ebm_st_kan, gen = gen_st_kan) |> ComponentArray .|> half_quant |> device
+    st_lux = (ebm = ebm_st_lux, gen = gen_st_lux) |> device
 
-    z = first(wrap.prior.sample_z(wrap, b_size, ps, st, Random.default_rng()))
-    x, _ = lkhood.generate_from_z(lkhood, ps.gen, Lux.testmode(st.gen), z)
+    z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
+    x, _ = lkhood.generate_from_z(lkhood, ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (lkhood.out_size, 8, b_size)
 
     commit!(conf, "SEQ", "sequence_length", "1")

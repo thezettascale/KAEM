@@ -308,7 +308,8 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         symbol_map[i] => Lux.initialstates(rng, lkhood.Φ_fcns[i]) |> hq for
         i in eachindex(lkhood.Φ_fcns)
     )
-    st_lyrnorm = (a = zero(T))
+
+    st_lyrnorm = (a = zero(T), b = zero(T))
     if lkhood.layernorm_bool && length(lkhood.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, lkhood.layernorms[i]) |> hq for
@@ -334,7 +335,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     end
 
     if lkhood.CNN || lkhood.seq_length > 1
-        return one(T),
+        return (a = one(T), b = one(T)),
         (
             fcn = fcn_st,
             layernorm = st_lyrnorm,

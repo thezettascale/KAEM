@@ -137,8 +137,11 @@ function log_prior_univar(
     log_p = @zeros(S)
     log_Z = @zeros(Q, P)
 
-    (normalize && !ebm.ula) &&
-        @parallel (1:Q, 1:P) log_norm_kernel!(log_Z, first(ebm.quad(ebm, ps, st)), ε)
+    (normalize && !ebm.ula) && @parallel (1:Q, 1:P) log_norm_kernel!(
+        log_Z,
+        first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
+        ε,
+    )
 
     for q = 1:size(z, 1)
         log_Zq = @view log_Z[q, :]
@@ -193,8 +196,11 @@ function log_prior_mix(
     f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
 
     log_Z = @zeros(Q, P, S)
-    normalize &&
-        @parallel (1:Q, 1:P, 1:S) log_norm_kernel!(log_Z, first(ebm.quad(ebm, ps, st)), ε)
+    normalize && @parallel (1:Q, 1:P, 1:S) log_norm_kernel!(
+        log_Z,
+        first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
+        ε,
+    )
 
     # Unnormalized or normalized log-probability
     @. f = f + log_απ

@@ -156,6 +156,25 @@ function log_prior_univar(
     return log_p, st_lyrnorm
 end
 
+@parallel_indices (s) function mix_kernel!(
+    logprob::AbstractArray{T},
+    f::AbstractArray{T},
+    log_απ::AbstractArray{T},
+    log_Z::AbstractArray{T},
+    reg::T,
+    Q::Int,
+    P::Int,
+)::Nothing where {T<:half_quant}
+    acc = zero(T)
+    @inbounds for q = 1:Q
+        @inbounds for p = 1:P
+            acc = acc + log_απ[q, p, s] + f[q, p, s] - log_Z[q, p] + reg
+        end
+    end
+    logprob[s] = acc
+    return nothing
+end
+
 function log_prior_mix(
     z::AbstractArray{T},
     ebm,
@@ -195,18 +214,16 @@ function log_prior_mix(
     # Energy functions of each component, q -> p
     f, st_lyrnorm = prior_fwd(ebm, ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
 
-    log_Z = @zeros(Q, P, S)
-    normalize && @parallel (1:Q, 1:P, 1:S) log_norm_kernel!(
+    log_Z = @zeros(Q, P)
+    normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
         log_Z,
         first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
         ε,
     )
 
-    # Unnormalized or normalized log-probability
-    @. f = f + log_απ
-    @. f = f - log_Z
-    return dropdims(sum(f; dims = (1, 2)); dims = (1, 2)) .+ ebm.λ * abs(ps.dist.α),
-    st_lyrnorm
+    log_p = @zeros(S)
+    @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, ebm.λ * abs(ps.dist.α), Q, P)
+    return log_p, st_lyrnorm
 end
 
 end

@@ -97,7 +97,7 @@ function test_seq_generate()
 
     z = first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
     x, _ = lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
-    @test size(x) == (lkhood.out_size, 8, b_size)
+    @test size(x) == (out_dim, 8, b_size)
 
     commit!(conf, "SEQ", "sequence_length", "1")
 end

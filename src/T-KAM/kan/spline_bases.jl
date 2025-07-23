@@ -38,7 +38,7 @@ struct B_spline_basis
 end
 
 struct RBF_basis
-    scale::T
+    scale::half_quant
 end
 
 struct RSWAF_basis end

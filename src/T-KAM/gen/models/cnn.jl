@@ -88,7 +88,7 @@ function init_CNN_Generator(
         Φ_functions,
         Lux.ConvTranspose(
             (k_size[end], k_size[end]),
-            hidden_c[end] => output_dim,
+            hidden_c[end] => last(x_shape),
             identity;
             stride = strides[end],
             pad = paddings[end],

@@ -110,9 +110,11 @@ function init_function(
     base_activation =
         get(activation_mapping, base_activation, x -> x .* NNlib.sigmoid_fast(x))
 
-    initializer = get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
+    initializer =
+        get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
-    basis_function = spline_function == "RBF" ? initializer(scale) : initializer(spline_degree)
+    basis_function =
+        spline_function == "RBF" ? initializer(scale) : initializer(spline_degree)
 
     return univariate_function(
         in_dim,

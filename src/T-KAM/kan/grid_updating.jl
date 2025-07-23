@@ -152,7 +152,8 @@ function update_model_grid(
                 @reset kan_st.ebm[symbol_map[i]].grid = new_grid
 
                 scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
-                model.prior.fcns_qp[i].spline_string == "RBF" && @reset model.prior.fcns_qp[i].basis_function.scale = scale
+                model.prior.fcns_qp[i].spline_string == "RBF" &&
+                    @reset model.prior.fcns_qp[i].basis_function.scale = scale
 
                 z = model.prior.fcns_qp[i](
                     z,
@@ -214,7 +215,8 @@ function update_model_grid(
         @reset kan_st.gen[symbol_map[i]].grid = new_grid
 
         scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
-        model.lkhood.Φ_fcns[i].spline_string == "RBF" && @reset model.lkhood.Φ_fcns[i].basis_function.scale = scale
+        model.lkhood.Φ_fcns[i].spline_string == "RBF" &&
+            @reset model.lkhood.Φ_fcns[i].basis_function.scale = scale
 
         z = model.lkhood.Φ_fcns[i](z, ps.gen.fcn[symbol_map[i]], kan_st.gen[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)

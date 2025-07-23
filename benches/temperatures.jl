@@ -33,10 +33,9 @@ function setup_model(N_t)
     commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_t)")
 
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
-    ps, st = Lux.setup(rng, model)
-    model = prep_model(model, ps, st, dataset)
-    x_test = device(first(model.train_loader))
-    ps, st = ComponentArray(ps) |> device, st |> device
+    x_test, loader_state = iterate(model.train_loader)
+    x_test = device(x_test)
+    model, ps, st = prep_model(model, x_test)
     ∇ = zero(half_quant.(ps))
 
     return model, half_quant.(ps), ∇, st, x_test

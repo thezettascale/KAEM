@@ -35,9 +35,9 @@ function setup_model(N_l)
     commit!(conf, "PRIOR_LANGEVIN", "iters", "$(N_l)")
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
 
-    ps, st = Lux.setup(rng, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = prep_model(model)
+    x_test, loader_state = iterate(model.train_loader)
+    x_test = device(x_test)
+    model, ps, st = prep_model(model, x_test)
 
     return model, half_quant.(ps), st
 end

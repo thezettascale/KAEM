@@ -126,15 +126,15 @@ function init_trainer(
     # Initialize model
     println("Initializing model")
     model = init_T_KAM(dataset, conf, x_shape; file_loc = file_loc, rng = rng)
-    params, state = Lux.setup(rng, model)
-    model = prep_model(model, params, state, x; rng = rng)
+    x, loader_state = iterate(model.train_loader)
+    x = device(x)
+    model, params, state = prep_model(model, x; rng = rng)
 
     optimizer = create_opt(conf)
     grid_update_frequency =
         parse(Int, retrieve(conf, "GRID_UPDATING", "grid_update_frequency"))
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
-    x, loader_state = iterate(model.train_loader)
     checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
 
     try
@@ -153,11 +153,11 @@ function init_trainer(
         cnn,
         optimizer,
         dataset_name,
-        device(params),
-        device(state),
+        params,
+        state,
         N_epochs,
         loader_state,
-        device(x),
+        x,
         num_generated_samples,
         batch_size_for_gen,
         grid_update_frequency,

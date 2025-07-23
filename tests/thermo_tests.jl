@@ -22,9 +22,7 @@ function test_posterior_sampling()
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = prep_model(model, ps, st, x_test)
+    model, ps, st = prep_model(model, x_test)
 
     z_posterior, temps, st = sample_thermo(half_quant.(ps), st, model, x_test)
     @test size(z_posterior) == (10, 5, 10, 4)
@@ -37,9 +35,7 @@ function test_model_derivative()
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = prep_model(model, ps, st, x_test)
+    model, ps, st = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)

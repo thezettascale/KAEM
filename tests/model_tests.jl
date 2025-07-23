@@ -22,11 +22,8 @@ function test_ps_derivative()
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
+    model, ps, st = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
-    model = move_to_hq(model)
-    model = prep_model(model, ps, st, x_test)
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
 
@@ -38,9 +35,8 @@ function test_grid_update()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    x_test = first(model.train_loader) |> device
+    model, ps, st = prep_model(model, x_test)
 
     size_grid = size(st.ebm.fcn[:a].grid)
     x = first(model.train_loader) |> device
@@ -55,10 +51,7 @@ function test_mala_loss()
     commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
-    model = prep_model(model, ps, st, x_test)
+    model, ps, st = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
@@ -72,10 +65,7 @@ function test_cnn_loss()
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
-    model = prep_model(model, ps, st, x_test)
+    model, ps, st = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)
@@ -91,10 +81,7 @@ function test_seq_loss()
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf, (50, 10))
     x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.default_rng(), model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
-    model = prep_model(model, ps, st, x_test)
+    model, ps, st = prep_model(model, x_test)
     ∇ = Enzyme.make_zero(half_quant.(ps))
 
     loss, ∇, st_ebm, st_gen = model.loss_fcn(half_quant.(ps), ∇, st, model, x_test)

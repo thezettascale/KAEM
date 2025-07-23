@@ -386,16 +386,16 @@ end
 
 function prep_model(
     model::T_KAM,
-    ps::ComponentArray,
-    st::NamedTuple,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}
+    ps, st = Lux.setup(rng, model)
+    ps, st = ps |> ComponentArray |> device, st |> device
     model = move_to_hq(model)
-    ps = T.(ps)
-    model = init_prior_sampler(model, ps, st, x, model.conf; rng = rng)
-    model = init_posterior_sampler(model, ps, st, x, model.conf; rng = rng)
-    return model
+    ps_hq, st_hq = T.(ps), T.(st)
+    model = init_prior_sampler(model, ps_hq, st_hq, x, model.conf; rng = rng)
+    model = init_posterior_sampler(model, ps_hq, st_hq, x, model.conf; rng = rng)
+    return model, ps, st_hq
 end
 
 function next_temp(model::T_KAM, st::NamedTuple, idx::Int)

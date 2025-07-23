@@ -92,15 +92,10 @@ model = init_T_KAM(
       rng = rng
 )
 
-# Explicit Lux.jl initialisation
-params, state = Lux.setup(rng, model) 
-
-# Params must be ComponentArrays.jl. Option to reduce precision
-ps = convert(ComponentArray, params) |> hq |> device
-st = convert(NamedTuple, state) |> hq |> device
-
 # Parse config to setup sampling and training criterions
-model = prep_model(model, params, state, x; rng = rng) 
+x, loader_state = iterate(model.train_loader)
+x = device(x)
+model, ps, st = prep_model(model, x; rng = rng) 
 
 # Training loss/grads are Reactant.jl compiled
 grads = Enzyme.make_zero(ps) # or zero(ps)

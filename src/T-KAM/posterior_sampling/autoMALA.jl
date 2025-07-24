@@ -1,6 +1,6 @@
 module autoMALA_sampling
 
-export initialize_autoMALA_sampler, autoMALA_sample
+export initialize_autoMALA_sampler, autoMALA_sampler
 
 using CUDA,
     KernelAbstractions,
@@ -16,223 +16,19 @@ using CUDA,
     Reactant
 
 include("../../utils.jl")
-include("preconditioner.jl")
 include("../gen/gen_model.jl")
-include("hamiltonian.jl")
+include("preconditioner.jl")
+include("step_search.jl")
+include("hmc_updates.jl")
 include("log_posteriors.jl")
 using .Utils: device, half_quant, full_quant
 using .Preconditioning
-using .HamiltonianDynamics
-using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
+using .HamiltonianMonteCarlo: leapfrog
+using .autoMALA_StepSearch: autoMALA_step
+using .LogPosteriors: logpos_withgrad
 using .GeneratorModel: log_likelihood_MALA
 
-function safe_step_size_update(
-    η::AbstractArray{U},
-    δ::AbstractArray{Int},
-    Δη::U,
-) where {U<:full_quant}
-    η_new = η .* Δη .^ δ
-    return ifelse.(isfinite.(η_new), η_new, η)
-end
-
-function check_reversibility(
-    ẑ::AbstractArray{U},
-    z::AbstractArray{U},
-    η::AbstractArray{U},
-    η_prime::AbstractArray{U};
-    tol::U = full_quant(1e-6),
-) where {U<:full_quant}
-    # Both checks may be required to maintain detailed balance
-    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
-    step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
-    return step_diff
-end
-
-function select_step_size(
-    log_a::AbstractArray{U},
-    log_b::AbstractArray{U},
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    x::AbstractArray{T},
-    temps::AbstractArray{T},
-    logpos_z::AbstractArray{U},
-    momentum::AbstractArray{U},
-    M::AbstractArray{U},
-    η_init::AbstractArray{U},
-    Δη::U,
-    logpos_withgrad::Function,
-    leapfrog::Function,
-    model,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple;
-    η_min::U = full_quant(1e-5),
-    η_max::U = one(full_quant),
-    seq::Bool = false,
-)::Tuple{
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    NamedTuple,
-} where {T<:half_quant,U<:full_quant}
-
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux = leapfrog(
-        z,
-        ∇z,
-        x,
-        temps,
-        logpos_z,
-        momentum,
-        M,
-        η_init,
-        logpos_withgrad,
-        model,
-        ps,
-        st_kan,
-        st_lux,
-    )
-
-    δ = (log_r .>= log_b) - (log_r .<= log_a)
-    active_chains = findall(δ .!= 0) |> cpu_device()
-    isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
-
-    geq_bool = log_r .>= log_b
-
-    while !isempty(active_chains)
-
-        η_init[active_chains] .=
-            safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
-
-        x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
-
-        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux =
-            leapfrog(
-                z[:, :, active_chains],
-                ∇z[:, :, active_chains],
-                x_active,
-                temps[active_chains],
-                logpos_z[active_chains],
-                momentum[:, :, active_chains],
-                M[:, :, active_chains],
-                η_init[active_chains],
-                logpos_withgrad,
-                model,
-                ps,
-                st_kan,
-                st_lux,
-            )
-
-        ẑ[:, :, active_chains] .= ẑ_active
-        logpos_ẑ[active_chains] .= logpos_ẑ_active
-        ∇ẑ[:, :, active_chains] .= ∇ẑ_active
-        p̂[:, :, active_chains] .= p̂_active
-        log_r[active_chains] .= log_r_active
-
-        δ[active_chains] .= ifelse.(
-            δ[active_chains] .== 1 .&& log_r[active_chains] .< log_b[active_chains],
-            0,
-            δ[active_chains],
-        )
-        δ[active_chains] .= ifelse.(
-            δ[active_chains] .== -1 .&& log_r[active_chains] .> log_a[active_chains],
-            0,
-            δ[active_chains],
-        )
-        δ[active_chains] .= ifelse.(isnan.(log_r[active_chains]), 0, δ[active_chains])
-        δ[active_chains] .=
-            ifelse.(η_min .< η_init[active_chains] .< η_max, δ[active_chains], 0)
-        active_chains = findall(δ .!= 0) |> cpu_device()
-    end
-
-    # Reduce step size for chains that initially had too high acceptance with safety check
-    η_init = safe_step_size_update(η_init, -1 .* geq_bool, Δη)
-    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_kan, st_lux
-end
-
-function autoMALA_step(
-    log_a::AbstractArray{U},
-    log_b::AbstractArray{U},
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    x::AbstractArray{T},
-    temps::AbstractArray{T},
-    logpos_z::AbstractArray{U},
-    momentum::AbstractArray{U},
-    M::AbstractArray{U},
-    logpos_withgrad::Function,
-    model,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    η_init::AbstractArray{U},
-    Δη::U,
-    η_min::U,
-    η_max::U,
-    ε::U,
-    seq::Bool,
-)::Tuple{
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    NamedTuple,
-} where {T<:half_quant,U<:full_quant}
-
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st_kan, st_lux = select_step_size(
-        log_a,
-        log_b,
-        z,
-        ∇z,
-        x,
-        temps,
-        logpos_z,
-        momentum,
-        M,
-        η_init,
-        Δη,
-        logpos_withgrad,
-        model,
-        ps,
-        st_kan,
-        st_lux;
-        η_min = η_min,
-        η_max = η_max,
-        seq = seq,
-    )
-
-    z_rev, _, _, _, η_prime, _, st_kan, st_lux = select_step_size(
-        log_a,
-        log_b,
-        ẑ,
-        ∇ẑ,
-        x,
-        temps,
-        logpos_ẑ,
-        p̂,
-        M,
-        η_init,
-        Δη,
-        logpos_withgrad,
-        model,
-        ps,
-        st_kan,
-        st_lux;
-        η_min = η_min,
-        η_max = η_max,
-        seq = seq,
-    )
-
-    reversible = check_reversibility(z, z_rev, η, η_prime; tol = ε)
-    return ẑ, η, η_prime, reversible, log_r, st_kan, st_lux
-end
-
 struct autoMALA_sampler{U<:full_quant}
-    compiled_llhood::Any
-    logpos_withgrad::Any
     N::Int
     N_unadjusted::Int
     η::AbstractArray{U}
@@ -243,14 +39,8 @@ struct autoMALA_sampler{U<:full_quant}
     seq::Bool
 end
 
-function initialize_autoMALA_sampler(
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    model,
-    x::AbstractArray{T};
+function initialize_autoMALA_sampler(;
     N::Int = 20,
-    temps::AbstractArray{T} = [one(T)],
     N_unadjusted::Int = 1,
     RE_frequency::Int = 10,
     η::U = full_quant(1e-3),
@@ -258,96 +48,13 @@ function initialize_autoMALA_sampler(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     seq::Bool = false,
-    compile_mlir::Bool = false,
-    rng::AbstractRNG = Random.default_rng(),
+    samples::Int = 100,
 ) where {T<:half_quant,U<:full_quant}
-    z_hq, st_ebm =
-        model.prior.sample_z(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
-    loss_scaling = model.loss_scaling |> U
-
-    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
-    z_hq = reshape(z_hq, Q, P, S, num_temps)
-    z_fq = U.(z_hq)
-    ∇z_fq = Enzyme.make_zero(z_fq)
-
-    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
-    seq = model.lkhood.SEQ
-    x_t = seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
-
-    M = zeros(U, Q, P, 1, num_temps) |> device
-    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2))) |> device
-    momentum = Enzyme.make_zero(z_fq)
-    η_init = repeat([η], S, length(temps)) |> device
-
-    log_a, log_b = dropdims(minimum(ratio_bounds; dims = 3); dims = 3),
-    dropdims(maximum(ratio_bounds; dims = 3); dims = 3)
-
-    compiled_4D_value_and_grad = autoMALA_value_and_grad_4D
-    compiled_value_and_grad = autoMALA_value_and_grad
-    x_single = seq ? x_t[:, :, :, 1] : x_t[:, :, :, :, 1]
-
-    if compile_mlir
-        compiled_4D_value_and_grad = Reactant.@compile autoMALA_value_and_grad_4D(
-            z_hq,
-            Enzyme.make_zero(z_hq),
-            x_t,
-            t_expanded,
-            model,
-            ps,
-            st_kan,
-            st_lux,
-        )
-        compiled_value_and_grad = Reactant.@compile autoMALA_value_and_grad(
-            z_hq[:, :, :, 1],
-            Enzyme.make_zero(z_hq[:, :, :, 1]),
-            x_single,
-            t_expanded[:, 1],
-            model,
-            ps,
-            st_kan,
-            st_lux,
-        )
-    end
-
-    function logpos_withgrad(
-        z_i::AbstractArray{T},
-        x_i::AbstractArray{T},
-        t_k::AbstractArray{T},
-        m,
-        p::ComponentArray{T},
-        st_kan_i::ComponentArray{T},
-        st_lux_i::NamedTuple,
-    )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple}
-        fcn = ndims(z_i) == 4 ? compiled_4D_value_and_grad : compiled_value_and_grad
-        logpos, ∇z_k, st_ebm, st_gen =
-            fcn(z_i, Enzyme.make_zero(z_i), x_i, t_k, m, p, st_kan_i, st_lux_i, num_temps)
-        @reset st_kan_i.ebm = st_ebm
-        @reset st_lux_i.gen = st_gen
-
-        return U.(logpos) ./ loss_scaling, U.(∇z_k) ./ loss_scaling, st_kan_i, st_lux_i
-    end
-
-    compiled_llhood = log_likelihood_MALA
-    logpos_z, ∇z_fq, st_kan, st_lux =
-        logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
-
-    if compile_mlir
-        compiled_llhood = Reactant.@compile log_likelihood_MALA(
-            z_hq[:, :, :, 1],
-            x_single,
-            model.lkhood,
-            ps.gen,
-            st_kan.gen,
-            st_lux.gen,
-        )
-    end
 
     return autoMALA_sampler(
-        compiled_llhood,
-        logpos_withgrad,
         N,
         N_unadjusted,
-        η_init,
+        repeat([η], samples, num_temps) |> device,
         Δη,
         η_min,
         η_max,
@@ -356,8 +63,7 @@ function initialize_autoMALA_sampler(
     )
 end
 
-function autoMALA_sample(
-    sampler,
+function (sampler::autoMALA_sampler)(
     model,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -424,8 +130,7 @@ function autoMALA_sample(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z_fq, st_kan, st_lux =
-            sampler.logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
+        logpos_z, ∇z_fq, st_kan, st_lux = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
 
         if burn_in < sampler.N
             burn_in += 1
@@ -438,7 +143,6 @@ function autoMALA_sample(
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
                 η,
-                sampler.logpos_withgrad,
                 model,
                 ps,
                 st_kan,
@@ -457,8 +161,6 @@ function autoMALA_sample(
                 logpos_z,
                 device(momentum),
                 device(repeat(M, 1, 1, S, 1)),
-                sampler.logpos_withgrad,
-                sampler.leapfrog,
                 model,
                 ps,
                 st_kan,
@@ -488,21 +190,23 @@ function autoMALA_sample(
                     # Global swap criterion
                     z_t = copy(z_hq[:, :, :, t])
                     z_t1 = copy(z_hq[:, :, :, t+1])
-                    ll_t, st_gen = sampler.compiled_llhood(
+                    ll_t, st_gen = log_likelihood_MALA(
                         z_t,
                         x,
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_lux.gen,
+                        st_lux.gen;
+                        ε = model.ε,
                     )
-                    ll_t1, st_gen = sampler.compiled_llhood(
+                    ll_t1, st_gen = log_likelihood_MALA(
                         z_t1,
                         x,
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_lux.gen,
+                        st_lux.gen;
+                        ε = model.ε,
                     )
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 

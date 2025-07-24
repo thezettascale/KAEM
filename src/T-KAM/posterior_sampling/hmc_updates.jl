@@ -1,6 +1,6 @@
-module HamiltonianDynamics
+module HamiltonianMonteCarlo
 
-export position_update, momentum_update, leapfrop_proposal
+export leapfrop_proposal
 
 using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, ComponentArrays
 
@@ -31,6 +31,23 @@ function momentum_update!(
     return nothing
 end
 
+function logpos_withgrad(
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model,
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+)::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple} where {T<:half_quant,U<:full_quant}
+    fcn = ndims(z) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
+    logpos, ∇z_k, st_ebm, st_gen = fcn(z, Enzyme.make_zero(z), x, temps, model, ps, st_kan, st_lux)
+    @reset st_kan.ebm = st_ebm
+    @reset st_lux.gen = st_gen
+
+    return U.(logpos) ./ U(model.loss_scaling), U.(∇z_k) ./ U(model.loss_scaling), st_kan, st_lux
+end
+
 function leapfrop_proposal(
     z::AbstractArray{U},
     ∇z::AbstractArray{U},
@@ -40,7 +57,6 @@ function leapfrop_proposal(
     momentum::AbstractArray{U},  # This is y = M^{-1/2}p
     M::AbstractArray{U},         # This is M^{1/2}
     η::AbstractArray{U},
-    logpos_withgrad::Function,
     model,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},

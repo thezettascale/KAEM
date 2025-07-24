@@ -20,7 +20,7 @@ function sample_thermo(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
-    z, st_lux = model.posterior_sample(model, x, temps[2:end], ps, st_kan, st_lux, rng)
+    z, st_lux = model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
     Δt = device(temps[2:end] - temps[1:(end-1)])
     return z, Δt, st_lux
 end
@@ -125,58 +125,9 @@ function grad_thermo_llhood(
 end
 
 struct ThermodynamicLoss
-    compiled_loss::Any
-    compiled_grad::Any
 end
 
-function initialize_thermo_loss(
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    model,
-    x::AbstractArray{T};
-    compile_mlir::Bool = false,
-    rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
-    ∇ = Enzyme.make_zero(ps)
-    z_posterior, Δt, st_lux =
-        sample_thermo(ps, st_kan, st_lux, model, x; train_idx = 1, rng = rng)
-    st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
-    z_prior, st_lux_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
-    compiled_loss = marginal_llhood
-    compiled_grad = grad_thermo_llhood
-
-    if compile_mlir
-        compiled_loss = Reactant.@compile marginal_llhood(
-            ps,
-            z_posterior,
-            z_prior,
-            x,
-            Δt,
-            model,
-            st_kan,
-            Lux.testmode(st_lux_ebm),
-            Lux.testmode(st_lux_gen),
-        )
-        compiled_grad = Reactant.@compile grad_thermo_llhood(
-            ps,
-            ∇,
-            z_posterior,
-            z_prior,
-            x,
-            Δt,
-            model,
-            st_kan,
-            Lux.trainmode(st_lux_ebm),
-            Lux.trainmode(st_lux_gen),
-        )
-    end
-
-    return ThermodynamicLoss(compiled_loss, compiled_grad)
-end
-
-function thermodynamic_loss(
-    l,
+function (l::ThermodynamicLoss)(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -198,7 +149,7 @@ function thermodynamic_loss(
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
 
-    ∇, st_lux_ebm, st_lux_gen = l.compiled_grad(
+    ∇, st_lux_ebm, st_lux_gen = grad_thermo_llhood(
         ps,
         ∇,
         z_posterior,
@@ -210,7 +161,7 @@ function thermodynamic_loss(
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
     )
-    loss, st_lux_ebm, st_lux_gen = l.compiled_loss(
+    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
         z_posterior,
         z_prior,

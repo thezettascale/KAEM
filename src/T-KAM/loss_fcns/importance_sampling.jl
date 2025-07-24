@@ -135,61 +135,10 @@ function grad_importance_llhood(
 end
 
 struct ImportanceLoss
-    compiled_loss::Any
-    compiled_grad::Any
     zero_vec::AbstractArray{half_quant}
 end
 
-function initialize_importance_loss(
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    model,
-    x::AbstractArray{T};
-    compile_mlir::Bool = false,
-    rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
-    ∇ = Enzyme.make_zero(ps)
-    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
-        sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
-    compiled_loss = marginal_llhood
-    compiled_grad = grad_importance_llhood
-
-    zero_vec = device(zeros(T, model.lkhood.x_shape..., size(z)[end], size(x)[end]))
-
-    if compile_mlir
-        compiled_loss = Reactant.@compile marginal_llhood(
-            ps,
-            z,
-            x,
-            weights_resampled,
-            resampled_idxs,
-            model,
-            st_kan,
-            Lux.testmode(st_lux_ebm),
-            Lux.testmode(st_lux_gen),
-            zero_vec,
-        )
-        compiled_grad = Reactant.@compile grad_importance_llhood(
-            ps,
-            ∇,
-            z,
-            x,
-            weights_resampled,
-            resampled_idxs,
-            model,
-            st_kan,
-            Lux.trainmode(st_lux_ebm),
-            Lux.trainmode(st_lux_gen),
-            zero_vec,
-        )
-    end
-
-    return ImportanceLoss(compiled_loss, compiled_grad, zero_vec)
-end
-
-function importance_loss(
-    l,
+function (l::ImportanceLoss)(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -199,10 +148,11 @@ function importance_loss(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+
     z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
         sample_importance(ps, st_kan, st_lux, model, x; rng = rng)
 
-    ∇, st_lux_ebm, st_lux_gen = l.compiled_grad(
+    ∇, st_lux_ebm, st_lux_gen = grad_importance_llhood(
         ps,
         ∇,
         z,
@@ -215,7 +165,8 @@ function importance_loss(
         Lux.trainmode(st_lux_gen),
         l.zero_vec,
     )
-    loss, st_lux_ebm, st_lux_gen = l.compiled_loss(
+
+    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
         z,
         x,
@@ -227,6 +178,7 @@ function importance_loss(
         Lux.testmode(st_lux_gen),
         l.zero_vec,
     )
+
     return loss, ∇, st_lux_ebm, st_lux_gen
 end
 

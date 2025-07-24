@@ -8,6 +8,7 @@ using Flux: DataLoader
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
+include("ebm/inverse_transform.jl")
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
@@ -17,6 +18,7 @@ include("posterior_sampling/unadjusted_langevin.jl")
 using .EBM_Model
 using .GeneratorModel
 using .LangevinMLE
+using .InverseTransform: sample_mixture, sample_univariate
 using .ImportanceSampling
 using .ThermodynamicIntegration
 using .autoMALA_sampling: initialize_autoMALA_sampler, autoMALA_sample
@@ -36,8 +38,9 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     verbose::Bool
     p::AbstractArray{U}
     N_t::Int
-    posterior_sample::Function
-    loss_fcn::Function
+    sample_prior::Function
+    posterior_sampler
+    loss_fcn
     loss_scaling::T
     ε::T
     file_loc::AbstractString
@@ -133,6 +136,12 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     p = [one(full_quant)]
 
+    zero_vec = device(zeros(T, model.lkhood.x_shape..., IS_samples, batch_size))
+    loss_struct = ImportanceLoss(zero_vec)
+
+    MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
+    autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
+ 
     if N_t > 1
         initial_p =
             parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
@@ -143,6 +152,74 @@ function init_T_KAM(
 
         x = range(0, stop = 2*π*(num_cycles+0.5), length = num_param_updates+1)
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
+
+        loss_struct = ThermodynamicLoss()
+
+        type = autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA"
+        println("Posterior sampler: $type")
+    elseif MALA || prior_model.ula
+        loss_struct = LangevinLoss()
+        type = autoMALA_bool ? "autoMALA" : "ULA"
+        println("Posterior sampler: $type")
+    else
+        println("Posterior sampler: IS")
+    end
+
+    sample_prior = (m, n, p, sk, sl, r) -> sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+
+    if prior_model.ula
+        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
+        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
+
+        prior_sampler = initialize_ULA_sampler(;
+            η = step_size,
+            N = num_steps,
+            prior_sampling_bool = true,
+        )
+
+        sample_prior = (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
+        println("Prior sampler: ULA")
+
+    elseif prior_model.mixture_model
+        sample_prior = (m, n, p, sk, sl, r) -> sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+        println("Prior sampler: Mix ITS")
+    else
+        println("Prior sampler: Univar ITS")
+    end
+
+    # Posterior samplers
+    initial_step_size =
+        parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
+    num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
+    N_unadjusted = parse(Int, retrieve(conf, "POST_LANGEVIN", "N_unadjusted"))
+    η_init = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
+    Δη = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "autoMALA_η_changerate"))
+    η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
+    replica_exchange_frequency = parse(
+        Int,
+        retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
+    )
+
+    posterior_sampler = initialize_ULA_sampler(;
+        η = η_init,
+        N = num_steps,
+        num_samples = size(x)[end],
+        RE_frequency = replica_exchange_frequency,
+        rng = rng,
+    )
+    
+    if autoMALA_bool
+        posterior_sampler = initialize_autoMALA_sampler(;
+            N = num_steps,
+            N_unadjusted = N_unadjusted,
+            η = η_init,
+            Δη = Δη,
+            η_min = η_minmax[1],
+            η_max = η_minmax[2],
+            seq = model.lkhood.SEQ,
+            RE_frequency = replica_exchange_frequency,
+            samples = max(IS_samples, batch_size),
+        )
     end
 
     verbose && println("Using $(Threads.nthreads()) threads.")
@@ -160,259 +237,16 @@ function init_T_KAM(
         verbose,
         p,
         N_t,
-        identity,
-        identity,
+        sample_prior,
+        posterior_sampler,
+        loss_struct,
         loss_scaling,
         eps,
         file_loc,
         max_samples,
-        parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")),
+        MALA,
         conf,
     )
-end
-
-function init_prior_sampler(
-    model::T_KAM,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    x::AbstractArray{T},
-    conf::ConfParse;
-    rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
-
-    if model.prior.ula
-        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
-        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
-        compile_mlir = parse(Bool, retrieve(conf, "TRAINING", "MLIR_compile"))
-
-        sampler_struct = initialize_ULA_sampler(
-            ps,
-            st_kan,
-            Lux.testmode(st_lux),
-            model,
-            x;
-            η = step_size,
-            N = num_steps,
-            num_samples = size(x)[end],
-            prior_sampling_bool = true,
-            compile_mlir = compile_mlir,
-            rng = rng,
-        )
-
-        @reset model.prior.sample_z =
-            (m, n, p, ks, ls, rng) ->
-                sample(sampler_struct, m, p, ks, Lux.testmode(ls), x; rng = rng)
-
-        println("Prior sampler: ULA")
-    else
-        println("Prior sampler: ITS")
-    end
-
-    return model
-end
-
-## Must be called after init_prior_sampler
-function init_posterior_sampler(
-    model::T_KAM,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    x::AbstractArray{T},
-    conf::ConfParse;
-    rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
-
-    # MLE or Thermodynamic Integration
-    initial_step_size =
-        parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
-    num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
-    N_unadjusted = parse(Int, retrieve(conf, "POST_LANGEVIN", "N_unadjusted"))
-    η_init = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
-    Δη = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "autoMALA_η_changerate"))
-    η_minmax = parse.(full_quant, retrieve(conf, "POST_LANGEVIN", "step_size_bounds"))
-    replica_exchange_frequency = parse(
-        Int,
-        retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
-    )
-
-    # Importance sampling or MALA
-    autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
-    compile_mlir = parse(Bool, retrieve(conf, "TRAINING", "MLIR_compile"))
-
-    if (model.MALA && !(model.N_t > 1)) || model.prior.ula
-        sampler_struct =
-            autoMALA_bool ?
-            initialize_autoMALA_sampler(
-                ps,
-                st_kan,
-                Lux.testmode(st_lux),
-                model,
-                x;
-                N = num_steps,
-                N_unadjusted = N_unadjusted,
-                η = η_init,
-                Δη = Δη,
-                η_min = η_minmax[1],
-                η_max = η_minmax[2],
-                seq = model.lkhood.SEQ,
-                RE_frequency = replica_exchange_frequency,
-                compile_mlir = compile_mlir,
-                rng = rng,
-            ) :
-            initialize_ULA_sampler(
-                ps,
-                st_kan,
-                Lux.testmode(st_lux),
-                model,
-                x;
-                η = η_init,
-                N = num_steps,
-                num_samples = size(x)[end],
-                RE_frequency = replica_exchange_frequency,
-                compile_mlir = compile_mlir,
-                rng = rng,
-            )
-        sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
-
-
-        @reset model.posterior_sample =
-            (m, x, ps, ks, ls, rng) ->
-                sample_function(sampler_struct, m, ps, ks, Lux.testmode(ls), x; rng = rng)
-
-        loss_struct = initialize_langevin_loss(
-            ps,
-            st_kan,
-            st_lux,
-            model,
-            x;
-            compile_mlir = compile_mlir,
-            rng = rng,
-        )
-
-        @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> langevin_loss(
-                loss_struct,
-                p,
-                ∇,
-                ks,
-                ls,
-                m,
-                x_i;
-                train_idx = train_idx,
-                rng = rng,
-            )
-
-        println("Posterior sampler: $(autoMALA_bool ? "autoMALA" : "ULA")")
-    elseif model.N_t > 1
-        num_steps =
-            parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "N_langevin_per_temp"))
-        replica_exchange_frequency = parse(
-            Int,
-            retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
-        )
-        temps = collect(T, [(k / model.N_t)^model.p[1] for k = 0:model.N_t])
-
-        sampler_struct =
-            autoMALA_bool ?
-            initialize_autoMALA_sampler(
-                ps,
-                st_kan,
-                Lux.testmode(st_lux),
-                model,
-                x;
-                temps = temps[2:end],
-                N = num_steps,
-                N_unadjusted = N_unadjusted,
-                η = η_init,
-                Δη = Δη,
-                η_min = η_minmax[1],
-                η_max = η_minmax[2],
-                seq = model.lkhood.SEQ,
-                RE_frequency = replica_exchange_frequency,
-                compile_mlir = compile_mlir,
-                rng = rng,
-            ) :
-            initialize_ULA_sampler(
-                ps,
-                st_kan,
-                Lux.testmode(st_lux),
-                model,
-                x;
-                η = η_init,
-                temps = temps[2:end],
-                N = num_steps,
-                num_samples = size(x)[end],
-                RE_frequency = replica_exchange_frequency,
-                compile_mlir = compile_mlir,
-                rng = rng,
-            )
-        sample_function = autoMALA_bool ? autoMALA_sample : ULA_sample
-
-
-        @reset model.posterior_sample =
-            (m, x, t, ps, ks, ls, rng) -> sample_function(
-                sampler_struct,
-                m,
-                ps,
-                ks,
-                Lux.testmode(ls),
-                x;
-                temps = t,
-                rng = rng,
-            )
-
-        loss_struct = initialize_thermo_loss(
-            ps,
-            st_kan,
-            st_lux,
-            model,
-            x;
-            compile_mlir = compile_mlir,
-            rng = rng,
-        )
-
-        @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> thermodynamic_loss(
-                loss_struct,
-                p,
-                ∇,
-                ks,
-                ls,
-                m,
-                x_i;
-                train_idx = train_idx,
-                rng = rng,
-            )
-
-        println("Posterior sampler: $(autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA")")
-    else
-        loss_struct = initialize_importance_loss(
-            ps,
-            st_kan,
-            st_lux,
-            model,
-            x;
-            compile_mlir = compile_mlir,
-            rng = rng,
-        )
-        @reset model.loss_fcn =
-            (p, ∇, ks, ls, m, x_i, train_idx, rng) -> importance_loss(
-                loss_struct,
-                p,
-                ∇,
-                ks,
-                ls,
-                m,
-                x_i;
-                train_idx = train_idx,
-                rng = rng,
-            )
-
-        println("Posterior sampler: IS")
-    end
-
-    return model
 end
 
 function move_to_hq(model::T_KAM)
@@ -453,12 +287,8 @@ function prep_model(
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
         ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
-
     model = move_to_hq(model)
-    ps_hq, st_kan = T.(ps), T.(st_kan)
-    model = init_prior_sampler(model, ps_hq, st_kan, st_lux, x, model.conf; rng = rng)
-    model = init_posterior_sampler(model, ps_hq, st_kan, st_lux, x, model.conf; rng = rng)
-    return model, ps, st_kan, st_lux
+    return model, ps, T.(st_kan), st_lux
 end
 
 function init_from_file(file_loc::AbstractString, ckpt::Int)

@@ -104,10 +104,10 @@ function update_model_grid(
 
         if model.N_t > 1
             z = first(
-                model.posterior_sample(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+                model.sample_posterior(model, x, temps[2:end], ps, kan_st, st_lux, rng),
             )
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sample(model, x, ps, kan_st, st_lux, rng))
+            z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
         else
             z = first(
                 model.prior.sample_z(
@@ -184,10 +184,10 @@ function update_model_grid(
     if !sampled_bool
         if model.N_t > 1
             z = first(
-                model.posterior_sample(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+                model.sample_posterior(model, x, temps[2:end], ps, kan_st, st_lux, rng),
             )
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sample(model, x, ps, kan_st, st_lux, rng))
+            z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
         else
             z = first(
                 model.prior.sample_z(

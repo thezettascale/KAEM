@@ -1,6 +1,6 @@
 module ULA_sampling
 
-export initialize_ULA_sampler, ULA_sample
+export initialize_ULA_sampler, ULA_sampler
 
 using CUDA,
     KernelAbstractions,
@@ -66,110 +66,24 @@ function logpos_grad(
 end
 
 struct ULA_sampler{U<:full_quant}
-    compiled_llhood::Any
-    compiled_logpos_grad::Any
     prior_sampling_bool::Bool
     N::Int
     RE_frequency::Int
     η::U
 end
 
-
-function initialize_ULA_sampler(
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    model,
-    x::AbstractArray{T};
+function initialize_ULA_sampler(;
     η::U = full_quant(1e-3),
     prior_sampling_bool::Bool = false,
-    num_samples::Int = 100,
     N::Int = 20,
     RE_frequency::Int = 10,
-    compile_mlir::Bool = false,
-    temps::AbstractArray{T} = [one(T)],
-    rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant,U<:full_quant}
 
-    z_hq = begin
-        if model.prior.ula && prior_sampling_bool
-            z = π_dist[model.prior.prior_type](model.prior.p_size, num_samples, rng)
-            z = device(z)
-        else
-            z, st_ebm = model.prior.sample_z(
-                model,
-                size(x)[end]*length(temps),
-                ps,
-                st_kan,
-                st_lux,
-                rng,
-            )
-            @reset st_lux.ebm = st_ebm
-            z
-        end
-    end
-
-    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
-    S = prior_sampling_bool ? size(z_hq)[end] : S
-    z_hq = reshape(z_hq, Q, P, S, num_temps)
-
-    z_fq = U.(z_hq)
-    ∇z_fq = Enzyme.make_zero(z_fq) |> device
-
-    ll =
-        (z_i, x_i, l, ps_gen, st_kan_gen, st_lux_gen) ->
-            log_likelihood_MALA(z_i, x_i, l, ps_gen, st_kan_gen, st_lux_gen; ε = model.ε)
-
-    compiled_llhood = ll
-    compiled_logpos_grad = logpos_grad
-    if compile_mlir
-        try
-            compiled_llhood = Reactant.@compile ll(
-                z_hq[:, :, :, 1],
-                x,
-                model.lkhood,
-                ps.gen,
-                st_kan.gen,
-                st_lux.gen,
-            )
-            compiled_logpos_grad = Reactant.@compile logpos_grad(
-                z_hq,
-                Enzyme.make_zero(z_hq),
-                x,
-                device(temps),
-                model,
-                ps,
-                st_kan,
-                st_lux,
-                prior_sampling_bool,
-            )
-        catch e
-            @warn "Reactant compilation failed, falling back to non-compiled version" exception=(
-                e,
-                catch_backtrace(),
-            )
-            compiled_llhood = ll
-            compiled_logpos_grad = logpos_grad
-        end
-    else
-        # Ensure we're using the non-compiled versions when compile_mlir = false
-        compiled_llhood = ll
-        compiled_logpos_grad = logpos_grad
-    end
-
-    return ULA_sampler(
-        compiled_llhood,
-        compiled_logpos_grad,
-        prior_sampling_bool,
-        N,
-        RE_frequency,
-        η,
-    )
+    return ULA_sampler(prior_sampling_bool, N, RE_frequency, η)
 end
 
 
-function ULA_sample(
-    sampler,
+function (sampler::ULA_sampler)(
     model,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -244,7 +158,7 @@ function ULA_sample(
         ξ = device(noise[:, :, :, :, i])
         ∇z_fq =
             full_quant.(
-                sampler.compiled_logpos_grad(
+                logpos_grad(
                     z_hq,
                     Enzyme.make_zero(z_hq),
                     x,
@@ -266,21 +180,23 @@ function ULA_sample(
                 z_t = copy(z_hq[:, :, :, t])
                 z_t1 = copy(z_hq[:, :, :, t+1])
 
-                ll_t, st_gen = sampler.compiled_llhood(
+                ll_t, st_gen = log_likelihood_MALA(
                     z_t,
                     x,
                     model.lkhood,
                     ps.gen,
                     st_kan.gen,
-                    st_lux.gen,
+                    st_lux.gen;
+                    ε = model.ε,
                 )
-                ll_t1, st_gen = sampler.compiled_llhood(
+                ll_t1, st_gen = log_likelihood_MALA(
                     z_t1,
                     x,
                     model.lkhood,
                     ps.gen,
                     st_kan.gen,
-                    st_lux.gen,
+                    st_lux.gen;
+                    ε = model.ε,
                 )
 
                 log_swap_ratio = dropdims(

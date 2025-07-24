@@ -1,6 +1,6 @@
 module LangevinMLE
 
-export initialize_langevin_loss, langevin_loss
+export LangevinLoss
 
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
 using Statistics, Lux, LuxCUDA
@@ -18,7 +18,7 @@ function sample_langevin(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
-    z, st_lux, = model.posterior_sample(model, x, ps, st_kan, st_lux, rng)
+    z, st_lux, = model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng)
     return z[:, :, :, 1], st_lux
 end
 
@@ -102,56 +102,9 @@ function grad_langevin_llhood(
 end
 
 struct LangevinLoss
-    compiled_loss::Any
-    compiled_grad::Any
 end
 
-function initialize_langevin_loss(
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    model,
-    x::AbstractArray{T};
-    compile_mlir::Bool = false,
-    rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
-    ∇ = Enzyme.make_zero(ps)
-    z_posterior, st_new =
-        sample_langevin(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
-    st_lux_ebm, st_lux_gen = st_new.ebm, st_new.gen
-    z_prior, st_lux_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
-    compiled_loss = marginal_llhood
-    compiled_grad = grad_langevin_llhood
-
-    if compile_mlir
-        compiled_loss = Reactant.@compile marginal_llhood(
-            ps,
-            z_posterior,
-            z_prior,
-            x,
-            model,
-            st_kan,
-            Lux.testmode(st_lux_ebm),
-            Lux.testmode(st_lux_gen),
-        )
-        compiled_grad = Reactant.@compile grad_langevin_llhood(
-            ps,
-            ∇,
-            z_posterior,
-            z_prior,
-            x,
-            model,
-            st_kan,
-            Lux.trainmode(st_lux_ebm),
-            Lux.trainmode(st_lux_gen),
-        )
-    end
-
-    return LangevinLoss(compiled_loss, compiled_grad)
-end
-
-function langevin_loss(
-    l,
+function (l::LangevinLoss)(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -166,7 +119,7 @@ function langevin_loss(
     st_lux_ebm, st_lux_gen = st_new.ebm, st_new.gen
     z_prior, st_lux_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
 
-    ∇, st_lux_ebm, st_lux_gen = l.compiled_grad(
+    ∇, st_lux_ebm, st_lux_gen = grad_langevin_llhood(
         ps,
         ∇,
         z_posterior,
@@ -177,7 +130,7 @@ function langevin_loss(
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
     )
-    loss, st_lux_ebm, st_lux_gen = l.compiled_loss(
+    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
         z_posterior,
         z_prior,

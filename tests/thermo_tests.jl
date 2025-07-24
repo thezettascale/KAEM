@@ -5,10 +5,12 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/T-KAM.jl")
+include("../src/T-KAM/model_setup.jl")
 include("../src/T-KAM/loss_fcns/thermodynamic.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .ThermodynamicIntegration: sample_thermo
+using .ModelSetup: prep_model
 using .Utils
 
 conf = ConfParse("tests/test_conf.ini")

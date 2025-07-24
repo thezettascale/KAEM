@@ -138,7 +138,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights')
 
-    
+
 
     ref_initializer = get(prior_pdf, prior_type, prior_pdf["uniform"])
 

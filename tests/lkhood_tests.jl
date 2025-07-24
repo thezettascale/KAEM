@@ -6,9 +6,11 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/T-KAM/T-KAM.jl")
+include("../src/T-KAM/model_setup.jl")
 include("../src/utils.jl")
 include("../src/T-KAM/gen/loglikelihoods.jl")
 using .T_KAM_model
+using .ModelSetup: prep_model
 using .Utils: device, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_IS, log_likelihood_MALA
 

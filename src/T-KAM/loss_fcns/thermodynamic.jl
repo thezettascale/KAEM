@@ -6,7 +6,9 @@ using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA
 
 include("../gen/loglikelihoods.jl")
+include("../T-KAM.jl")
 include("../../utils.jl")
+using .T_KAM: T_KAM
 using .LogLikelihoods: log_likelihood_MALA
 using .Utils: device, half_quant, full_quant, hq
 
@@ -14,7 +16,7 @@ function sample_thermo(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    model,
+    model::T_KAM{T,full_quant},
     x::AbstractArray{T};
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
@@ -39,7 +41,7 @@ function marginal_llhood(
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
     Δt::AbstractVector{T},
-    model,
+    model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
@@ -104,7 +106,7 @@ function grad_thermo_llhood(
     z_prior::AbstractArray{T},
     x::AbstractArray{T},
     Δt::AbstractVector{T},
-    model,
+    model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
@@ -139,7 +141,7 @@ function (l::ThermodynamicLoss)(
     ∇::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    model,
+    model::T_KAM{T,full_quant},
     x::AbstractArray{T};
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),

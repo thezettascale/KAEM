@@ -3,11 +3,13 @@ module trainer
 export T_KAM_trainer, init_trainer, train!
 
 include("../T-KAM/T-KAM.jl")
+include("../T-KAM/model_setup.jl")
 include("../T-KAM/kan/grid_updating.jl")
 include("optimizer.jl")
 include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
+using .ModelSetup: prep_model
 using .GridUpdating: update_model_grid
 using .optimization
 using .Utils: device, half_quant, full_quant, hq, fq

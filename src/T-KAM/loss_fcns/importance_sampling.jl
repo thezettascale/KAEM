@@ -9,7 +9,7 @@ export ImportanceLoss, initialize_importance_loss
 include("../gen/loglikelihoods.jl")
 include("../T-KAM.jl")
 include("../../utils.jl")
-using .T_KAM_model: T_KAM
+using .T_KAM_model
 using .LogLikelihoods: log_likelihood_IS
 using .Utils: device, half_quant, full_quant, hq
 

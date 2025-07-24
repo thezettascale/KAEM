@@ -15,7 +15,7 @@ include("../gen/loglikelihoods.jl")
 include("../T-KAM.jl")
 using .Utils: device, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_MALA
-using .T_KAM_model: T_KAM
+using .T_KAM_model
 
 ### ULA ### 
 function unadjusted_logpos(

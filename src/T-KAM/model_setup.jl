@@ -4,7 +4,6 @@ export prep_model
 
 using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
-include("T-KAM.jl")
 include("ebm/log_prior_fcns.jl")
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
@@ -12,7 +11,6 @@ include("loss_fcns/thermodynamic.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
 include("../utils.jl")
-using .T_KAM_model: T_KAM
 using .LogPriorFCNs: log_prior_ula, log_prior_mix, log_prior_univar
 using .ImportanceSampling
 using .LangevinMLE
@@ -21,7 +19,7 @@ using .autoMALA_sampling
 using .ULA_sampling
 using .Utils: device, half_quant, full_quant, hq
 
-function move_to_hq!(model::T_KAM)
+function move_to_hq!(model)
     """Moves the model to half precision."""
 
     if model.prior.layernorm_bool
@@ -52,7 +50,7 @@ function move_to_hq!(model::T_KAM)
     return nothing
 end
 
-function setup_training!(model::T_KAM)
+function setup_training!(model)
     conf = model.conf
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
 

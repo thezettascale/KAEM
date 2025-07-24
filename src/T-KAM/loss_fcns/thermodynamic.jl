@@ -154,7 +154,7 @@ function (l::ThermodynamicLoss)(
         rng = rng,
     )
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
-    z_prior, st_ebm = model.prior.sample_z(model, size(x)[end], ps, st_kan, st_lux, rng)
+    z_prior, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
 
     ∇, st_lux_ebm, st_lux_gen = grad_thermo_llhood(
         ps,

@@ -110,7 +110,7 @@ function update_model_grid(
             z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
         else
             z = first(
-                model.prior.sample_z(
+                model.sample_prior(
                     model,
                     model.grid_updates_samples,
                     ps,
@@ -190,7 +190,7 @@ function update_model_grid(
             z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
         else
             z = first(
-                model.prior.sample_z(
+                model.sample_prior(
                     model,
                     model.grid_updates_samples,
                     ps,

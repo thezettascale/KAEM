@@ -74,7 +74,7 @@ function generate_batch(
         Lux states of the likelihood.
     """
     ps = ps .|> half_quant
-    z, st_ebm = model.prior.sample_z(model, num_samples, ps, kan_st, st_lux, rng)
+    z, st_ebm = model.sample_prior(model, num_samples, ps, kan_st, st_lux, rng)
     x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
     noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
     return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen

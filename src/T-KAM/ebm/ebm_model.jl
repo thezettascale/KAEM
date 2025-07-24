@@ -34,7 +34,6 @@ struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
     depth::Int
     prior_type::AbstractString
     π_pdf!::Any
-    sample_z::Function
     p_size::Int
     q_size::Int
     quad::Function
@@ -90,15 +89,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )[prior_type]
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
-
-    sample_function =
-        (m, n, p, st_kan, st_lux, rng) -> begin
-            if mixture_model
-                sample_mixture(m.prior, n, p.ebm, st_kan.ebm, st_lux.ebm; rng = rng, ε = eps)
-            else
-                sample_univariate(m.prior, n, p.ebm, st_kan.ebm, st_lux.ebm; rng = rng, ε = eps)
-            end
-        end
 
     functions = []
     layernorms = []
@@ -169,7 +159,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         length(widths)-1,
         prior_type,
         ref_initializer(eps),
-        sample_function,
         P,
         Q,
         quadrature_method,

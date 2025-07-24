@@ -118,7 +118,7 @@ function (sampler::ULA_sampler)(
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             z = device(z)
         else
-            z, st_ebm = model.prior.sample_z(
+            z, st_ebm = model.sample_prior(
                 model,
                 size(x)[end]*length(temps),
                 ps,

@@ -5,9 +5,9 @@ ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 
-include("../src/T-KAM/ebm/ebm_model.jl")
+include("../src/T-KAM/T-KAM.jl")
 include("../src/utils.jl")
-using .EBM_Model: EbmModel, init_EbmModel
+using .T_KAM_model
 using .Utils: device, half_quant, full_quant
 
 conf = ConfParse("tests/test_conf.ini")
@@ -17,35 +17,26 @@ p_size = first(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 q_size = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 
 Random.seed!(42)
-EBM = init_EbmModel(conf)
-ps = Lux.initialparameters(Random.GLOBAL_RNG, EBM)
-st_kan, st_lux = Lux.initialstates(Random.GLOBAL_RNG, EBM)
-
-struct PriorWrapper{T<:EbmModel{Float32}}
-    prior::T
-end
-
-wrap = PriorWrapper(EBM)
-
-ps = (ebm = ps, gen = ps) |> ComponentArray .|> half_quant |> device
-st_kan = (ebm = st_kan, gen = st_kan) |> ComponentArray .|> half_quant |> device
-st_lux = (ebm = st_lux, gen = st_lux) |> device
+dataset = randn(full_quant, 32, 32, 1, b_size*10)
+model = init_T_KAM(dataset, conf, (32, 32, 1))
+x_test = first(model.train_loader) |> device
+model, ps, st_kan, st_lux = prep_model(model, x_test)
 
 function test_shapes()
-    @test prior.p_size == p_size
-    @test prior.q_size == q_size
+    @test model.prior.p_size == p_size
+    @test model.prior.q_size == q_size
 end
 
 function test_sampling()
     z_test =
-        first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     @test all(size(z_test) .== (q_size, p_size, b_size))
 end
 
 function test_log_prior()
     z_test =
-        first(wrap.prior.sample_z(wrap, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    log_p = first(wrap.prior.lp_fcn(z_test, wrap.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+    log_p = first(model.prior.lp_fcn(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
     @test size(log_p) == (b_size,)
 end
 

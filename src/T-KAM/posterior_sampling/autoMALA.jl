@@ -84,7 +84,7 @@ function (sampler::autoMALA_sampler)(
     """
     # Initialize from prior 
     z_hq, st_ebm =
-        model.prior.sample_z(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
+        model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
     loss_scaling = model.loss_scaling |> full_quant
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]

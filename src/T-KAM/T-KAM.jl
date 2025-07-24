@@ -40,13 +40,13 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
 end
 
 function generate_batch(
-    model::T_KAM,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     kan_st::ComponentArray{T},
     st_lux::NamedTuple,
     num_samples::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant, U<:full_quant}
     """
     Inference pass to generate a batch of data from the model.
     This is the same for both the standard and thermodynamic models.
@@ -77,7 +77,7 @@ function init_T_KAM(
     x_shape::Tuple;
     file_loc::AbstractString = "logs/",
     rng::AbstractRNG = Random.default_rng(),
-)::T_KAM
+)::T_KAM{half_quant,full_quant}
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     IS_samples = parse(Int, retrieve(conf, "TRAINING", "importance_sample_size"))

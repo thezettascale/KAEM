@@ -21,7 +21,7 @@ using .autoMALA_sampling
 using .ULA_sampling
 using .Utils: device, half_quant, full_quant, hq
 
-function move_to_hq(model::T_KAM)
+function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""
 
     if model.prior.layernorm_bool
@@ -52,7 +52,7 @@ function move_to_hq(model::T_KAM)
     return model
 end
 
-function setup_training(model::T_KAM)
+function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     conf = model.conf
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
 
@@ -138,16 +138,16 @@ function setup_training(model::T_KAM)
 end
 
 function prep_model(
-    model::T_KAM,
+    model::T_KAM{T,U},
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-) where {T<:half_quant}
+) where {T<:half_quant,U<:full_quant}
     ps = Lux.initialparameters(rng, model)
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
         ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
-    model = move_to_hq(model::T_KAM)
-    model = setup_training(model::T_KAM)
+    model = move_to_hq(model::T_KAM{T,U})
+    model = setup_training(model::T_KAM{T,U})
     return model, ps, T.(st_kan), st_lux
 end
 

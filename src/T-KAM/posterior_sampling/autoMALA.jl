@@ -12,8 +12,7 @@ using CUDA,
     Accessors,
     Statistics,
     Enzyme,
-    ComponentArrays,
-    Reactant
+    ComponentArrays
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")

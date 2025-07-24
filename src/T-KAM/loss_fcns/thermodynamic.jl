@@ -2,7 +2,7 @@ module ThermodynamicIntegration
 
 export initialize_thermo_loss, thermodynamic_loss
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA
 
 include("../gen/loglikelihoods.jl")

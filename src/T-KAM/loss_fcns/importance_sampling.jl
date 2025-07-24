@@ -1,6 +1,6 @@
 module ImportanceSampling
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA, ParallelStencil
 using NNlib: softmax
 

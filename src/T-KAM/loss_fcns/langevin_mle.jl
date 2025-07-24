@@ -2,7 +2,7 @@ module LangevinMLE
 
 export LangevinLoss
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random, Reactant
+using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA
 
 include("../gen/loglikelihoods.jl")

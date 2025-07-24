@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Enzyme, CUDA
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
 
 ENV["GPU"] = true

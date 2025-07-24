@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, Enzyme
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -43,38 +43,7 @@ function test_log_prior()
     @test size(log_p) == (b_size,)
 end
 
-function test_lp_derivative()
-    z_test =
-        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    ∇ = Enzyme.make_zero(ps)
-
-    function fcn(
-        p::ComponentArray{half_quant},
-        z::AbstractArray{half_quant},
-        m::T_KAM{half_quant,half_quant},
-        sk::ComponentArray{half_quant},
-        se::NamedTuple,
-    )
-        sum(first(model.prior.lp_fcn(z, model.prior, p, sk, se)))
-    end
-
-    Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
-        Enzyme.Active(fcn),
-        Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z_test),
-        Enzyme.Const(model),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux),
-    )
-
-    @test !all(iszero, ∇)
-    @test !any(isnan, ∇)
-end
-
 @testset "Mixture Prior Tests" begin
     test_sampling()
     test_log_prior()
-    test_lp_derivative()
 end

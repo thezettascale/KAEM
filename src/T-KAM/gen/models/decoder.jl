@@ -142,7 +142,7 @@ function init_SEQ_Generator(
     )
 end
 
-function (gen::SEQ_Generator{T})(
+function (gen::SEQ_Generator)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,

@@ -8,6 +8,14 @@ using Flux: DataLoader
 
 using ..Utils
 
+include("kan/univariate_functions.jl")
+using .UnivariateFunctions
+
+include("ebm/inverse_transform.jl")
+include("ebm/ref_priors.jl")
+using .InverseTransformSampling
+using .RefPriors
+
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
 using .EBM_Model

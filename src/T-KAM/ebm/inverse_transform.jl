@@ -25,11 +25,11 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
+struct TrapeziumQuadrature end
 
-struct GaussLegendreQuadrature <: Lux.AbstractLuxLayer end
+struct GaussLegendreQuadrature end
 
-function (tq::TrapeziumQuadrature)(
+function trapezium_quad(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -90,7 +90,7 @@ function get_gausslegendre(
     return nodes, (b - a) ./ 2 .* weights
 end
 
-function (gq::GaussLegendreQuadrature)(
+function gausslegendre_quad(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},

@@ -6,7 +6,7 @@ using CUDA, KernelAbstractions, ComponentArrays, Random, ParallelStencil
 using NNlib: softmax, sigmoid
 
 using ..Utils
-using ..T_KAM_model: GenModel
+using ..GeneratorModel: GenModel
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

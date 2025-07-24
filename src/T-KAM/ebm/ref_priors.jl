@@ -1,6 +1,6 @@
 module RefPriors
 
-export prior_pdf,
+export prior_map,
     UniformPrior, GaussianPrior, LogNormalPrior, LearnableGaussianPrior, EbmPrior
 
 using CUDA, KernelAbstractions, ParallelStencil, Lux
@@ -13,15 +13,15 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-struct UniformPrior <: Lux.AbstractLuxLayer end
-struct GaussianPrior <: Lux.AbstractLuxLayer end
-struct LogNormalPrior <: Lux.AbstractLuxLayer
+struct UniformPrior end
+struct GaussianPrior end
+struct LogNormalPrior
     ε::half_quant
 end
-struct LearnableGaussianPrior <: Lux.AbstractLuxLayer
+struct LearnableGaussianPrior
     ε::half_quant
 end
-struct EbmPrior <: Lux.AbstractLuxLayer
+struct EbmPrior
     ε::half_quant
 end
 
@@ -129,7 +129,7 @@ function (prior::EbmPrior)(
     return nothing
 end
 
-const prior_pdf = Dict(
+const prior_map = Dict(
     "uniform" => ε -> UniformPrior(),
     "gaussian" => ε -> GaussianPrior(),
     "lognormal" => ε -> LogNormalPrior(ε),

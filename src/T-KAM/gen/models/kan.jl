@@ -6,14 +6,12 @@ export KAN_Generator, init_KAN_Generator
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
 using ..Utils
-
-include("../../kan/univariate_functions.jl")
-using .UnivariateFunctions
+using ..UnivariateFunctions
 
 struct KAN_Generator{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Vector{Any}
-    layernorms::Vector{Any}
+    Φ_fcns::Vector{univariate_function{T,U}}
+    layernorms::Vector{Lux.LayerNorm}
     layernorm_bool::Bool
     batchnorm_bool::Bool
     x_shape::Tuple
@@ -85,8 +83,8 @@ function init_KAN_Generator(
             init_τ = init_τ,
             τ_trainable = τ_trainable,
         )
-    Φ_functions = []
-    layernorms = []
+    Φ_functions = Vector{univariate_function{half_quant,full_quant}}(undef, 0)
+    layernorms = Vector{Lux.LayerNorm}(undef, 0)
 
     for i in eachindex(widths[1:(end-1)])
         base_scale = (

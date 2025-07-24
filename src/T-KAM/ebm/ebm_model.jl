@@ -14,17 +14,9 @@ using ConfParser,
     ComponentArrays
 
 using ..Utils
-using ..T_KAM_model
-
-include("../kan/univariate_functions.jl")
-include("inverse_transform.jl")
-include("ref_priors.jl")
-using .UnivariateFunctions
-using .InverseTransformSampling
-using .RefPriors
-
-const quad_map =
-    Dict("gausslegendre" => GaussLegendreQuadrature, "trapezium" => TrapeziumQuadrature)
+using ..UnivariateFunctions
+using ..InverseTransformSampling
+using ..RefPriors
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     fcns_qp::Vector{univariate_function{T,U}}
@@ -88,8 +80,9 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
 
-    functions = []
-    layernorms = []
+    functions = Vector{univariate_function{half_quant,full_quant}}(undef, 0)
+    layernorms = Vector{Lux.LayerNorm}(undef, 0)
+
     for i in eachindex(widths[1:(end-1)])
         base_scale = (
             μ_scale * (one(full_quant) / √(full_quant(widths[i]))) .+
@@ -129,7 +122,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
-    quad_fcn = get(quad_map, quad_type, GaussLegendreQuadrature())
+    quad_fcn = quad_type == "gausslegendre" ? GaussLegendreQuadrature() : TrapeziumQuadrature()
+
     quadrature_method =
         (m, p, sk, sl, mask) -> quad_fcn(m, p, sk, sl; ε = eps, component_mask = mask)
 
@@ -138,7 +132,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights')
 
-    ref_initializer = get(prior_pdf, prior_type, prior_pdf["uniform"])
+    ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
 
     return EbmModel(
         functions,

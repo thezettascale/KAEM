@@ -8,6 +8,7 @@ using ConfParser,
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 
 using ..Utils
+using ..UnivariateFunctions
 
 include("resamplers.jl")
 include("models/kan.jl")

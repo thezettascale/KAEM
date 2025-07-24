@@ -9,7 +9,7 @@ include("../src/T-KAM/T-KAM.jl")
 include("../src/T-KAM/model_setup.jl")
 include("../src/utils.jl")
 using .T_KAM_model
-using .ModelSetup: prep_model
+using .ModelSetup
 using .Utils: device, half_quant, full_quant
 
 conf = ConfParse("tests/test_conf.ini")

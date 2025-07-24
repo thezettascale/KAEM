@@ -10,7 +10,7 @@ include("../src/T-KAM/loss_fcns/thermodynamic.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .ThermodynamicIntegration: sample_thermo
-using .ModelSetup: prep_model
+using .ModelSetup
 using .Utils
 
 conf = ConfParse("tests/test_conf.ini")

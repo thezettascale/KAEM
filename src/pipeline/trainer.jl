@@ -9,7 +9,7 @@ include("optimizer.jl")
 include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
-using .ModelSetup: prep_model
+using .ModelSetup
 using .GridUpdating: update_model_grid
 using .optimization
 using .Utils: device, half_quant, full_quant, hq, fq

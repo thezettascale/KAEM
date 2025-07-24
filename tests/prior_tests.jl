@@ -60,7 +60,7 @@ function test_lp_derivative()
 
     Enzyme.autodiff_deferred(
         Enzyme.Reverse,
-        fcn,
+        Enzyme.Active(fcn),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z_test),
@@ -74,7 +74,7 @@ function test_lp_derivative()
 end
 
 @testset "Mixture Prior Tests" begin
-    # test_sampling()
-    # test_log_prior()
-    test_lp_derivative()
+    test_sampling()
+    test_log_prior()
+    # test_lp_derivative()
 end

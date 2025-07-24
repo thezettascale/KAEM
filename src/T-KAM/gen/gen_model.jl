@@ -1,7 +1,7 @@
 module GeneratorModel
 
 export GenModel,
-    init_GenModel, generator, importance_resampler, log_likelihood_IS, log_likelihood_MALA
+    init_GenModel, generator, importance_resampler
 
 using CUDA, KernelAbstractions
 using ConfParser,
@@ -11,14 +11,12 @@ using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 include("../ebm/ebm_model.jl")
 include("../../utils.jl")
 include("resamplers.jl")
-include("loglikelihoods.jl")
 include("models/kan.jl")
 include("models/cnn.jl")
 include("models/decoder.jl")
 using .Utils: device, half_quant, full_quant, hq, fq, symbol_map
 using .EBM_Model
 using .WeightResamplers
-using .LogLikelihoods
 using .KAN_Model
 using .CNN_Model
 using .Transformer_Model

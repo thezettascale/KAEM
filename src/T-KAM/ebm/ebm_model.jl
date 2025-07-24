@@ -19,11 +19,9 @@ using ..T_KAM_model
 include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("ref_priors.jl")
-include("log_prior_fcns.jl")
 using .UnivariateFunctions
 using .InverseTransformSampling
 using .RefPriors
-using .LogPriorFCNs
 
 const quad_map =
     Dict("gausslegendre" => GaussLegendreQuadrature, "trapezium" => TrapeziumQuadrature)
@@ -44,7 +42,6 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     contrastive_div::Bool
     quad_type::AbstractString
     ula::Bool
-    lp_fcn::Union{LogPriorULA,LogPriorUnivariate,LogPriorMix}
     mixture_model::Bool
     λ::T
 end
@@ -159,7 +156,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         contrastive_div,
         quad_type,
         ula,
-        LogPriorUnivariate(eps, !contrastive_div),
         mixture_model,
         reg,
     )

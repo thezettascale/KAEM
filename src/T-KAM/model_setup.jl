@@ -5,15 +5,13 @@ export prep_model
 using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 using ..Utils
-using ..T_KAM_model
+using ..T_KAM_model: T_KAM, LogPriorULA, LogPriorMix, LogPriorUnivariate
 
-include("ebm/log_prior_fcns.jl")
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
-using .LogPriorFCNs
 using .ImportanceSampling
 using .LangevinMLE
 using .ThermodynamicIntegration
@@ -102,17 +100,17 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
 
-        @reset model.prior.lp_fcn = LogPriorULA(model.ε)
+        @reset model.log_prior = LogPriorULA(model.ε)
         println("Prior sampler: ULA")
     elseif model.prior.mixture_model
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
-        @reset model.prior.lp_fcn = LogPriorMix(model.ε, !model.prior.contrastive_div)
+        @reset model.log_prior = LogPriorMix(model.ε, !model.prior.contrastive_div)
         println("Prior sampler: Mix ITS")
     else
-        @reset model.prior.lp_fcn = LogPriorUnivariate(model.ε, !model.prior.contrastive_div)
+        @reset model.log_prior = LogPriorUnivariate(model.ε, !model.prior.contrastive_div)
         println("Prior sampler: Univar ITS")
     end
 

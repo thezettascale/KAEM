@@ -40,7 +40,7 @@ end
 function test_log_prior()
     z_test =
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    log_p = first(model.prior.lp_fcn(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
     @test size(log_p) == (b_size,)
 end
 

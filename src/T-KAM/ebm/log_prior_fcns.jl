@@ -1,6 +1,6 @@
 module LogPriorFCNs
 
-export LogPriorULA, LogPriorMix
+export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: softmax
 using CUDA,

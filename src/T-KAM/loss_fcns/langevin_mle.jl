@@ -34,7 +34,7 @@ function marginal_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
-    logprior_pos, st_ebm = model.prior.lp_fcn(
+    logprior_pos, st_ebm = model.log_prior(
         z_posterior,
         model.prior,
         ps.ebm,
@@ -51,7 +51,7 @@ function marginal_llhood(
         ε = model.ε,
     )
 
-    logprior, st_ebm = model.prior.lp_fcn(
+    logprior, st_ebm = model.log_prior(
         z_prior,
         model.prior,
         ps.ebm,

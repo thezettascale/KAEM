@@ -13,6 +13,9 @@ include("gen/gen_model.jl")
 using .EBM_Model
 using .GeneratorModel
 
+include("ebm/log_prior_fcns.jl")
+using .LogPriorFCNs
+
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel
     lkhood::GenModel
@@ -35,6 +38,7 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     max_samples::Int
     MALA::Bool
     conf::ConfParse
+    log_prior::Union{LogPriorULA,LogPriorUnivariate,LogPriorMix}
 end
 
 function init_T_KAM(
@@ -134,6 +138,7 @@ function init_T_KAM(
         max_samples,
         MALA,
         conf,
+        LogPriorUnivariate(eps, !prior_model.contrastive_div),
     )
 end
 

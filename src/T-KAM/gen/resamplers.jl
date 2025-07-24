@@ -6,7 +6,7 @@ using CUDA, Random, Distributions, LinearAlgebra, ParallelStencil
 using NNlib: softmax
 
 include("../../utils.jl")
-using .Utils: full_quant, device
+using .Utils: full_quant, pu
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -90,7 +90,7 @@ function residual_resampler(
     residual_weights = softmax(weights .* (N .- integer_counts), dims = 2)
 
     # CDF and variate for resampling
-    u = device(rand(rng, U, B, N))
+    u = pu(rand(rng, U, B, N))
     cdf = cumsum(residual_weights, dims = 2)
 
     idxs = @zeros(B, N)
@@ -158,7 +158,7 @@ function systematic_resampler(
     cdf = cumsum(weights, dims = 2)
 
     # Systematic thresholds
-    u = device((rand(rng, U, B, 1) .+ (0:(N-1))') ./ N)
+    u = pu((rand(rng, U, B, 1) .+ (0:(N-1))') ./ N)
 
     idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)
@@ -187,7 +187,7 @@ function stratified_resampler(
     cdf = cumsum(weights, dims = 2)
 
     # Stratified thresholds
-    u = device((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
+    u = pu((rand(rng, U, B, N) .+ (0:(N-1))') ./ N)
 
     idxs = @zeros(B, N)
     @parallel (1:B) systematic_kernel!(idxs, ESS_bool, cdf, u, B, N)

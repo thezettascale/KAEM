@@ -13,7 +13,7 @@ include("../utils.jl")
 using .EBM_Model
 using .GeneratorModel
 using .InverseTransformSampling: sample_mixture, sample_univariate
-using .Utils: device, half_quant, full_quant, hq
+using .Utils: pu, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel

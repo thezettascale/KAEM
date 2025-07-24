@@ -17,7 +17,7 @@ using CUDA,
 include("../../utils.jl")
 include("../gen/loglikelihoods.jl")
 include("log_posteriors.jl")
-using .Utils: device, half_quant, full_quant, fq
+using .Utils: pu, half_quant, full_quant, fq
 using .LogLikelihoods: log_likelihood_MALA
 using .LogPosteriors: unadjusted_logpos_grad
 
@@ -80,7 +80,7 @@ function (sampler::ULA_sampler)(
     z_hq = begin
         if model.prior.ula && sampler.prior_sampling_bool
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
-            z = device(z)
+            z = pu(z)
         else
             z, st_ebm = model.sample_prior(
                 model,
@@ -104,20 +104,20 @@ function (sampler::ULA_sampler)(
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     S = sampler.prior_sampling_bool ? size(z_hq)[end] : S
     z_hq = reshape(z_hq, Q, P, S, num_temps)
-    temps_gpu = device(temps)
+    temps_gpu = pu(temps)
 
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    z_copy = similar(z_hq[:, :, :, 1]) |> device
+    z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
     # Pre-allocate noise
     noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> device
+    log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> pu
 
     for i = 1:sampler.N
-        ξ = device(noise[:, :, :, :, i])
+        ξ = pu(noise[:, :, :, :, i])
         ∇z_fq =
             full_quant.(
                 unadjusted_logpos_grad(

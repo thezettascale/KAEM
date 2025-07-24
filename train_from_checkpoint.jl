@@ -30,12 +30,12 @@ commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 include("src/utils.jl")
 include("src/pipeline/trainer.jl")
-using .Utils: hq, device
+using .Utils: hq, pu
 using .trainer
 
 saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
-ps = convert(ComponentArray, saved_data["params"]) |> hq |> device
-st = convert(NamedTuple, saved_data["state"]) |> hq |> device
+ps = convert(ComponentArray, saved_data["params"]) |> hq |> pu
+st = convert(NamedTuple, saved_data["state"]) |> hq |> pu
 
 rng = Random.MersenneTwister(1)
 t = init_trainer(rng, conf, dataset)

@@ -10,7 +10,7 @@ include("../src/T-KAM/model_setup.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .ModelSetup
-using .Utils: device, half_quant, full_quant
+using .Utils: pu, half_quant, full_quant
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
@@ -21,7 +21,7 @@ q_size = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
 Random.seed!(42)
 dataset = randn(full_quant, 32, 32, 1, b_size*10)
 model = init_T_KAM(dataset, conf, (32, 32, 1))
-x_test = first(model.train_loader) |> device
+x_test = first(model.train_loader) |> pu
 model, ps, st_kan, st_lux = prep_model(model, x_test)
 ps = half_quant.(ps)
 

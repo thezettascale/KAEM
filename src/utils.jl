@@ -1,6 +1,6 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, symbol_map
+export removeNaN, pu, removeZero, removeNeg, half_quant, full_quant, hq, fq, symbol_map
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
 using CUDA, LuxCUDA, KernelAbstractions, Enzyme.EnzymeRules
@@ -20,26 +20,22 @@ const full_quant = get(QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Flo
 const hq = get(LUX_QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Lux.f32)
 const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32)
 
-function device(x)
-    return pu(x)
-end
-
 function removeNaN(x)
-    return ifelse.(isnan.(x), zero(half_quant), x) |> device
+    return ifelse.(isnan.(x), zero(half_quant), x) |> pu
 end
 
 function removeZero(x; ε = half_quant(1e-4))
-    return ifelse.(abs.(x) .< ε, ε, x) |> device
+    return ifelse.(abs.(x) .< ε, ε, x) |> pu
 end
 
 function removeNeg(x; ε = half_quant(1e-4))
-    return ifelse.(x .< ε, ε, x) |> device
+    return ifelse.(x .< ε, ε, x) |> pu
 end
 
 # Num layers must be flexible, yet static, so this is used to index into params/state
 const symbol_map = (:a, :b, :c, :d, :e, :f, :g, :h, :i)
 
-EnzymeRules.inactive(::typeof(device), args...) = nothing
+EnzymeRules.inactive(::typeof(pu), args...) = nothing
 EnzymeRules.inactive(::typeof(half_quant), args...) = nothing
 EnzymeRules.inactive(::typeof(full_quant), args...) = nothing
 

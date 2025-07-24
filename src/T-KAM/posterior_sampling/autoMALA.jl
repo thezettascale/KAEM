@@ -20,7 +20,7 @@ include("preconditioner.jl")
 include("step_search.jl")
 include("hmc_updates.jl")
 include("log_posteriors.jl")
-using .Utils: device, half_quant, full_quant
+using .Utils: pu, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianMonteCarlo: leapfrog, logpos_withgrad
 using .autoMALA_StepSearch: autoMALA_step
@@ -52,7 +52,7 @@ function initialize_autoMALA_sampler(;
     return autoMALA_sampler(
         N,
         N_unadjusted,
-        repeat([η], samples, num_temps) |> device,
+        repeat([η], samples, num_temps) |> pu,
         Δη,
         η_min,
         η_max,
@@ -93,10 +93,10 @@ function (sampler::autoMALA_sampler)(
     # Pre-allocate for both precisions
     z_fq = full_quant.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
-    z_copy = similar(z_hq[:, :, :, 1]) |> device
+    z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
-    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> device
+    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> pu
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
@@ -105,15 +105,15 @@ function (sampler::autoMALA_sampler)(
     for k = 1:num_temps
         M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
     end
-    @reset model.η = device(model.η)
+    @reset model.η = pu(model.η)
 
-    log_u = log.(rand(rng, num_temps, sampler.N)) |> device
+    log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
     ratio_bounds =
-        log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> device
-    log_u_swap = log.(rand(rng, full_quant, S, num_temps-1, sampler.N)) |> device
+        log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
+    log_u_swap = log.(rand(rng, full_quant, S, num_temps-1, sampler.N)) |> pu
 
-    num_acceptances = zeros(Int, S, num_temps) |> device
-    mean_η = zeros(full_quant, S, num_temps) |> device
+    num_acceptances = zeros(Int, S, num_temps) |> pu
+    mean_η = zeros(full_quant, S, num_temps) |> pu
     momentum = Enzyme.make_zero(z_fq)
 
     burn_in = 0
@@ -139,8 +139,8 @@ function (sampler::autoMALA_sampler)(
                 x_t,
                 t_expanded,
                 logpos_z,
-                device(momentum),
-                device(repeat(M, 1, 1, S, 1)),
+                pu(momentum),
+                pu(repeat(M, 1, 1, S, 1)),
                 η,
                 model,
                 ps,
@@ -158,8 +158,8 @@ function (sampler::autoMALA_sampler)(
                 x_t,
                 t_expanded,
                 logpos_z,
-                device(momentum),
-                device(repeat(M, 1, 1, S, 1)),
+                pu(momentum),
+                pu(repeat(M, 1, 1, S, 1)),
                 model,
                 ps,
                 st_kan,
@@ -222,7 +222,7 @@ function (sampler::autoMALA_sampler)(
     end
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)
-    mean_η = ifelse.(isnan.(mean_η), sampler.η, mean_η) |> device
+    mean_η = ifelse.(isnan.(mean_η), sampler.η, mean_η) |> pu
     @reset sampler.η = mean_η
 
     return z_hq, st_lux

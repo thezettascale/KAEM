@@ -11,7 +11,7 @@ include("../T-KAM.jl")
 include("../../utils.jl")
 using .T_KAM_model
 using .LogLikelihoods: log_likelihood_IS
-using .Utils: device, half_quant, full_quant, hq
+using .Utils: pu, half_quant, full_quant, hq
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -34,7 +34,7 @@ function sample_importance(
     AbstractArray{Int},
 } where {T<:half_quant}
     z, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
-    noise = device(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
+    noise = pu(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
     logllhood, st_lux_gen =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = m.ε)
     weights = softmax(full_quant.(logllhood), dims = 2)

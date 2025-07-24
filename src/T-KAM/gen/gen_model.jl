@@ -13,7 +13,7 @@ include("resamplers.jl")
 include("models/kan.jl")
 include("models/cnn.jl")
 include("models/decoder.jl")
-using .Utils: device, half_quant, full_quant, hq, fq, symbol_map
+using .Utils: pu, half_quant, full_quant, hq, fq, symbol_map
 using .EBM_Model
 using .WeightResamplers
 using .KAN_Model

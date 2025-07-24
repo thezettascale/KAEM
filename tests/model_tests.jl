@@ -22,7 +22,7 @@ function test_ps_derivative()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
     ∇ = Enzyme.make_zero(ps)
@@ -38,12 +38,12 @@ function test_grid_update()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
     size_grid = size(st_kan.ebm[:a].grid)
-    x = first(model.train_loader) |> device
+    x = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux =
         update_model_grid(model, x, ps, st_kan, Lux.testmode(st_lux))
     @test all(size(st_kan.ebm[:a].grid) .== size_grid)
@@ -55,7 +55,7 @@ function test_mala_loss()
     dataset = randn(full_quant, 32, 32, 1, 50)
     commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
     ∇ = Enzyme.make_zero(ps)
@@ -71,7 +71,7 @@ function test_cnn_loss()
     dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
     ∇ = Enzyme.make_zero(ps)
@@ -89,7 +89,7 @@ function test_seq_loss()
     commit!(conf, "SEQ", "sequence_length", "10")
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf, (50, 10))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
     ∇ = Enzyme.make_zero(ps)

@@ -13,8 +13,7 @@ export extend_grid,
 using CUDA, ParallelStencil
 using LinearAlgebra, NNlib
 
-include("../../utils.jl")
-using .Utils: removeNaN, device, half_quant, full_quant, hq
+using ..Utils
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)
@@ -278,7 +277,7 @@ function curve2coef(
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
-    coef = Array{U}(undef, J, O, G) |> device
+    coef = Array{U}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O
             coef[i, o, :] .= (

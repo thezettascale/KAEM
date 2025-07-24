@@ -20,7 +20,7 @@ include("src/T-KAM/ebm/ebm_model.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .trainer
-using .Utils: device, half_quant, hq
+using .Utils: pu, half_quant, hq
 
 for fcn_type in ["RBF", "FFT"]
     for prior_type in ["gaussian", "lognormal", "uniform"]
@@ -47,8 +47,8 @@ for fcn_type in ["RBF", "FFT"]
 
             saved_data = load(file)
 
-            ps = saved_data["params"] .|> half_quant |> device
-            st = saved_data["state"] |> hq |> device
+            ps = saved_data["params"] .|> half_quant |> pu
+            st = saved_data["state"] |> hq |> pu
 
             rng = Random.MersenneTwister(1)
             t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/", rng = rng)
@@ -63,11 +63,11 @@ for fcn_type in ["RBF", "FFT"]
 
             a, b = minimum(st.fcn[1].grid; dims = 2), maximum(st.fcn[1].grid; dims = 2)
             if fcn_type == "FFT"
-                a = fill(half_quant(first(grid_range)), size(a)) |> device
-                b = fill(half_quant(last(grid_range)), size(b)) |> device
+                a = fill(half_quant(first(grid_range)), size(a)) |> pu
+                b = fill(half_quant(last(grid_range)), size(b)) |> pu
             end
 
-            z = (a + b) ./ 2 .+ (b - a) ./ 2 .* device(prior.nodes)
+            z = (a + b) ./ 2 .+ (b - a) ./ 2 .* pu(prior.nodes)
             π_0 =
                 prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) :
                 prior.π_pdf(z)

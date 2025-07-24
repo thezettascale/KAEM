@@ -18,7 +18,7 @@ include("../../utils.jl")
 include("inverse_transform.jl")
 include("ref_priors.jl")
 using .UnivariateFunctions
-using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
+using .Utils: pu, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
 using .InverseTransformSampling
 using .RefPriors: prior_pdf
 

@@ -83,7 +83,7 @@ include("src/T-KAM/model_setup.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .ModelSetup
-using .Utils: device, half_quant, full_quant, hq, fq
+using .Utils: pu, half_quant, full_quant, hq, fq
 
 
 model = init_T_KAM(
@@ -96,7 +96,7 @@ model = init_T_KAM(
 
 # Parse config to setup sampling and training criterions
 x, loader_state = iterate(model.train_loader)
-x = device(x)
+x = pu(x)
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
 ps_hq = half_quant.(ps)
 
@@ -127,7 +127,7 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 The following optimisations are in place:
 
 - Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Enzyme provides highly efficient reverse-mode autodifferentation of statically analyzable LLVM. Reactant compiles to MLIR, (amongst other things).
-- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). This allows for supremely optimized stencil computations, agnostic to the device in use. 
+- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). This allows for supremely optimized stencil computations, agnostic to the pu in use. 
 
 If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
 

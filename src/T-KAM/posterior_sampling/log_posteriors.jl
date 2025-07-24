@@ -13,7 +13,7 @@ using CUDA,
 include("../../utils.jl")
 include("../gen/loglikelihoods.jl")
 include("../T-KAM.jl")
-using .Utils: device, half_quant, full_quant
+using .Utils: pu, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_MALA
 using .T_KAM_model
 

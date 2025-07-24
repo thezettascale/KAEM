@@ -22,7 +22,7 @@ function test_posterior_sampling()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
@@ -44,7 +44,7 @@ function test_model_derivative()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
     ∇ = Enzyme.make_zero(ps)

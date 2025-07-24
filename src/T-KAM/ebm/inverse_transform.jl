@@ -16,7 +16,7 @@ using CUDA,
 
 include("../../utils.jl")
 include("mixture_selection.jl")
-using .Utils: device, half_quant, full_quant, fq
+using .Utils: pu, half_quant, full_quant, fq
 using .MixtureChoice
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
@@ -51,7 +51,7 @@ function trapezium_quadrature(
     Q, P, G = size(f_grid)
 
     # Choose component if mixture model else use all
-    exp_fg = zeros(T, Q, P, G) |> device
+    exp_fg = zeros(T, Q, P, G) |> pu
     if component_mask !== nothing
         @tullio exp_fg[q, p, g] := (exp(f_grid[q, p, g]) * π_grid[q, g])
         @tullio exp_fg[q, b, g] = exp_fg[q, p, g] * component_mask[q, p, b]
@@ -78,11 +78,11 @@ function get_gausslegendre(
         (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
     if no_grid
-        a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> device
-        b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> device
+        a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> pu
+        b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> pu
     end
 
-    nodes, weights = device(ebm.nodes), device(ebm.weights)
+    nodes, weights = pu(ebm.nodes), pu(ebm.weights)
     @. nodes = (a + b) / 2 + (b - a) / 2 * nodes
     return nodes, (b - a) ./ 2 .* weights
 end
@@ -170,12 +170,12 @@ function sample_univariate(
     grid = full_quant.(grid)
 
     cdf = cat(
-        device(zeros(full_quant, ebm.q_size, ebm.p_size, 1)), # Add 0 to start of CDF
+        pu(zeros(full_quant, ebm.q_size, ebm.p_size, 1)), # Add 0 to start of CDF
         cumsum(full_quant.(cdf); dims = 3), # Cumulative trapezium = CDF
         dims = 3,
     )
 
-    rand_vals = device(rand(rng, full_quant, 1, ebm.p_size, num_samples)) .* cdf[:, :, end]
+    rand_vals = pu(rand(rng, full_quant, 1, ebm.p_size, num_samples)) .* cdf[:, :, end]
     z = @zeros(ebm.q_size, ebm.p_size, num_samples)
     @parallel (1:ebm.q_size, 1:ebm.p_size, 1:num_samples) interp_kernel!(
         z,
@@ -243,12 +243,12 @@ function sample_mixture(
     grid_size = size(grid, 2)
 
     cdf = cat(
-        device(zeros(full_quant, ebm.q_size, num_samples, 1)), # Add 0 to start of CDF
+        pu(zeros(full_quant, ebm.q_size, num_samples, 1)), # Add 0 to start of CDF
         cumsum(full_quant.(cdf); dims = 3), # Cumulative trapezium = CDF
         dims = 3,
     )
 
-    rand_vals = device(rand(rng, full_quant, ebm.q_size, num_samples)) .* cdf[:, :, end]
+    rand_vals = pu(rand(rng, full_quant, ebm.q_size, num_samples)) .* cdf[:, :, end]
 
     z = @zeros(ebm.q_size, 1, num_samples)
     @parallel (1:ebm.q_size, 1:num_samples) interp_kernel_mixture!(

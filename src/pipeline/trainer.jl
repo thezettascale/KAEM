@@ -4,15 +4,15 @@ export T_KAM_trainer, init_trainer, train!
 
 include("../T-KAM/T-KAM.jl")
 include("../T-KAM/model_setup.jl")
-include("../T-KAM/kan/grid_updating.jl")
+include("../T-KAM/grid_updating.jl")
 include("optimizer.jl")
 include("../utils.jl")
 include("data_utils.jl")
 using .T_KAM_model
 using .ModelSetup
-using .GridUpdating: update_model_grid
+using .ModelGridUpdating: update_model_grid
 using .optimization
-using .Utils: device, half_quant, full_quant, hq, fq
+using .Utils: pu, half_quant, full_quant, hq, fq
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
 
@@ -130,7 +130,7 @@ function init_trainer(
     println("Initializing model")
     model = init_T_KAM(dataset, conf, x_shape; file_loc = file_loc, rng = rng)
     x, loader_state = iterate(model.train_loader)
-    x = device(x)
+    x = pu(x)
     model, params, st_kan, st_lux = prep_model(model, x; rng = rng)
 
     optimizer = create_opt(conf)
@@ -272,10 +272,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 if t.gen_type == "logits"
                     idxs = dropdims(argmax(x_gen, dims = 1); dims = 1)
                     test_loss +=
-                        sum((device(onecold(x, 1:size(x, 1))) .- getindex.(idxs, 1)) .^ 2) /
+                        sum((pu(onecold(x, 1:size(x, 1))) .- getindex.(idxs, 1)) .^ 2) /
                         size(x)[end]
                 else
-                    test_loss += mse(device(x), x_gen)
+                    test_loss += mse(pu(x), x_gen)
                 end
             end
 
@@ -343,7 +343,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         x, t.train_loader_state =
             (train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
-        t.x = device(x)
+        t.x = pu(x)
         return loss
     end
 

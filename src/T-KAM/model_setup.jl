@@ -19,7 +19,7 @@ using .LangevinMLE
 using .ThermodynamicIntegration
 using .autoMALA_sampling
 using .ULA_sampling
-using .Utils: device, half_quant, full_quant, hq
+using .Utils: pu, half_quant, full_quant, hq
 
 function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""
@@ -71,7 +71,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     zero_vec =
-        device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+        pu(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
     
     # Defaults
     @reset model.loss_fcn = ImportanceLoss(zero_vec)
@@ -145,7 +145,7 @@ function prep_model(
     ps = Lux.initialparameters(rng, model)
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
-        ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
+        ps |> ComponentArray |> pu, st_kan |> ComponentArray |> pu, st_lux |> pu
     model = move_to_hq(model::T_KAM{T,U})
     model = setup_training(model::T_KAM{T,U})
     return model, ps, T.(st_kan), st_lux

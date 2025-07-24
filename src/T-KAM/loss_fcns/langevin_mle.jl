@@ -10,7 +10,7 @@ include("../T-KAM.jl")
 include("../../utils.jl")
 using .T_KAM_model
 using .LogLikelihoods: log_likelihood_MALA
-using .Utils: device, half_quant, full_quant, hq
+using .Utils: pu, half_quant, full_quant, hq
 
 function sample_langevin(
     ps::ComponentArray{T},

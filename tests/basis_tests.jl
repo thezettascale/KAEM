@@ -4,27 +4,27 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/kan/spline_bases.jl")
 include("../src/utils.jl")
-using .spline_functions
+include("../src/T-KAM/kan/spline_bases.jl")
 using .Utils
+using .spline_functions
 
-b, i, g, o, degree, σ = 5, 8, 7, 2, 2, device([one(half_quant)])
+b, i, g, o, degree, σ = 5, 8, 7, 2, 2, pu([one(half_quant)])
 
 function test_extend_grid()
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> pu
     extended_grid = extend_grid(grid; k_extend = degree)
     @test size(extended_grid, 2) == size(grid, 2) + 2 * degree
 end
 
 function test_B_spline_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
+    x_eval = rand(half_quant, i, b) |> pu
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
+    grid = rand(half_quant, i, g) |> pu
     extended_grid = extend_grid(grid; k_extend = degree)
-    coef = rand(half_quant, i, o, g + degree - 1) |> device
+    coef = rand(half_quant, i, o, g + degree - 1) |> pu
 
     basis_function = B_spline_basis(degree)
 
@@ -41,10 +41,10 @@ end
 
 function test_RBF_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
+    x_eval = rand(half_quant, i, b) |> pu
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-    coef = rand(half_quant, i, o, g) |> device
+    grid = rand(half_quant, i, g) |> pu
+    coef = rand(half_quant, i, o, g) |> pu
 
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
     basis_function = RBF_basis(scale)
@@ -61,10 +61,10 @@ end
 
 function test_RSWAF_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
+    x_eval = rand(half_quant, i, b) |> pu
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-    coef = rand(half_quant, i, o, g) |> device
+    grid = rand(half_quant, i, g) |> pu
+    coef = rand(half_quant, i, o, g) |> pu
 
     basis_function = RSWAF_basis()
 
@@ -80,10 +80,10 @@ end
 
 function test_FFT_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
+    x_eval = rand(half_quant, i, b) |> pu
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-    coef = rand(half_quant, 2, i, o, g) |> device
+    grid = rand(half_quant, i, g) |> pu
+    coef = rand(half_quant, 2, i, o, g) |> pu
 
     basis_function = FFT_basis()
 
@@ -94,10 +94,10 @@ end
 
 function test_Cheby_basis()
     Random.seed!(42)
-    x_eval = rand(half_quant, i, b) |> device
+    x_eval = rand(half_quant, i, b) |> pu
     Random.seed!(42)
-    grid = rand(half_quant, i, g) |> device
-    coef = rand(half_quant, i, o, degree+1) |> device
+    grid = rand(half_quant, i, g) |> pu
+    coef = rand(half_quant, i, o, degree+1) |> pu
 
     basis_function = Cheby_basis(degree)
 

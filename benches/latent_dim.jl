@@ -9,7 +9,7 @@ include("../src/pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: device, half_quant
+using .Utils: pu, half_quant
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
@@ -35,7 +35,7 @@ function setup_model(n_z)
 
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
     x_test, loader_state = iterate(model.train_loader)
-    x_test = device(x_test)
+    x_test = pu(x_test)
     model, ps, st = prep_model(model, x_test)
     ∇ = zero(half_quant.(ps))
 

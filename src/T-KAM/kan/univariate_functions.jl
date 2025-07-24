@@ -5,10 +5,10 @@ export univariate_function, init_function, activation_mapping
 using CUDA, Accessors, ComponentArrays
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
 
+using ..Utils
+
 include("spline_bases.jl")
-include("../../utils.jl")
 using .spline_functions
-using .Utils: device, half_quant, full_quant
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -101,7 +101,7 @@ function init_function(
     grid =
         spline_function == "FFT" ? collect(T, 0:grid_size) :
         range(grid_range[1], grid_range[2], length = grid_size + 1)
-    grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> device
+    grid = T.(grid) |> collect |> x -> reshape(x, 1, length(x)) |> pu
     grid = repeat(grid, in_dim, 1)
     grid =
         !(spline_function == "Cheby" || spline_function == "FFT") ?
@@ -154,14 +154,14 @@ function Lux.initialparameters(
             (
                 (rand(rng, T, l.in_dim, l.out_dim, l.grid_size + 1) .- T(0.5)) .*
                 l.ε_scale ./ l.grid_size
-            ) |> device
+            ) |> pu
         coef = cpu_device()(
             curve2coef(
                 l.basis_function,
                 l.init_grid[:, (l.spline_degree+1):(end-l.spline_degree)],
                 ε,
                 l.init_grid,
-                device(T.(l.init_τ)),
+                pu(T.(l.init_τ)),
             ),
         )
     end

@@ -10,7 +10,7 @@ include("../T-KAM.jl")
 include("../../utils.jl")
 using .T_KAM_model
 using .LogLikelihoods: log_likelihood_MALA
-using .Utils: device, half_quant, full_quant, hq
+using .Utils: pu, half_quant, full_quant, hq
 
 function sample_thermo(
     ps::ComponentArray{T},
@@ -31,7 +31,7 @@ function sample_thermo(
         temps = temps[2:end],
         rng = rng,
     )
-    Δt = device(temps[2:end] - temps[1:(end-1)])
+    Δt = pu(temps[2:end] - temps[1:(end-1)])
     return z, Δt, st_lux
 end
 

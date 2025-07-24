@@ -9,7 +9,7 @@ include("../src/pipeline/data_utils.jl")
 include("../src/utils.jl")
 using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: device, half_quant
+using .Utils: pu, half_quant
 
 conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
@@ -34,7 +34,7 @@ function setup_model(N_t)
 
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
     x, loader_state = iterate(model.train_loader)
-    x = device(x)
+    x = pu(x)
     model, ps, st = prep_model(model, x)
 
     return model, half_quant.(ps), st

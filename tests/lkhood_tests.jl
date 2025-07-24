@@ -11,7 +11,7 @@ include("../src/utils.jl")
 include("../src/T-KAM/gen/loglikelihoods.jl")
 using .T_KAM_model
 using .ModelSetup
-using .Utils: device, half_quant, full_quant
+using .Utils: pu, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_IS, log_likelihood_MALA
 
 conf = ConfParse("tests/test_conf.ini")
@@ -28,7 +28,7 @@ function test_generate()
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
@@ -41,13 +41,13 @@ function test_logllhood()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
     model = init_T_KAM(dataset, conf, (32, 32, 1))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
-    x = randn(half_quant, 32, 32, 1, b_size) |> device
+    x = randn(half_quant, 32, 32, 1, b_size) |> pu
     z = first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    noise = randn(half_quant, 32, 32, 1, b_size, b_size) |> device
+    noise = randn(half_quant, 32, 32, 1, b_size, b_size) |> pu
     logllhood, _ =
         log_likelihood_IS(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise)
     @test size(logllhood) == (b_size, b_size)
@@ -58,7 +58,7 @@ function test_cnn_generate()
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     dataset = randn(full_quant, 32, 32, out_dim, 50)
     model = init_T_KAM(dataset, conf, (32, 32, out_dim))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 
@@ -75,7 +75,7 @@ function test_seq_generate()
 
     dataset = randn(full_quant, out_dim, 8, 50)
     model = init_T_KAM(dataset, conf, (out_dim, 8))
-    x_test = first(model.train_loader) |> device
+    x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
 

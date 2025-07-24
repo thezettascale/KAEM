@@ -111,7 +111,7 @@ function log_prior_univar(
     for q = 1:Q
         f, st = ebm(ps, st_kan, st_lyrnorm, z[q, :, :])
         lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
-        log_p += dropdims(sum(lp; dims = 1); dims = 1)
+        log_p = log_p + dropdims(sum(lp; dims = 1); dims = 1)
     end
 
     return log_p, st_lyrnorm

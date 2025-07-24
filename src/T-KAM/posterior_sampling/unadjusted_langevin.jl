@@ -15,10 +15,10 @@ using CUDA,
     ComponentArrays
 
 include("../../utils.jl")
-include("../gen/gen_model.jl")
+include("../gen/loglikelihoods.jl")
 include("log_posteriors.jl")
 using .Utils: device, half_quant, full_quant, fq
-using .GeneratorModel: log_likelihood_MALA
+using .LogLikelihoods: log_likelihood_MALA
 using .LogPosteriors: unadjusted_logpos_grad
 
 π_dist = Dict(

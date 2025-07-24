@@ -6,8 +6,10 @@ using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
 using Enzyme: make_zero
 
 include("../../utils.jl")
+include("../gen/loglikelihoods.jl")
 include("log_posteriors.jl")
 using .Utils: full_quant, half_quant
+using .LogLikelihoods: log_likelihood_MALA
 using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
 
 function position_update(

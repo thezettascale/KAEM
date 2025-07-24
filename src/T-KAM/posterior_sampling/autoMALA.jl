@@ -15,7 +15,7 @@ using CUDA,
     ComponentArrays
 
 include("../../utils.jl")
-include("../gen/gen_model.jl")
+include("../gen/loglikelihoods.jl")
 include("preconditioner.jl")
 include("step_search.jl")
 include("hmc_updates.jl")
@@ -24,7 +24,7 @@ using .Utils: device, half_quant, full_quant
 using .Preconditioning
 using .HamiltonianMonteCarlo: leapfrog, logpos_withgrad
 using .autoMALA_StepSearch: autoMALA_step
-using .GeneratorModel: log_likelihood_MALA
+using .LogLikelihoods: log_likelihood_MALA
 
 struct autoMALA_sampler{U<:full_quant}
     N::Int

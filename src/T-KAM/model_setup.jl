@@ -11,6 +11,7 @@ include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
+include("../utils.jl")
 using .T_KAM_model: T_KAM
 using .LogPriorFCNs: log_prior_ula, log_prior_mix, log_prior_univar
 using .ImportanceSampling
@@ -18,6 +19,7 @@ using .LangevinMLE
 using .ThermodynamicIntegration
 using .autoMALA_sampling
 using .ULA_sampling
+using .Utils: device, half_quant, full_quant, hq
 
 function move_to_hq!(model::T_KAM)
     """Moves the model to half precision."""

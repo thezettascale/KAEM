@@ -174,7 +174,7 @@ function (model::T_KAM{T,U})(
     st_lux::NamedTuple,
     num_samples::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant, U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant,U<:full_quant}
     """
     Inference pass to generate a batch of data from the model.
     This is the same for both the standard and thermodynamic models.

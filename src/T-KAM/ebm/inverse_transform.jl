@@ -1,7 +1,7 @@
 
 module InverseTransformSampling
 
-export sample_univariate, sample_mixture, gausslegendre_quadrature, trapezium_quadrature
+export sample_univariate, sample_mixture, GaussLegendreQuadrature, TrapeziumQuadrature
 
 using NNlib: softmax
 using CUDA,
@@ -13,7 +13,7 @@ using CUDA,
     Tullio,
     ComponentArrays,
     ParallelStencil
-    
+
 using ..Utils
 
 include("mixture_selection.jl")
@@ -25,12 +25,15 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-function trapezium_quadrature(
+struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
+
+struct GaussLegendreQuadrature <: Lux.AbstractLuxLayer end
+
+function (tq::TrapeziumQuadrature)(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{<:half_quant},Nothing} = nothing,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Trapezoidal rule for numerical integration"""
@@ -87,12 +90,11 @@ function get_gausslegendre(
     return nodes, (b - a) ./ 2 .* weights
 end
 
-function gausslegendre_quadrature(
+function (gq::GaussLegendreQuadrature)(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    ε::T = eps(half_quant),
     component_mask::Union{AbstractArray{T},Nothing} = nothing,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""

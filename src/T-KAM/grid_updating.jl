@@ -27,7 +27,12 @@ function update_model_grid(
     st_lux::NamedTuple;
     temps::AbstractArray{T} = [one(T)],
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{Any,ComponentArray{T},ComponentArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    Any,
+    ComponentArray{T},
+    ComponentArray{T},
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
     """
     Update the grid of the likelihood model using samples from the prior.
 

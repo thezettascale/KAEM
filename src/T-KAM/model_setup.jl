@@ -69,15 +69,11 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     )
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-    zero_vec =
-        pu(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
-    
+    zero_vec = pu(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+
     # Defaults
     @reset model.loss_fcn = ImportanceLoss(zero_vec)
-    @reset model.posterior_sampler = initialize_ULA_sampler(;
-        η = η_init,
-        N = num_steps,
-    )
+    @reset model.posterior_sampler = initialize_ULA_sampler(; η = η_init, N = num_steps)
 
     if model.N_t > 1
         @reset model.loss_fcn = ThermodynamicLoss()
@@ -89,7 +85,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
         type = autoMALA_bool ? "autoMALA" : "ULA"
         println("Posterior sampler: $type")
     else
-        
+
         println("Posterior sampler: IS")
     end
 
@@ -106,17 +102,17 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
 
-        @reset model.prior.lp_fcn = log_prior_ula
+        @reset model.prior.lp_fcn = LogPriorULA(model.ε)
         println("Prior sampler: ULA")
     elseif model.prior.mixture_model
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
-        @reset model.prior.lp_fcn = log_prior_mix
+        @reset model.prior.lp_fcn = LogPriorMix(model.ε, !model.prior.contrastive_div)
         println("Prior sampler: Mix ITS")
     else
-        @reset model.prior.lp_fcn = log_prior_univar
+        @reset model.prior.lp_fcn = LogPriorUnivariate(model.ε, !model.prior.contrastive_div)
         println("Prior sampler: Univar ITS")
     end
 

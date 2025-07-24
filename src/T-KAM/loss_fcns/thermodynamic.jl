@@ -67,9 +67,7 @@ function marginal_llhood(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux_ebm;
-        ε = model.ε,
-        normalize = !model.prior.contrastive_div,
+        st_lux_ebm,
     )
 
     logprior, st_lux_ebm = model.prior.lp_fcn(
@@ -77,9 +75,7 @@ function marginal_llhood(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux_ebm;
-        ε = model.ε,
-        normalize = !model.prior.contrastive_div,
+        st_lux_ebm,
     )
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
 

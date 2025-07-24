@@ -1,6 +1,6 @@
 module EBM_Model
 
-export EbmModel, init_EbmModel, log_prior
+export EbmModel, init_EbmModel
 
 using CUDA, KernelAbstractions, FastGaussQuadrature
 using ConfParser,
@@ -14,34 +14,37 @@ using ConfParser,
     ComponentArrays
 
 using ..Utils
+using ..T_KAM_model
 
 include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("ref_priors.jl")
+include("log_prior_fcns.jl")
 using .UnivariateFunctions
 using .InverseTransformSampling
 using .RefPriors
+using .LogPriorFCNs
 
 const quad_map =
-    Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
+    Dict("gausslegendre" => GaussLegendreQuadrature, "trapezium" => TrapeziumQuadrature)
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Vector{Any}
-    layernorms::Vector{Any}
+    fcns_qp::Vector{univariate_function{T,U}}
+    layernorms::Vector{Lux.LayerNorm}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf!::Any
+    π_pdf!::Union{UniformPrior,GaussianPrior,LogNormalPrior,LearnableGaussianPrior,EbmPrior}
     p_size::Int
     q_size::Int
-    quad::Function
+    quad::Union{GaussLegendreQuadrature,TrapeziumQuadrature}
     N_quad::Int
     nodes::AbstractArray{T}
     weights::AbstractArray{T}
     contrastive_div::Bool
     quad_type::AbstractString
     ula::Bool
-    lp_fcn::Function
+    lp_fcn::Union{LogPriorULA,LogPriorUnivariate,LogPriorMix}
     mixture_model::Bool
     λ::T
 end
@@ -129,7 +132,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
-    quad_fcn = get(quad_map, quad_type, gausslegendre_quadrature)
+    quad_fcn = get(quad_map, quad_type, GaussLegendreQuadrature())
     quadrature_method =
         (m, p, sk, sl, mask) -> quad_fcn(m, p, sk, sl; ε = eps, component_mask = mask)
 
@@ -137,8 +140,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights')
-
-
 
     ref_initializer = get(prior_pdf, prior_type, prior_pdf["uniform"])
 
@@ -158,7 +159,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         contrastive_div,
         quad_type,
         ula,
-        identity,
+        LogPriorUnivariate(eps, !contrastive_div),
         mixture_model,
         reg,
     )

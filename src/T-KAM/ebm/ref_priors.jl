@@ -1,8 +1,9 @@
 module RefPriors
 
-export prior_pdf
+export prior_pdf,
+    UniformPrior, GaussianPrior, LogNormalPrior, LearnableGaussianPrior, EbmPrior
 
-using CUDA, KernelAbstractions, ParallelStencil
+using CUDA, KernelAbstractions, ParallelStencil, Lux
 
 using ..Utils
 
@@ -12,15 +13,15 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-struct UniformPrior end
-struct GaussianPrior end
-struct LogNormalPrior
+struct UniformPrior <: Lux.AbstractLuxLayer end
+struct GaussianPrior <: Lux.AbstractLuxLayer end
+struct LogNormalPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
-struct LearnableGaussianPrior
+struct LearnableGaussianPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
-struct EbmPrior
+struct EbmPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
 

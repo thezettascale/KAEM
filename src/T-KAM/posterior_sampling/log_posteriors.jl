@@ -36,8 +36,7 @@ function unadjusted_logpos(
                 model.prior,
                 ps.ebm,
                 st_kan.ebm,
-                st_lux.ebm;
-                ε = model.ε,
+                st_lux.ebm,
             ),
         ),
     )
@@ -108,8 +107,7 @@ function autoMALA_logpos_value_4D(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux.ebm;
-        ε = model.ε,
+        st_lux.ebm,
     )
     ll, st_gen = log_likelihood_MALA(
         z_reshaped,
@@ -142,8 +140,7 @@ function autoMALA_logpos_reduced_4D(
                 model.prior,
                 ps.ebm,
                 st_kan.ebm,
-                st_lux.ebm;
-                ε = model.ε,
+                st_lux.ebm,
             ),
         ),
     )
@@ -171,7 +168,12 @@ function autoMALA_value_and_grad_4D(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{T},
+    AbstractArray{T},
+    NamedTuple,
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
 
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
@@ -205,10 +207,10 @@ function autoMALA_logpos(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant }
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
     lp, st_ebm =
-        model.prior.lp_fcn(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm; ε = model.ε)
+        model.prior.lp_fcn(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
     ll, st_gen =
         log_likelihood_MALA(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen; ε = model.ε)
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
@@ -235,7 +237,12 @@ function autoMALA_value_and_grad(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{T},
+    AbstractArray{T},
+    NamedTuple,
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
 
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :

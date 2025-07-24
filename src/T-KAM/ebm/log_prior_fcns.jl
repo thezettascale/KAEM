@@ -1,6 +1,6 @@
 module LogPriorFCNs
 
-export log_prior_univar, log_prior_ula, log_prior_mix
+export LogPriorULA, LogPriorMix
 
 using NNlib: softmax
 using CUDA,
@@ -16,7 +16,7 @@ using CUDA,
     ParallelStencil
 
 using ..Utils
-using ..T_KAM_model: EbmModel
+using ..EBM_Model
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)
@@ -24,19 +24,31 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-function log_prior_ula(
+struct LogPriorULA{T<:half_quant} <: Lux.AbstractLuxLayer
+    ε::T
+end
+
+struct LogPriorUnivariate{T<:half_quant} <: Lux.AbstractLuxLayer
+    ε::T
+    normalize::Bool
+end
+
+struct LogPriorMix{T<:half_quant} <: Lux.AbstractLuxLayer
+    ε::T
+    normalize::Bool
+end
+
+function (lp::LogPriorULA)(
     z::AbstractArray{T},
     ebm::EbmModel{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-    ε::T = eps(half_quant),
-    normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     Q, P, S = size(z)
     log_π0 = @zeros(Q, P, S)
     ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
+    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, lp.ε)
     f, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
 end
@@ -62,14 +74,12 @@ end
     return nothing
 end
 
-function log_prior_univar(
+function (lp::LogPriorUnivariate)(
     z::AbstractArray{T},
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    ε::T = eps(half_quant),
-    normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the ebm-prior.
@@ -93,16 +103,16 @@ function log_prior_univar(
     Q, P, S = size(z)
     log_π0 = @zeros(Q, P, S)
     ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, ε)
+    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, lp.ε)
 
     # Pre-allocate
     log_p = @zeros(S)
     log_Z = @zeros(Q, P)
 
-    (normalize && !ebm.ula) && @parallel (1:Q, 1:P) log_norm_kernel!(
+    lp.normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
         log_Z,
         first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
-        ε,
+        lp.ε,
     )
 
     for q = 1:Q
@@ -142,14 +152,12 @@ end
     return nothing
 end
 
-function log_prior_mix(
+function (lp::LogPriorMix)(
     z::AbstractArray{T},
     ebm::EbmModel{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-    ε::T = eps(half_quant),
-    normalize::Bool = false,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the mixture ebm-prior.
@@ -176,16 +184,16 @@ function log_prior_mix(
     alpha = softmax(ps.dist.α; dims = 2)
     log_απ = @zeros(Q, P, S)
     ebm.π_pdf!(log_απ, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
+    @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, lp.ε)
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
 
     log_Z = @zeros(Q, P)
-    normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
+    lp.normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
         log_Z,
         first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
-        ε,
+        lp.ε,
     )
 
     log_p = @zeros(S)

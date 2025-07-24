@@ -39,9 +39,7 @@ function marginal_llhood(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux_ebm;
-        ε = model.ε,
-        normalize = !model.prior.contrastive_div,
+        st_lux_ebm,
     )
     logllhood, st_lux_gen = log_likelihood_MALA(
         z_posterior,
@@ -58,9 +56,7 @@ function marginal_llhood(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux_ebm;
-        ε = model.ε,
-        normalize = !model.prior.contrastive_div,
+        st_lux_ebm,
     )
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
     return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*model.loss_scaling,

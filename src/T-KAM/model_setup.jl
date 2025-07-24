@@ -2,7 +2,7 @@ module ModelSetup
 
 export prep_model
 
-using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA
+using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 include("T-KAM.jl")
 include("ebm/log_prior_fcns.jl")

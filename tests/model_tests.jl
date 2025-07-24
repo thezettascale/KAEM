@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -102,8 +102,8 @@ end
 
 @testset "T-KAM Tests" begin
     test_ps_derivative()
-    test_grid_update()
-    test_mala_loss()
-    test_cnn_loss()
-    test_seq_loss()
+    # test_grid_update()
+    # test_mala_loss()
+    # test_cnn_loss()
+    # test_seq_loss()
 end

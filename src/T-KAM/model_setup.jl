@@ -74,7 +74,7 @@ function setup_training!(model)
     # Defaults
     @reset model.loss_fcn = ImportanceLoss(zero_vec)
     @reset model.posterior_sampler = initialize_ULA_sampler(;
-        η = step_size,
+        η = η_init,
         N = num_steps,
     )
 
@@ -93,12 +93,12 @@ function setup_training!(model)
     end
 
     if model.prior.ula
-        num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
-        step_size = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
+        num_steps_prior = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
+        step_size_prior = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
 
         prior_sampler = initialize_ULA_sampler(;
-            η = step_size,
-            N = num_steps,
+            η = step_size_prior,
+            N = num_steps_prior,
             prior_sampling_bool = true,
         )
 

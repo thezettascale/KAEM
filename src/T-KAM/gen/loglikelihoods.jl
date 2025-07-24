@@ -9,7 +9,7 @@ using NNlib: softmax, sigmoid
 include("../../utils.jl")
 include("gen_model.jl")
 using .Utils: half_quant, full_quant
-using .GenModel: GenModel
+using .GeneratorModel: GenModel
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

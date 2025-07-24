@@ -215,6 +215,18 @@ function autoMALA_logpos(
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
 end
 
+function closure(
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model::T_KAM{T,full_quant},
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+)::T where {T<:half_quant}
+    return sum(first(autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)))
+end
+
 function autoMALA_value_and_grad(
     z::AbstractArray{T},
     ∇z::AbstractArray{T},
@@ -226,17 +238,13 @@ function autoMALA_value_and_grad(
     st_lux::NamedTuple,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    fcn =
-        (z_i, x_i, t, m, p, ks, ls) ->
-            sum(first(autoMALA_logpos(z_i, x_i, t, m, p, ks, ls)))
-
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :
         repeat(x, 1, 1, length(temps)-size(x)[end])
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.Reverse,
-        fcn,
+        closure,
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),

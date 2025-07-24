@@ -98,6 +98,34 @@ function marginal_llhood(
     st_lux_gen
 end
 
+function closure(
+    ps::ComponentArray{T},
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    weights_resampled::AbstractArray{T},
+    resampled_idxs::AbstractArray{Int},
+    m::T_KAM{T},
+    st_kan::ComponentArray{T},
+    st_lux_ebm::NamedTuple,
+    st_lux_gen::NamedTuple,
+    zero_vec::AbstractArray{T},
+)::T where {T<:half_quant}
+    return first(
+        marginal_llhood(
+            ps,
+            z,
+            x,
+            weights_resampled,
+            resampled_idxs,
+            m,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+            zero_vec,
+        ),
+    )
+end
+
 function grad_importance_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
@@ -112,14 +140,9 @@ function grad_importance_llhood(
     zero_vec::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    f =
-        (p, z_i, x_i, w, r, m, sk, se, sg, zv) -> begin
-            first(marginal_llhood(p, z_i, x_i, w, r, m, sk, se, sg, zv))
-        end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.Reverse,
-        f,
+        closure,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z),
@@ -176,8 +199,8 @@ function (l::ImportanceLoss)(
         resampled_idxs,
         model,
         st_kan,
-        Lux.testmode(st_lux_ebm),
-        Lux.testmode(st_lux_gen),
+        Lux.trainmode(st_lux_ebm),
+        Lux.trainmode(st_lux_gen),
         l.zero_vec,
     )
 

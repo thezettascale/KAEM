@@ -99,6 +99,32 @@ function marginal_llhood(
     st_lux_gen
 end
 
+function closure(
+    ps::ComponentArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
+    x::AbstractArray{T},
+    Δt::AbstractVector{T},
+    model::T_KAM{T,full_quant},
+    st_kan::ComponentArray{T},
+    st_lux_ebm::NamedTuple,
+    st_lux_gen::NamedTuple;
+)
+    return first(
+        marginal_llhood(
+            ps,
+            z_posterior,
+            z_prior,
+            x,
+            Δt,
+            model,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+        ),
+    )
+end
+
 function grad_thermo_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
@@ -111,14 +137,10 @@ function grad_thermo_llhood(
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    f =
-        (p, post_i, prior_i, x_i, t, m, sk, se, sg) -> begin
-            first(marginal_llhood(p, post_i, prior_i, x_i, t, m, sk, se, sg))
-        end
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.Reverse,
-        f,
+        closure,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z_posterior),
@@ -178,8 +200,8 @@ function (l::ThermodynamicLoss)(
         Δt,
         model,
         st_kan,
-        Lux.testmode(st_lux_ebm),
-        Lux.testmode(st_lux_gen),
+        Lux.trainmode(st_lux_ebm),
+        Lux.trainmode(st_lux_gen),
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

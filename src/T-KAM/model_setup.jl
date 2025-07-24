@@ -11,7 +11,7 @@ include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
-using .T_KAM
+using .T_KAM_model: T_KAM
 using .LogPriorFCNs: log_prior_ula, log_prior_mix, log_prior_univar
 using .ImportanceSampling
 using .LangevinMLE

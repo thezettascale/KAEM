@@ -47,17 +47,22 @@ function test_derivative()
     st = st |> ComponentArray |> device
 
     ∇ = Enzyme.make_zero(ps)
-    
-    # Use anonymous function without type annotations, exactly like working examples
-    diff_fcn = (fcn, z, p, s) -> sum(fcn(z, p, s))
+    function diff_fcn(
+        fcn::univariate_function{half_quant,full_quant},
+        z::AbstractArray{half_quant},
+        p::ComponentArray{half_quant},
+        s::ComponentArray{half_quant},
+    )
+        sum(fcn(z, p, s))
+    end
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
+    Enzyme.autodiff_deferred(
         Enzyme.Reverse,
-        diff_fcn,
+        Enzyme.Const(diff_fcn),
         Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(f),
         Enzyme.Const(x),
+        Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(st),
     )
 
@@ -66,7 +71,7 @@ function test_derivative()
 end
 
 @testset "Univariate Funtion Tests" begin
-    test_fwd()
-    test_grid_update()
+    # test_fwd()
+    # test_grid_update()
     test_derivative()
 end

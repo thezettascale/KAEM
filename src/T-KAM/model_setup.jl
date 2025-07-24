@@ -79,7 +79,9 @@ function setup_training!(model::T_KAM)
         type = autoMALA_bool ? "autoMALA" : "ULA"
         println("Posterior sampler: $type")
     else
-        @reset model.loss_fcn = ImportanceLoss()
+        batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+        zero_vec = device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+        @reset model.loss_fcn = ImportanceLoss(zero_vec)
         println("Posterior sampler: IS")
     end
 

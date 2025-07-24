@@ -121,9 +121,6 @@ function init_T_KAM(
     num_grid_updating_samples =
         parse(Int, retrieve(conf, "GRID_UPDATING", "num_grid_updating_samples"))
 
-    zero_vec = device(zeros(half_quant, x_shape..., IS_samples, batch_size))
-    loss_struct = ImportanceLoss(zero_vec)
-
     max_samples = max(IS_samples, batch_size)
     η_init = parse(full_quant, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
@@ -147,11 +144,6 @@ function init_T_KAM(
         (m, n, p, sk, sl, r) ->
             sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
-    posterior_sampler = initialize_ULA_sampler(;
-        η = η_init,
-        N = num_steps,
-        RE_frequency = replica_exchange_frequency,
-    )
     verbose && println("Using $(Threads.nthreads()) threads.")
 
     return T_KAM(
@@ -168,8 +160,8 @@ function init_T_KAM(
         p,
         N_t,
         sample_prior,
-        posterior_sampler,
-        loss_struct,
+        nothing,
+        nothing,
         loss_scaling,
         eps,
         file_loc,

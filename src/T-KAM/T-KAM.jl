@@ -143,8 +143,9 @@ function init_T_KAM(
         p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> full_quant
     end
 
-    sample_prior = (m, n, p, sk, sl, r) ->
-        sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+    sample_prior =
+        (m, n, p, sk, sl, r) ->
+            sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
     posterior_sampler = initialize_ULA_sampler(;
         η = η_init,

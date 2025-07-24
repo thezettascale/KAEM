@@ -1,7 +1,6 @@
 module GeneratorModel
 
-export GenModel,
-    init_GenModel, generator, importance_resampler
+export GenModel, init_GenModel, generator, importance_resampler
 
 using CUDA, KernelAbstractions
 using ConfParser,

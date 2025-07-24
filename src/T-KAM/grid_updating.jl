@@ -15,6 +15,7 @@ using CUDA,
 
 using ..Utils
 using ..T_KAM_model
+using ..T_KAM_model.UnivariateFunctions
 
 include("kan/grid_updating.jl")
 using .GridUpdating

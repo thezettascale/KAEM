@@ -29,7 +29,7 @@ struct TrapeziumQuadrature end
 
 struct GaussLegendreQuadrature end
 
-function trapezium_quad(
+function (tq::TrapeziumQuadrature)(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -90,7 +90,7 @@ function get_gausslegendre(
     return nodes, (b - a) ./ 2 .* weights
 end
 
-function gausslegendre_quad(
+function (gq::GaussLegendreQuadrature)(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},

@@ -46,7 +46,7 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     max_samples::Int
     MALA::Bool
     conf::ConfParse
-    log_prior::Union{LogPriorULA,LogPriorUnivariate,LogPriorMix}
+    log_prior::Any
 end
 
 function init_T_KAM(

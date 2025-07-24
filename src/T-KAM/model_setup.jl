@@ -6,6 +6,8 @@ using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 using ..Utils
 using ..T_KAM_model
+using ..T_KAM_model.EBM_Model
+using ..T_KAM_model.LogPriorFCNs
 
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")

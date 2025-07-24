@@ -117,7 +117,7 @@ function grad_thermo_llhood(
         end
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         f,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

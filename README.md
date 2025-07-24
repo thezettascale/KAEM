@@ -79,8 +79,10 @@ Without trainer:
 using Random, Lux, Enzyme, ComponentArrays, Accessors
 
 include("src/T-KAM/T-KAM.jl")
+include("src/T-KAM/model_setup.jl")
 include("src/utils.jl")
 using .T_KAM_model
+using .ModelSetup
 using .Utils: device, half_quant, full_quant, hq, fq
 
 
@@ -96,19 +98,19 @@ model = init_T_KAM(
 x, loader_state = iterate(model.train_loader)
 x = device(x)
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
+ps_hq = half_quant.(ps)
 
 # Training loss/grads are Reactant.jl compiled
-grads = Enzyme.make_zero(ps) # or zero(ps)
-train_idx, rng = 1, MersenneTwister(1)
+grads = Enzyme.make_zero(ps_hq) # or zero(ps_hq)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
-      ps,
+      ps_hq,
       grads,
       st_kan,
       st_lux,
       model,
-      x,
-      train_idx, # Only affects temperature scheduling in thermo model
-      rng
+      x;
+      train_idx = 1, # Only affects temperature scheduling in thermo model
+      rng = Random.default_rng()
 )
 
 # States reset with Accessors.jl:

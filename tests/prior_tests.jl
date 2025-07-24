@@ -59,7 +59,7 @@ function test_lp_derivative()
     end
 
     Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         fcn,
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

@@ -46,7 +46,6 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     file_loc::AbstractString
     max_samples::Int
     MALA::Bool
-    conf::ConfParse
 end
 
 function generate_batch(
@@ -203,7 +202,6 @@ function init_T_KAM(
     posterior_sampler = initialize_ULA_sampler(;
         η = η_init,
         N = num_steps,
-        num_samples = size(x)[end],
         RE_frequency = replica_exchange_frequency,
         rng = rng,
     )
@@ -218,7 +216,7 @@ function init_T_KAM(
             η_max = η_minmax[2],
             seq = model.lkhood.SEQ,
             RE_frequency = replica_exchange_frequency,
-            samples = max(IS_samples, batch_size),
+            samples = max_samples,
         )
     end
 
@@ -245,7 +243,6 @@ function init_T_KAM(
         file_loc,
         max_samples,
         MALA,
-        conf,
     )
 end
 

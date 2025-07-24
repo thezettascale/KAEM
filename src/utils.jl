@@ -3,7 +3,7 @@ module Utils
 export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
 
 using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, KernelAbstractions, Enzyme.EnzymeRules
+using CUDA, LuxCUDA, KernelAbstractions, Enzyme.EnzymeRules, NNlib
 
 const pu =
     CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()

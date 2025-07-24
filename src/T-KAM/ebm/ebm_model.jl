@@ -14,11 +14,13 @@ using ConfParser,
     ComponentArrays
 
 using ..Utils
-using ..InverseTransformSampling
-using ..RefPriors: prior_pdf
 
 include("../kan/univariate_functions.jl")
+include("inverse_transform.jl")
+include("ref_priors.jl")
 using .UnivariateFunctions: univariate_function, init_function
+using .InverseTransformSampling
+using .RefPriors: prior_pdf
 
 const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)

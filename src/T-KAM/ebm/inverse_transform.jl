@@ -167,7 +167,7 @@ function sample_univariate(
     ε::T = eps(T),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
 
-    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm, nothing)
+    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm)
     grid_size = size(grid, 2)
     grid = full_quant.(grid)
 
@@ -241,7 +241,7 @@ function sample_mixture(
     """
     mask = choose_component(ps.α, num_samples, ebm.q_size, ebm.p_size; rng = rng)
 
-    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm, mask)
+    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm; component_mask = mask)
     grid_size = size(grid, 2)
 
     cdf = cat(

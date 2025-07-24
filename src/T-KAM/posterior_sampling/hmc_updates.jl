@@ -1,6 +1,6 @@
 module HamiltonianMonteCarlo
 
-export leapfrop_proposal
+export leapfrog
 
 using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
 using Enzyme: make_zero
@@ -52,7 +52,7 @@ function logpos_withgrad(
     st_lux
 end
 
-function leapfrop_proposal(
+function leapfrog(
     z::AbstractArray{U},
     ∇z::AbstractArray{U},
     x::AbstractArray{T},

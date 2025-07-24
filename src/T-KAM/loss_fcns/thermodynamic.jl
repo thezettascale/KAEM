@@ -114,7 +114,7 @@ function grad_thermo_llhood(
             first(marginal_llhood(p, post_i, prior_i, x_i, t, m, sk, se, sg))
         end
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,

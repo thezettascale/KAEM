@@ -115,7 +115,7 @@ function grad_importance_llhood(
             first(marginal_llhood(p, z_i, x_i, w, r, m, sk, se, sg, zv))
         end
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
         Enzyme.Active,

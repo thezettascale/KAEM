@@ -140,7 +140,7 @@ function autoMALA_value_and_grad_4D(
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         autoMALA_logpos_reduced_4D,
         Enzyme.Active,
@@ -197,7 +197,7 @@ function autoMALA_value_and_grad(
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :
         repeat(x, 1, 1, length(temps)-size(x)[end])
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         fcn,
         Enzyme.Active,

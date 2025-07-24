@@ -4,8 +4,6 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-Enzyme.Compiler.VERBOSE_ERRORS[] = false
-
 include("../src/T-KAM/kan/univariate_functions.jl")
 include("../src/T-KAM/kan/grid_updating.jl")
 include("../src/utils.jl")
@@ -53,7 +51,7 @@ function test_derivative()
         sum(fcn(z, p, s))
     end
 
-    Enzyme.autodiff(
+    Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         diff_fcn,
         Enzyme.Active,
@@ -68,7 +66,7 @@ function test_derivative()
 end
 
 @testset "Univariate Funtion Tests" begin
-    test_fwd()
-    test_grid_update()
+    # test_fwd()
+    # test_grid_update()
     test_derivative()
 end

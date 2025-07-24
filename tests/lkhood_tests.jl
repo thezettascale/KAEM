@@ -31,7 +31,7 @@ function test_generate()
     ps = half_quant.(ps)
 
     z = first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    x, _ = model.generator(ps.gen, st_kan.gen, st_lux.gen, z)
+    x, _ = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (32, 32, 1, b_size)
 end
 

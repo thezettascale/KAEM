@@ -6,7 +6,7 @@ using CUDA, KernelAbstractions, Accessors, Lux, LuxCUDA, Statistics, ComponentAr
 
 using ..Utils
 using ..T_KAM_model
-using ..HamiltonianMonteCarlo: leapfrog
+using ..HamiltonianMonteCarlo
 
 function safe_step_size_update(
     η::AbstractArray{U},

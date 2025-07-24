@@ -18,16 +18,16 @@ using ..Utils
 include("../kan/univariate_functions.jl")
 include("inverse_transform.jl")
 include("ref_priors.jl")
-using .UnivariateFunctions: univariate_function, init_function
+using .UnivariateFunctions
 using .InverseTransformSampling
-using .RefPriors: prior_pdf
+using .RefPriors
 
 const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Vector{univariate_function{T,U}}
-    layernorms::Vector{Lux.LayerNorm}
+    fcns_qp::Vector{Any}
+    layernorms::Vector{Any}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -43,7 +43,7 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     ula::Bool
     lp_fcn::Function
     mixture_model::Bool
-    λ::half_quant
+    λ::T
 end
 
 function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())

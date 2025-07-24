@@ -17,13 +17,16 @@ using CUDA,
 using ..Utils
 using ..T_KAM_model
 
-include("../gen/loglikelihoods.jl")
 include("preconditioner.jl")
-include("step_search.jl")
-include("hmc_updates.jl")
-using .LogLikelihoods: log_likelihood_MALA
 using .Preconditioning
+
+include("../gen/loglikelihoods.jl")
+using .LogLikelihoods: log_likelihood_MALA
+
+include("hmc_updates.jl")
 using .HamiltonianMonteCarlo
+
+include("step_search.jl")
 using .autoMALA_StepSearch
 
 struct autoMALA_sampler{U<:full_quant}

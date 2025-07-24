@@ -10,10 +10,8 @@ using ..Utils
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
-include("ebm/inverse_transform.jl")
 using .EBM_Model
 using .GeneratorModel
-using .InverseTransformSampling: sample_mixture, sample_univariate
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel

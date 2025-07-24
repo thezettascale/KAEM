@@ -8,9 +8,9 @@ using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 using ..Utils
 
 include("../../kan/univariate_functions.jl")
-using .UnivariateFunctions: univariate_function, init_function
+using .UnivariateFunctions
 
-struct KAN_Generator <: Lux.AbstractLuxLayer
+struct KAN_Generator{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Vector{Any}
     layernorms::Vector{Any}
@@ -106,12 +106,12 @@ function init_KAN_Generator(
     return KAN_Generator(depth, Φ_functions, layernorms, layernorm_bool, false, x_shape)
 end
 
-function (gen::KAN_Generator)(
+function (gen::KAN_Generator{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Generate data from the KAN likelihood model.
 

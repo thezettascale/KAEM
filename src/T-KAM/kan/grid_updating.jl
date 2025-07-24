@@ -13,7 +13,7 @@ using CUDA,
     LuxCUDA
 
 using ..Utils
-using ..UnivariateFunctions: univariate_function, extend_grid, coef2curve_FFT, coef2curve_Spline, curve2coef
+using ..UnivariateFunctions
 
 function update_fcn_grid(
     l::univariate_function{T,U},

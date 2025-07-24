@@ -2,7 +2,11 @@ module autoMALA_StepSearch
 
 export autoMALA_step
 
+using CUDA, KernelAbstractions, Accessors, Lux, LuxCUDA, Statistics, ComponentArrays
+
+include("../../utils.jl")
 include("hmc_updates.jl")
+using .Utils: half_quant, full_quant
 using .HamiltonianMonteCarlo: leapfrog
 
 function safe_step_size_update(
@@ -56,20 +60,8 @@ function select_step_size(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux = leapfrog(
-        z,
-        ∇z,
-        x,
-        temps,
-        logpos_z,
-        momentum,
-        M,
-        η_init,
-        model,
-        ps,
-        st_kan,
-        st_lux,
-    )
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux =
+        leapfrog(z, ∇z, x, temps, logpos_z, momentum, M, η_init, model, ps, st_kan, st_lux)
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0) |> cpu_device()

@@ -101,8 +101,7 @@ function grad_langevin_llhood(
     return ∇, st_lux_ebm, st_lux_gen
 end
 
-struct LangevinLoss
-end
+struct LangevinLoss end
 
 function (l::LangevinLoss)(
     ps::ComponentArray{T},

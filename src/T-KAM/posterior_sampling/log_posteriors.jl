@@ -137,7 +137,8 @@ function autoMALA_value_and_grad_4D(
     st_lux::NamedTuple,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    x_expanded = ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
+    x_expanded =
+        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -192,7 +193,9 @@ function autoMALA_value_and_grad(
         (z_i, x_i, t, m, p, ks, ls) ->
             sum(first(autoMALA_logpos(z_i, x_i, t, m, p, ks, ls)))
 
-    x_expanded = ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) : repeat(x, 1, 1, length(temps)-size(x)[end])
+    x_expanded =
+        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :
+        repeat(x, 1, 1, length(temps)-size(x)[end])
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),

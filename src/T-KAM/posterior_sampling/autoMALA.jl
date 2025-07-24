@@ -129,7 +129,8 @@ function (sampler::autoMALA_sampler)(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z_fq, st_kan, st_lux = logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
+        logpos_z, ∇z_fq, st_kan, st_lux =
+            logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
 
         if burn_in < sampler.N
             burn_in += 1

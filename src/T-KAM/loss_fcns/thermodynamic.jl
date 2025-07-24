@@ -20,7 +20,15 @@ function sample_thermo(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
-    z, st_lux = model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
+    z, st_lux = model.posterior_sampler(
+        model,
+        ps,
+        st_kan,
+        st_lux,
+        x;
+        temps = temps[2:end],
+        rng = rng,
+    )
     Δt = device(temps[2:end] - temps[1:(end-1)])
     return z, Δt, st_lux
 end
@@ -124,8 +132,7 @@ function grad_thermo_llhood(
     return ∇, st_lux_ebm, st_lux_gen
 end
 
-struct ThermodynamicLoss
-end
+struct ThermodynamicLoss end
 
 function (l::ThermodynamicLoss)(
     ps::ComponentArray{T},

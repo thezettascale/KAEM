@@ -39,8 +39,8 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     p::AbstractArray{U}
     N_t::Int
     sample_prior::Function
-    posterior_sampler
-    loss_fcn
+    posterior_sampler::Any
+    loss_fcn::Any
     loss_scaling::T
     ε::T
     file_loc::AbstractString
@@ -140,7 +140,7 @@ function init_T_KAM(
 
     MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
- 
+
     if N_t > 1
         initial_p =
             parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
@@ -164,7 +164,9 @@ function init_T_KAM(
         println("Posterior sampler: IS")
     end
 
-    sample_prior = (m, n, p, sk, sl, r) -> sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+    sample_prior =
+        (m, n, p, sk, sl, r) ->
+            sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
     if prior_model.ula
         num_steps = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
@@ -176,11 +178,14 @@ function init_T_KAM(
             prior_sampling_bool = true,
         )
 
-        sample_prior = (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
+        sample_prior =
+            (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
         println("Prior sampler: ULA")
 
     elseif prior_model.mixture_model
-        sample_prior = (m, n, p, sk, sl, r) -> sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+        sample_prior =
+            (m, n, p, sk, sl, r) ->
+                sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
         println("Prior sampler: Mix ITS")
     else
         println("Prior sampler: Univar ITS")
@@ -205,7 +210,7 @@ function init_T_KAM(
         RE_frequency = replica_exchange_frequency,
         rng = rng,
     )
-    
+
     if autoMALA_bool
         posterior_sampler = initialize_autoMALA_sampler(;
             N = num_steps,

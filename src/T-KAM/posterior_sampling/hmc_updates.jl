@@ -2,7 +2,8 @@ module HamiltonianMonteCarlo
 
 export leapfrop_proposal
 
-using CUDA, KernelAbstractions, Tullio, Lux, LuxCUDA, ComponentArrays
+using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
+using Enzyme: make_zero
 
 include("../../utils.jl")
 using .Utils: full_quant, half_quant
@@ -41,11 +42,14 @@ function logpos_withgrad(
     st_lux::NamedTuple,
 )::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple} where {T<:half_quant,U<:full_quant}
     fcn = ndims(z) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
-    logpos, ∇z_k, st_ebm, st_gen = fcn(z, Enzyme.make_zero(z), x, temps, model, ps, st_kan, st_lux)
+    logpos, ∇z_k, st_ebm, st_gen = fcn(z, make_zero(z), x, temps, model, ps, st_kan, st_lux)
     @reset st_kan.ebm = st_ebm
     @reset st_lux.gen = st_gen
 
-    return U.(logpos) ./ U(model.loss_scaling), U.(∇z_k) ./ U(model.loss_scaling), st_kan, st_lux
+    return U.(logpos) ./ U(model.loss_scaling),
+    U.(∇z_k) ./ U(model.loss_scaling),
+    st_kan,
+    st_lux
 end
 
 function leapfrop_proposal(

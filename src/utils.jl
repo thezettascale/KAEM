@@ -2,17 +2,18 @@ module Utils
 
 export removeNaN, device, removeZero, removeNeg, half_quant, full_quant, hq, fq, symbol_map
 
-using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant
+using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, Reactant, MLDataDevices
 using CUDA, LuxCUDA, KernelAbstractions, Enzyme.EnzymeRules
 
 if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     Reactant.set_default_backend("gpu")
+else
+    Reactant.set_default_backend("cpu")
 end
 
-const pu =
-    CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
+const pu = MLDataDevices.reactant_device()
 
-# # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
+# Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const QUANT_MAP =
     Dict("BF16" => BFloat16, "FP16" => Float16, "FP32" => Float32, "FP64" => Float64)
 

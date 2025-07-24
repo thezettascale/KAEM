@@ -2,7 +2,7 @@
 
 julia_version = "1.10.10"
 manifest_format = "2.0"
-project_hash = "bb768a7167f33fe2964c71fc7eeedbb6b45c5f50"
+project_hash = "dbca4da01a2688d98e01051574d8028f17e02b5e"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "be7ae030256b8ef14a441726c4c37766b90b93a3"
@@ -1990,9 +1990,9 @@ version = "1.0.0"
 
 [[deps.MLDataDevices]]
 deps = ["Adapt", "Compat", "Functors", "Preferences", "Random"]
-git-tree-sha1 = "209390b236bb04b289c708054fe1df06a4b314b5"
+git-tree-sha1 = "0ad0d8f83ddf28a7eba28ed94d0d68015ce645b7"
 uuid = "7e8f7934-dd98-4c1a-8fe8-92b47a384d40"
-version = "1.11.0"
+version = "1.11.1"
 
     [deps.MLDataDevices.extensions]
     MLDataDevicesAMDGPUExt = "AMDGPU"

@@ -124,9 +124,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
     quad_fcn = quad_type == "gausslegendre" ? GaussLegendreQuadrature() : TrapeziumQuadrature()
 
-    quadrature_method =
-        (m, p, sk, sl, mask) -> quad_fcn(m, p, sk, sl; ε = eps, component_mask = mask)
-
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
@@ -143,7 +140,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         ref_initializer(eps),
         P,
         Q,
-        quadrature_method,
+        quad_fcn,
         N_quad,
         nodes,
         weights,

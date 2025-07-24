@@ -261,7 +261,7 @@ function move_to_hq(model::T_KAM)
 
     if model.lkhood.generator.layernorm_bool
         for i = 1:(model.lkhood.generator.depth-1)
-            @reset model.lkhood.layernorms[i] = model.lkhood.layernorms[i] |> hq
+            @reset model.lkhood.generator.layernorms[i] = model.lkhood.generator.layernorms[i] |> hq
         end
     end
 
@@ -269,7 +269,7 @@ function move_to_hq(model::T_KAM)
         for i = 1:(model.lkhood.generator.depth-1)
             @reset model.lkhood.generator.Φ_fcns[i] = model.lkhood.generator.Φ_fcns[i] |> hq
             if model.lkhood.generator.batchnorm_bool
-                @reset model.lkhood.batchnorms[i] = model.lkhood.batchnorms[i] |> hq
+                @reset model.lkhood.generator.batchnorms[i] = model.lkhood.generator.batchnorms[i] |> hq
             end
         end
         @reset model.lkhood.generator.Φ_fcns[model.lkhood.generator.depth] =

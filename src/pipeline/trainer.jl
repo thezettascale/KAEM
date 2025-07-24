@@ -256,8 +256,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
             test_loss = 0
             for x in t.model.test_loader
-                x_gen, st_ebm, st_gen = CUDA.@fastmath generate_batch(
-                    t.model,
+                x_gen, st_ebm, st_gen = CUDA.@fastmath t.model(
                     t.ps,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
@@ -307,8 +306,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
             for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-                batch, st_ebm, st_gen = CUDA.@fastmath generate_batch(
-                    t.model,
+                batch, st_ebm, st_gen = CUDA.@fastmath t.model(
                     t.ps,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
@@ -386,10 +384,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     idx = length(t.model.lkhood.x_shape) + 1
     for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-        batch, t.st = CUDA.@fastmath generate_batch(
-            t.model,
+        batch, t.st = CUDA.@fastmath t.model(
             t.ps,
-            Lux.testmode(t.st),
+            t.st_kan,
+            Lux.testmode(t.st_lux),
             t.batch_size_for_gen;
             rng = t.rng,
         )

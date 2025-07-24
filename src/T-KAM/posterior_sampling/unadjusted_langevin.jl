@@ -14,12 +14,11 @@ using CUDA,
     Enzyme,
     ComponentArrays
 
-include("../../utils.jl")
-include("../gen/loglikelihoods.jl")
+using ..Utils
+using ..T_KAM_model
+
 include("log_posteriors.jl")
-using .Utils: pu, half_quant, full_quant, fq
-using .LogLikelihoods: log_likelihood_MALA
-using .LogPosteriors: unadjusted_logpos_grad
+using .LogPosteriors: unadjusted_logpos_grad, log_likelihood_MALA
 
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -46,14 +45,14 @@ function initialize_ULA_sampler(;
 end
 
 function (sampler::ULA_sampler)(
-    model,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(T)],
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
 
@@ -95,7 +94,7 @@ function (sampler::ULA_sampler)(
         end
     end
 
-    loss_scaling = model.loss_scaling |> full_quant
+    loss_scaling = U(model.loss_scaling)
 
     η = sampler.η
     sqrt_2η = sqrt(2 * η)
@@ -107,19 +106,19 @@ function (sampler::ULA_sampler)(
     temps_gpu = pu(temps)
 
     # Pre-allocate for both precisions
-    z_fq = full_quant.(z_hq)
+    z_fq = U.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
     # Pre-allocate noise
-    noise = randn(rng, full_quant, Q, P, S, num_temps, sampler.N)
+    noise = randn(rng, U, Q, P, S, num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> pu
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, :, i])
         ∇z_fq =
-            full_quant.(
+            U.(
                 unadjusted_logpos_grad(
                     z_hq,
                     Enzyme.make_zero(z_hq),
@@ -171,7 +170,7 @@ function (sampler::ULA_sampler)(
                 # Swap population if likelihood of population in new temperature is higher on average
                 z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
                 z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                z_fq = full_quant.(z_hq)
+                z_fq = U.(z_hq)
 
             end
         end

@@ -13,11 +13,11 @@ using CUDA,
     Random,
     LuxCUDA
 
-using ..Utils: half_quant, full_quant, pu, symbol_map
-using ..T_KAM_model: T_KAM
+using ..Utils
+using ..T_KAM_model
 
 include("kan/grid_updating.jl")
-using .GridUpdating: update_fcn_grid
+using .GridUpdating
 
 function update_model_grid(
     model::T_KAM{T,U},

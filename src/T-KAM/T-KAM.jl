@@ -1,19 +1,19 @@
 module T_KAM_model
 
-export T_KAM, init_T_KAM, generate_batch, next_temp
+export T_KAM, init_T_KAM
 
 using CUDA, KernelAbstractions, Enzyme
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 
+using ..Utils
+
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
 include("ebm/inverse_transform.jl")
-include("../utils.jl")
 using .EBM_Model
 using .GeneratorModel
 using .InverseTransformSampling: sample_mixture, sample_univariate
-using .Utils: pu, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel
@@ -37,38 +37,6 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     max_samples::Int
     MALA::Bool
     conf::ConfParse
-end
-
-function generate_batch(
-    model::T_KAM{T,U},
-    ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
-    st_lux::NamedTuple,
-    num_samples::Int;
-    rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant, U<:full_quant}
-    """
-    Inference pass to generate a batch of data from the model.
-    This is the same for both the standard and thermodynamic models.
-
-    Args:
-        model: The model.
-        ps: The parameters of the model.
-        kan_st: The states of the KAN model.
-        st_lux: The states of the Lux model.
-        num_samples: The number of samples to generate.
-        rng: The random number generator.
-
-    Returns:
-        The generated data.
-        Lux states of the prior.
-        Lux states of the likelihood.
-    """
-    ps = ps .|> half_quant
-    z, st_ebm = model.sample_prior(model, num_samples, ps, kan_st, st_lux, rng)
-    x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
-    noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
-    return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end
 
 function init_T_KAM(
@@ -200,6 +168,37 @@ function Lux.initialstates(
     gen_kan, gen_lux = Lux.initialstates(rng, model.lkhood)
 
     return ComponentArray(ebm = ebm_kan, gen = gen_kan), (ebm = ebm_lux, gen = gen_lux)
+end
+
+function (model::T_KAM{T,U})(
+    ps::ComponentArray{T},
+    kan_st::ComponentArray{T},
+    st_lux::NamedTuple,
+    num_samples::Int;
+    rng::AbstractRNG = Random.default_rng(),
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant, U<:full_quant}
+    """
+    Inference pass to generate a batch of data from the model.
+    This is the same for both the standard and thermodynamic models.
+
+    Args:
+        model: The model.
+        ps: The parameters of the model.
+        kan_st: The states of the KAN model.
+        st_lux: The states of the Lux model.
+        num_samples: The number of samples to generate.
+        rng: The random number generator.
+
+    Returns:
+        The generated data.
+        Lux states of the prior.
+        Lux states of the likelihood.
+    """
+    ps = ps .|> half_quant
+    z, st_ebm = model.sample_prior(model, num_samples, ps, kan_st, st_lux, rng)
+    x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
+    noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
+    return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end
 
 end

@@ -2,6 +2,7 @@ module LogPriorFCNs
 
 export log_prior_univar, log_prior_ula, log_prior_mix
 
+using NNlib: softmax
 using CUDA,
     KernelAbstractions,
     Tullio,
@@ -14,14 +15,8 @@ using CUDA,
     ComponentArrays,
     ParallelStencil
 
-using NNlib: softmax
-
-include("../../utils.jl")
-include("../kan/univariate_functions.jl")
-include("ebm_model.jl")
-using .Utils: half_quant, full_quant, fq, symbol_map
-using .UnivariateFunctions
-using .EBM_Model
+using ..Utils
+using ..T_KAM_model: EbmModel
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)

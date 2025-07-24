@@ -14,17 +14,17 @@ using CUDA,
     Enzyme,
     ComponentArrays
 
-include("../../utils.jl")
+using ..Utils
+using ..T_KAM_model
+
 include("../gen/loglikelihoods.jl")
 include("preconditioner.jl")
 include("step_search.jl")
 include("hmc_updates.jl")
-include("log_posteriors.jl")
-using .Utils: pu, half_quant, full_quant
-using .Preconditioning
-using .HamiltonianMonteCarlo: leapfrog, logpos_withgrad
-using .autoMALA_StepSearch: autoMALA_step
 using .LogLikelihoods: log_likelihood_MALA
+using .Preconditioning
+using .HamiltonianMonteCarlo
+using .autoMALA_StepSearch
 
 struct autoMALA_sampler{U<:full_quant}
     N::Int
@@ -62,14 +62,14 @@ function initialize_autoMALA_sampler(;
 end
 
 function (sampler::autoMALA_sampler)(
-    model,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     x::AbstractArray{T};
     temps::AbstractArray{T} = [one(T)],
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
 
@@ -85,13 +85,13 @@ function (sampler::autoMALA_sampler)(
     # Initialize from prior 
     z_hq, st_ebm =
         model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
-    loss_scaling = model.loss_scaling |> full_quant
+    loss_scaling = U(model.loss_scaling)
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)
 
     # Pre-allocate for both precisions
-    z_fq = full_quant.(z_hq)
+    z_fq = U.(z_hq)
     ∇z_fq = Enzyme.make_zero(z_fq)
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
@@ -100,7 +100,7 @@ function (sampler::autoMALA_sampler)(
     x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
-    M = zeros(full_quant, Q, P, 1, num_temps)
+    M = zeros(U, Q, P, 1, num_temps)
     z_cpu = cpu_device()(z_fq)
     for k = 1:num_temps
         M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
@@ -109,11 +109,11 @@ function (sampler::autoMALA_sampler)(
 
     log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
     ratio_bounds =
-        log.(full_quant.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
-    log_u_swap = log.(rand(rng, full_quant, S, num_temps-1, sampler.N)) |> pu
+        log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
+    log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N)) |> pu
 
     num_acceptances = zeros(Int, S, num_temps) |> pu
-    mean_η = zeros(full_quant, S, num_temps) |> pu
+    mean_η = zeros(U, S, num_temps) |> pu
     momentum = Enzyme.make_zero(z_fq)
 
     burn_in = 0
@@ -215,7 +215,7 @@ function (sampler::autoMALA_sampler)(
                     # Swap population if likelihood of population in new temperature is higher on average
                     z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
                     z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                    z_fq = full_quant.(z_hq)
+                    z_fq = U.(z_hq)
                 end
             end
         end

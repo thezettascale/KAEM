@@ -5,8 +5,7 @@ export SEQ_Generator, init_SEQ_Generator
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser, ParallelStencil
 using NNlib: softmax, gelu
 
-include("../../../utils.jl")
-using .Utils: half_quant, full_quant
+using ..Utils
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

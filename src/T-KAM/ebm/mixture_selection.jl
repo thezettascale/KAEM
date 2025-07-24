@@ -7,8 +7,7 @@ using NNlib: softmax
 using Flux: onehotbatch
 using CUDA, LinearAlgebra, Random, ParallelStencil
 
-include("../../utils.jl")
-using .Utils: pu, half_quant, full_quant, fq
+using ..Utils
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

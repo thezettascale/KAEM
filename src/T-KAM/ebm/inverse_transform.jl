@@ -13,11 +13,11 @@ using CUDA,
     Tullio,
     ComponentArrays,
     ParallelStencil
+    
+using ..Utils
 
-include("../../utils.jl")
 include("mixture_selection.jl")
-using .Utils: pu, half_quant, full_quant, fq
-using .MixtureChoice
+using .MixtureChoice: choose_component
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)

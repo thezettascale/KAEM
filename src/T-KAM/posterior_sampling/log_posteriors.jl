@@ -10,24 +10,23 @@ using CUDA,
     Random,
     Enzyme
 
-include("../../utils.jl")
+using ..Utils
+using ..T_KAM_model
+
 include("../gen/loglikelihoods.jl")
-include("../T-KAM.jl")
-using .Utils: pu, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_MALA
-using .T_KAM_model
 
 ### ULA ### 
 function unadjusted_logpos(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     prior_sampling_bool::Bool,
-)::T where {T<:half_quant}
+)::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
     lp = sum(
@@ -62,12 +61,12 @@ function unadjusted_logpos_grad(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     prior_sampling_bool::Bool,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
     # Expand for log_likelihood
     x_expanded =
@@ -97,11 +96,11 @@ function autoMALA_logpos_value_4D(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
     lp, st_ebm = model.prior.lp_fcn(
@@ -129,11 +128,11 @@ function autoMALA_logpos_reduced_4D(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::T where {T<:half_quant}
+)::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
     lp = sum(
@@ -168,11 +167,11 @@ function autoMALA_value_and_grad_4D(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
 
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
@@ -202,11 +201,11 @@ function autoMALA_logpos(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant }
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
     lp, st_ebm =
         model.prior.lp_fcn(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm; ε = model.ε)
@@ -219,11 +218,11 @@ function closure(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::T where {T<:half_quant}
+)::T where {T<:half_quant,U<:full_quant}
     return sum(first(autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)))
 end
 
@@ -232,11 +231,11 @@ function autoMALA_value_and_grad(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model::T_KAM{T,full_quant},
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
 
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :

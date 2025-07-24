@@ -5,12 +5,11 @@ export LangevinLoss, initialize_langevin_loss
 using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA
 
+using ..Utils
+using ..T_KAM_model
+
 include("../gen/loglikelihoods.jl")
-include("../T-KAM.jl")
-include("../../utils.jl")
-using .T_KAM_model
 using .LogLikelihoods: log_likelihood_MALA
-using .Utils: pu, half_quant, full_quant, hq
 
 function sample_langevin(
     ps::ComponentArray{T},

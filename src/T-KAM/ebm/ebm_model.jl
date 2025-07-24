@@ -13,21 +13,19 @@ using ConfParser,
     LinearAlgebra,
     ComponentArrays
 
+using ..Utils
+using ..InverseTransformSampling
+using ..RefPriors: prior_pdf
+
 include("../kan/univariate_functions.jl")
-include("../../utils.jl")
-include("inverse_transform.jl")
-include("ref_priors.jl")
-using .UnivariateFunctions
-using .Utils: pu, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
-using .InverseTransformSampling
-using .RefPriors: prior_pdf
+using .UnivariateFunctions: univariate_function, init_function
 
 const quad_map =
     Dict("gausslegendre" => gausslegendre_quadrature, "trapezium" => trapezium_quadrature)
 
-struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Vector
-    layernorms::Vector
+struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
+    fcns_qp::Vector{univariate_function{T,U}}
+    layernorms::Vector{Lux.LayerNorm}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString

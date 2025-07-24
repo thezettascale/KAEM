@@ -4,10 +4,9 @@ export autoMALA_step
 
 using CUDA, KernelAbstractions, Accessors, Lux, LuxCUDA, Statistics, ComponentArrays
 
-include("../../utils.jl")
-include("hmc_updates.jl")
-using .Utils: half_quant, full_quant
-using .HamiltonianMonteCarlo: leapfrog
+using ..Utils
+using ..T_KAM_model
+using ..HamiltonianMonteCarlo: leapfrog
 
 function safe_step_size_update(
     η::AbstractArray{U},
@@ -43,7 +42,7 @@ function select_step_size(
     M::AbstractArray{U},
     η_init::AbstractArray{U},
     Δη::U,
-    model,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple;
@@ -129,7 +128,7 @@ function autoMALA_step(
     logpos_z::AbstractArray{U},
     momentum::AbstractArray{U},
     M::AbstractArray{U},
-    model,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,

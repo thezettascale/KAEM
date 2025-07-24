@@ -5,8 +5,7 @@ export residual_resampler, systematic_resampler, stratified_resampler, importanc
 using CUDA, Random, Distributions, LinearAlgebra, ParallelStencil
 using NNlib: softmax
 
-include("../../utils.jl")
-using .Utils: full_quant, pu
+using ..Utils
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -15,7 +14,6 @@ else
 end
 
 ### Potential hread divergence on GPU for resampler searchsortedfirsts
-
 @parallel_indices (b) function residual_kernel!(
     idxs::AbstractArray{U},
     ESS_bool::AbstractArray{Bool},

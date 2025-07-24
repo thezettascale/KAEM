@@ -7,14 +7,12 @@ using ConfParser,
     Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh
 
-include("../ebm/ebm_model.jl")
-include("../../utils.jl")
+using ..Utils
+
 include("resamplers.jl")
 include("models/kan.jl")
 include("models/cnn.jl")
 include("models/decoder.jl")
-using .Utils: pu, half_quant, full_quant, hq, fq, symbol_map
-using .EBM_Model
 using .WeightResamplers
 using .KAN_Model
 using .CNN_Model

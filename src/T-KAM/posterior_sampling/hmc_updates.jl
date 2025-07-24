@@ -5,11 +5,10 @@ export leapfrog, logpos_withgrad
 using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
 using Enzyme: make_zero
 
-include("../../utils.jl")
-include("../gen/loglikelihoods.jl")
+using ..Utils
+using ..T_KAM_model
+
 include("log_posteriors.jl")
-using .Utils: full_quant, half_quant
-using .LogLikelihoods: log_likelihood_MALA
 using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
 
 function position_update(
@@ -69,7 +68,7 @@ function leapfrog(
     momentum::AbstractArray{U},  # This is y = M^{-1/2}p
     M::AbstractArray{U},         # This is M^{1/2}
     η::AbstractArray{U},
-    model,
+    model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,

@@ -6,12 +6,11 @@ using NNlib: softmax
 
 export ImportanceLoss, initialize_importance_loss
 
+using ..Utils
+using ..T_KAM_model
+
 include("../gen/loglikelihoods.jl")
-include("../T-KAM.jl")
-include("../../utils.jl")
-using .T_KAM_model
 using .LogLikelihoods: log_likelihood_IS
-using .Utils: pu, half_quant, full_quant, hq
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

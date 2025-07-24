@@ -4,22 +4,21 @@ export prep_model
 
 using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
-include("T-KAM.jl")
+using ..Utils
+using ..T_KAM_model
+
 include("ebm/log_prior_fcns.jl")
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
 include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
-include("../utils.jl")
-using .T_KAM_model
-using .LogPriorFCNs: log_prior_ula, log_prior_mix, log_prior_univar
+using .LogPriorFCNs
 using .ImportanceSampling
 using .LangevinMLE
 using .ThermodynamicIntegration
 using .autoMALA_sampling
 using .ULA_sampling
-using .Utils: pu, half_quant, full_quant, hq
 
 function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""

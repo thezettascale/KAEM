@@ -5,10 +5,10 @@ export KAN_Generator, init_KAN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
+using ..Utils
+
 include("../../kan/univariate_functions.jl")
-include("../../../utils.jl")
-using .Utils: half_quant, full_quant, symbol_map
-using .UnivariateFunctions
+using .UnivariateFunctions: univariate_function, init_function
 
 struct KAN_Generator <: Lux.AbstractLuxLayer
     depth::Int

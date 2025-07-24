@@ -4,8 +4,7 @@ export prior_pdf
 
 using CUDA, KernelAbstractions, ParallelStencil
 
-include("../../utils.jl")
-using .Utils: half_quant
+using ..Utils
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)

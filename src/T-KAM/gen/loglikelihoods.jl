@@ -1,15 +1,12 @@
 module LogLikelihoods
 
-export cross_entropy_IS,
-    l2_IS, cross_entropy_MALA, l2_MALA, log_likelihood_IS, log_likelihood_MALA
+export log_likelihood_IS, log_likelihood_MALA
 
 using CUDA, KernelAbstractions, ComponentArrays, Random, ParallelStencil
 using NNlib: softmax, sigmoid
 
-include("../../utils.jl")
-include("gen_model.jl")
-using .Utils: half_quant, full_quant
-using .GeneratorModel
+using ..Utils
+using ..T_KAM_model: GenModel
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

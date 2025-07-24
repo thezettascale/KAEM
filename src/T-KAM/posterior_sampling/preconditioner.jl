@@ -4,8 +4,7 @@ export init_mass_matrix, sample_momentum
 
 using LinearAlgebra, Random, Distributions, Statistics
 
-include("../../utils.jl")
-using .Utils: full_quant
+using ..Utils
 
 abstract type Preconditioner end
 

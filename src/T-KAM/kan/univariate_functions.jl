@@ -24,21 +24,6 @@ const SplineBasis_mapping = Dict(
     "Cheby" => degree -> Cheby_basis(degree),
 )
 
-const activation_mapping = Dict(
-    "relu" => NNlib.relu,
-    "leakyrelu" => NNlib.leakyrelu,
-    "tanh" => NNlib.tanh_fast,
-    "sigmoid" => NNlib.sigmoid_fast,
-    "swish" => NNlib.hardswish,
-    "gelu" => NNlib.gelu,
-    "selu" => NNlib.selu,
-    "tanh" => NNlib.tanh_fast,
-    "silu" => x -> x .* NNlib.sigmoid_fast(x),
-    "elu" => NNlib.elu,
-    "celu" => NNlib.celu,
-    "none" => x -> x .* zero(half_quant),
-)
-
 struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int

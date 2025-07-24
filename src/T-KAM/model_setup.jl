@@ -19,7 +19,7 @@ using .autoMALA_sampling
 using .ULA_sampling
 using .Utils: device, half_quant, full_quant, hq
 
-function move_to_hq!(model)
+function move_to_hq(model)
     """Moves the model to half precision."""
 
     if model.prior.layernorm_bool
@@ -47,10 +47,10 @@ function move_to_hq!(model)
             model.lkhood.generator.Φ_fcns[model.lkhood.generator.depth] |> hq
     end
 
-    return nothing
+    return model
 end
 
-function setup_training!(model)
+function setup_training(model)
     conf = model.conf
     autoMALA_bool = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
 
@@ -132,6 +132,7 @@ function setup_training!(model)
             samples = max_samples,
         )
     end
+    return model
 end
 
 function prep_model(
@@ -143,8 +144,8 @@ function prep_model(
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
         ps |> ComponentArray |> device, st_kan |> ComponentArray |> device, st_lux |> device
-    move_to_hq!(model)
-    setup_training!(model)
+    model = move_to_hq(model)
+    model = setup_training(model)
     return model, ps, T.(st_kan), st_lux
 end
 

@@ -181,7 +181,7 @@ end
 end
 
 function coef2curve_Spline(
-    b,
+    b::Union{B_spline_basis,RBF_basis,RSWAF_basis,Cheby_basis},
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},

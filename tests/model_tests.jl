@@ -26,7 +26,7 @@ function test_ps_derivative()
     ∇ = Enzyme.make_zero(ps)
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
 
     @test norm(∇) != 0
     @test !any(isnan, ∇)
@@ -59,7 +59,7 @@ function test_mala_loss()
     ∇ = Enzyme.make_zero(ps)
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end
@@ -75,7 +75,7 @@ function test_cnn_loss()
     ∇ = Enzyme.make_zero(ps)
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
@@ -93,7 +93,7 @@ function test_seq_loss()
     ∇ = Enzyme.make_zero(ps)
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end

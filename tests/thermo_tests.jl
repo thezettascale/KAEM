@@ -48,7 +48,7 @@ function test_model_derivative()
     ∇ = Enzyme.make_zero(ps)
 
     loss, ∇, st_ebm, st_gen =
-        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test, 1, Random.default_rng())
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
     @test norm(∇) != 0
     @test !any(isnan, ∇)
 end

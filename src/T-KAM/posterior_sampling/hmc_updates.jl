@@ -1,12 +1,14 @@
 module HamiltonianMonteCarlo
 
-export leapfrog
+export leapfrog, logpos_withgrad
 
 using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
 using Enzyme: make_zero
 
 include("../../utils.jl")
+include("log_posteriors.jl")
 using .Utils: full_quant, half_quant
+using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
 
 function position_update(
     z::AbstractArray{U},
@@ -40,14 +42,18 @@ function logpos_withgrad(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-)::Tuple{AbstractArray{U},AbstractArray{U},NamedTuple} where {T<:half_quant,U<:full_quant}
+)::Tuple{
+    AbstractArray{full_quant},
+    AbstractArray{full_quant},
+    NamedTuple,
+} where {T<:half_quant}
     fcn = ndims(z) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
     logpos, ∇z_k, st_ebm, st_gen = fcn(z, make_zero(z), x, temps, model, ps, st_kan, st_lux)
     @reset st_kan.ebm = st_ebm
     @reset st_lux.gen = st_gen
 
-    return U.(logpos) ./ U(model.loss_scaling),
-    U.(∇z_k) ./ U(model.loss_scaling),
+    return full_quant.(logpos) ./ full_quant(model.loss_scaling),
+    full_quant.(∇z_k) ./ full_quant(model.loss_scaling),
     st_kan,
     st_lux
 end

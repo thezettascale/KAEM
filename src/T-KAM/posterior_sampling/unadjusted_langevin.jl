@@ -75,7 +75,7 @@ function initialize_ULA_sampler(;
     prior_sampling_bool::Bool = false,
     N::Int = 20,
     RE_frequency::Int = 10,
-) where {T<:half_quant,U<:full_quant}
+) where {U<:full_quant}
 
     return ULA_sampler(prior_sampling_bool, N, RE_frequency, η)
 end

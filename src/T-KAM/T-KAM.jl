@@ -17,12 +17,12 @@ include("posterior_sampling/autoMALA.jl")
 include("posterior_sampling/unadjusted_langevin.jl")
 using .EBM_Model
 using .GeneratorModel
-using .LangevinMLE
-using .InverseTransform: sample_mixture, sample_univariate
+using .InverseTransformSampling: sample_mixture, sample_univariate
 using .ImportanceSampling
+using .LangevinMLE
 using .ThermodynamicIntegration
-using .autoMALA_sampling: initialize_autoMALA_sampler, autoMALA_sample
-using .ULA_sampling: initialize_ULA_sampler, ULA_sample
+using .autoMALA_sampling
+using .ULA_sampling
 using .Utils: device, half_quant, full_quant, hq
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
@@ -135,7 +135,7 @@ function init_T_KAM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     p = [one(full_quant)]
 
-    zero_vec = device(zeros(T, model.lkhood.x_shape..., IS_samples, batch_size))
+    zero_vec = device(zeros(half_quant, x_shape..., IS_samples, batch_size))
     loss_struct = ImportanceLoss(zero_vec)
 
     MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
@@ -208,7 +208,6 @@ function init_T_KAM(
         η = η_init,
         N = num_steps,
         RE_frequency = replica_exchange_frequency,
-        rng = rng,
     )
 
     if autoMALA_bool

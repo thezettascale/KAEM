@@ -4,7 +4,7 @@ using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA, ParallelStencil
 using NNlib: softmax
 
-export initialize_importance_loss, importance_loss
+export ImportanceLoss, initialize_importance_loss
 
 include("../gen/loglikelihoods.jl")
 include("../../utils.jl")

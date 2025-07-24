@@ -228,9 +228,9 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             t.st_kan,
             t.st_lux,
             t.model,
-            t.x,
-            train_idx,
-            t.rng,
+            t.x;
+            train_idx = train_idx,
+            rng = t.rng,
         )
         t.loss = full_quant(loss) / loss_scaling
         copy!(G, full_quant.(grads) ./ loss_scaling)

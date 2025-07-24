@@ -22,9 +22,8 @@ include("hmc_updates.jl")
 include("log_posteriors.jl")
 using .Utils: device, half_quant, full_quant
 using .Preconditioning
-using .HamiltonianMonteCarlo: leapfrog
+using .HamiltonianMonteCarlo: leapfrog, logpos_withgrad
 using .autoMALA_StepSearch: autoMALA_step
-using .LogPosteriors: logpos_withgrad
 using .GeneratorModel: log_likelihood_MALA
 
 struct autoMALA_sampler{U<:full_quant}
@@ -48,7 +47,7 @@ function initialize_autoMALA_sampler(;
     η_max::U = one(full_quant),
     seq::Bool = false,
     samples::Int = 100,
-) where {T<:half_quant,U<:full_quant}
+) where {U<:full_quant}
 
     return autoMALA_sampler(
         N,

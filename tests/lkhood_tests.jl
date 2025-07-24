@@ -9,7 +9,7 @@ include("../src/T-KAM/T-KAM.jl")
 include("../src/utils.jl")
 include("../src/T-KAM/gen/loglikelihoods.jl")
 using .T_KAM_model
-using .Utils
+using .Utils: device, half_quant, full_quant
 using .LogLikelihoods: log_likelihood_IS, log_likelihood_MALA
 
 conf = ConfParse("tests/test_conf.ini")

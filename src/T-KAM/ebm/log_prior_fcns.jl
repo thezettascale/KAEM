@@ -18,7 +18,7 @@ using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
-include("EBMModel.jl")
+include("ebm_model.jl")
 using .Utils: half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
 using .EBM_Model: EBMModel

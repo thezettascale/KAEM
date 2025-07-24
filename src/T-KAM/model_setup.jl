@@ -5,7 +5,7 @@ export prep_model
 using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 using ..Utils
-using ..T_KAM_model: T_KAM, LogPriorULA, LogPriorMix, LogPriorUnivariate
+using ..T_KAM_model
 
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")

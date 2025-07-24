@@ -78,7 +78,8 @@ function setup_training!(model)
         println("Posterior sampler: $type")
     else
         batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-        zero_vec = device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+        zero_vec =
+            device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
         @reset model.loss_fcn = ImportanceLoss(zero_vec)
         println("Posterior sampler: IS")
     end
@@ -126,7 +127,7 @@ function setup_training!(model)
 end
 
 function prep_model(
-    model::T_KAM,
+    model,
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 ) where {T<:half_quant}

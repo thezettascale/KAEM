@@ -109,7 +109,7 @@ function closure(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple;
-)
+)::T where {T<:half_quant}
     return first(
         marginal_llhood(
             ps,

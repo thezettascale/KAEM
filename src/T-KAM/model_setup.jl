@@ -67,6 +67,17 @@ function setup_training!(model)
         retrieve(conf, "THERMODYNAMIC_INTEGRATION", "replica_exchange_frequency"),
     )
 
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    zero_vec =
+        device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+    
+    # Defaults
+    @reset model.loss_fcn = ImportanceLoss(zero_vec)
+    @reset model.posterior_sampler = initialize_ULA_sampler(;
+        η = step_size,
+        N = num_steps,
+    )
+
     if model.N_t > 1
         @reset model.loss_fcn = ThermodynamicLoss()
 
@@ -77,10 +88,7 @@ function setup_training!(model)
         type = autoMALA_bool ? "autoMALA" : "ULA"
         println("Posterior sampler: $type")
     else
-        batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-        zero_vec =
-            device(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
-        @reset model.loss_fcn = ImportanceLoss(zero_vec)
+        
         println("Posterior sampler: IS")
     end
 

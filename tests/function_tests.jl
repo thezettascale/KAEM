@@ -47,13 +47,19 @@ function test_derivative()
     st = st |> ComponentArray |> device
 
     ∇ = Enzyme.make_zero(x)
-    diff_fcn = (fcn, z, p, s) -> begin
+    function diff_fcn(
+        fcn::UnivariateFunction{half_quant},
+        z::AbstractArray{half_quant},
+        p::ComponentArray{half_quant},
+        s::ComponentArray{half_quant},
+    )
         sum(fcn(z, p, s))
     end
 
     Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         diff_fcn,
+        Enzyme.Active,
         Enzyme.Const(f),
         Enzyme.Duplicated(x, ∇),
         Enzyme.Const(ps),

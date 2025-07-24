@@ -46,13 +46,20 @@ function test_lp_derivative()
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     ∇ = Enzyme.make_zero(ps)
 
-    fcn = (p, z, m, sk, se) -> begin
+    function fcn(
+        p::ComponentArray{half_quant},
+        z::AbstractArray{half_quant},
+        m::T_KAM{half_quant, half_quant},
+        sk::ComponentArray{half_quant},
+        se::NamedTuple,
+    )
         sum(first(model.prior.lp_fcn(z, model.prior, p, sk, se)))
     end
 
     Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         fcn,
+        Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z_test),
         Enzyme.Const(model),

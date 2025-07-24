@@ -47,6 +47,7 @@ function logpos_grad(
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         unadjusted_logpos,
+        Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),
         Enzyme.Const(temps),

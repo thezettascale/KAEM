@@ -18,8 +18,10 @@ using NNlib: softmax
 
 include("../../utils.jl")
 include("../kan/univariate_functions.jl")
+include("ebm_model.jl")
 using .Utils: half_quant, full_quant, fq, symbol_map
 using .UnivariateFunctions
+using .EBM_Model: EBM_Model
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, half_quant, 3)
@@ -29,7 +31,7 @@ end
 
 function log_prior_ula(
     z::AbstractArray{T},
-    ebm,
+    ebm::EBM_Model{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
@@ -147,7 +149,7 @@ end
 
 function log_prior_mix(
     z::AbstractArray{T},
-    ebm,
+    ebm::EBM_Model{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,

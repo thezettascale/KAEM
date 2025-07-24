@@ -9,6 +9,7 @@ using Flux: DataLoader
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
 include("ebm/inverse_transform.jl")
+include("ebm/log_prior_fcns.jl")
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
 include("loss_fcns/thermodynamic.jl")
@@ -18,6 +19,7 @@ include("posterior_sampling/unadjusted_langevin.jl")
 using .EBM_Model
 using .GeneratorModel
 using .InverseTransformSampling: sample_mixture, sample_univariate
+using .LogPriorFCNs
 using .ImportanceSampling
 using .LangevinMLE
 using .ThermodynamicIntegration
@@ -180,14 +182,18 @@ function init_T_KAM(
 
         sample_prior =
             (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
-        println("Prior sampler: ULA")
 
+        @reset prior_model.lp_fcn = log_prior_ula
+        println("Prior sampler: ULA")
     elseif prior_model.mixture_model
         sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
+
+        @reset prior_model.lp_fcn = log_prior_mix
         println("Prior sampler: Mix ITS")
     else
+        @reset prior_model.lp_fcn = log_prior_univar
         println("Prior sampler: Univar ITS")
     end
 

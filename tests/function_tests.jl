@@ -48,7 +48,7 @@ function test_derivative()
 
     ∇ = Enzyme.make_zero(x)
     function diff_fcn(
-        fcn::UnivariateFunction{half_quant},
+        fcn::univariate_function{half_quant,full_quant},
         z::AbstractArray{half_quant},
         p::ComponentArray{half_quant},
         s::ComponentArray{half_quant},
@@ -58,7 +58,7 @@ function test_derivative()
 
     Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        diff_fcn,
+        Enzyme.Active(diff_fcn),
         Enzyme.Active,
         Enzyme.Const(f),
         Enzyme.Duplicated(x, ∇),

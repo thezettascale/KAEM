@@ -15,12 +15,10 @@ using ConfParser,
 
 include("../kan/univariate_functions.jl")
 include("../../utils.jl")
-include("log_prior_fcns.jl")
 include("inverse_transform.jl")
 include("ref_priors.jl")
 using .UnivariateFunctions
 using .Utils: device, half_quant, full_quant, removeZero, removeNeg, hq, fq, symbol_map
-using .LogPriorFCNs
 using .InverseTransformSampling
 using .RefPriors: prior_pdf
 
@@ -140,15 +138,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     nodes = repeat(nodes', first(widths), 1) .|> half_quant
     weights = half_quant.(weights')
 
-    lp_fcn = begin
-        if mixture_model && !ula
-            log_prior_mix
-        elseif ula
-            log_prior_ula
-        else
-            log_prior_univar
-        end
-    end
+    
 
     ref_initializer = get(prior_pdf, prior_type, prior_pdf["uniform"])
 
@@ -168,7 +158,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         contrastive_div,
         quad_type,
         ula,
-        lp_fcn,
+        identity,
         mixture_model,
         reg,
     )

@@ -19,7 +19,7 @@ include("../gen/gen_model.jl")
 include("log_posteriors.jl")
 using .Utils: device, half_quant, full_quant, fq
 using .GeneratorModel: log_likelihood_MALA
-using .LogPosteriors: unadjusted_logpos
+using .LogPosteriors: unadjusted_logpos_grad
 
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -27,41 +27,6 @@ using .LogPosteriors: unadjusted_logpos
     "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
     "ebm" => (p, b, rng) -> randn(rng, p, 1, b),
 )
-
-function logpos_grad(
-    z::AbstractArray{T},
-    ∇z::AbstractArray{T},
-    x::AbstractArray{T},
-    temps::AbstractArray{T},
-    model,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-    prior_sampling_bool::Bool,
-)::AbstractArray{T} where {T<:half_quant}
-
-    # Expand for log_likelihood
-    x_expanded =
-        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
-
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        unadjusted_logpos,
-        Enzyme.Active,
-        Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x_expanded),
-        Enzyme.Const(temps),
-        Enzyme.Const(model),
-        Enzyme.Const(ps),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux),
-        Enzyme.Const(prior_sampling_bool),
-    )
-
-    # any(isnan, ∇z) && error("∇z is NaN")
-    # all(iszero, ∇z) && error("∇z is zero")
-    return ∇z
-end
 
 struct ULA_sampler{U<:full_quant}
     prior_sampling_bool::Bool
@@ -79,7 +44,6 @@ function initialize_ULA_sampler(;
 
     return ULA_sampler(prior_sampling_bool, N, RE_frequency, η)
 end
-
 
 function (sampler::ULA_sampler)(
     model,
@@ -156,7 +120,7 @@ function (sampler::ULA_sampler)(
         ξ = device(noise[:, :, :, :, i])
         ∇z_fq =
             full_quant.(
-                logpos_grad(
+                unadjusted_logpos_grad(
                     z_hq,
                     Enzyme.make_zero(z_hq),
                     x,

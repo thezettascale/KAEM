@@ -7,7 +7,9 @@ using CUDA, KernelAbstractions, ComponentArrays, Random, ParallelStencil
 using NNlib: softmax, sigmoid
 
 include("../../utils.jl")
+include("gen_model.jl")
 using .Utils: half_quant, full_quant
+using .GenModel: GenModel
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)
@@ -81,7 +83,7 @@ end
 function log_likelihood_IS(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood,
+    lkhood::GenModel{T},
     ps::ComponentArray{T},
     kan_st::ComponentArray{T},
     st_lux::NamedTuple,
@@ -117,7 +119,7 @@ end
 function log_likelihood_MALA(
     z::AbstractArray{T},
     x::AbstractArray{T},
-    lkhood,
+    lkhood::GenModel{T},
     ps::ComponentArray{T},
     kan_st::ComponentArray{T},
     st_lux::NamedTuple;

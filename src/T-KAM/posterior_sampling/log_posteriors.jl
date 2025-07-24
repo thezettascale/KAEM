@@ -12,15 +12,17 @@ using CUDA,
 
 include("../../utils.jl")
 include("../gen/gen_model.jl")
+include("../T-KAM.jl")
 using .Utils: device, half_quant, full_quant
 using .GeneratorModel: log_likelihood_MALA
+using .T_KAM: T_KAM
 
 ### ULA ### 
 function unadjusted_logpos(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
@@ -55,12 +57,47 @@ function unadjusted_logpos(
     return (lp + tempered_ll) * model.loss_scaling
 end
 
+function unadjusted_logpos_grad(
+    z::AbstractArray{T},
+    ∇z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model::T_KAM{T},
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+    prior_sampling_bool::Bool,
+)::AbstractArray{T} where {T<:half_quant}
+
+    # Expand for log_likelihood
+    x_expanded =
+        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
+
+    CUDA.@fastmath Enzyme.autodiff_deferred(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        unadjusted_logpos,
+        Enzyme.Active,
+        Enzyme.Duplicated(z, ∇z),
+        Enzyme.Const(x_expanded),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
+        Enzyme.Const(ps),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
+        Enzyme.Const(prior_sampling_bool),
+    )
+
+    # any(isnan, ∇z) && error("∇z is NaN")
+    # all(iszero, ∇z) && error("∇z is zero")
+    return ∇z
+end
+
 ### autoMALA ###
 function autoMALA_logpos_value_4D(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
@@ -92,7 +129,7 @@ function autoMALA_logpos_reduced_4D(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
@@ -131,7 +168,7 @@ function autoMALA_value_and_grad_4D(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
@@ -165,7 +202,7 @@ function autoMALA_logpos(
     z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
@@ -183,7 +220,7 @@ function autoMALA_value_and_grad(
     ∇z::AbstractArray{T},
     x::AbstractArray{T},
     temps::AbstractArray{T},
-    model,
+    model::T_KAM{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,

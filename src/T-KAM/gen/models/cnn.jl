@@ -100,7 +100,7 @@ function init_CNN_Generator(
     return CNN_Generator(depth, Φ_functions, batchnorms, batchnorm_bool, false)
 end
 
-function (gen::CNN_Generator)(
+function (gen::CNN_Generator{T})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,

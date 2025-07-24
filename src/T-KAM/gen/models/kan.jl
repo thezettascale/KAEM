@@ -106,7 +106,7 @@ function init_KAN_Generator(
     return KAN_Generator(depth, Φ_functions, layernorms, layernorm_bool, false, x_shape)
 end
 
-function (gen::KAN_Generator)(
+function (gen::KAN_Generator{T})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,

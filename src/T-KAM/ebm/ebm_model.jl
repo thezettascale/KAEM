@@ -164,7 +164,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )
 end
 
-function (ebm::EbmModel)(
+function (ebm::EbmModel{T})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,

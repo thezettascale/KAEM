@@ -116,8 +116,9 @@ function grad_importance_llhood(
         end
 
     CUDA.@fastmath Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         f,
+        Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z),
         Enzyme.Const(x),

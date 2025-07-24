@@ -54,8 +54,9 @@ function test_derivative()
     end
 
     Enzyme.autodiff(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         diff_fcn,
+        Enzyme.Active,
         Enzyme.Const(f),
         Enzyme.Duplicated(x, ∇),
         Enzyme.Const(ps),
@@ -69,5 +70,5 @@ end
 @testset "Univariate Funtion Tests" begin
     test_fwd()
     test_grid_update()
-    # test_derivative()
+    test_derivative()
 end

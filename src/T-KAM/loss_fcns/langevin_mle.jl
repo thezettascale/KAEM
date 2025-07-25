@@ -82,7 +82,7 @@ function grad_langevin_llhood(
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        closure,
+        Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
         Enzyme.Const(z_posterior),

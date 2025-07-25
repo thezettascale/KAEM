@@ -63,7 +63,7 @@ function unadjusted_logpos_grad(
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        unadjusted_logpos,
+        Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),
@@ -155,7 +155,7 @@ function autoMALA_value_and_grad_4D(
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        autoMALA_logpos_reduced_4D,
+        Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),
@@ -224,7 +224,7 @@ function autoMALA_value_and_grad(
 
     CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        closure,
+        Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
         Enzyme.Const(x_expanded),

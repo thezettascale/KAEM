@@ -21,8 +21,8 @@ include("quadrature.jl")
 using .Quadrature
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Vector{univariate_function{T,U}}
-    layernorms::Vector{Lux.LayerNorm}
+    fcns_qp::Tuple{univariate_function{T,U}}
+    layernorms::Tuple{Lux.LayerNorm}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -119,6 +119,10 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         end
     end
 
+    if length(layernorms) == 0
+        layernorms = (Lux.LayerNorm(0),)
+    end
+
     ula = length(widths) > 2
     contrastive_div =
         parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
@@ -134,8 +138,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
 
     return EbmModel(
-        functions,
-        layernorms,
+        (functions...,),
+        (layernorms...,),
         layernorm_bool,
         length(widths)-1,
         prior_type,

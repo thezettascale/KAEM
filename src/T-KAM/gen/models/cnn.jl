@@ -8,8 +8,8 @@ using ..Utils
 
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Vector{Lux.ConvTranspose}
-    batchnorms::Vector{Lux.BatchNorm}
+    Φ_fcns::Tuple{Lux.ConvTranspose}
+    batchnorms::Tuple{Lux.BatchNorm}
     batchnorm_bool::Bool
     layernorm_bool::Bool
 end
@@ -57,7 +57,7 @@ function init_CNN_Generator(
     batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
 
     Φ_functions = Vector{Lux.ConvTranspose}(undef, 0)
-    batchnorms = Vector{Lux.BatchNorm}(undef, 0)
+    batchnorms = Vector{Lux.BatchNorm}(undef, 0)    
 
     length(strides) != length(hidden_c) &&
         (error("Number of strides must be equal to the number of hidden layers + 1."))
@@ -94,7 +94,11 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    return CNN_Generator(depth, Φ_functions, batchnorms, batchnorm_bool, false)
+    if length(batchnorms) == 0
+        batchnorms = (Lux.BatchNorm(0),)
+    end
+
+    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), batchnorm_bool, false)
 end
 
 function (gen::CNN_Generator)(

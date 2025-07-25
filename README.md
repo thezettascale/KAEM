@@ -65,7 +65,7 @@ using .trainer
 
 t = init_trainer(
       rng, 
-      conf, 
+      conf, # See config directory for examples
       dataset_name; 
       img_resize = (16,16), 
       file_loc = loc
@@ -83,8 +83,7 @@ include("src/T-KAM/model_setup.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .ModelSetup
-using .Utils: pu, half_quant, full_quant, hq, fq
-
+using .Utils
 
 model = init_T_KAM(
       dataset, 
@@ -98,9 +97,8 @@ model = init_T_KAM(
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
-ps_hq = half_quant.(ps)
+ps_hq = half_quant.(ps) #Mixed precision
 
-# Training loss/grads are Reactant.jl compiled
 grads = Enzyme.make_zero(ps_hq) # or zero(ps_hq)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
       ps_hq,
@@ -126,8 +124,8 @@ Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantia
 
 The following optimisations are in place:
 
-- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/)/[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl/). Enzyme provides highly efficient reverse-mode autodifferentation of statically analyzable LLVM. Reactant compiles to MLIR, (amongst other things).
-- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl). This allows for supremely optimized stencil computations, agnostic to the pu in use. 
+- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/), which provides much more efficient reverse autodiff of statically analyzable LLVM. 
+- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl), which allows for supremely optimized stencil computations, agnostic to the device in use. 
 
 If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
 

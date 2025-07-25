@@ -61,7 +61,7 @@ function unadjusted_logpos_grad(
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
@@ -75,8 +75,8 @@ function unadjusted_logpos_grad(
         Enzyme.Const(prior_sampling_bool),
     )
 
-    # any(isnan, ∇z) && error("∇z is NaN")
-    # all(iszero, ∇z) && error("∇z is zero")
+    any(isnan, ∇z) && error("∇z is NaN")
+    all(iszero, ∇z) && error("∇z is zero")
     return ∇z
 end
 
@@ -153,7 +153,7 @@ function autoMALA_value_and_grad_4D(
     x_expanded =
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
@@ -222,7 +222,7 @@ function autoMALA_value_and_grad(
         ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :
         repeat(x, 1, 1, length(temps)-size(x)[end])
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,

@@ -28,6 +28,7 @@ end
     grid::AbstractArray{U},
     rand_vals::AbstractArray{U},
     grid_size::Int,
+    ε::U,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, p, b]
     idx = 1
@@ -47,8 +48,11 @@ end
     z1, z2 = grid[p, idx-1], grid[p, idx]
     cd1, cd2 = cdf[q, p, idx-1], cdf[q, p, idx]
 
+    length = cd2 - cd1
+    length = length == 0 ? ε : length
+
     # Linear interpolation
-    z[q, p, b] = z1 + (z2 - z1) * ((rv - cd1) / (cd2 - cd1))
+    z[q, p, b] = z1 + (z2 - z1) * ((rv - cd1) / length)
     return nothing
 end
 
@@ -80,6 +84,7 @@ function sample_univariate(
         grid,
         rand_vals,
         grid_size,
+        full_quant(ε),
     )
     return T.(z), st_lyrnorm_new
 end
@@ -90,6 +95,7 @@ end
     grid::AbstractArray{U},
     rand_vals::AbstractArray{U},
     grid_size::Int,
+    ε::U,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, b]
     idx = 1
@@ -104,11 +110,14 @@ end
     end
 
     idx = idx > grid_size ? grid_size : idx
-    
+
+    length = cdf[q, b, idx] - cdf[q, b, idx-1]
+    length = length == 0 ? ε : length
+
     z[q, 1, b] =
         grid[q, idx-1] +
         (grid[q, idx] - grid[q, idx-1]) *
-        ((rv - cdf[q, b, idx-1]) / (cdf[q, b, idx] - cdf[q, b, idx-1]))
+        ((rv - cdf[q, b, idx-1]) / length)
     return nothing
 end
 
@@ -154,6 +163,7 @@ function sample_mixture(
         full_quant.(grid),
         rand_vals,
         grid_size,
+        full_quant(ε),
     )
     return T.(z), st_lyrnorm_new
 end

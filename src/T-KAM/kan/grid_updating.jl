@@ -14,6 +14,7 @@ using CUDA,
 
 using ..Utils
 using ..UnivariateFunctions
+using ..UnivariateFunctions.spline_functions
 
 function update_fcn_grid(
     l::univariate_function{T,U},

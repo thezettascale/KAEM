@@ -10,7 +10,7 @@ export extend_grid,
     FFT_basis,
     Cheby_basis
 
-using CUDA, ParallelStencil
+using CUDA, ParallelStencil, Lux
 using LinearAlgebra, NNlib
 
 using ..Utils
@@ -32,21 +32,23 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     return grid
 end
 
-struct B_spline_basis
+struct B_spline_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct RBF_basis
+struct RBF_basis <: Lux.AbstractLuxLayer
     scale::half_quant
 end
 
-struct RSWAF_basis end
+struct RSWAF_basis <: Lux.AbstractLuxLayer
+end
 
-struct Cheby_basis
+struct Cheby_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct FFT_basis end
+struct FFT_basis <: Lux.AbstractLuxLayer
+end
 
 @parallel_indices (i, g, s) function B_spline_deg0!(
     B::AbstractArray{T},
@@ -180,7 +182,7 @@ end
 end
 
 function coef2curve_Spline(
-    b,
+    b::Lux.AbstractLuxLayer,
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},
@@ -236,7 +238,7 @@ end
 end
 
 function coef2curve_FFT(
-    b,
+    b::Lux.AbstractLuxLayer,
     x_eval::AbstractArray{T},
     grid::AbstractArray{T},
     coef::AbstractArray{T},
@@ -250,7 +252,7 @@ function coef2curve_FFT(
 end
 
 function curve2coef(
-    b,
+    b::Lux.AbstractLuxLayer,
     x::AbstractArray{T},
     y::AbstractArray{T},
     grid::AbstractArray{T},

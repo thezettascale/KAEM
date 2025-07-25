@@ -34,13 +34,8 @@ function marginal_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
-    logprior_pos, st_ebm = model.log_prior(
-        z_posterior,
-        model.prior,
-        ps.ebm,
-        st_kan.ebm,
-        st_lux_ebm,
-    )
+    logprior_pos, st_ebm =
+        model.log_prior(z_posterior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     logllhood, st_lux_gen = log_likelihood_MALA(
         z_posterior,
         x,
@@ -51,13 +46,7 @@ function marginal_llhood(
         ε = model.ε,
     )
 
-    logprior, st_ebm = model.log_prior(
-        z_prior,
-        model.prior,
-        ps.ebm,
-        st_kan.ebm,
-        st_lux_ebm,
-    )
+    logprior, st_ebm = model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
     return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*model.loss_scaling,
     st_lux_ebm,

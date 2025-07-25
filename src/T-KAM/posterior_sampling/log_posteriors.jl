@@ -29,17 +29,8 @@ function unadjusted_logpos(
 )::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
-    lp = sum(
-        first(
-            model.log_prior(
-                z_reshaped,
-                model.prior,
-                ps.ebm,
-                st_kan.ebm,
-                st_lux.ebm,
-            ),
-        ),
-    )
+    lp =
+        sum(first(model.log_prior(z_reshaped, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
     ll = first(
         log_likelihood_MALA(
             z_reshaped,
@@ -102,13 +93,7 @@ function autoMALA_logpos_value_4D(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
-    lp, st_ebm = model.log_prior(
-        z_reshaped,
-        model.prior,
-        ps.ebm,
-        st_kan.ebm,
-        st_lux.ebm,
-    )
+    lp, st_ebm = model.log_prior(z_reshaped, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
     ll, st_gen = log_likelihood_MALA(
         z_reshaped,
         x,
@@ -133,17 +118,8 @@ function autoMALA_logpos_reduced_4D(
 )::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
-    lp = sum(
-        first(
-            model.log_prior(
-                z_reshaped,
-                model.prior,
-                ps.ebm,
-                st_kan.ebm,
-                st_lux.ebm,
-            ),
-        ),
-    )
+    lp =
+        sum(first(model.log_prior(z_reshaped, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
     ll = first(
         log_likelihood_MALA(
             z_reshaped,
@@ -209,8 +185,7 @@ function autoMALA_logpos(
     st_lux::NamedTuple,
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
-    lp, st_ebm =
-        model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
+    lp, st_ebm = model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
     ll, st_gen =
         log_likelihood_MALA(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen; ε = model.ε)
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen

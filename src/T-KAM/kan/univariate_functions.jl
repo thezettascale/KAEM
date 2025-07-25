@@ -2,7 +2,7 @@ module UnivariateFunctions
 
 export univariate_function, init_function, activation_mapping
 
-using CUDA, Accessors, ComponentArrays
+using CUDA, Accessors, ComponentArrays, NNlib
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
 
 using ..Utils
@@ -27,8 +27,8 @@ const SplineBasis_mapping = Dict(
 struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
-    base_activation::Any
-    basis_function::Any
+    base_activation::Function
+    basis_function::Lux.AbstractLuxLayer
     spline_string::String
     spline_degree::Int
     init_grid::AbstractArray{T}
@@ -98,8 +98,7 @@ function init_function(
     initializer =
         get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
-    basis_function =
-        spline_function == "RBF" ? initializer(scale) : initializer(spline_degree)
+    basis_function = spline_function == "RBF" ? initializer(scale) : initializer(spline_degree)
 
     return univariate_function(
         in_dim,

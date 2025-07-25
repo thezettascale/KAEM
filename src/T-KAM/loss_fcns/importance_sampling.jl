@@ -70,13 +70,7 @@ function marginal_llhood(
     st_lux_gen::NamedTuple,
     zero_vec::AbstractArray{T},
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    logprior, st_lux_ebm = m.log_prior(
-        z,
-        m.prior,
-        ps.ebm,
-        st_kan.ebm,
-        st_lux_ebm,
-    )
+    logprior, st_lux_ebm = m.log_prior(z, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, zero_vec; ε = m.ε)

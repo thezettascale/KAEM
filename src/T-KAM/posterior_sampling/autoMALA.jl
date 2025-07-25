@@ -97,7 +97,8 @@ function (sampler::autoMALA_sampler)(
     z_t, z_t1 = z_copy, z_copy
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> pu
-    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
+    x_t =
+        model.lkhood.SEQ ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
     M = zeros(U, Q, P, 1, num_temps)

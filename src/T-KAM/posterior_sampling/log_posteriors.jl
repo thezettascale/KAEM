@@ -108,12 +108,13 @@ function autoMALA_logpos_reduced_4D(
 )::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
+    x_reshaped = reshape(x, model.lkhood.x_shape..., S*num_temps)
     lp =
         sum(first(model.log_prior(z_reshaped, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
     ll = first(
         log_likelihood_MALA(
             z_reshaped,
-            x,
+            x_reshaped,
             model.lkhood,
             ps.gen,
             st_kan.gen,

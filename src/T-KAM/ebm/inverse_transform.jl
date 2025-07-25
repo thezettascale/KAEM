@@ -25,18 +25,20 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-struct TrapeziumQuadrature end
+neg_one = device([-one(half_quant)])
 
-struct GaussLegendreQuadrature end
+struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
+
+struct GaussLegendreQuadrature <: Lux.AbstractLuxLayer end
 
 function (tq::TrapeziumQuadrature)(
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::Union{AbstractArray{<:half_quant},Nothing} = nothing,
+    component_mask::AbstractArray{T} = negative_one,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
-    """Trapezoidal rule for numerical integration"""
+    """Trapezoidal rule for numerical integration: 1/2 * (u(z_{i-1}) + u(z_i)) * Δx"""
 
     # Evaluate prior on grid [0,1]
     f_grid = st_kan[:a].grid
@@ -52,7 +54,7 @@ function (tq::TrapeziumQuadrature)(
     # Energy function of each component
     f_grid, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, f_grid)
     Q, P, G = size(f_grid)
-
+    
     # Choose component if mixture model else use all
     exp_fg = zeros(T, Q, P, G) |> pu
     if component_mask !== nothing
@@ -95,7 +97,7 @@ function (gq::GaussLegendreQuadrature)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::Union{AbstractArray{T},Nothing} = nothing,
+    component_mask::AbstractArray{T} = negative_one,
 )::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 

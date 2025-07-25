@@ -1,17 +1,20 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/T-KAM.jl")
-include("../src/T-KAM/model_setup.jl")
-include("../src/T-KAM/loss_fcns/thermodynamic.jl")
 include("../src/utils.jl")
-using .T_KAM_model
-using .ThermodynamicIntegration: sample_thermo
-using .ModelSetup
 using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
+
+include("../src/T-KAM/loss_fcns/thermodynamic.jl")
+using .ThermodynamicIntegration: sample_thermo
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)

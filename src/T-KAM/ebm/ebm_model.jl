@@ -24,10 +24,10 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf!::Union{UniformPrior,GaussianPrior,LogNormalPrior,LearnableGaussianPrior,EbmPrior}
+    π_pdf!::Lux.AbstractLuxLayer
     p_size::Int
     q_size::Int
-    quad::Union{GaussLegendreQuadrature,TrapeziumQuadrature}
+    quad::Lux.AbstractLuxLayer
     N_quad::Int
     nodes::AbstractArray{T}
     weights::AbstractArray{T}

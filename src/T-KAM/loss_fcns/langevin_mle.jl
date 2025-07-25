@@ -80,7 +80,7 @@ function grad_langevin_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
+    CUDA.@fastmath Enzyme.autodiff(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         closure,
         Enzyme.Active,

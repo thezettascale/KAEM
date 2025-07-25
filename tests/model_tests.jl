@@ -4,14 +4,17 @@ ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/T-KAM.jl")
-include("../src/T-KAM/model_setup.jl")
-include("../src/T-KAM/kan/grid_updating.jl")
 include("../src/utils.jl")
-using .T_KAM_model
-using .ModelSetup
-using .GridUpdating: update_model_grid
 using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
+
+include("../src/T-KAM/grid_updating.jl")
+using .ModelGridUpdating
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)

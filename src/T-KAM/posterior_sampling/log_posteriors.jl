@@ -51,16 +51,12 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    # Expand for log_likelihood
-    x_expanded =
-        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x_expanded),
+        Enzyme.Const(x),
         Enzyme.Const(temps),
         Enzyme.Const(model),
         Enzyme.Const(ps),

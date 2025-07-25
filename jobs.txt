@@ -10,4 +10,4 @@ DARCY_FLOW vanilla
 CIFAR10 thermo
 CIFAR10 vanilla
 SVHN thermo
-SVHN vanilla 
+SVHN vanilla

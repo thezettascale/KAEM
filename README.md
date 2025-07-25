@@ -48,7 +48,7 @@ make train-thermo DATASET=SVHN
 ```
 
 To automatically run experiments one after the other:
-```
+```bash
 vim jobs.txt # Schedule jobs
 make train-sequential CONFIG=jobs.txt
 ```

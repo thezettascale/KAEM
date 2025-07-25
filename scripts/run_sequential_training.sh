@@ -118,7 +118,9 @@ load_config() {
         jobs+=("$dataset $mode")
     done < "$config_file"
     
-    echo "${jobs[@]}"
+    for job in "${jobs[@]}"; do
+        echo "$job"
+    done
 }
     
 main() {
@@ -126,7 +128,11 @@ main() {
     print_status "Configuration file: $CONFIG_FILE"
     
     local jobs
-    mapfile -t jobs < <(load_config "$CONFIG_FILE")
+    local config_output
+    config_output=$(load_config "$CONFIG_FILE")
+    mapfile -t jobs <<< "$config_output"
+    
+
     
     local total_jobs=${#jobs[@]}
     

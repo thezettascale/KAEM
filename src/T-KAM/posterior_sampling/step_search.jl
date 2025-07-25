@@ -48,7 +48,6 @@ function select_step_size(
     st_lux::NamedTuple;
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
-    seq::Bool = false,
 )::Tuple{
     AbstractArray{U},
     AbstractArray{U},
@@ -73,7 +72,7 @@ function select_step_size(
         η_init[active_chains] .=
             safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
 
-        x_active = seq ? x[:, :, active_chains] : x[:, :, :, active_chains]
+        x_active = model.lkhood.SEQ ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux =
             leapfrog(
@@ -137,7 +136,6 @@ function autoMALA_step(
     η_min::U,
     η_max::U,
     ε::U,
-    seq::Bool,
 )::Tuple{
     AbstractArray{U},
     AbstractArray{U},
@@ -165,7 +163,6 @@ function autoMALA_step(
         st_lux;
         η_min = η_min,
         η_max = η_max,
-        seq = seq,
     )
 
     z_rev, _, _, _, η_prime, _, st_kan, st_lux = select_step_size(
@@ -186,7 +183,6 @@ function autoMALA_step(
         st_lux;
         η_min = η_min,
         η_max = η_max,
-        seq = seq,
     )
 
     reversible = check_reversibility(z, z_rev, η, η_prime; tol = ε)

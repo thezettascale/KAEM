@@ -124,7 +124,6 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
             Δη = Δη,
             η_min = η_minmax[1],
             η_max = η_minmax[2],
-            seq = model.lkhood.SEQ,
             RE_frequency = replica_exchange_frequency,
             samples = max_samples,
         )

@@ -37,7 +37,6 @@ struct autoMALA_sampler{U<:full_quant}
     η_min::U
     η_max::U
     RE_frequency::Int
-    seq::Bool
 end
 
 function initialize_autoMALA_sampler(;
@@ -48,7 +47,6 @@ function initialize_autoMALA_sampler(;
     Δη::U = full_quant(2),
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
-    seq::Bool = false,
     samples::Int = 100,
 ) where {U<:full_quant}
 
@@ -60,7 +58,6 @@ function initialize_autoMALA_sampler(;
         η_min,
         η_max,
         RE_frequency,
-        seq,
     )
 end
 
@@ -100,7 +97,7 @@ function (sampler::autoMALA_sampler)(
     z_t, z_t1 = z_copy, z_copy
 
     t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> pu
-    x_t = sampler.seq ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
+    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
     M = zeros(U, Q, P, 1, num_temps)
@@ -171,7 +168,6 @@ function (sampler::autoMALA_sampler)(
                 sampler.η_min,
                 sampler.η_max,
                 model.ε,
-                sampler.seq,
             )
 
             accept = (log_u[:, :, i] .< log_r) .* reversible

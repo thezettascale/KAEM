@@ -141,17 +141,12 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-
-    x_expanded =
-        model.lkhood.SEQ ? repeat(x, 1, 1, length(temps)) :
-        repeat(x, 1, 1, 1, length(temps))
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x_expanded),
+        Enzyme.Const(x),
         Enzyme.Const(temps),
         Enzyme.Const(model),
         Enzyme.Const(ps),
@@ -160,7 +155,7 @@ function autoMALA_value_and_grad_4D(
     )
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, m, ps, st_kan, st_lux)
+        CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, model, ps, st_kan, st_lux)
     return logpos, ∇z, st_ebm, st_gen
 end
 
@@ -208,16 +203,12 @@ function autoMALA_value_and_grad(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    x_expanded =
-        model.lkhood.SEQ ? repeat(x, 1, 1, length(temps)-size(x)[end]) :
-        repeat(x, 1, 1, 1, length(temps)-size(x)[end])
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x_expanded),
+        Enzyme.Const(x),
         Enzyme.Const(temps),
         Enzyme.Const(model),
         Enzyme.Const(ps),

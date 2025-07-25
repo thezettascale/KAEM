@@ -42,6 +42,7 @@ end
         idx = j + 1
     end
 
+    idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
 
     # Get bounds
@@ -109,6 +110,7 @@ end
         idx = j + 1
     end
 
+    idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
 
     length = cdf[q, b, idx] - cdf[q, b, idx-1]

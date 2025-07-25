@@ -38,6 +38,7 @@ function test_generate()
     z = first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     x, _ = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (32, 32, 1, b_size)
+    @test !any(isnan, x)
 end
 
 function test_logllhood()
@@ -54,6 +55,7 @@ function test_logllhood()
     logllhood, _ =
         log_likelihood_IS(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise)
     @test size(logllhood) == (b_size, b_size)
+    @test !any(isnan, logllhood)
 end
 
 function test_cnn_generate()
@@ -68,7 +70,7 @@ function test_cnn_generate()
     z = first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     x = first(model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z))
     @test size(x) == (32, 32, out_dim, b_size)
-
+    @test !any(isnan, x)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
@@ -85,7 +87,7 @@ function test_seq_generate()
     z = first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     x, _ = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     @test size(x) == (out_dim, 8, b_size)
-
+    @test !any(isnan, x)
     commit!(conf, "SEQ", "sequence_length", "1")
 end
 

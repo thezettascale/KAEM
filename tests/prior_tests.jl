@@ -40,6 +40,8 @@ function test_sampling()
     else
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
+
+    @test !any(isnan, z_test)
 end
 
 function test_log_prior()
@@ -47,6 +49,7 @@ function test_log_prior()
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
     log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
     @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
 end
 
 @testset "Mixture Prior Tests" begin

@@ -1,6 +1,6 @@
 # T-KAM 
 
-T-KAM is a MLE model presented [here.](https://www.arxiv.org/abs/2506.14167)
+T-KAM is a generative model presented [here.](https://www.arxiv.org/abs/2506.14167)
 
 ## Setup:
 
@@ -50,7 +50,7 @@ make train-thermo DATASET=SVHN
 To automatically run experiments one after the other:
 ```
 vim jobs.txt # Schedule jobs
-make train-sequential CONFID=jobs.txt
+make train-sequential CONFIG=jobs.txt
 ```
 
 For benchmarking run:

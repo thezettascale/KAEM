@@ -103,7 +103,7 @@ function init_trainer(
     end
 
 
-    model_type = N_t > 1 ? "thermo/$(dataset_name)" : "vanilla/$(dataset_name)"
+    model_type = N_t > 1 ? "Thermodynamic/$(dataset_name)" : "Vanilla/$(dataset_name)"
 
     prior_spline_fcn =
         "importance" *
@@ -305,7 +305,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             # Save images
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
-            for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
+            for i = 1:(fld(t.num_generated_samples,10)//t.batch_size_for_gen) # Save 1/10 of the samples to conserve space
                 batch, st_ebm, st_gen = CUDA.@fastmath t.model(
                     t.ps,
                     t.st_kan,

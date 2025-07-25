@@ -25,7 +25,7 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-neg_one = device([-one(half_quant)])
+neg_one = pu([-one(half_quant)])
 
 struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
 

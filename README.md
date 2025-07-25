@@ -122,7 +122,7 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 @reset st.gen = st_gen
 ```
 
-## Personal preferences
+## Performance tuning and dev preferences
 
 In this project, implicit types/quantization are never used. Quantization is explicitly declared in function headers using `half_quant` and `full_quant`, defined in [utils.jl](src/utils.jl). Model parameterization is also explicit.
 

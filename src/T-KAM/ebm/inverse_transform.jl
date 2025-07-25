@@ -41,8 +41,6 @@ end
         idx = j + 1
     end
 
-    # Edge cases
-    idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
 
     # Get bounds
@@ -105,8 +103,8 @@ end
         idx = j + 1
     end
 
-    idx = idx == 1 ? 2 : idx
     idx = idx > grid_size ? grid_size : idx
+    
     z[q, 1, b] =
         grid[q, idx-1] +
         (grid[q, idx] - grid[q, idx-1]) *

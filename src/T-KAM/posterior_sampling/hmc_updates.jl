@@ -50,12 +50,11 @@ function logpos_withgrad(
 } where {T<:half_quant}
     fcn = ndims(z) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
     logpos, ∇z_k, st_ebm, st_gen = fcn(z, make_zero(z), x, temps, model, ps, st_kan, st_lux)
-    @reset st_kan.ebm = st_ebm
+    @reset st_lux.ebm = st_ebm
     @reset st_lux.gen = st_gen
 
     return full_quant.(logpos) ./ full_quant(model.loss_scaling),
     full_quant.(∇z_k) ./ full_quant(model.loss_scaling),
-    st_kan,
     st_lux
 end
 
@@ -90,7 +89,7 @@ function leapfrog(
     p, ẑ = position_update(z, momentum, ∇z, M, η)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st_kan, st_lux =
+    logpos_ẑ, ∇ẑ, st_lux =
         logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
@@ -105,7 +104,7 @@ function leapfrog(
             dims = (1, 2),
         ) ./ 2
 
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st_kan, st_lux
+    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st_lux
 end
 
 end

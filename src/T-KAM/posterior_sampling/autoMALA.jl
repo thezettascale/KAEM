@@ -128,12 +128,12 @@ function (sampler::autoMALA_sampler)(
 
         log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
         dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
-        logpos_z, ∇z_fq, st_kan, st_lux =
+        logpos_z, ∇z_fq, st_lux =
             logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
 
         if burn_in < sampler.N
             burn_in += 1
-            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux = leapfrog(
+            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux = leapfrog(
                 z_fq,
                 ∇z_fq,
                 x_t,
@@ -150,7 +150,7 @@ function (sampler::autoMALA_sampler)(
             z_hq = T.(z_fq)
 
         else
-            ẑ, η_prop, η_prime, reversible, log_r, st_kan, st_lux = autoMALA_step(
+            ẑ, η_prop, η_prime, reversible, log_r, st_lux = autoMALA_step(
                 log_a,
                 log_b,
                 z_fq,
@@ -203,7 +203,7 @@ function (sampler::autoMALA_sampler)(
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_lux.gen;
+                        st_gen;
                         ε = model.ε,
                     )
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)

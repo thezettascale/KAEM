@@ -58,7 +58,7 @@ function select_step_size(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_kan, st_lux =
+    ẑ, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux =
         leapfrog(z, ∇z, x, temps, logpos_z, momentum, M, η_init, model, ps, st_kan, st_lux)
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
@@ -74,7 +74,7 @@ function select_step_size(
 
         x_active = model.lkhood.SEQ ? x[:, :, active_chains] : x[:, :, :, active_chains]
 
-        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_kan, st_lux =
+        ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_lux =
             leapfrog(
                 z[:, :, active_chains],
                 ∇z[:, :, active_chains],
@@ -114,7 +114,7 @@ function select_step_size(
 
     # Reduce step size for chains that initially had too high acceptance with safety check
     η_init = safe_step_size_update(η_init, -1 .* geq_bool, Δη)
-    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_kan, st_lux
+    return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_lux
 end
 
 function autoMALA_step(
@@ -145,7 +145,7 @@ function autoMALA_step(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st_kan, st_lux = select_step_size(
+    ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st_lux = select_step_size(
         log_a,
         log_b,
         z,
@@ -165,7 +165,7 @@ function autoMALA_step(
         η_max = η_max,
     )
 
-    z_rev, _, _, _, η_prime, _, st_kan, st_lux = select_step_size(
+    z_rev, _, _, _, η_prime, _, st_lux = select_step_size(
         log_a,
         log_b,
         ẑ,
@@ -186,7 +186,7 @@ function autoMALA_step(
     )
 
     reversible = check_reversibility(z, z_rev, η, η_prime; tol = ε)
-    return ẑ, η, η_prime, reversible, log_r, st_kan, st_lux
+    return ẑ, η, η_prime, reversible, log_r, st_lux
 end
 
 end

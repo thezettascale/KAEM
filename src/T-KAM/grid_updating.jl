@@ -16,7 +16,7 @@ function update_model_grid(
     model::T_KAM{T,U},
     x::AbstractArray{T},
     ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple;
     temps::AbstractArray{T} = [one(T)],
     rng::AbstractRNG = Random.default_rng(),
@@ -33,7 +33,7 @@ function update_model_grid(
         model: The model.
         x: Data samples.
         ps: The parameters of the model.
-        kan_st: The states of the KAN model.
+        st_kan: The states of the KAN model.
         st_lux: The states of the Lux model.
         temps: The temperatures for thermodynamic models.
         rng: The random number generator.
@@ -51,17 +51,17 @@ function update_model_grid(
 
         if model.N_t > 1
             z = first(
-                model.sample_posterior(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+                model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
             )
         elseif model.prior.ula || model.MALA
-            z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))
         else
             z = first(
                 model.sample_prior(
                     model,
                     model.grid_updates_samples,
                     ps,
-                    kan_st,
+                    st_kan,
                     st_lux,
                     rng,
                 ),
@@ -92,20 +92,21 @@ function update_model_grid(
                 new_grid, new_coef = update_fcn_grid(
                     model.prior.fcns_qp[i],
                     ps.ebm.fcn[symbol_map[i]],
-                    kan_st.ebm[symbol_map[i]],
+                    st_kan.ebm[symbol_map[i]],
                     z,
                 )
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
-                @reset kan_st.ebm[symbol_map[i]].grid = new_grid
+                @reset st_kan.ebm[symbol_map[i]].grid = new_grid
 
                 scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
                 model.prior.fcns_qp[i].spline_string == "RBF" &&
                     @reset model.prior.fcns_qp[i].basis_function.scale = scale
 
-                z = model.prior.fcns_qp[i](
+                z = Lux.apply(
+                    model.prior.fcns_qp[i],
                     z,
                     ps.ebm.fcn[symbol_map[i]],
-                    kan_st.ebm[symbol_map[i]],
+                    st_kan.ebm[symbol_map[i]],
                 )
                 z =
                     i == 1 ? reshape(z, size(z, 2), :) :
@@ -126,22 +127,22 @@ function update_model_grid(
 
     # Only update if KAN-type generator requires
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.SEQ) &&
-        return model, T.(ps), kan_st, st_lux
+        return model, T.(ps), st_kan, st_lux
 
     if !sampled_bool
         if model.N_t > 1
             z = first(
-                model.sample_posterior(model, x, temps[2:end], ps, kan_st, st_lux, rng),
+                model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
             )
         elseif model.prior.ula || model.MALA
-            z = first(model.sample_posterior(model, x, ps, kan_st, st_lux, rng))
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))
         else
             z = first(
                 model.sample_prior(
                     model,
                     model.grid_updates_samples,
                     ps,
-                    kan_st,
+                    st_kan,
                     st_lux,
                     rng,
                 ),
@@ -155,20 +156,21 @@ function update_model_grid(
         new_grid, new_coef = update_fcn_grid(
             model.lkhood.generator.Φ_fcns[i],
             ps.gen.fcn[symbol_map[i]],
-            kan_st.gen[symbol_map[i]],
+            st_kan.gen[symbol_map[i]],
             z,
         )
         @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
-        @reset kan_st.gen[symbol_map[i]].grid = new_grid
+        @reset st_kan.gen[symbol_map[i]].grid = new_grid
 
         scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
         model.lkhood.generator.Φ_fcns[i].spline_string == "RBF" &&
             @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale = scale
 
-        z = model.lkhood.generator.Φ_fcns[i](
+        z = Lux.apply(
+            model.lkhood.generator.Φ_fcns[i],
             z,
             ps.gen.fcn[symbol_map[i]],
-            kan_st.gen[symbol_map[i]],
+            st_kan.gen[symbol_map[i]],
         )
         z = dropdims(sum(z, dims = 1); dims = 1)
 
@@ -183,7 +185,7 @@ function update_model_grid(
         end
     end
 
-    return model, T.(ps), kan_st, st_lux
+    return model, T.(ps), st_kan, st_lux
 end
 
 end

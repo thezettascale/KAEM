@@ -30,8 +30,8 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     cnn::Bool
     o::opt
     dataset_name::AbstractString
-    ps::ComponentArray
-    st_kan::ComponentArray
+    ps::ComponentArray{U}
+    st_kan::ComponentArray{T}
     st_lux::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any,Int}
@@ -43,7 +43,7 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     save_model::Bool
     gen_type::AbstractString
     checkpoint_every::Int
-    loss::full_quant
+    loss::U
     rng::AbstractRNG
 end
 

@@ -21,8 +21,8 @@ include("quadrature.jl")
 using .Quadrature
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple{univariate_function{T,U}}
-    layernorms::Tuple{Lux.LayerNorm}
+    fcns_qp::Tuple{Vararg{univariate_function{T,U}}}
+    layernorms::Tuple{Vararg{Lux.LayerNorm}}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString

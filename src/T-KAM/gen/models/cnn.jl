@@ -8,8 +8,8 @@ using ..Utils
 
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Lux.ConvTranspose}
-    batchnorms::Tuple{Lux.BatchNorm}
+    Φ_fcns::Tuple{Vararg{Lux.ConvTranspose}}
+    batchnorms::Tuple{Vararg{Lux.BatchNorm}}
     batchnorm_bool::Bool
     layernorm_bool::Bool
 end

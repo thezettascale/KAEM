@@ -40,11 +40,17 @@ Edit the config files:
 vim config/nist_config.ini
 ```
 
-For main experiments run:
+For individual experiments run:
 
 ```bash
 make train-vanilla DATASET=MNIST
 make train-thermo DATASET=SVHN
+```
+
+To automatically run experiments one after the other:
+```
+vim jobs.txt # Schedule jobs
+make train-sequential CONFID=jobs.txt
 ```
 
 For benchmarking run:

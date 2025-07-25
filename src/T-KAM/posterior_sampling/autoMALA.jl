@@ -1,0 +1,230 @@
+module autoMALA_sampling
+
+export initialize_autoMALA_sampler, autoMALA_sampler
+
+using CUDA,
+    LinearAlgebra,
+    Random,
+    Lux,
+    LuxCUDA,
+    Distributions,
+    Accessors,
+    Statistics,
+    Enzyme,
+    ComponentArrays
+
+using ..Utils
+using ..T_KAM_model
+
+include("preconditioner.jl")
+using .Preconditioning
+
+include("../gen/loglikelihoods.jl")
+using .LogLikelihoods: log_likelihood_MALA
+
+include("hmc_updates.jl")
+using .HamiltonianMonteCarlo
+
+include("step_search.jl")
+using .autoMALA_StepSearch
+
+struct autoMALA_sampler{U<:full_quant}
+    N::Int
+    N_unadjusted::Int
+    η::AbstractArray{U}
+    Δη::U
+    η_min::U
+    η_max::U
+    RE_frequency::Int
+end
+
+function initialize_autoMALA_sampler(;
+    N::Int = 20,
+    N_unadjusted::Int = 1,
+    RE_frequency::Int = 10,
+    η::U = full_quant(1e-3),
+    Δη::U = full_quant(2),
+    η_min::U = full_quant(1e-5),
+    η_max::U = one(full_quant),
+    samples::Int = 100,
+    num_temps::Int = 1,
+) where {U<:full_quant}
+
+    return autoMALA_sampler(
+        N,
+        N_unadjusted,
+        repeat([η], samples, num_temps) |> pu,
+        Δη,
+        η_min,
+        η_max,
+        RE_frequency,
+    )
+end
+
+function (sampler::autoMALA_sampler)(
+    model::T_KAM{T,U},
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+    x::AbstractArray{T};
+    temps::AbstractArray{T} = [one(T)],
+    rng::AbstractRNG = Random.default_rng(),
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
+    """
+    Metropolis-adjusted Langevin algorithm (MALA) sampler to generate posterior samples.
+
+    Args:
+        m: The model.
+        ps: The parameters of the model.
+        st: The states of the model.
+        x: The data.
+        t: The temperatures if using Thermodynamic Integration.
+        N: The number of iterations.
+        rng: The random number generator.
+    """
+    # Initialize from prior 
+    z_hq, st_ebm =
+        model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
+    loss_scaling = U(model.loss_scaling)
+
+    num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
+    z_hq = reshape(z_hq, Q, P, S, num_temps)
+
+    # Pre-allocate for both precisions
+    z_fq = U.(z_hq)
+    ∇z_fq = Enzyme.make_zero(z_fq)
+    z_copy = similar(z_hq[:, :, :, 1]) |> pu
+    z_t, z_t1 = z_copy, z_copy
+
+    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> pu
+    x_t =
+        model.lkhood.SEQ ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
+
+    # Initialize preconditioner
+    M = zeros(U, Q, P, 1, num_temps)
+    z_cpu = cpu_device()(z_fq)
+    for k = 1:num_temps
+        M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
+    end
+    @reset sampler.η = pu(sampler.η)
+
+    log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
+    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
+    log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N)) |> pu
+
+    num_acceptances = zeros(Int, S, num_temps) |> pu
+    mean_η = zeros(U, S, num_temps) |> pu
+    momentum = Enzyme.make_zero(z_fq)
+
+    burn_in = 0
+    η = sampler.η
+
+    for i = 1:sampler.N
+        z_cpu = cpu_device()(z_fq)
+        for k = 1:num_temps
+            momentum[:, :, :, k], M[:, :, 1, k] =
+                sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k])
+        end
+
+        log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
+        dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
+        logpos_z, ∇z_fq, st_lux =
+            logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
+
+        if burn_in < sampler.N
+            burn_in += 1
+            z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux = leapfrog(
+                z_fq,
+                ∇z_fq,
+                x_t,
+                t_expanded,
+                logpos_z,
+                pu(momentum),
+                pu(repeat(M, 1, 1, S, 1)),
+                η,
+                model,
+                ps,
+                st_kan,
+                st_lux,
+            )
+            z_hq = T.(z_fq)
+
+        else
+            ẑ, η_prop, η_prime, reversible, log_r, st_lux = autoMALA_step(
+                log_a,
+                log_b,
+                z_fq,
+                ∇z_fq,
+                x_t,
+                t_expanded,
+                logpos_z,
+                pu(momentum),
+                pu(repeat(M, 1, 1, S, 1)),
+                model,
+                ps,
+                st_kan,
+                st_lux,
+                η,
+                sampler.Δη,
+                sampler.η_min,
+                sampler.η_max,
+                model.ε,
+            )
+
+            accept = (log_u[:, :, i] .< log_r) .* reversible
+            z_fq =
+                ẑ .* reshape(accept, 1, 1, S, num_temps) .+
+                z_fq .* reshape(1 .- accept, 1, 1, S, num_temps)
+            mean_η .= mean_η .+ η_prop .* accept
+            η .= η_prop .* accept .+ η .* (1 .- accept)
+            num_acceptances .= num_acceptances .+ accept
+
+            z_hq = T.(z_fq)
+
+            # Replica exchange Monte Carlo
+            if i % sampler.RE_frequency == 0 && num_temps > 1
+                for t = 1:(num_temps-1)
+
+                    # Global swap criterion
+                    z_t = copy(z_hq[:, :, :, t])
+                    z_t1 = copy(z_hq[:, :, :, t+1])
+                    ll_t, st_gen = log_likelihood_MALA(
+                        z_t,
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st_kan.gen,
+                        st_lux.gen;
+                        ε = model.ε,
+                    )
+                    ll_t1, st_gen = log_likelihood_MALA(
+                        z_t1,
+                        x,
+                        model.lkhood,
+                        ps.gen,
+                        st_kan.gen,
+                        st_gen;
+                        ε = model.ε,
+                    )
+                    log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
+
+                    swap = T(log_u_swap[t, i] < mean(log_swap_ratio))
+                    @reset st_lux.gen = st_gen
+
+                    # Swap population if likelihood of population in new temperature is higher on average
+                    z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+                    z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+                    z_fq = U.(z_hq)
+                end
+            end
+        end
+    end
+
+    mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)
+    mean_η = ifelse.(isnan.(mean_η), sampler.η, mean_η) |> pu
+    @reset sampler.η = mean_η
+
+    return z_hq, st_lux
+end
+
+end

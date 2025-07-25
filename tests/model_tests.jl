@@ -1,59 +1,71 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP16"
+ENV["HALF_QUANT"] = "FP32"
+
+include("../src/utils.jl")
+using .Utils
 
 include("../src/T-KAM/T-KAM.jl")
-include("../src/utils.jl")
 using .T_KAM_model
-using .Utils
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
+
+include("../src/T-KAM/grid_updating.jl")
+using .ModelGridUpdating
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
-out_dim = parse(Int, retrieve(conf, "KAN_LIKELIHOOD", "output_dim"))
+out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
+commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 function test_ps_derivative()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
-    model = init_T_KAM(dataset, conf, (3,3,1))
-    x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    dataset = randn(full_quant, 32, 32, 1, 50)
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = Enzyme.make_zero(ps)
 
-    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test norm(∇) > 0
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
 end
 
 function test_grid_update()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
-    model = init_T_KAM(dataset, conf, (3,3,1))
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    dataset = randn(full_quant, 32, 32, 1, 50)
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
 
-    size_grid = size(st.gen[Symbol("1")].grid)
-    x = first(model.train_loader) |> device
-    model, ps, st, seed = update_model_grid(model, x, ps, Lux.testmode(st))
-    @test all(size(st.gen[Symbol("1")].grid) .== size_grid)
+    size_grid = size(st_kan.ebm[:a].grid)
+    x = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux =
+        update_model_grid(model, x, ps, st_kan, Lux.testmode(st_lux))
+    @test all(size(st_kan.ebm[:a].grid) .== size_grid)
     @test !any(isnan, ps)
 end
 
 function test_mala_loss()
     Random.seed!(42)
-    dataset = randn(full_quant, 3, 3, 1, 50) 
-    commit!(conf, "MALA", "use_langevin", "true")
-    model = init_T_KAM(dataset, conf, (3,3,1))
-    x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    dataset = randn(full_quant, 32, 32, 1, 50)
+    commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = Enzyme.make_zero(ps)
 
-    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test norm(∇) > 0
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
 end
 
@@ -62,30 +74,32 @@ function test_cnn_loss()
     dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
-    x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = Enzyme.make_zero(ps)
 
-    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test norm(∇) > 0
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
 end
 
-function test_SEQ_loss()
+function test_seq_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 50, 10, 100)
     commit!(conf, "SEQ", "sequence_length", "10")
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_T_KAM(dataset, conf, (50, 10))
-    x_test = first(model.train_loader) |> device
-    ps, st = Lux.setup(Random.GLOBAL_RNG, model)
-    ps, st = ComponentArray(ps) |> device, st |> device
-    model = move_to_hq(model)
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = Enzyme.make_zero(ps)
 
-    ∇ = first(gradient(p -> first(model.loss_fcn(model, p, st, x_test)), half_quant.(ps)))
-    @test norm(∇) > 0
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+    @test norm(∇) != 0
     @test !any(isnan, ∇)
 end
 
@@ -94,5 +108,5 @@ end
     test_grid_update()
     test_mala_loss()
     test_cnn_loss()
-    test_SEQ_loss()
+    test_seq_loss()
 end

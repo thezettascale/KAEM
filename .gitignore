@@ -1,6 +1,9 @@
 *.log
 *.out
+*.pyc
 # logs/** 
 **/ckpt_*.jld2
 garbage/**
 generated_images_epoch_*.h5
+*.egg-info
+condaenv*

@@ -1,35 +1,41 @@
-using Test, Random, LinearAlgebra, Lux
+using Test, Random, LinearAlgebra, Lux, ComponentArrays
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/univariate_functions.jl")
 include("../src/utils.jl")
-using .univariate_functions
 using .Utils
+
+include("../src/T-KAM/kan/univariate_functions.jl")
+using .UnivariateFunctions
+
+include("../src/T-KAM/kan/grid_updating.jl")
+using .GridUpdating: update_fcn_grid
 
 function test_fwd()
     Random.seed!(42)
-    x = rand(half_quant, 5, 3) |> device
+    x = rand(half_quant, 5, 3) |> pu
     f = init_function(5, 2)
 
     Random.seed!(42)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> device, st |> device
+    ps = ps |> ComponentArray |> pu
+    st = st |> ComponentArray |> pu
 
-    y = fwd(f, ps, st, x)
+    y = f(x, ps, st)
     @test size(y) == (5, 2, 3)
 end
 
 function test_grid_update()
     Random.seed!(42)
-    x = rand(half_quant, 5, 3) |> device
+    x = rand(half_quant, 5, 3) |> pu
     f = init_function(5, 2)
     ps, st = Lux.setup(Random.GLOBAL_RNG, f)
-    ps, st = ps |> device, st |> device
+    ps = ps |> ComponentArray |> pu
+    st = st |> ComponentArray |> pu
 
-    y = fwd(f, ps, st, x)
+    y = f(x, ps, st)
     grid, coef = update_fcn_grid(f, ps, st, x)
     @test size(grid) == (5, 12)
 end

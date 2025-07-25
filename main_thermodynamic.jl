@@ -14,16 +14,16 @@ conf = Dict(
 )[dataset]
 parse_conf!(conf)
 
-ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu") 
+ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 ENV["autoMALA"] = retrieve(conf, "POST_LANGEVIN", "use_autoMALA")
 
-include("src/ML_pipeline/trainer.jl")
+include("src/pipeline/trainer.jl")
 using .trainer
 
-rng = Random.seed!(1)
+rng = Random.MersenneTwister(1)
 
 # Thermodynamic
 t = init_trainer(rng, conf, dataset)
-train!(t)  
+train!(t)

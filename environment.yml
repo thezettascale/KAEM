@@ -1,0 +1,11 @@
+name: T-KAM
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - tmux
+  - pip:
+    - -e .[dev] 

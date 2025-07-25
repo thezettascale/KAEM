@@ -1,57 +1,41 @@
 module Utils
 
-export removeNaN, device, removeZero, removeNeg, next_rng, half_quant, full_quant, hq, fq
+export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
 
-using Lux, Tullio, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, KernelAbstractions
-using ChainRules: @ignore_derivatives
+using Lux, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
+using CUDA, LuxCUDA, Enzyme.EnzymeRules, NNlib
 
-const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
+const pu =
+    CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
-# Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
-const half_quant = Dict(
-    "BF16" => BFloat16,
-    "FP16" => Float16,
-    "FP32" => Float32,
-)[get(ENV, "HALF_QUANT", "FP32")]
+# # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
+const QUANT_MAP =
+    Dict("BF16" => BFloat16, "FP16" => Float16, "FP32" => Float32, "FP64" => Float64)
 
-const full_quant = Dict(
-    "FP16" => Float16,
-    "FP32" => Float32,
-    "FP64" => Float64,
-)[get(ENV, "FULL_QUANT", "FP32")]
+const LUX_QUANT_MAP =
+    Dict("BF16" => Lux.bf16, "FP16" => Lux.f16, "FP32" => Lux.f32, "FP64" => Lux.f64)
 
-const hq = Dict(
-    "BF16" => Lux.bf16,
-    "FP16" => Lux.f16,
-    "FP32" => Lux.f32,
-)[get(ENV, "HALF_QUANT", "FP32")]
+const half_quant = get(QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Float32)
+const full_quant = get(QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Float32)
+const hq = get(LUX_QUANT_MAP, uppercase(get(ENV, "HALF_QUANT", "FP32")), Lux.f32)
+const fq = get(LUX_QUANT_MAP, uppercase(get(ENV, "FULL_QUANT", "FP32")), Lux.f32)
 
-const fq = Dict(
-    "FP16" => Lux.f16,
-    "FP32" => Lux.f32,
-    "FP64" => Lux.f64
-)[get(ENV, "FULL_QUANT", "FP32")]
+# Num layers must be flexible, yet static, so this is used to index into params/state
+const symbol_map = (:a, :b, :c, :d, :e, :f, :g, :h, :i)
 
-function device(x)
-    return pu(x)
-end
-
-function removeNaN(x)
-    return ifelse.(isnan.(x), zero(half_quant), x) |> device
-end
-
-function removeZero(x; ε=half_quant(1e-4))
-    return ifelse.(abs.(x) .< ε, ε, x) |> device
-end
-
-function removeNeg(x; ε=half_quant(1e-4))
-    return ifelse.(x .< ε, ε, x) |> device
-end
-
-function next_rng(seed)
-    rng = @ignore_derivatives Random.seed!(seed)
-    return seed + 1, rng
-end
+const activation_mapping = Dict(
+    "relu" => NNlib.relu,
+    "leakyrelu" => NNlib.leakyrelu,
+    "tanh" => NNlib.tanh_fast,
+    "sigmoid" => NNlib.sigmoid_fast,
+    "swish" => NNlib.hardswish,
+    "gelu" => NNlib.gelu,
+    "selu" => NNlib.selu,
+    "tanh" => NNlib.tanh_fast,
+    "silu" => x -> x .* NNlib.sigmoid_fast(x),
+    "elu" => NNlib.elu,
+    "celu" => NNlib.celu,
+    "none" => x -> x .* zero(half_quant),
+)
 
 end

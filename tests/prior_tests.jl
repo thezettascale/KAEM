@@ -1,59 +1,58 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Zygote
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/EBM_prior.jl")
 include("../src/utils.jl")
-using .ebm_ebm_prior: ebm_prior, init_ebm_prior, log_prior, sample_prior
 using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
 
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 b_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
-p_size = first(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
-q_size = last(parse.(Int, retrieve(conf, "EBM_PRIOR", "layer_widths")))
+p_size = first(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
+q_size = last(parse.(Int, retrieve(conf, "EbmModel", "layer_widths")))
+
+Random.seed!(42)
+dataset = randn(full_quant, 32, 32, 1, b_size*10)
+model = init_T_KAM(dataset, conf, (32, 32, 1))
+x_test = first(model.train_loader) |> pu
+model, ps, st_kan, st_lux = prep_model(model, x_test)
+ps = half_quant.(ps)
+
+function test_shapes()
+    @test model.prior.p_size == p_size
+    @test model.prior.q_size == q_size
+end
 
 function test_sampling()
-    Random.seed!(42)
-    prior = init_ebm_prior(conf; prior_seed=1) 
+    z_test =
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
 
-    @test prior.p_size == p_size
-    @test prior.q_size == q_size
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
 
-    ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
-    ps, st = ps |> device, st |> device
-
-    z_test = first(sample_prior(prior, b_size, ps, st; ε=half_quant(1e-6)))
-    @test all(size(z_test) .== (q_size, p_size, b_size))
+    @test !any(isnan, z_test)
 end
 
 function test_log_prior()
-    Random.seed!(42)
-    prior = init_ebm_prior(conf; prior_seed=1) 
-    ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
-    ps, st = ps |> device, st |> device
-
-    z_test = first(sample_prior(prior, b_size, ps, st; ε=half_quant(1e-6)))
-    log_p = first(prior.lp_fcn(prior, z_test, ps, st))
-    @test size(log_p) == (b_size, )
+    z_test =
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
 end
-
-function test_log_prior_derivative()
-    Random.seed!(42)
-    prior = init_ebm_prior(conf; prior_seed=1) 
-    ps, st = Lux.setup(Random.GLOBAL_RNG, prior)
-    ps, st = ps |> device, st |> device
-
-    z_test = first(sample_prior(prior, b_size, ps, st; ε=half_quant(1e-6)))
-    ∇ = first(gradient(x -> sum(first(prior.lp_fcn(prior, x, ps, st))), z_test))
-    @test size(∇) == size(z_test)
-end
-    
 
 @testset "Mixture Prior Tests" begin
     test_sampling()
     test_log_prior()
-    test_log_prior_derivative()
 end

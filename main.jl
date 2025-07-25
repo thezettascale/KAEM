@@ -9,7 +9,6 @@ conf = Dict(
     "SVHN" => ConfParse("config/svhn_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
-    "DARCY_PERM" => ConfParse("config/darcy_perm_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
 )[dataset]
 parse_conf!(conf)

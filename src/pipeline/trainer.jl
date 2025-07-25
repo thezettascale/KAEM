@@ -2,24 +2,28 @@ module trainer
 
 export T_KAM_trainer, init_trainer, train!
 
-include("../T-KAM/T-KAM.jl")
-include("../T-KAM/model_setup.jl")
-include("../T-KAM/grid_updating.jl")
-include("optimizer.jl")
-include("../utils.jl")
-include("data_utils.jl")
-using .T_KAM_model
-using .ModelSetup
-using .ModelGridUpdating: update_model_grid
-using .optimization
-using .Utils: pu, half_quant, full_quant, hq, fq
-using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
-
 using CUDA
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme
+
+include("../utils.jl")
+using .Utils
+
+include("../T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../T-KAM/model_setup.jl")
+using .ModelSetup
+
+include("../T-KAM/grid_updating.jl")
+using .ModelGridUpdating
+
+include("optimizer.jl")
+include("data_utils.jl")
+using .optimization
+using .DataUtils: get_vision_dataset, get_text_dataset
 
 mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     model::Any

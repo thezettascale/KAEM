@@ -12,7 +12,7 @@ using .T_KAM_model
 using .DataUtils: get_vision_dataset
 using .Utils: pu, half_quant
 
-conf = ConfParse("benches/svhn_prior_config.ini")
+conf = ConfParse("config/svhn_pang_config.ini")
 parse_conf!(conf)
 
 rng = Random.MersenneTwister(1)

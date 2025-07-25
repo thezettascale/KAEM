@@ -57,7 +57,7 @@ function init_CNN_Generator(
     batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
 
     Φ_functions = Vector{Lux.ConvTranspose}(undef, 0)
-    batchnorms = Vector{Lux.BatchNorm}(undef, 0)    
+    batchnorms = Vector{Lux.BatchNorm}(undef, 0)
 
     length(strides) != length(hidden_c) &&
         (error("Number of strides must be equal to the number of hidden layers + 1."))

@@ -47,6 +47,7 @@ function initialize_autoMALA_sampler(;
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
     samples::Int = 100,
+    num_temps::Int = 1,
 ) where {U<:full_quant}
 
     return autoMALA_sampler(
@@ -105,7 +106,7 @@ function (sampler::autoMALA_sampler)(
     for k = 1:num_temps
         M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
     end
-    @reset model.η = pu(model.η)
+    @reset sampler.η = pu(sampler.η)
 
     log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu

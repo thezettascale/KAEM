@@ -3,14 +3,7 @@ module LogPriorFCNs
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: softmax
-using CUDA,
-    Lux,
-    LuxCUDA,
-    LinearAlgebra,
-    Accessors,
-    Random,
-    ComponentArrays,
-    ParallelStencil
+using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays, ParallelStencil
 
 using ..Utils
 using ..EBM_Model
@@ -176,7 +169,7 @@ function (lp::LogPriorMix)(
     """
     alpha = softmax(ps.dist.α; dims = 2)
     Q, P, S = size(alpha)..., size(z)[end]
-    
+
     log_απ = @zeros(Q, P, S)
     ebm.π_pdf!(log_απ, z, ps.dist.π_μ, ps.dist.π_σ)
     @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, lp.ε)

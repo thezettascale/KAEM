@@ -70,6 +70,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     zero_vec = pu(zeros(half_quant, model.lkhood.x_shape..., model.IS_samples, batch_size))
+    max_samples = max(model.IS_samples, batch_size)
 
     # Defaults
     @reset model.loss_fcn = ImportanceLoss(zero_vec)
@@ -129,6 +130,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
             η_max = η_minmax[2],
             RE_frequency = replica_exchange_frequency,
             samples = max_samples,
+            num_temps = model.N_t,
         )
     end
     return model

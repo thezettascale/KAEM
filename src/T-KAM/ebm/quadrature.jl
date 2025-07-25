@@ -2,13 +2,7 @@ module Quadrature
 
 export TrapeziumQuadrature, GaussLegendreQuadrature
 
-using CUDA,
-    LinearAlgebra,
-    Random,
-    Lux,
-    LuxCUDA,
-    ComponentArrays,
-    ParallelStencil
+using CUDA, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, ParallelStencil
 
 using ..Utils
 
@@ -48,7 +42,7 @@ end
     component_mask::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     acc = zero(T)
-    for p in 1:size(component_mask, 2)
+    for p = 1:size(component_mask, 2)
         acc += exp_fg[q, p, g] * component_mask[q, p, b]
     end
     trapz[q, b, g] = acc
@@ -94,7 +88,7 @@ function (tq::TrapeziumQuadrature)(
     # Energy function of each component
     f_grid, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, f_grid)
     Q, P, G = size(f_grid)
-    
+
     # Choose component if mixture model else use all
     exp_fg = @zeros(Q, P, G)
     if !any(component_mask .< zero(T))
@@ -103,13 +97,13 @@ function (tq::TrapeziumQuadrature)(
         @parallel (1:Q, 1:P, 1:G) qfirst_exp_kernel!(exp_fg, f_grid, π_grid)
         @parallel (1:Q, 1:B, 1:G) apply_mask!(trapz, exp_fg, component_mask)
         trapz = trapz[:, :, 2:end] + trapz[:, :, 1:(end-1)]
-        @parallel (1:Q, 1:B, 1:G-1) weight_kernel!(trapz, Δg)
+        @parallel (1:Q, 1:B, 1:(G-1)) weight_kernel!(trapz, Δg)
         @. trapz = trapz / 2
         return trapz, st_kan[:a].grid, st_lyrnorm_new
     else
         @parallel (1:Q, 1:P, 1:G) pfirst_exp_kernel!(exp_fg, f_grid, π_grid)
         trapz = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
-        @parallel (1:Q, 1:P, 1:G-1) weight_kernel!(trapz, Δg)
+        @parallel (1:Q, 1:P, 1:(G-1)) weight_kernel!(trapz, Δg)
         @. trapz = trapz / 2
         return trapz, st_kan[:a].grid, st_lyrnorm_new
     end

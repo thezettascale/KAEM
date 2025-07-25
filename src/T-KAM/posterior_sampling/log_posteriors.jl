@@ -1,13 +1,6 @@
 module LogPosteriors
 
-using CUDA,
-    ComponentArrays,
-    Statistics,
-    Lux,
-    LuxCUDA,
-    LinearAlgebra,
-    Random,
-    Enzyme
+using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
 
 using ..Utils
 using ..T_KAM_model
@@ -75,8 +68,6 @@ function unadjusted_logpos_grad(
         Enzyme.Const(prior_sampling_bool),
     )
 
-    any(isnan, ∇z) && error("∇z is NaN")
-    all(iszero, ∇z) && error("∇z is zero")
     return ∇z
 end
 
@@ -150,8 +141,10 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
+
     x_expanded =
-        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)) : repeat(x, 1, 1, length(temps))
+        model.lkhood.SEQ ? repeat(x, 1, 1, length(temps)) :
+        repeat(x, 1, 1, 1, length(temps))
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -165,9 +158,6 @@ function autoMALA_value_and_grad_4D(
         Enzyme.Const(st_kan),
         Enzyme.Const(st_lux),
     )
-
-    any(isnan, ∇z) && error("∇z is NaN")
-    all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, m, ps, st_kan, st_lux)
@@ -219,8 +209,8 @@ function autoMALA_value_and_grad(
 } where {T<:half_quant,U<:full_quant}
 
     x_expanded =
-        ndims(x) == 4 ? repeat(x, 1, 1, 1, length(temps)-size(x)[end]) :
-        repeat(x, 1, 1, length(temps)-size(x)[end])
+        model.lkhood.SEQ ? repeat(x, 1, 1, length(temps)-size(x)[end]) :
+        repeat(x, 1, 1, 1, length(temps)-size(x)[end])
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -234,9 +224,6 @@ function autoMALA_value_and_grad(
         Enzyme.Const(st_kan),
         Enzyme.Const(st_lux),
     )
-
-    any(isnan, ∇z) && error("∇z is NaN")
-    all(iszero, ∇z) && error("∇z is zero")
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)

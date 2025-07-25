@@ -106,6 +106,8 @@ function init_T_KAM(
     MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
     p = [one(full_quant)]
 
+    N_t = max(N_t, 1)
+
     if N_t > 1
         initial_p =
             parse(full_quant, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))

@@ -40,15 +40,13 @@ struct RBF_basis <: Lux.AbstractLuxLayer
     scale::half_quant
 end
 
-struct RSWAF_basis <: Lux.AbstractLuxLayer
-end
+struct RSWAF_basis <: Lux.AbstractLuxLayer end
 
 struct Cheby_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct FFT_basis <: Lux.AbstractLuxLayer
-end
+struct FFT_basis <: Lux.AbstractLuxLayer end
 
 @parallel_indices (i, g, s) function B_spline_deg0!(
     B::AbstractArray{T},

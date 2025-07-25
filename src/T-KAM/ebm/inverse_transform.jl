@@ -3,13 +3,7 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture
 
-using CUDA,
-    LinearAlgebra,
-    Random,
-    Lux,
-    LuxCUDA,
-    ComponentArrays,
-    ParallelStencil
+using CUDA, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, ParallelStencil
 
 using ..Utils
 
@@ -118,8 +112,7 @@ end
 
     z[q, 1, b] =
         grid[q, idx-1] +
-        (grid[q, idx] - grid[q, idx-1]) *
-        ((rv - cdf[q, b, idx-1]) / length)
+        (grid[q, idx] - grid[q, idx-1]) * ((rv - cdf[q, b, idx-1]) / length)
     return nothing
 end
 

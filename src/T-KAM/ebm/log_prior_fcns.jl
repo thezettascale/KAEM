@@ -4,14 +4,11 @@ export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: softmax
 using CUDA,
-    KernelAbstractions,
-    Tullio,
     Lux,
     LuxCUDA,
     LinearAlgebra,
     Accessors,
     Random,
-    Tullio,
     ComponentArrays,
     ParallelStencil
 

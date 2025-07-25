@@ -2,7 +2,7 @@ module LangevinMLE
 
 export LangevinLoss, initialize_langevin_loss
 
-using CUDA, KernelAbstractions, Enzyme, ComponentArrays, Random
+using CUDA, Enzyme, ComponentArrays, Random
 using Statistics, Lux, LuxCUDA
 
 using ..Utils

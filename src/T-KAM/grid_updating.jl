@@ -4,7 +4,6 @@ module ModelGridUpdating
 export update_model_grid
 
 using CUDA,
-    KernelAbstractions,
     Accessors,
     ComponentArrays,
     Lux,

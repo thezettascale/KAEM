@@ -16,7 +16,7 @@ using .Utils: pu, half_quant, full_quant, hq, fq
 using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme

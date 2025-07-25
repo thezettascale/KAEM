@@ -2,7 +2,7 @@ module GeneratorModel
 
 export GenModel, init_GenModel, generator, importance_resampler
 
-using CUDA, KernelAbstractions
+using CUDA
 using ConfParser,
     Random, Lux, LuxCUDA, Statistics, LinearAlgebra, ComponentArrays, Accessors
 using NNlib: sigmoid_fast, tanh_fast, relu, gelu, sigmoid, tanh

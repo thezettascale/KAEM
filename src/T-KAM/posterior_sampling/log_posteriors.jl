@@ -1,7 +1,6 @@
 module LogPosteriors
 
 using CUDA,
-    KernelAbstractions,
     ComponentArrays,
     Statistics,
     Lux,

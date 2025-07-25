@@ -3,7 +3,6 @@ module autoMALA_sampling
 export initialize_autoMALA_sampler, autoMALA_sampler
 
 using CUDA,
-    KernelAbstractions,
     LinearAlgebra,
     Random,
     Lux,

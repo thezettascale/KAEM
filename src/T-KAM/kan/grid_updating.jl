@@ -3,7 +3,6 @@ module GridUpdating
 export update_fcn_grid
 
 using CUDA,
-    KernelAbstractions,
     Accessors,
     ComponentArrays,
     Lux,

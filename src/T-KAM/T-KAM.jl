@@ -2,7 +2,7 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM
 
-using CUDA, KernelAbstractions, Enzyme
+using CUDA, Enzyme
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 

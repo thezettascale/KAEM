@@ -8,7 +8,6 @@ using JLD2,
     LaTeXStrings,
     Makie,
     GLMakie,
-    Tullio,
     Random,
     Accessors
 

@@ -128,9 +128,7 @@ using Flux
 using Distributions
 using Plots
 using cuDNN
-using KernelAbstractions
 using NNlib
-using Tullio
 println(\"✓ All Julia imports successful!\")
 println(\"✓ CUDA available: \", CUDA.functional())
     "

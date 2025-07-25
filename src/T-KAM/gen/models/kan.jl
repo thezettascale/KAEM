@@ -132,7 +132,7 @@ function (gen::KAN_Generator{T,U})(
 
     # KAN functions
     for i = 1:gen.depth
-        z = gen.Φ_fcns[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
         z = dropdims(sum(z, dims = 1); dims = 1)
 
         z, st_lyrnorm_new =

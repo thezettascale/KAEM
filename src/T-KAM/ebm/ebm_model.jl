@@ -181,7 +181,7 @@ function (ebm::EbmModel{T})(
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
 
     for i = 1:ebm.depth
-        z = ebm.fcns_qp[i](z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
 
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :

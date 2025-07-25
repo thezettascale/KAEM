@@ -34,7 +34,12 @@ end
 function test_sampling()
     z_test =
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-    @test all(size(z_test) .== (q_size, p_size, b_size))
+
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
 end
 
 function test_log_prior()

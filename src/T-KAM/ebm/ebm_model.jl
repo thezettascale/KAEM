@@ -15,8 +15,10 @@ using ConfParser,
 
 using ..Utils
 using ..UnivariateFunctions
-using ..InverseTransformSampling
 using ..RefPriors
+
+include("quadrature.jl")
+using .Quadrature
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     fcns_qp::Vector{univariate_function{T,U}}
@@ -122,8 +124,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
 
     quad_type = retrieve(conf, "EbmModel", "quadrature_method")
-    quad_fcn =
-        quad_type == "gausslegendre" ? GaussLegendreQuadrature() : TrapeziumQuadrature()
+    quad_fcn = quad_type == "gausslegendre" ? GaussLegendreQuadrature() : TrapeziumQuadrature()
 
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))
     nodes, weights = gausslegendre(N_quad)

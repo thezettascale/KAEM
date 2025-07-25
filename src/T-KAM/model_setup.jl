@@ -6,8 +6,8 @@ using ConfParser, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 using ..Utils
 using ..T_KAM_model
-using ..T_KAM_model.EBM_Model
 using ..T_KAM_model.LogPriorFCNs
+using ..T_KAM_model.InverseTransformSampling
 
 include("loss_fcns/langevin_mle.jl")
 include("loss_fcns/importance_sampling.jl")
@@ -110,10 +110,10 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r, ε = m.ε)
 
         @reset model.log_prior = LogPriorMix(model.ε, !model.prior.contrastive_div)
-        println("Prior sampler: Mix ITS")
+        println("Prior sampler: Mix ITS, Quadrature method: $(model.prior.quad_type)")
     else
         @reset model.log_prior = LogPriorUnivariate(model.ε, !model.prior.contrastive_div)
-        println("Prior sampler: Univar ITS")
+        println("Prior sampler: Univar ITS, Quadrature method: $(model.prior.quad_type)")
     end
 
     if autoMALA_bool

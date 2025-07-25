@@ -148,7 +148,7 @@ end
     alpha::AbstractArray{T},
     ε::T,
 )::Nothing where {T<:half_quant}
-    log_pdf[q, p, s] = log(log_pdf[q, p, s] + alpha[q, p] + ε)
+    log_pdf[q, p, s] = log(log_pdf[q, 1, s] + alpha[q, p] + ε)
     return nothing
 end
 
@@ -177,11 +177,9 @@ function (lp::LogPriorMix)(
         The unnormalized log-probability of the mixture ebm-prior.
         The updated states of the mixture ebm-prior.
     """
-
-    Q, P, S = size(z)
-
-    # Mixture proportions and prior
     alpha = softmax(ps.dist.α; dims = 2)
+    Q, P, S = size(alpha)..., size(z)[end]
+    
     log_απ = @zeros(Q, P, S)
     ebm.π_pdf!(log_απ, z, ps.dist.π_μ, ps.dist.π_σ)
     @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, lp.ε)
@@ -197,7 +195,7 @@ function (lp::LogPriorMix)(
     )
 
     log_p = @zeros(S)
-    @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, ebm.λ * abs(ps.dist.α), Q, P)
+    @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, ebm.λ * sum(abs.(ps.dist.α)), Q, P)
     return log_p, st_lyrnorm
 end
 

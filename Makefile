@@ -21,6 +21,7 @@ help:
 	@echo "  train       - Start training (use: make train DATASET=SVHN MODE=thermo)"
 	@echo "  train-thermo- Start thermodynamic training (use: make train-thermo DATASET=SVHN)"
 	@echo "  train-vanilla- Start vanilla training (use: make train-vanilla DATASET=SVHN)"
+	@echo "  train-sequential- Schedule multiple training jobs sequentially (use: make train-sequential CONFIG=jobs.txt)"
 	@echo "  plot        - Run all plotting scripts"
 	@echo "  plot-results- Run only results plotting scripts"
 	@echo "  logs        - View latest test log"
@@ -101,6 +102,16 @@ train-thermo:
 
 train-vanilla:
 	@$(MAKE) train DATASET=$(DATASET) MODE=vanilla
+
+train-sequential:
+	@mkdir -p logs
+	@chmod +x scripts/run_sequential_training.sh
+	@echo "Starting sequential training with config: $(CONFIG)"
+	@tmux kill-session -t tkam_sequential 2>/dev/null || true
+	@tmux new-session -d -s tkam_sequential -n sequential
+	@tmux send-keys -t tkam_sequential:sequential "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@echo "Sequential training session started in tmux. Attach with: tmux attach-session -t tkam_sequential"
+	@echo "Log file: logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log"
 
 plot:
 	@mkdir -p logs

@@ -13,11 +13,11 @@ using .WeightResamplers
 
 function test_systematic_resampler()
     Random.seed!(42)
-    weights = rand(full_quant, 4, 4) |> pu
+    weights = rand(full_quant, 4, 6) |> pu
     ESS_bool = rand(Bool, 4) |> pu
 
-    idxs = systematic_resampler(softmax(weights; dims = 2), ESS_bool, 4, 4)
-    @test size(idxs) == (4, 4)
+    idxs = systematic_resampler(softmax(weights; dims = 2), ESS_bool, 4, 6)
+    @test size(idxs) == (4, 6)
     @test !any(isnan, idxs)
 end
 

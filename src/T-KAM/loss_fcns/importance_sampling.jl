@@ -13,9 +13,9 @@ include("../gen/loglikelihoods.jl")
 using .LogLikelihoods: log_likelihood_IS
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+    @init_parallel_stencil(CUDA, half_quant, 3)
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    @init_parallel_stencil(Threads, half_quant, 3)
 end
 
 function sample_importance(

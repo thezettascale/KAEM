@@ -81,7 +81,7 @@ function grad_langevin_llhood(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
@@ -132,8 +132,8 @@ function (l::LangevinLoss)(
         x,
         model,
         st_kan,
-        Lux.trainmode(st_lux_ebm),
-        Lux.trainmode(st_lux_gen),
+        Lux.testmode(st_lux_ebm),
+        Lux.testmode(st_lux_gen),
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

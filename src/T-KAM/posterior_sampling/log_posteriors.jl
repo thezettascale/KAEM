@@ -60,7 +60,7 @@ function unadjusted_logpos_grad(
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
@@ -149,7 +149,7 @@ function autoMALA_value_and_grad_4D(
 } where {T<:half_quant,U<:full_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
@@ -211,7 +211,7 @@ function autoMALA_value_and_grad(
 } where {T<:half_quant,U<:full_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),

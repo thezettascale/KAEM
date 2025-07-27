@@ -129,7 +129,7 @@ function grad_importance_llhood(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
@@ -187,8 +187,8 @@ function (l::ImportanceLoss)(
         resampled_idxs,
         model,
         st_kan,
-        Lux.trainmode(st_lux_ebm),
-        Lux.trainmode(st_lux_gen),
+        Lux.testmode(st_lux_ebm),
+        Lux.testmode(st_lux_gen),
         l.zero_vec,
     )
 

@@ -2,15 +2,9 @@ module Utils
 
 export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
 
-using Lux, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, CUDA, KernelAbstractions, LuxCUDA, Enzyme.EnzymeRules, NNlib, Reactant, MLDataDevices
+using Lux, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, CUDA, KernelAbstractions, LuxCUDA, Enzyme.EnzymeRules, NNlib
 
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    Reactant.set_default_backend("gpu")
-else
-    Reactant.set_default_backend("cpu")
-end
-
-const pu = MLDataDevices.reactant_device()
+const pu = CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
 
 # # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const QUANT_MAP =

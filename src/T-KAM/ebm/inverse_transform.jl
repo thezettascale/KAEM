@@ -3,7 +3,14 @@ module InverseTransformSampling
 
 export sample_univariate, sample_mixture
 
-using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, ParallelStencil
+using CUDA,
+    KernelAbstractions,
+    LinearAlgebra,
+    Random,
+    Lux,
+    LuxCUDA,
+    ComponentArrays,
+    ParallelStencil
 
 using ..Utils
 

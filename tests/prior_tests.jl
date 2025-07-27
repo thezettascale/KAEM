@@ -1,4 +1,5 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, KernelAbstractions
+using Test,
+    Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, KernelAbstractions
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"

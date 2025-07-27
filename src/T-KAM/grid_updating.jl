@@ -3,7 +3,15 @@ module ModelGridUpdating
 
 export update_model_grid
 
-using CUDA, KernelAbstractions, Accessors, ComponentArrays, Lux, NNlib, LinearAlgebra, Random, LuxCUDA
+using CUDA,
+    KernelAbstractions,
+    Accessors,
+    ComponentArrays,
+    Lux,
+    NNlib,
+    LinearAlgebra,
+    Random,
+    LuxCUDA
 
 using ..Utils
 using ..T_KAM_model
@@ -51,7 +59,15 @@ function update_model_grid(
 
         if model.N_t > 1
             z = first(
-                model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
+                model.posterior_sampler(
+                    model,
+                    ps,
+                    st_kan,
+                    st_lux,
+                    x;
+                    temps = temps[2:end],
+                    rng = rng,
+                ),
             )
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))
@@ -132,7 +148,15 @@ function update_model_grid(
     if !sampled_bool
         if model.N_t > 1
             z = first(
-                model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps[2:end], rng = rng)
+                model.posterior_sampler(
+                    model,
+                    ps,
+                    st_kan,
+                    st_lux,
+                    x;
+                    temps = temps[2:end],
+                    rng = rng,
+                ),
             )
         elseif model.prior.ula || model.MALA
             z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))

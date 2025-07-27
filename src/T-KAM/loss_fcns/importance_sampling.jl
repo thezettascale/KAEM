@@ -75,7 +75,7 @@ function marginal_llhood(
 
     B, S = size(x)[end], size(z)[end]
     marginal_llhood = @zeros(B, S)
-     @parallel (1:B, 1:S) resampled_kernel!(
+    @parallel (1:B, 1:S) resampled_kernel!(
         marginal_llhood,
         weights_resampled,
         repeat(logprior', B, 1)[resampled_idxs],
@@ -128,7 +128,7 @@ function grad_importance_llhood(
     zero_vec::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,

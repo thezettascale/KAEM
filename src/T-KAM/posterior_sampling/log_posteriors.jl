@@ -1,6 +1,14 @@
 module LogPosteriors
 
-using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
+using CUDA,
+    KernelAbstractions,
+    ComponentArrays,
+    Statistics,
+    Lux,
+    LuxCUDA,
+    LinearAlgebra,
+    Random,
+    Enzyme
 
 using ..Utils
 using ..T_KAM_model
@@ -51,7 +59,7 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
@@ -140,7 +148,7 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
@@ -202,7 +210,7 @@ function autoMALA_value_and_grad(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff(
+    CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,

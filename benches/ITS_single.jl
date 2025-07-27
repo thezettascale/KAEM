@@ -1,4 +1,5 @@
-using BenchmarkTools, ConfParser, Lux, Random, CUDA, KernelAbstractions, ComponentArrays, CSV, DataFrames
+using BenchmarkTools,
+    ConfParser, Lux, Random, CUDA, KernelAbstractions, ComponentArrays, CSV, DataFrames
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"

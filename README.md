@@ -133,7 +133,7 @@ The following optimisations are in place:
 - Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/), which provides much more efficient reverse autodiff of statically analyzable LLVM. 
 - Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl), which allows for supremely optimized stencil computations, agnostic to the device in use. 
 
-If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
+If there's trouble sourcing cuDNN libraries, the following fix might be useful, (after adapting to the artifact that isn't being sourced properly):
 
 ```bash
 export LD_LIBRARY_PATH=$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:$LD_LIBRARY_PATH

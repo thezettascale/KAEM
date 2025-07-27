@@ -2,7 +2,15 @@ module Transformer_Model
 
 export SEQ_Generator, init_SEQ_Generator
 
-using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser, ParallelStencil
+using CUDA,
+    KernelAbstractions,
+    Lux,
+    LuxCUDA,
+    ComponentArrays,
+    Accessors,
+    Random,
+    ConfParser,
+    ParallelStencil
 using NNlib: softmax, gelu
 
 using ..Utils

@@ -3,7 +3,15 @@ module LogPriorFCNs
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: softmax
-using CUDA, KernelAbstractions, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays, ParallelStencil
+using CUDA,
+    KernelAbstractions,
+    Lux,
+    LuxCUDA,
+    LinearAlgebra,
+    Accessors,
+    Random,
+    ComponentArrays,
+    ParallelStencil
 
 using ..Utils
 using ..EBM_Model

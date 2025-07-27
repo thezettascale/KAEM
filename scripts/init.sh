@@ -123,7 +123,6 @@ else:
     julia --project=. -e "
 using Pkg
 using CUDA
-usign KernelAbstractions
 using Lux
 using Flux
 using Distributions

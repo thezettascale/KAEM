@@ -49,10 +49,12 @@ end
 @parallel_indices (b, s) function resampled_kernel!(
     loss::AbstractArray{T},
     weights_resampled::AbstractArray{T},
-    lp_resampled::AbstractArray{T},
-    ll_resampled::AbstractArray{T},
+    logprior::AbstractArray{T},
+    logllhood::AbstractArray{T},
+    resampled_idxs::AbstractArray{Int},
 )::Nothing where {T<:half_quant}
-    loss[b, s] = weights_resampled[b, s] * (lp_resampled[b, s] + ll_resampled[b, s])
+    idx = resampled_idxs[b, s]
+    loss[b, s] = weights_resampled[b, s] * (logprior[idx] + logllhood[b, idx])
     return nothing
 end
 
@@ -78,8 +80,9 @@ function marginal_llhood(
     @parallel (1:B, 1:S) resampled_kernel!(
         marginal_llhood,
         weights_resampled,
-        repeat(logprior', B, 1)[resampled_idxs],
-        logllhood[resampled_idxs],
+        logprior,
+        logllhood,
+        resampled_idxs,
     )
     return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling,
     st_lux_ebm,
@@ -129,7 +132,7 @@ function grad_importance_llhood(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),

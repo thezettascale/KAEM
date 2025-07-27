@@ -1,6 +1,6 @@
 module Utils
 
-export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
+export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping, enzyme_state_arg
 
 using Lux,
     LinearAlgebra,
@@ -11,6 +11,7 @@ using Lux,
     CUDA,
     KernelAbstractions,
     LuxCUDA,
+    Enzyme,
     Enzyme.EnzymeRules,
     NNlib
 
@@ -49,5 +50,15 @@ const activation_mapping = Dict(
     "celu" => NNlib.celu,
     "none" => x -> x .* zero(half_quant),
 )
+
+function enzyme_state_arg(st)
+    if isempty(fieldnames(typeof(st)))
+        return Enzyme.Const(st)
+    elseif all(v -> v isa NamedTuple && isempty(fieldnames(typeof(v))), values(st))
+        return Enzyme.Const(st)
+    else
+        return Enzyme.Duplicated(st, Enzyme.make_zero(st))
+    end
+end
 
 end

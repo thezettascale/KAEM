@@ -2,7 +2,7 @@ module autoMALA_StepSearch
 
 export autoMALA_step
 
-using CUDA, Accessors, Lux, LuxCUDA, Statistics, ComponentArrays
+using CUDA, KernelAbstractions, Accessors, Lux, LuxCUDA, Statistics, ComponentArrays
 
 using ..Utils
 using ..T_KAM_model

@@ -2,7 +2,7 @@ module WeightResamplers
 
 export residual_resampler, systematic_resampler, stratified_resampler, importance_resampler
 
-using CUDA, Random, Distributions, LinearAlgebra, ParallelStencil
+using CUDA, KernelAbstractions, Random, Distributions, LinearAlgebra, ParallelStencil
 using NNlib: softmax
 
 using ..Utils

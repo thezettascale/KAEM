@@ -2,7 +2,7 @@ module GridUpdating
 
 export update_fcn_grid
 
-using CUDA, Accessors, ComponentArrays, Lux, NNlib, LinearAlgebra, Random, LuxCUDA
+using CUDA, KernelAbstractions, Accessors, ComponentArrays, Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 using ..Utils
 using ..UnivariateFunctions

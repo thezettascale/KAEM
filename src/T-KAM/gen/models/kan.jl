@@ -3,7 +3,7 @@ module KAN_Model
 
 export KAN_Generator, init_KAN_Generator
 
-using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
 using ..Utils
 using ..UnivariateFunctions

@@ -1,6 +1,6 @@
 module LogPosteriors
 
-using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
+using CUDA, KernelAbstractions, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
 
 using ..Utils
 using ..T_KAM_model

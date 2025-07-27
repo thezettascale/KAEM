@@ -2,7 +2,7 @@ module HamiltonianMonteCarlo
 
 export leapfrog, logpos_withgrad
 
-using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors
+using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors
 using Enzyme: make_zero
 
 using ..Utils

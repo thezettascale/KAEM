@@ -5,7 +5,7 @@ export choose_component
 
 using NNlib: softmax
 using Flux: onehotbatch
-using CUDA, LinearAlgebra, Random, ParallelStencil
+using CUDA, KernelAbstractions, LinearAlgebra, Random, ParallelStencil
 
 using ..Utils
 

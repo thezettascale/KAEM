@@ -3,6 +3,7 @@ module ULA_sampling
 export initialize_ULA_sampler, ULA_sampler
 
 using CUDA,
+    KernelAbstractions,
     LinearAlgebra,
     Random,
     Lux,

@@ -2,7 +2,7 @@ module EBM_Model
 
 export EbmModel, init_EbmModel
 
-using CUDA, FastGaussQuadrature
+using CUDA, KernelAbstractions, FastGaussQuadrature
 using ConfParser,
     Random,
     Distributions,

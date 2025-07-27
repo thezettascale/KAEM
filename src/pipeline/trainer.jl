@@ -3,7 +3,7 @@ module trainer
 export T_KAM_trainer, init_trainer, train!
 
 using Flux: onecold, mse
-using CUDA
+using CUDA, KernelAbstractions
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme

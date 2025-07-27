@@ -16,6 +16,10 @@ using Lux,
 
 const pu = (CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))) ? gpu_device() : cpu_device()
 
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    CUDA.allowscalar(false)
+end
+
 # # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const QUANT_MAP =
     Dict("BF16" => BFloat16, "FP16" => Float16, "FP32" => Float32, "FP64" => Float64)

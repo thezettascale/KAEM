@@ -12,17 +12,9 @@ using Lux,
     KernelAbstractions,
     LuxCUDA,
     Enzyme.EnzymeRules,
-    NNlib,
-    Reactant,
-    MLDataDevices
+    NNlib
 
-const pu = cpu_device()
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    pu = gpu_device()
-    Reactant.set_default_backend("gpu")
-end
-
-const xdev = MLDataDevices.reactant_device()
+const pu = (CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))) ? gpu_device() : cpu_device()
 
 # # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const QUANT_MAP =

@@ -2,7 +2,7 @@
 
 julia_version = "1.10.10"
 manifest_format = "2.0"
-project_hash = "83939f0a435dcd37a13b4c5ea1b7d40172d515e4"
+project_hash = "7df8e40a9a81e6258a6b39c1aac2d4a71bc19d55"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "be7ae030256b8ef14a441726c4c37766b90b93a3"
@@ -828,11 +828,6 @@ version = "2.6.5+0"
 git-tree-sha1 = "27415f162e6028e81c72b82ef756bf321213b6ec"
 uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
 version = "0.1.10"
-
-[[deps.ExpressionExplorer]]
-git-tree-sha1 = "4a8c0a9eebf807ac42f0f6de758e60a20be25ffb"
-uuid = "21656369-7473-754a-2065-74616d696c43"
-version = "1.1.3"
 
 [[deps.Extents]]
 git-tree-sha1 = "b309b36a9e02fe7be71270dd8c0fd873625332b4"
@@ -2283,12 +2278,16 @@ deps = ["ChainRulesCore", "ConstructionBase", "Functors", "LinearAlgebra", "Rand
 git-tree-sha1 = "131dc319e7c58317e8c6d5170440f6bdaee0a959"
 uuid = "3bd65402-5787-11e9-1adc-39752487f4e2"
 version = "0.4.6"
-weakdeps = ["Adapt", "EnzymeCore", "Reactant"]
 
     [deps.Optimisers.extensions]
     OptimisersAdaptExt = ["Adapt"]
     OptimisersEnzymeCoreExt = "EnzymeCore"
     OptimisersReactantExt = "Reactant"
+
+    [deps.Optimisers.weakdeps]
+    Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+    EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+    Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2603,56 +2602,6 @@ weakdeps = ["FixedPointNumbers"]
 
     [deps.Ratios.extensions]
     RatiosFixedPointNumbersExt = "FixedPointNumbers"
-
-[[deps.Reactant]]
-deps = ["Adapt", "CEnum", "Downloads", "EnumX", "Enzyme", "EnzymeCore", "Functors", "GPUArraysCore", "HTTP", "LLVMOpenMP_jll", "Libdl", "LinearAlgebra", "OrderedCollections", "PrecompileTools", "Preferences", "Random", "ReactantCore", "Reactant_jll", "ScopedValues", "Scratch", "Sockets"]
-git-tree-sha1 = "40ca24dfe98f782b4a59c04299a4b9a3a88afb50"
-uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
-version = "0.2.140"
-
-    [deps.Reactant.extensions]
-    ReactantAbstractFFTsExt = "AbstractFFTs"
-    ReactantArrayInterfaceExt = "ArrayInterface"
-    ReactantCUDAExt = ["CUDA", "GPUCompiler", "KernelAbstractions", "LLVM"]
-    ReactantKernelAbstractionsExt = "KernelAbstractions"
-    ReactantMPIExt = "MPI"
-    ReactantNNlibExt = ["NNlib", "Statistics"]
-    ReactantOffsetArraysExt = "OffsetArrays"
-    ReactantOneHotArraysExt = "OneHotArrays"
-    ReactantPythonCallExt = "PythonCall"
-    ReactantRandom123Ext = "Random123"
-    ReactantSpecialFunctionsExt = "SpecialFunctions"
-    ReactantStatisticsExt = "Statistics"
-    ReactantYaoBlocksExt = "YaoBlocks"
-
-    [deps.Reactant.weakdeps]
-    AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
-    ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    GPUCompiler = "61eb1bfa-7361-4325-ad38-22787b887f55"
-    KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-    LLVM = "929cbde3-209d-540e-8aea-75f648917ca0"
-    MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
-    NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
-    OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-    OneHotArrays = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
-    PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
-    Random123 = "74087812-796a-5b5d-8853-05524746bad3"
-    SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-    YaoBlocks = "418bc28f-b43b-5e0b-a6e7-61bbc1a2c1df"
-
-[[deps.ReactantCore]]
-deps = ["ExpressionExplorer", "MacroTools"]
-git-tree-sha1 = "120feaf6a97738e3a63902644a0afb3b69cc7b98"
-uuid = "a3311ec8-5e00-46d5-b541-4f83e724a433"
-version = "0.1.15"
-
-[[deps.Reactant_jll]]
-deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "5772aff9d8b8229e1173ddea317a95e3e8a61856"
-uuid = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
-version = "0.0.214+0"
 
 [[deps.RealDot]]
 deps = ["LinearAlgebra"]

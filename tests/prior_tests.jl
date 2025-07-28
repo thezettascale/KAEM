@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -95,6 +95,8 @@ function test_learnable_gaussian_prior()
     else
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
+
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
 
     @test !any(isnan, z_test)
     @test size(log_p) == (b_size,)

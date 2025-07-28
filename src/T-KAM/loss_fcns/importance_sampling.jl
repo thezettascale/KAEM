@@ -136,7 +136,7 @@ function grad_importance_llhood(
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
-        Enzyme.Duplicated(z, Enzyme.make_zero(z)),
+        Enzyme.Const(z),
         Enzyme.Const(x),
         Enzyme.Const(weights_resampled),
         Enzyme.Const(resampled_idxs),

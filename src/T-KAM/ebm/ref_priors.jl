@@ -29,6 +29,14 @@ struct EbmPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
 
+@parallel_indices (q, p, b) function stable_log!(
+    log_pdf::AbstractArray{T},
+    ε::T,
+)::Nothing where {T<:half_quant}
+    log_pdf[q, p, b] = log(log_pdf[q, p, b] + ε)
+    return nothing
+end
+
 @parallel_indices (q, p, b) function uniform_pdf!(
     pdf::AbstractArray{T},
     z::AbstractArray{T},
@@ -107,7 +115,7 @@ end
 function (prior::LogNormalPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
@@ -120,7 +128,7 @@ end
 function (prior::LearnableGaussianPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
@@ -133,7 +141,7 @@ end
 function (prior::EbmPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)

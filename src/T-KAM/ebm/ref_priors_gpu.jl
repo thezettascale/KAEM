@@ -48,7 +48,7 @@ end
 function (prior::LogNormalPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     pdf = exp.(-(log.(z .+ prior.ε)) .^ 2 ./ 2) ./ (z .* T(sqrt(2π)) .+ prior.ε)
@@ -59,7 +59,7 @@ end
 function (prior::LearnableGaussianPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     pdf = one(T) ./ (
@@ -73,7 +73,7 @@ end
 function (prior::EbmPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
+    π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     log_pdf = zero(T) .* z

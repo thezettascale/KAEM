@@ -89,34 +89,6 @@ function marginal_llhood(
     st_lux_gen
 end
 
-function closure(
-    ps::ComponentArray{T},
-    z::AbstractArray{T},
-    x::AbstractArray{T},
-    weights_resampled::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
-    m::T_KAM{T},
-    st_kan::ComponentArray{T},
-    st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple,
-    zero_vec::AbstractArray{T},
-)::T where {T<:half_quant}
-    return first(
-        marginal_llhood(
-            ps,
-            z,
-            x,
-            weights_resampled,
-            resampled_idxs,
-            m,
-            st_kan,
-            st_lux_ebm,
-            st_lux_gen,
-            zero_vec,
-        ),
-    )
-end
-
 function grad_importance_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
@@ -131,20 +103,28 @@ function grad_importance_llhood(
     zero_vec::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
+    function closure(pars::ComponentArray{T})::T where {T<:half_quant}
+        return first(
+            marginal_llhood(
+                pars,
+                z,
+                x,
+                weights_resampled,
+                resampled_idxs,
+                model,
+                st_kan,
+                st_lux_ebm,
+                st_lux_gen,
+                zero_vec,
+            ),
+        )
+    end
+
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z),
-        Enzyme.Const(x),
-        Enzyme.Const(weights_resampled),
-        Enzyme.Const(resampled_idxs),
-        Enzyme.Const(model),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux_ebm),
-        Enzyme.Const(st_lux_gen),
-        Enzyme.Const(zero_vec),
     )
 
     return ∇, st_lux_ebm, st_lux_gen

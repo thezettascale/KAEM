@@ -22,7 +22,7 @@ function sample_importance(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    m::T_KAM{T,full_quant},
+    m::T_KAM{T,U},
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{

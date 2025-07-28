@@ -8,7 +8,7 @@ include("../src/utils.jl")
 using .Utils
 
 if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("../src/T-KAM/kan/spline_bases.jl")
+    include("../src/T-KAM/kan/spline_bases_gpu.jl")
     using .spline_functions # Broadcast version
 else
     include("../src/T-KAM/kan/spline_bases_gpu.jl")

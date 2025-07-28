@@ -40,7 +40,7 @@ function (prior::GaussianPrior)(
     π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
-    pdf = T(1 ./ sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
+    pdf = T(1 / sqrt(2π)) .* exp.(-z .^ 2 ./ 2)
     log_bool && return log.(pdf .+ prior.ε)
     return pdf
 end

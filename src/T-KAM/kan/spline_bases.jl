@@ -11,7 +11,7 @@ export extend_grid,
     Cheby_basis,
     SplineMUL
 
-using CUDA, ParallelStencil, Lux
+using CUDA, ParallelStencil, Lux, ComponentArrays
 using LinearAlgebra, NNlib
 
 using ..Utils
@@ -33,12 +33,12 @@ end
 end
 
 function SplineMUL(
-    """Top-level function for KAN with spline basis functions."""
-    l::univariate_function{T,full_quant},
+    l::Lux.AbstractLuxLayer,
     ps::ComponentArray{T},
     x::AbstractArray{T},
     y::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
+    """Top-level function for KAN with spline basis functions."""
     I, O, B = size(y)
     base = l.base_activation(x)
     @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp)

@@ -1,13 +1,19 @@
-using Test, Random, LinearAlgebra
+using Test, Random, LinearAlgebra, CUDA
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/utils.jl")
-include("../src/T-KAM/kan/spline_bases.jl")
 using .Utils
-using .spline_functions
+
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("../src/T-KAM/kan/spline_bases.jl")
+    using .spline_functions # Broadcast version
+else
+    include("../src/T-KAM/kan/spline_bases_gpu.jl")
+    using .spline_functions # Stencil loops
+end
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, pu([one(half_quant)])
 

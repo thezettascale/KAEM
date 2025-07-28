@@ -53,6 +53,12 @@ struct RSWAF_basis <: Lux.AbstractLuxLayer end
 
 struct Cheby_basis <: Lux.AbstractLuxLayer
     degree::Int
+    lin::AbstractArray{half_quant}
+end
+
+function Cheby_basis(degree::Int)
+    lin = collect(half_quant, 0:degree) |> pu
+    return Cheby_basis(degree, lin)
 end
 
 function (b::B_spline_basis)(
@@ -63,7 +69,7 @@ function (b::B_spline_basis)(
     I, S, G = size(x)..., size(grid, 2)
     
     # 0-th degree
-    if degree == 0
+    if b.degree == 0
         grid_1 = grid[:, 1:(end-1)]
         grid_2 = grid[:, 2:end]
 
@@ -74,7 +80,7 @@ function (b::B_spline_basis)(
 
     # k-th degree
     else   
-        k = degree
+        k = b.degree
         B = B_spline_basis(x, grid; degree = k-1)
         x = reshape(x, I, 1, S)
 
@@ -118,9 +124,8 @@ function (b::Cheby_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     x = NNlib.tanh_fast(x) ./ σ
-    x = repeat(reshape(x, size(x)..., 1), 1, 1, degree+1)
-    linspace = collect(T, 0:degree) |> device
-    return cos.(linspace' .* acos.(permutedims(x, [1, 3, 2])))
+    x = repeat(reshape(x, size(x)..., 1), 1, 1, b.degree+1)
+    return cos.(b.lin' .* acos.(permutedims(x, [1, 3, 2])))
 end
 
 function coef2curve_Spline(

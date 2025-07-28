@@ -147,7 +147,7 @@ function grad_importance_llhood(
         Enzyme.Const(zero_vec),
     )
 
-    return ∇, st_lux_ebm, st_lux_gen
+    return ∇
 end
 
 struct ImportanceLoss
@@ -166,9 +166,9 @@ function (l::ImportanceLoss)(
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
     z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
-        sample_importance(ps, st_kan, st_lux, model, x; rng = rng)
+        sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
 
-    ∇, st_lux_ebm, st_lux_gen = grad_importance_llhood(
+    ∇ = grad_importance_llhood(
         ps,
         ∇,
         z,
@@ -190,8 +190,8 @@ function (l::ImportanceLoss)(
         resampled_idxs,
         model,
         st_kan,
-        Lux.testmode(st_lux_ebm),
-        Lux.testmode(st_lux_gen),
+        Lux.trainmode(st_lux_ebm),
+        Lux.trainmode(st_lux_gen),
         l.zero_vec,
     )
 

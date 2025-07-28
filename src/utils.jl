@@ -52,5 +52,4 @@ const activation_mapping = Dict(
     "none" => x -> x .* zero(half_quant),
 )
 
-
 end

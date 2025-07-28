@@ -59,24 +59,18 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    function closure(z_i::AbstractArray{T})::T where {T<:half_quant}
-        return unadjusted_logpos(
-            z_i,
-            x,
-            temps,
-            model,
-            ps,
-            st_kan,
-            st_lux,
-            prior_sampling_bool,
-        )
-    end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
-        Enzyme.Const(closure),
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Const(unadjusted_logpos),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
+        Enzyme.Const(x),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
+        Enzyme.Const(ps),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
+        Enzyme.Const(prior_sampling_bool),
     )
 
     return ∇z
@@ -154,15 +148,17 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    function closure(z_i::AbstractArray{T})::T where {T<:half_quant}
-        return autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux)
-    end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(closure),
+        Enzyme.Const(autoMALA_logpos_reduced_4D),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
+        Enzyme.Const(x),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
+        Enzyme.Const(ps),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
     )
 
     logpos, st_ebm, st_gen =
@@ -186,6 +182,18 @@ function autoMALA_logpos(
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
 end
 
+function closure(
+    z::AbstractArray{T},
+    x::AbstractArray{T},
+    temps::AbstractArray{T},
+    model::T_KAM{T,U},
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+)::T where {T<:half_quant,U<:full_quant}
+    return sum(first(autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)))
+end
+
 function autoMALA_value_and_grad(
     z::AbstractArray{T},
     ∇z::AbstractArray{T},
@@ -202,15 +210,17 @@ function autoMALA_value_and_grad(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    function closure(z_i::AbstractArray{T})::T where {T<:half_quant}
-        return sum(first(autoMALA_logpos(z_i, x, temps, model, ps, st_kan, st_lux)))
-    end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(z, ∇z),
+        Enzyme.Const(x),
+        Enzyme.Const(temps),
+        Enzyme.Const(model),
+        Enzyme.Const(ps),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux),
     )
 
     logpos, st_ebm, st_gen =

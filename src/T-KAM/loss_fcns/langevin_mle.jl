@@ -53,6 +53,21 @@ function marginal_llhood(
     st_lux_gen
 end
 
+function closure(
+    ps::ComponentArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
+    x::AbstractArray{T},
+    model::T_KAM{T,full_quant},
+    st_kan::ComponentArray{T},
+    st_lux_ebm::NamedTuple,
+    st_lux_gen::NamedTuple;
+)::T where {T<:half_quant}
+    return first(
+        marginal_llhood(ps, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen),
+    )
+end
+
 function grad_langevin_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
@@ -65,26 +80,18 @@ function grad_langevin_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    function closure(pars::ComponentArray{T})::T where {T<:half_quant}
-        return first(
-            marginal_llhood(
-                pars,
-                z_posterior,
-                z_prior,
-                x,
-                model,
-                st_kan,
-                st_lux_ebm,
-                st_lux_gen,
-            ),
-        )
-    end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(z_posterior),
+        Enzyme.Const(z_prior),
+        Enzyme.Const(x),
+        Enzyme.Const(model),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux_ebm),
+        Enzyme.Const(st_lux_gen),
     )
 
     return ∇, st_lux_ebm, st_lux_gen

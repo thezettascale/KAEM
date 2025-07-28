@@ -128,27 +128,19 @@ function grad_thermo_llhood(
     st_lux_gen::NamedTuple;
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    function closure(pars::ComponentArray{T})::T where {T<:half_quant}
-        return first(
-            marginal_llhood(
-                pars,
-                z_posterior,
-                z_prior,
-                x,
-                Δt,
-                model,
-                st_kan,
-                st_lux_ebm,
-                st_lux_gen,
-            ),
-        )
-    end
-
     CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
         Enzyme.Const(closure),
         Enzyme.Active,
         Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(z_posterior),
+        Enzyme.Const(z_prior),
+        Enzyme.Const(x),
+        Enzyme.Const(Δt),
+        Enzyme.Const(model),
+        Enzyme.Const(st_kan),
+        Enzyme.Const(st_lux_ebm),
+        Enzyme.Const(st_lux_gen),
     )
 
     return ∇, st_lux_ebm, st_lux_gen

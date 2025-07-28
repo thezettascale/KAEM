@@ -131,9 +131,9 @@ function init_SEQ_Generator(
 
     return SEQ_Generator(
         depth,
-        (Φ_functions...),
-        (layernorms...),
-        (attention...),
+        (Φ_functions...,),
+        (layernorms...,),
+        (attention...,),
         sequence_length,
         d_model,
         true,

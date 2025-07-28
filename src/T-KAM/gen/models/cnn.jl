@@ -98,7 +98,7 @@ function init_CNN_Generator(
         batchnorms = (Lux.BatchNorm(0),)
     end
 
-    return CNN_Generator(depth, (Φ_functions...), (batchnorms...), batchnorm_bool, false)
+    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), batchnorm_bool, false)
 end
 
 function (gen::CNN_Generator)(

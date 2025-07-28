@@ -107,8 +107,8 @@ function init_KAN_Generator(
 
     return KAN_Generator(
         depth,
-        (Φ_functions...),
-        (layernorms...),
+        (Φ_functions...,),
+        (layernorms...,),
         layernorm_bool,
         false,
         x_shape,
@@ -120,7 +120,7 @@ function (gen::KAN_Generator{T,U})(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Generate data from the KAN likelihood model.
 

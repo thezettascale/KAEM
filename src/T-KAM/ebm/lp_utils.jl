@@ -3,6 +3,8 @@ module LogPriorUtils
 
 export log_norm, log_alpha, log_mix_pdf
 
+using ..Utils
+
 using NNlib: softmax
 using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays, ParallelStencil
 
@@ -80,7 +82,7 @@ function log_mix_pdf(
     Q::Int,
     P::Int,
     S::Int,
-)
+)::AbstractArray{T} where {T<:half_quant}
     log_p = @zeros(S)
     @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, reg, Q, P)
     return log_p

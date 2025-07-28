@@ -3,6 +3,8 @@ module LogPriorUtils
 
 export log_norm, log_alpha, log_mix_pdf
 
+using ..Utils
+
 using NNlib: softmax
 using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays
 
@@ -29,7 +31,7 @@ function log_mix_pdf(
     Q::Int,
     P::Int,
     S::Int,
-)
+)::AbstractArray{T} where {T<:half_quant}
     logprob = f + log_απ .- log_Z
     return dropdims(sum(logprob; dims = (1, 2)); dims = (1, 2)) .+ reg
 end

@@ -3,7 +3,6 @@ module Quadrature
 export TrapeziumQuadrature, GaussLegendreQuadrature
 
 using CUDA,
-    KernelAbstractions,
     LinearAlgebra,
     Random,
     Lux,

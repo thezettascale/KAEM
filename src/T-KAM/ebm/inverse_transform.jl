@@ -4,7 +4,6 @@ module InverseTransformSampling
 export sample_univariate, sample_mixture
 
 using CUDA,
-    KernelAbstractions,
     LinearAlgebra,
     Random,
     Lux,

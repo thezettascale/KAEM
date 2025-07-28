@@ -10,7 +10,7 @@ export extend_grid,
     FFT_basis,
     Cheby_basis
 
-using CUDA, KernelAbstractions, ParallelStencil, Lux
+using CUDA, ParallelStencil, Lux
 using LinearAlgebra, NNlib
 
 using ..Utils

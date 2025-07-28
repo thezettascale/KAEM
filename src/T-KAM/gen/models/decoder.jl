@@ -3,7 +3,6 @@ module Transformer_Model
 export SEQ_Generator, init_SEQ_Generator
 
 using CUDA,
-    KernelAbstractions,
     Lux,
     LuxCUDA,
     ComponentArrays,

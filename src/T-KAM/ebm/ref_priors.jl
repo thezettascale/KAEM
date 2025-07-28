@@ -3,7 +3,7 @@ module RefPriors
 export prior_map,
     UniformPrior, GaussianPrior, LogNormalPrior, LearnableGaussianPrior, EbmPrior
 
-using CUDA, KernelAbstractions, ParallelStencil, Lux
+using CUDA, ParallelStencil, Lux
 
 using ..Utils
 

@@ -4,7 +4,6 @@ using BenchmarkTools,
     Enzyme,
     Random,
     CUDA,
-    KernelAbstractions,
     ComponentArrays,
     CSV,
     DataFrames

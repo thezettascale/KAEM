@@ -2,7 +2,7 @@ module ModelSetup
 
 export prep_model
 
-using ConfParser, CUDA, KernelAbstractions, Lux, Accessors, ComponentArrays, LuxCUDA, Random
+using ConfParser, CUDA, Lux, Accessors, ComponentArrays, LuxCUDA, Random
 
 using ..Utils
 using ..T_KAM_model

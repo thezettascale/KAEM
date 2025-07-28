@@ -2,7 +2,7 @@ module UnivariateFunctions
 
 export univariate_function, init_function, activation_mapping
 
-using CUDA, KernelAbstractions, Accessors, ComponentArrays, NNlib
+using CUDA, Accessors, ComponentArrays, NNlib
 using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
 
 using ..Utils

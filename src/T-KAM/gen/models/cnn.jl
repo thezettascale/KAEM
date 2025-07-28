@@ -2,7 +2,7 @@ module CNN_Model
 
 export CNN_Generator, init_CNN_Generator
 
-using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 
 using ..Utils
 

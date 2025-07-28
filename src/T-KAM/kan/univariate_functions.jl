@@ -9,10 +9,10 @@ using ..Utils
 
 # Stencil loops are much faster than broadcast, but are launched host-side, which is not supported by Enzyme GPU yet.
 if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("spline_bases.jl")
+    include("spline_bases_gpu.jl")
     using .spline_functions # Broadcast version
 else
-    include("spline_bases_gpu.jl")
+    include("spline_bases.jl")
     using .spline_functions # Stencil loops
 end
 

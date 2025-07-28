@@ -99,13 +99,13 @@ end
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.Φ_fcns[i]) for
-        i in 1:lkhood.generator.depth
+        i = 1:lkhood.generator.depth
     )
     layernorm_ps = (a = zero(T))
     if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
-            for i in 1:lkhood.generator.depth-1
+            for i = 1:(lkhood.generator.depth-1)
         )
     end
 
@@ -113,7 +113,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
     if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
-            for i in 1:lkhood.generator.depth-1
+            for i = 1:(lkhood.generator.depth-1)
         )
     end
 
@@ -137,7 +137,7 @@ end
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, lkhood.generator.Φ_fcns[i]) |> hq for
-        i in 1:lkhood.generator.depth
+        i = 1:lkhood.generator.depth
     )
 
     st_lyrnorm = (a = zero(T), b = zero(T))
@@ -145,7 +145,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         st_lyrnorm = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
-            i in 1:lkhood.generator.depth-1
+            i = 1:(lkhood.generator.depth-1)
         )
     end
 
@@ -154,7 +154,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         batchnorm_st = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for
-            i in 1:lkhood.generator.depth-1
+            i = 1:(lkhood.generator.depth-1)
         )
     end
 

@@ -26,7 +26,7 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf!::Lux.AbstractLuxLayer
+    π_pdf::Lux.AbstractLuxLayer
     p_size::Int
     q_size::Int
     quad::Lux.AbstractLuxLayer
@@ -200,7 +200,10 @@ function (ebm::EbmModel{T,U})(
     return z, st_lyrnorm
 end
 
-function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T,U}) where {T<:half_quant,U<:full_quant}
+function Lux.initialparameters(
+    rng::AbstractRNG,
+    prior::EbmModel{T,U},
+) where {T<:half_quant,U<:full_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
@@ -217,14 +220,17 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T,U}) where {T<
               zeros(half_quant, prior.p_size) : [zero(T)],
         π_σ = prior.prior_type == "learnable_gaussian" ?
               ones(half_quant, prior.p_size) : [zero(T)],
-        α = prior.mixture_model ?
-            glorot_uniform(rng, U, prior.q_size, prior.p_size) : [zero(T)],
+        α = prior.mixture_model ? glorot_uniform(rng, U, prior.q_size, prior.p_size) :
+            [zero(T)],
     )
 
     return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)
 end
 
-function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T,U}) where {T<:half_quant,U<:full_quant}
+function Lux.initialstates(
+    rng::AbstractRNG,
+    prior::EbmModel{T,U},
+) where {T<:half_quant,U<:full_quant}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )

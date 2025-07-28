@@ -79,8 +79,7 @@ function (tq::TrapeziumQuadrature)(
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     I, O = size(f_grid)
-    π_grid = @zeros(I, O, 1)
-    ebm.π_pdf!(π_grid, f_grid[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
+    π_grid = ebm.π_pdf(f_grid[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
     π_grid =
         ebm.prior_type == "learnable_gaussian" ? dropdims(π_grid, dims = 3)' :
         dropdims(π_grid, dims = 3)
@@ -144,8 +143,7 @@ function (gq::GaussLegendreQuadrature)(
     grid = nodes
 
     I, O = size(nodes)
-    π_nodes = @zeros(I, O, 1)
-    ebm.π_pdf!(π_nodes, nodes[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
+    π_nodes = ebm.π_pdf(nodes[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
     π_nodes =
         ebm.prior_type == "learnable_gaussian" ? dropdims(π_nodes, dims = 3)' :
         dropdims(π_nodes, dims = 3)

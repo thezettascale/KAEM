@@ -67,7 +67,7 @@ function (b::B_spline_basis)(
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    
+
     # 0-th degree
     if b.degree == 0
         grid_1 = grid[:, 1:(end-1)]
@@ -78,8 +78,8 @@ function (b::B_spline_basis)(
         term2 = reshape(x, I, 1, S) .< reshape(grid_2, I, G-1, 1)
         B = T.(term1 .* term2)
 
-    # k-th degree
-    else   
+        # k-th degree
+    else
         k = b.degree
         B = B_spline_basis(x, grid; degree = k-1)
         x = reshape(x, I, 1, S)
@@ -196,7 +196,8 @@ function coef2curve_FFT(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[3:4]...
     even, odd = b(x_eval, grid, σ)
-    even_coef, odd_coef = reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
+    even_coef, odd_coef =
+        reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
     return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
 end
 

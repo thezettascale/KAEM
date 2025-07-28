@@ -12,9 +12,15 @@ include("kan/univariate_functions.jl")
 using .UnivariateFunctions
 
 include("ebm/inverse_transform.jl")
-include("ebm/ref_priors.jl")
 using .InverseTransformSampling
-using .RefPriors
+
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("ebm/ref_priors_gpu.jl")
+    using .RefPriors
+else
+    include("ebm/ref_priors.jl")
+    using .RefPriors
+end
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")

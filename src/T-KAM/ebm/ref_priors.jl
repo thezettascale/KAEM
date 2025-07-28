@@ -13,8 +13,12 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-struct UniformPrior <: Lux.AbstractLuxLayer end
-struct GaussianPrior <: Lux.AbstractLuxLayer end
+struct UniformPrior <: Lux.AbstractLuxLayer
+    ε::half_quant
+end
+struct GaussianPrior <: Lux.AbstractLuxLayer
+    ε::half_quant
+end
 struct LogNormalPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
@@ -74,67 +78,77 @@ end
     return nothing
 end
 
-function (::UniformPrior)(
-    pdf::AbstractArray{T},
+function (prior::UniformPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
-)::Nothing where {T<:half_quant}
+    π_σ::AbstractArray{T};
+    log_bool::Bool = false,
+)::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:Q, 1:P, 1:S) uniform_pdf!(pdf, z)
-    return nothing
+    log_pdf = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) uniform_pdf!(log_pdf, z)
+    log_bool && @parallel (1:Q, 1:P, 1:S) stable_log!(log_pdf, prior.ε)
+    return log_pdf
 end
 
-function (::GaussianPrior)(
-    pdf::AbstractArray{T},
+function (prior::GaussianPrior)(
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
-    π_σ::AbstractArray{T},
-)::Nothing where {T<:half_quant}
+    π_σ::AbstractArray{T};
+    log_bool::Bool = false,
+)::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:Q, 1:P, 1:S) gaussian_pdf!(pdf, z)
-    return nothing
+    log_pdf = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) gaussian_pdf!(log_pdf, z)
+    log_bool && @parallel (1:Q, 1:P, 1:S) stable_log!(log_pdf, prior.ε)
+    return log_pdf
 end
 
 function (prior::LogNormalPrior)(
-    pdf::AbstractArray{T},
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
     π_σ::AbstractArray{T},
-)::Nothing where {T<:half_quant}
+    log_bool::Bool = false,
+)::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:Q, 1:P, 1:S) lognormal_pdf!(pdf, z, prior.ε)
-    return nothing
+    log_pdf = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) lognormal_pdf!(log_pdf, z, prior.ε)
+    log_bool && @parallel (1:Q, 1:P, 1:S) stable_log!(log_pdf, prior.ε)
+    return log_pdf
 end
 
 function (prior::LearnableGaussianPrior)(
-    pdf::AbstractArray{T},
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
     π_σ::AbstractArray{T},
-)::Nothing where {T<:half_quant}
+    log_bool::Bool = false,
+)::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:Q, 1:P, 1:S) learnable_gaussian_pdf!(pdf, z, prior.ε, π_μ, π_σ)
-    return nothing
+    log_pdf = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) learnable_gaussian_pdf!(log_pdf, z, prior.ε, π_μ, π_σ)
+    log_bool && @parallel (1:Q, 1:P, 1:S) stable_log!(log_pdf, prior.ε)
+    return log_pdf
 end
 
 function (prior::EbmPrior)(
-    pdf::AbstractArray{T},
     z::AbstractArray{T},
     π_μ::AbstractArray{T},
     π_σ::AbstractArray{T},
-) where {T<:half_quant}
+    log_bool::Bool = false,
+)::AbstractArray{T} where {T<:half_quant}
     Q, P, S = size(z)
-    @parallel (1:Q, 1:P, 1:S) ebm_pdf!(pdf, z, prior.ε)
-    return nothing
+    log_pdf = @zeros(Q, P, S)
+    @parallel (1:Q, 1:P, 1:S) ebm_pdf!(log_pdf, z, prior.ε)
+    log_bool && @parallel (1:Q, 1:P, 1:S) stable_log!(log_pdf, prior.ε)
+    return log_pdf
 end
 
 const prior_map = Dict(
-    "uniform" => ε -> UniformPrior(),
-    "gaussian" => ε -> GaussianPrior(),
+    "uniform" => ε -> UniformPrior(ε),
+    "gaussian" => ε -> GaussianPrior(ε),
     "lognormal" => ε -> LogNormalPrior(ε),
-    "ebm" => ε -> EbmPrior(ε),
     "learnable_gaussian" => ε -> LearnableGaussianPrior(ε),
+    "ebm" => ε -> EbmPrior(ε),
 )
 
 end

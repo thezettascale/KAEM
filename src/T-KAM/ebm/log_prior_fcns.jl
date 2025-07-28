@@ -3,15 +3,17 @@ module LogPriorFCNs
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: softmax
-using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays, ParallelStencil
+using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays
 
 using ..Utils
 using ..EBM_Model
 
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, half_quant, 3)
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("lp_utils_gpu.jl")
+    using .LogPriorUtils
 else
-    @init_parallel_stencil(Threads, half_quant, 3)
+    include("lp_utils.jl")
+    using .LogPriorUtils
 end
 
 struct LogPriorULA{T<:half_quant} <: Lux.AbstractLuxLayer
@@ -36,32 +38,9 @@ function (lp::LogPriorULA)(
     st_lyrnorm::NamedTuple,
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
     Q, P, S = size(z)
-    log_π0 = @zeros(Q, P, S)
-    ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, lp.ε)
+    log_π0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
     f, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1) .+ log_π0; dims = 1), st_lyrnorm_new
-end
-
-@parallel_indices (q, p, s) function stable_log!(
-    log_pdf::AbstractArray{T},
-    ε::T,
-)::Nothing where {T<:half_quant}
-    log_pdf[q, p, s] = log(log_pdf[q, p, s] + ε)
-    return nothing
-end
-
-@parallel_indices (q, p) function log_norm_kernel!(
-    log_Z::AbstractArray{T},
-    norm::AbstractArray{T},
-    ε::T,
-)::Nothing where {T<:half_quant}
-    G, acc = size(norm, 3), zero(T)
-    for g = 1:G
-        acc = acc + norm[q, p, g]
-    end
-    log_Z[q, p] = log(acc + ε)
-    return nothing
 end
 
 function (lp::LogPriorUnivariate)(
@@ -91,19 +70,13 @@ function (lp::LogPriorUnivariate)(
     """
 
     Q, P, S = size(z)
-    log_π0 = @zeros(Q, P, S)
-    ebm.π_pdf!(log_π0, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_log!(log_π0, lp.ε)
+    log_π0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
 
     # Pre-allocate
-    log_p = @zeros(S)
-    log_Z = @zeros(Q, P)
-
-    lp.normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
-        log_Z,
-        first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
-        lp.ε,
-    )
+    log_p = dropdims(sum(z .* zero(T); dims = (1, 2)); dims = (1, 2))
+    log_Z =
+        lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
+        dropdims(sum(z .* zero(T); dims = 3); dims = 3)
 
     for q = 1:Q
         f, st = ebm(ps, st_kan, st_lyrnorm, z[q, :, :])
@@ -112,34 +85,6 @@ function (lp::LogPriorUnivariate)(
     end
 
     return log_p, st_lyrnorm
-end
-
-@parallel_indices (s) function mix_kernel!(
-    logprob::AbstractArray{T},
-    f::AbstractArray{T},
-    log_απ::AbstractArray{T},
-    log_Z::AbstractArray{T},
-    reg::T,
-    Q::Int,
-    P::Int,
-)::Nothing where {T<:half_quant}
-    acc = zero(T)
-    @inbounds for q = 1:Q
-        @inbounds for p = 1:P
-            acc = acc + log_απ[q, p, s] + f[q, p, s] - log_Z[q, p] + reg
-        end
-    end
-    logprob[s] = acc
-    return nothing
-end
-
-@parallel_indices (q, p, s) function stable_logalpha!(
-    log_pdf::AbstractArray{T},
-    alpha::AbstractArray{T},
-    ε::T,
-)::Nothing where {T<:half_quant}
-    log_pdf[q, p, s] = log(log_pdf[q, 1, s] + alpha[q, p] + ε)
-    return nothing
 end
 
 function (lp::LogPriorMix)(
@@ -170,22 +115,16 @@ function (lp::LogPriorMix)(
     alpha = softmax(ps.dist.α; dims = 2)
     Q, P, S = size(alpha)..., size(z)[end]
 
-    log_απ = @zeros(Q, P, S)
-    ebm.π_pdf!(log_απ, z, ps.dist.π_μ, ps.dist.π_σ)
-    @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, lp.ε)
+    log_απ = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
+    log_απ = log_alpha(log_απ, alpha, lp.ε, Q, P, S)
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
+    log_Z =
+        lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
+        dropdims(sum(z .* zero(T); dims = 3); dims = 3)
 
-    log_Z = @zeros(Q, P)
-    lp.normalize && @parallel (1:Q, 1:P) log_norm_kernel!(
-        log_Z,
-        first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)),
-        lp.ε,
-    )
-
-    log_p = @zeros(S)
-    @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, ebm.λ * sum(abs.(ps.dist.α)), Q, P)
+    log_p = log_mix_pdf(f, log_απ, log_Z, ebm.λ * sum(abs.(ps.dist.α)), Q, P, S)
     return log_p, st_lyrnorm
 end
 

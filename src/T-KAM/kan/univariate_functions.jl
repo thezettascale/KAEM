@@ -3,17 +3,17 @@ module UnivariateFunctions
 export univariate_function, init_function, activation_mapping
 
 using CUDA, Accessors, ComponentArrays, NNlib
-using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
+using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 using ..Utils
 
-include("spline_bases.jl")
-using .spline_functions
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+# Stencil loops are much faster than broadcast, but are launched host-side, which is not supported by Enzyme GPU yet.
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("spline_bases.jl")
+    using .spline_functions # Broadcast version
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    include("spline_bases_gpu.jl")
+    using .spline_functions # Stencil loops
 end
 
 const SplineBasis_mapping = Dict(
@@ -40,29 +40,6 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     σ_spline::U
     init_τ::AbstractArray{U}
     τ_trainable::Bool
-end
-
-## Stencils much faster than broadcast ##
-@parallel_indices (i, o, b) function spl_kernel!(
-    y::AbstractArray{T},
-    x::AbstractArray{T},
-    w_base::AbstractArray{T},
-    w_sp::AbstractArray{T},
-) where {T<:half_quant}
-    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b]
-    return nothing
-end
-
-function SplineMUL(
-    l::univariate_function{T,full_quant},
-    ps::ComponentArray{T},
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    I, O, B = size(y)
-    base = l.base_activation(x)
-    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp)
-    return y
 end
 
 function init_function(

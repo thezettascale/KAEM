@@ -8,7 +8,8 @@ export extend_grid,
     RBF_basis,
     RSWAF_basis,
     FFT_basis,
-    Cheby_basis
+    Cheby_basis,
+    SplineMUL
 
 using CUDA, ParallelStencil, Lux
 using LinearAlgebra, NNlib
@@ -21,6 +22,30 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
+@parallel_indices (i, o, b) function spl_kernel!(
+    y::AbstractArray{T},
+    x::AbstractArray{T},
+    w_base::AbstractArray{T},
+    w_sp::AbstractArray{T},
+) where {T<:half_quant}
+    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b]
+    return nothing
+end
+
+function SplineMUL(
+    """Top-level function for KAN with spline basis functions."""
+    l::univariate_function{T,full_quant},
+    ps::ComponentArray{T},
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+)::AbstractArray{T} where {T<:half_quant}
+    I, O, B = size(y)
+    base = l.base_activation(x)
+    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp)
+    return y
+end
+
+## Basis functions with Stencil loops ##
 function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
@@ -45,8 +70,6 @@ struct RSWAF_basis <: Lux.AbstractLuxLayer end
 struct Cheby_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
-
-struct FFT_basis <: Lux.AbstractLuxLayer end
 
 @parallel_indices (i, g, s) function B_spline_deg0!(
     B::AbstractArray{T},
@@ -186,6 +209,7 @@ function coef2curve_Spline(
     coef::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
+    """Top-level function for coef multiplication for all splines."""
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     G = b == Cheby_basis ? b.degree : G
     y = @zeros(I, O, S)
@@ -193,6 +217,39 @@ function coef2curve_Spline(
     @parallel (1:I, 1:O, 1:S) spline_mul!(y, spl, coef)
     return y
 end
+
+function curve2coef(
+    b::Lux.AbstractLuxLayer,
+    x::AbstractArray{T},
+    y::AbstractArray{T},
+    grid::AbstractArray{T},
+    σ::AbstractArray{T},
+    ε::U = full_quant(1.0f-4),
+)::AbstractArray{U} where {T<:half_quant,U<:full_quant}
+    """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
+    J, S, O = size(x)..., size(y, 2)
+
+    B = b(x, grid, σ) .|> full_quant
+    G = size(B, 2)
+
+    B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
+
+    coef = Array{U}(undef, J, O, G) |> pu
+    for i = 1:J
+        for o = 1:O
+            coef[i, o, :] .= (
+                (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
+                \ (B[i, :, :]' * y[i, o, :]) # Bty
+            )
+        end
+    end
+
+    any(isnan.(coef)) && error("NaN in coef")
+    return coef
+end
+
+### Specific implementation for FFT basis functions ###
+struct FFT_basis <: Lux.AbstractLuxLayer end
 
 @parallel_indices (i, g, s) function FFT_kernel!(
     even::AbstractArray{T},
@@ -247,47 +304,5 @@ function coef2curve_FFT(
     y = @zeros(I, O, S)
     @parallel (1:I, 1:O, 1:S) FFT_mul!(y, even, odd, coef[1, :, :, :], coef[2, :, :, :])
     return y
-end
-
-function curve2coef(
-    b::Lux.AbstractLuxLayer,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-    ε::U = full_quant(1.0f-4),
-)::AbstractArray{U} where {T<:half_quant,U<:full_quant}
-    """
-    Convert B-spline curves to B-spline coefficients using least squares.
-    This will not work for poly-KANs. CuSolver works best for higher precisions.
-
-    Args:
-        x: A matrix of size (i, b) containing the points at which the B-spline curves were evaluated.
-        y: A matrix of size (i, o, b) containing the B-spline curves evaluated at the points x_eval.
-        grid: A matrix of size (i, g) containing the grid of knots.
-        k: The degree of the B-spline basis functions.
-
-    Returns:
-        A matrix of size (i, o, g) containing the B-spline coefficients.
-    """
-    J, S, O = size(x)..., size(y, 2)
-
-    B = b(x, grid, σ) .|> full_quant
-    G = size(B, 2)
-
-    B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
-
-    coef = Array{U}(undef, J, O, G) |> pu
-    for i = 1:J
-        for o = 1:O
-            coef[i, o, :] .= (
-                (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
-                \ (B[i, :, :]' * y[i, o, :]) # Bty
-            )
-        end
-    end
-
-    any(isnan.(coef)) && error("NaN in coef")
-    return coef
 end
 end

@@ -2,13 +2,7 @@ module Quadrature
 
 export TrapeziumQuadrature, GaussLegendreQuadrature
 
-using CUDA,
-    LinearAlgebra,
-    Random,
-    Lux,
-    LuxCUDA,
-    ComponentArrays,
-    ParallelStencil
+using CUDA, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, ParallelStencil
 
 using ..Utils
 

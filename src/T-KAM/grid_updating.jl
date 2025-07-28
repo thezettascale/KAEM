@@ -3,14 +3,7 @@ module ModelGridUpdating
 
 export update_model_grid
 
-using CUDA,
-    Accessors,
-    ComponentArrays,
-    Lux,
-    NNlib,
-    LinearAlgebra,
-    Random,
-    LuxCUDA
+using CUDA, Accessors, ComponentArrays, Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 using ..Utils
 using ..T_KAM_model

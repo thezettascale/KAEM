@@ -112,7 +112,8 @@ function (l::LangevinLoss)(
     z_posterior, st_new =
         sample_langevin(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
     st_lux_ebm, st_lux_gen = st_new.ebm, st_new.gen
-    z_prior, st_lux_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, Lux.testmode(st_lux), rng)
+    z_prior, st_lux_ebm =
+        model.sample_prior(model, size(x)[end], ps, st_kan, Lux.testmode(st_lux), rng)
 
     ∇ = grad_langevin_llhood(
         ps,

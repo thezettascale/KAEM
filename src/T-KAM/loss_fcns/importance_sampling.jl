@@ -112,7 +112,7 @@ function closure(
             st_kan,
             st_lux_ebm,
             st_lux_gen,
-            zero_vec
+            zero_vec,
         ),
     )
 end

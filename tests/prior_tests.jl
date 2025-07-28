@@ -31,7 +31,62 @@ function test_shapes()
     @test model.prior.q_size == q_size
 end
 
-function test_sampling()
+function test_uniform_prior()
+    commit!(conf, "EbmModel", "π_0", "uniform")
+    z_test =
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
+
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+
+    @test !any(isnan, z_test)
+    @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
+end
+
+function test_gaussian_prior()
+    commit!(conf, "EbmModel", "π_0", "gaussian")
+    z_test =
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
+
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+
+    @test !any(isnan, z_test)
+    @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
+end
+
+function test_lognormal_prior()
+    commit!(conf, "EbmModel", "π_0", "lognormal")
+    z_test =
+        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
+
+    log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+
+    @test !any(isnan, z_test)
+    @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
+end
+
+function test_learnable_gaussian_prior()
+    commit!(conf, "EbmModel", "π_0", "learnable_gaussian")
     z_test =
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
 
@@ -42,17 +97,32 @@ function test_sampling()
     end
 
     @test !any(isnan, z_test)
+    @test size(log_p) == (b_size,)
+    @test !any(isnan, log_p)
 end
 
-function test_log_prior()
+function test_ebm_prior()
+    commit!(conf, "EbmModel", "π_0", "ebm")
     z_test =
         first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
+
+    if model.prior.mixture_model || model.prior.ula
+        @test all(size(z_test) .== (q_size, 1, b_size))
+    else
+        @test all(size(z_test) .== (q_size, p_size, b_size))
+    end
+
     log_p = first(model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+
+    @test !any(isnan, z_test)
     @test size(log_p) == (b_size,)
     @test !any(isnan, log_p)
 end
 
 @testset "Mixture Prior Tests" begin
-    test_sampling()
-    test_log_prior()
+    test_uniform_prior()
+    test_gaussian_prior()
+    test_lognormal_prior()
+    test_learnable_gaussian_prior()
+    test_ebm_prior()
 end

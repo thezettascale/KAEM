@@ -68,29 +68,32 @@ function (b::B_spline_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
 
-    # 0-th degree
-    if b.degree == 0
-        grid_1 = grid[:, 1:(end-1)]
-        grid_2 = grid[:, 2:end]
+    # Initialize degree 0, piecewise const
+    grid_1 = grid[:, 1:(end-1)]
+    grid_2 = grid[:, 2:end]
+    term1 = reshape(x, I, 1, S) .>= grid_1
+    term2 = reshape(x, I, 1, S) .< grid_2
+    B = T.(term1 .* term2)
 
-        # B0 is piecewise constant
-        term1 = reshape(x, I, 1, S) .>= reshape(grid_1, I, G-1, 1)
-        term2 = reshape(x, I, 1, S) .< reshape(grid_2, I, G-1, 1)
-        B = T.(term1 .* term2)
+    # Iteratively build up to degree k
+    for d = 1:b.degree
+        gmax = G - d - 1
+        B1 = B[:, 1:gmax, :]
+        B2 = B[:, 2:(gmax+1), :]
+        grid_1 = grid[:, 1:gmax]
+        grid_2 = grid[:, 2:(gmax+1)]
+        grid_3 = grid[:, (d+1):(d+gmax)]
+        grid_4 = grid[:, (d+2):(d+gmax+1)]
 
-        # k-th degree
-    else
-        k = b.degree
-        B = B_spline_basis(x, grid; degree = k-1)
-        x = reshape(x, I, 1, S)
-
-        numer1 = x .- grid[:, 1:(end-k-1)]
-        denom1 = grid[:, (k+1):(end-1)] .- grid[:, 1:(end-k-1)]
-        numer2 = grid[:, (k+2):end] .- x
-        denom2 = grid[:, (k+2):end] .- grid[:, 2:(end-k)]
-        B_i1 = B[:, 1:(end-1), :]
-        B_i2 = B[:, 2:end, :]
-        B = (numer1 ./ denom1) .* B_i1 .+ (numer2 ./ denom2) .* B_i2
+        numer1 = reshape(x, I, 1, S) .- grid_1
+        denom1 = grid_3 .- grid_1
+        numer2 = grid_4 .- reshape(x, I, 1, S)
+        denom2 = grid_4 .- grid_2
+        mask1 = T.(denom1 .!= 0)
+        mask2 = T.(denom2 .!= 0)
+        term1 = ((numer1 ./ denom1) .* B1) .* mask1
+        term2 = ((numer2 ./ denom2) .* B2) .* mask2
+        B = term1 + term2
     end
 
     return B

@@ -8,10 +8,10 @@ using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 using ..Utils
 using ..UnivariateFunctions
 
-struct KAN_Generator <: Lux.AbstractLuxLayer
+struct KAN_Generator{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns
-    layernorms
+    Φ_fcns::Tuple{Vararg{univariate_function{T,U}}}
+    layernorms::Tuple{Vararg{Lux.LayerNorm}}
     layernorm_bool::Bool
     batchnorm_bool::Bool
     x_shape::Tuple
@@ -107,15 +107,15 @@ function init_KAN_Generator(
 
     return KAN_Generator(
         depth,
-        Lux.Chain(Φ_functions...),
-        Lux.Chain(layernorms...),
+        (Φ_functions...),
+        (layernorms...),
         layernorm_bool,
         false,
         x_shape,
     )
 end
 
-function (gen::KAN_Generator)(
+function (gen::KAN_Generator{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,

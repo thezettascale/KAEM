@@ -20,9 +20,9 @@ using ..RefPriors
 include("quadrature.jl")
 using .Quadrature
 
-struct EbmModel{T<:half_quant} <: Lux.AbstractLuxLayer
-    fcns_qp
-    layernorms
+struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
+    fcns_qp::Tuple{Vararg{univariate_function{T,U}}}
+    layernorms::Tuple{Vararg{Lux.LayerNorm}}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -139,8 +139,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
 
     return EbmModel(
-        Lux.Chain(functions...),
-        Lux.Chain(layernorms...),
+        (functions...),
+        (layernorms...),
         layernorm_bool,
         length(widths)-1,
         prior_type,
@@ -159,12 +159,12 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     )
 end
 
-function (ebm::EbmModel{T})(
+function (ebm::EbmModel{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
 
@@ -200,7 +200,7 @@ function (ebm::EbmModel{T})(
     return z, st_lyrnorm
 end
 
-function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
+function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T,U}) where {T<:half_quant,U<:full_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
@@ -218,13 +218,13 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:h
         π_σ = prior.prior_type == "learnable_gaussian" ?
               ones(half_quant, prior.p_size) : [zero(T)],
         α = prior.mixture_model ?
-            glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : [zero(T)],
+            glorot_uniform(rng, U, prior.q_size, prior.p_size) : [zero(T)],
     )
 
     return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)
 end
 
-function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
+function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T,U}) where {T<:half_quant,U<:full_quant}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )

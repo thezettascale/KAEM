@@ -105,7 +105,7 @@ function (b::RBF_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
+    diff = reshape(x, I, 1, S) .- grid
     return exp.(-(diff ./ (b.scale .* σ) ./ 2) .^ 2)
 end
 
@@ -115,7 +115,7 @@ function (b::RSWAF_basis)(
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
+    diff = reshape(x, I, 1, S) .- grid
     diff = NNlib.tanh_fast(diff ./ σ)
     return 1 .- diff .^ 2
 end

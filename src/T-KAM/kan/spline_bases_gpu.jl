@@ -27,7 +27,7 @@ function SplineMUL(
     """Top-level function for KAN with spline basis functions."""
     x = l.base_activation(x)
     w_base, w_sp = ps.w_base, ps.w_sp
-    return @tullio y[i, o, s] = w_base[i, o] * x[i, s] + w_sp[i, o] * y[i, o, s]
+    return @tullio out[i, o, s] := w_base[i, o] * x[i, s] + w_sp[i, o] * y[i, o, s]
 end
 
 ## Basis functions with Stencil loops ##

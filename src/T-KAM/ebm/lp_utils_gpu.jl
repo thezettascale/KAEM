@@ -10,8 +10,8 @@ using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays
 using KernelAbstractions, Tullio
 
 function log_norm(norm::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    @tullio log_Z[q, p] := norm[q, p, g]
-    return @tullio log_Z[q, p] = log(log_Z[q, p] + ε)
+    @tullio Z[q, p] := norm[q, p, g]
+    return @tullio log_Z[q, p] := log(Z[q, p] + ε)
 end
 
 function log_alpha(

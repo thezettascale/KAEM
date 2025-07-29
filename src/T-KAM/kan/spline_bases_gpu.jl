@@ -13,6 +13,7 @@ export extend_grid,
 
 using CUDA, Lux, ComponentArrays
 using LinearAlgebra, NNlib
+using Tullio, KernelAbstractions
 
 using ..Utils
 
@@ -24,9 +25,9 @@ function SplineMUL(
     y::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     """Top-level function for KAN with spline basis functions."""
-    I, O, B = size(y)
-    base = l.base_activation(x)
-    return ps.w_base .* reshape(base, I, 1, B) .+ ps.w_sp .* y
+    x = l.base_activation(x)
+    w_base, w_sp = ps.w_base, ps.w_sp
+    return @tullio y[i, o, s] = w_base[i, o] * x[i, s] + w_sp[i, o] * y[i, o, s]
 end
 
 ## Basis functions with Stencil loops ##
@@ -71,8 +72,8 @@ function (b::B_spline_basis)(
     # Initialize degree 0, piecewise const
     grid_1 = grid[:, 1:(end-1)]
     grid_2 = grid[:, 2:end]
-    term1 = reshape(x, I, 1, S) .>= grid_1
-    term2 = reshape(x, I, 1, S) .< grid_2
+    @tullio term1[i, g, s] := x[i, s] >= grid_1[i, g]
+    @tullio term2[i, g, s] := x[i, s] < grid_2[i, g]
     B = T.(term1 .* term2)
 
     # Iteratively build up to degree k
@@ -85,15 +86,18 @@ function (b::B_spline_basis)(
         grid_3 = grid[:, (d+1):(d+gmax)]
         grid_4 = grid[:, (d+2):(d+gmax+1)]
 
-        numer1 = reshape(x, I, 1, S) .- grid_1
-        denom1 = grid_3 .- grid_1
-        numer2 = grid_4 .- reshape(x, I, 1, S)
-        denom2 = grid_4 .- grid_2
-        mask1 = T.(denom1 .!= 0)
-        mask2 = T.(denom2 .!= 0)
-        term1 = ((numer1 ./ denom1) .* B1) .* mask1
-        term2 = ((numer2 ./ denom2) .* B2) .* mask2
-        B = term1 + term2
+        @tullio numer1[i, g, s] := x[i, s] - grid_1[i, g]
+        @tullio denom1[i, g] := grid_3[i, g] - grid_1[i, g]
+        @tullio numer2[i, g, s] := grid_4[i, g] - x[i, s]
+        @tullio denom2[i, g] := grid_4[i, g] - grid_2[i, g]
+        @tullio mask1[i, g] := denom1[i, g] != 0
+        @tullio mask2[i, g] := denom2[i, g] != 0
+        mask1 = T.(mask1)
+        mask2 = T.(mask2)
+
+        @tullio B[i, g, s] =
+            (numer1[i, g, s] / denom1[i, g]) * B1[i, g, s] * mask1[i, g] +
+            (numer2[i, g, s] / denom2[i, g]) * B2[i, g, s] * mask2[i, g]
     end
 
     return B
@@ -105,8 +109,8 @@ function (b::RBF_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- grid
-    return exp.(-(diff ./ (b.scale .* σ) ./ 2) .^ 2)
+    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / (b.scale * σ[1]))^2 / 2)
+    return B
 end
 
 function (b::RSWAF_basis)(
@@ -115,9 +119,8 @@ function (b::RSWAF_basis)(
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    diff = reshape(x, I, 1, S) .- grid
-    diff = NNlib.tanh_fast(diff ./ σ)
-    return 1 .- diff .^ 2
+    @tullio B[i, g, s] := 1 - tanh((x[i, s] - grid[i, g]) / σ[1])^2
+    return B
 end
 
 function (b::Cheby_basis)(
@@ -126,9 +129,8 @@ function (b::Cheby_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    x = NNlib.tanh_fast(x) ./ σ
-    x = repeat(reshape(x, size(x)..., 1), 1, 1, b.degree+1)
-    return cos.(b.lin' .* acos.(permutedims(x, [1, 3, 2])))
+    @tullio B[i, g, s] := cos(b.lin[g] * acos(tanh(x[i, s] / σ[1])))
+    return B
 end
 
 function coef2curve_Spline(
@@ -141,9 +143,9 @@ function coef2curve_Spline(
     """Top-level function for coef multiplication for all splines."""
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     G = b == Cheby_basis ? b.degree : G
-    spl = reshape(b(x_eval, grid, σ), I, G, 1, S)
-    coef = reshape(coef, I, G, O, 1)
-    return dropdims(sum(spl .* coef, dims = 2), dims = 2)
+    spl = b(x_eval, grid, σ)
+    @tullio y[i, o, s] := spl[i, g, s] * coef[i, o, g]
+    return y
 end
 
 function curve2coef(
@@ -152,7 +154,7 @@ function curve2coef(
     y::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T};
-    ε::full_quant=full_quant(1f-4)
+    ε::full_quant = full_quant(1.0f-4),
 )::AbstractArray{T} where {T<:half_quant}
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
     J, S, O = size(x)..., size(y, 2)
@@ -187,8 +189,8 @@ function (b::FFT_basis)(
     σ::AbstractArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     I, S = size(x)
-    freq = reshape(x, I, 1, 1, S) .* grid
-    freq = T(2π) .* freq .* σ
+    σ = T(2π) .* σ
+    @tullio freq[i, g, s] := x[i, s] * grid[i, g] * σ[1]
     return cos.(freq), sin.(freq)
 end
 
@@ -201,9 +203,9 @@ function coef2curve_FFT(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[3:4]...
     even, odd = b(x_eval, grid, σ)
-    even_coef, odd_coef =
-        reshape(coef[1, :, :, :], I, G, O, 1), reshape(coef[2, :, :, :], I, G, O, 1)
-    return dropdims(sum(even .* even_coef .+ odd .* odd_coef, dims = 2), dims = 2)
+    even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
+    @tullio y[i, o, s] := even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
+    return y
 end
 
 end

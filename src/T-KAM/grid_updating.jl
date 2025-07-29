@@ -109,7 +109,7 @@ function update_model_grid(
                     ps.ebm.fcn[symbol_map[i]],
                     st_kan.ebm[symbol_map[i]],
                     z;
-                    ε=model.ε
+                    ε = model.ε,
                 )
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
                 @reset st_kan.ebm[symbol_map[i]].grid = new_grid
@@ -184,7 +184,7 @@ function update_model_grid(
                 ps.gen.fcn[symbol_map[i]],
                 st_kan.gen[symbol_map[i]],
                 z;
-                ε=model.ε
+                ε = model.ε,
             )
             @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
             @reset st_kan.gen[symbol_map[i]].grid = new_grid

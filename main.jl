@@ -20,7 +20,7 @@ ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 include("src/pipeline/trainer.jl")
 using .trainer
 
-# commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
+commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 prior_type = Dict(1 => "lognormal", 2 => "gaussian", 3 => "uniform", 4 => "ebm")

@@ -4,6 +4,8 @@ export IS_loss, MALA_loss
 
 using ..Utils
 
+using CUDA, KernelAbstractions, Tullio
+
 ## Fcns for model with Importance Sampling ##
 function cross_entropy_IS(
     x::AbstractArray{T},
@@ -11,10 +13,8 @@ function cross_entropy_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    log_x̂ = log.(x̂ .+ ε)
-    ll_expanded = permutedims(log_x̂, [1, 2, 4, 3]) .* x
-    ll = dropdims(sum(ll_expanded, dims = (1, 2)), dims = (1, 2)) # One-hot encoded cross-entropy
-    return ll ./ size(x̂, 1) ./ scale
+    @tullio x̂[d, t, s, b] = log(x̂[d, t, s, b] + ε) * x[d, t, b]
+    return @tullio ll[b, s] := x̂[d, t, s, b] / size(x̂, 1) / scale
 end
 
 function l2_IS(
@@ -23,9 +23,8 @@ function l2_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    ll_expanded = (x .- permutedims(x̂, [1, 2, 3, 5, 4])) .^ 2
-    ll = dropdims(sum(ll_expanded, dims = (1, 2, 3)); dims = (1, 2, 3))
-    return - ll ./ scale
+    @tullio x̂[w, h, c, s, b] = (x[w, h, c, b] - x̂[w, h, c, s, b])^2
+    return @tullio ll[b, s] := - x̂[w, h, c, s, b] / scale
 end
 
 function IS_loss(
@@ -48,8 +47,8 @@ function cross_entropy_MALA(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    ll = log.(x̂ .+ ε) .* x
-    return dropdims(sum(ll; dims = (1, 2)); dims = (1, 2)) ./ size(x, 1) ./ scale
+    @tullio x̂[d, t, b] = log(x̂[d, t, b] + ε) * x[d, t, b]
+    return @tullio ll[b] := x̂[d, t, b] / size(x, 1) / scale
 end
 
 function l2_MALA(
@@ -58,8 +57,8 @@ function l2_MALA(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    ll = -(x - x̂) .^ 2
-    return dropdims(sum(ll; dims = (1, 2, 3)); dims = (1, 2, 3)) ./ scale
+    @tullio x̂[w, h, c, b] = (x[w, h, c, b] - x̂[w, h, c, b])^2
+    return @tullio ll[b] := - x̂[w, h, c, b] / scale
 end
 
 function MALA_loss(

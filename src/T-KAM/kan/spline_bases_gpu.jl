@@ -95,7 +95,8 @@ function (b::B_spline_basis)(
         mask1 = T.(mask1)
         mask2 = T.(mask2)
 
-        @tullio B[i, g, s] =
+        # Re-allocate memory for B since G (size) is changing
+        @tullio B[i, g, s] :=
             (numer1[i, g, s] / denom1[i, g]) * B1[i, g, s] * mask1[i, g] +
             (numer2[i, g, s] / denom2[i, g]) * B2[i, g, s] * mask2[i, g]
     end

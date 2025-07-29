@@ -1,4 +1,4 @@
-module attention
+module Attention
 
 export scaled_dot_product_attention
 

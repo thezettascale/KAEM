@@ -10,10 +10,10 @@ using ..Utils
 
 if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     include("attention_gpu.jl")
-    using .Losses
+    using .Attention
 else
     include("attention.jl")
-    using .Losses
+    using .Attention
 end
 
 struct SEQ_Generator <: Lux.AbstractLuxLayer

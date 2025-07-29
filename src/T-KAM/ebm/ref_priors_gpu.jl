@@ -23,8 +23,8 @@ struct EbmPrior <: Lux.AbstractLuxLayer
     ε::half_quant
 end
 
-function stable_log(log_pdf::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    @tullio log_pdf[q, p, s] = log(log_pdf[q, p, s] + ε)
+function stable_log(pdf::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+    @tullio log_pdf[q, p, s] := log(pdf[q, p, s] + ε)
     return log_pdf
 end
 

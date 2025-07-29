@@ -151,7 +151,8 @@ function curve2coef(
     x::AbstractArray{T},
     y::AbstractArray{T},
     grid::AbstractArray{T},
-    σ::AbstractArray{T},
+    σ::AbstractArray{T};
+    ε::full_quant=full_quant(1f-4)
 )::AbstractArray{T} where {T<:half_quant}
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
     J, S, O = size(x)..., size(y, 2)
@@ -162,15 +163,18 @@ function curve2coef(
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
+    eps = ε * I(G) |> pu
     coef = Array{full_quant}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O
-            coef[i, o, :] .= B[i, :, :] \ y[i, o, :]
+            coef[i, o, :] .= (
+                (B[i, :, :]' * B[i, :, :] + eps) # BtB
+                \ (B[i, :, :]' * y[i, o, :]) # Bty
+            )
         end
     end
 
     coef = ifelse.(isnan.(coef), zero(full_quant), coef) |> pu
-
     return T.(coef)
 end
 

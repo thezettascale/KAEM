@@ -191,7 +191,7 @@ end
 
 function (model::T_KAM{T,U})(
     ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     num_samples::Int;
     rng::AbstractRNG = Random.default_rng(),
@@ -203,7 +203,7 @@ function (model::T_KAM{T,U})(
     Args:
         model: The model.
         ps: The parameters of the model.
-        kan_st: The states of the KAN model.
+        st_kan: The states of the KAN model.
         st_lux: The states of the Lux model.
         num_samples: The number of samples to generate.
         rng: The random number generator.
@@ -214,8 +214,8 @@ function (model::T_KAM{T,U})(
         Lux states of the likelihood.
     """
     ps = ps .|> half_quant
-    z, st_ebm = model.sample_prior(model, num_samples, ps, kan_st, st_lux, rng)
-    x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
+    z, st_ebm = model.sample_prior(model, num_samples, ps, st_kan, st_lux, rng)
+    x̂, st_gen = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
     return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end

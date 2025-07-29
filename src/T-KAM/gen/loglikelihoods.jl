@@ -22,7 +22,7 @@ function log_likelihood_IS(
     x::AbstractArray{T},
     lkhood::GenModel{T},
     ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     noise::AbstractArray{T};
     ε::T = eps(T),
@@ -43,7 +43,7 @@ function log_likelihood_IS(
         The unnormalized log-likelihood.
     """
     B, S = size(x)[end], size(z)[end]
-    x̂, st = lkhood.generator(ps, kan_st, st_lux, z)
+    x̂, st = lkhood.generator(ps, st_kan, st_lux, z)
     noise = lkhood.σ_llhood * noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
 
@@ -56,7 +56,7 @@ function log_likelihood_MALA(
     x::AbstractArray{T},
     lkhood::GenModel{T},
     ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple;
     ε::T = eps(half_quant),
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
@@ -75,7 +75,7 @@ function log_likelihood_MALA(
         The unnormalized log-likelihood.
     """
     B = size(z)[end]
-    x̂, st_lux = lkhood.generator(ps, kan_st, st_lux, z)
+    x̂, st_lux = lkhood.generator(ps, st_kan, st_lux, z)
     x̂_act = lkhood.output_activation(x̂)
 
     ll = MALA_loss(x, x̂_act, ε, 2*lkhood.σ_llhood^2, B, lkhood.SEQ)

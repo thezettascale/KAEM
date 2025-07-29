@@ -49,18 +49,19 @@ function test_derivative()
     st = st |> ComponentArray |> pu
     ∇ = Enzyme.make_zero(ps)
 
-    function closured_f(z, p, s)
-        y = f(z, p, s)
+    function closured_f(fcn, z, p, s)
+        y = fcn(z, p, s)
         return sum(y)
     end
 
     Enzyme.autodiff(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Reverse,
         Enzyme.Const(closured_f),
         Enzyme.Active,
-        Enzyme.Const(x),
+        Enzyme.Const(f),
+        Enzyme.DuplicatedNoNeed(x, Enzyme.make_zero(x)),
         Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(st),
+        Enzyme.DuplicatedNoNeed(st, Enzyme.make_zero(st)),
     )
 
     @test norm(∇) != 0

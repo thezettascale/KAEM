@@ -1,6 +1,6 @@
 # T-KAM 
 
-T-KAM is a generative model presented [here.](https://www.arxiv.org/abs/2506.14167) I'll explain at a later date.
+T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167) to be explained at a later date.
 
 ## Setup:
 

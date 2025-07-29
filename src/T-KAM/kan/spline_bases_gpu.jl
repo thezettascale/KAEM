@@ -109,8 +109,8 @@ function (b::RBF_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
-    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / (b.scale * σ[d]))^2 / 2)
+    σ = b.scale .* σ
+    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / σ[d])^2 / 2)
     return B
 end
 
@@ -119,7 +119,6 @@ function (b::RSWAF_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
     @tullio B[i, g, s] := 1 - tanh((x[i, s] - grid[i, g]) / σ[d])^2
     return B
 end
@@ -129,8 +128,8 @@ function (b::Cheby_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
-    @tullio B[i, g, s] := cos(b.lin[g] * acos(tanh(x[i, s] / σ[d])))
+    lin = b.lin
+    @tullio B[i, g, s] := cos(lin[g] * acos(tanh(x[i, s] / σ[d])))
     return B
 end
 
@@ -202,7 +201,6 @@ function coef2curve_FFT(
     coef::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    I, S, O, G = size(x_eval)..., size(coef)[3:4]...
     even, odd = b(x_eval, grid, σ)
     even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
     @tullio y[i, o, s] := even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]

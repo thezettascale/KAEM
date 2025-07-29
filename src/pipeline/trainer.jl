@@ -204,6 +204,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     # Gradient for a single batch
     function grad_fcn(G, u, args...)
         t.ps = u
+        ps_hq = half_quant.(t.ps)
 
         # Grid updating for likelihood model
         if (
@@ -212,7 +213,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             t.model, t.ps, t.st_kan, t.st_lux = update_model_grid(
                 t.model,
                 t.x,
-                t.ps,
+                ps_hq,
                 t.st_kan,
                 Lux.testmode(t.st_lux);
                 rng = t.rng,
@@ -229,7 +230,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
         loss, grads, st_ebm, st_gen = t.model.loss_fcn(
-            half_quant(t.ps),
+            ps_hq,
             Enzyme.make_zero(grads),
             t.st_kan,
             t.st_lux,
@@ -259,9 +260,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         if train_idx % num_batches == 0 || train_idx == 1
 
             test_loss = 0
+            ps_hq = half_quant.(t.ps)
             for x in t.model.test_loader
                 x_gen, st_ebm, st_gen = CUDA.@fastmath t.model(
-                    t.ps,
+                    ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
                     size(x)[end];
@@ -309,9 +311,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             # Save images
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
+            ps_hq = half_quant.(t.ps)
             for i = 1:(fld(t.num_generated_samples, 10)//t.batch_size_for_gen) # Save 1/10 of the samples to conserve space
                 batch, st_ebm, st_gen = CUDA.@fastmath t.model(
-                    t.ps,
+                    ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
                     t.batch_size_for_gen;
@@ -387,9 +390,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     # Generate samples
     gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     idx = length(t.model.lkhood.x_shape) + 1
+    ps_hq = half_quant.(t.ps)
     for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
         batch, t.st = CUDA.@fastmath t.model(
-            t.ps,
+            ps_hq,
             t.st_kan,
             Lux.testmode(t.st_lux),
             t.batch_size_for_gen;

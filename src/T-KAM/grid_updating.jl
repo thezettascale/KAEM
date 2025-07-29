@@ -60,9 +60,9 @@ function update_model_grid(
                     temps = temps[2:end],
                     rng = rng,
                 ),
-            )
+            )[:, :, :, end]
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
         else
             z = first(
                 model.sample_prior(
@@ -150,9 +150,9 @@ function update_model_grid(
                     temps = temps[2:end],
                     rng = rng,
                 ),
-            )
+            )[:, :, :, end]
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
         else
             z = first(
                 model.sample_prior(
@@ -167,7 +167,7 @@ function update_model_grid(
         end
     end
 
-    z = dropdims(sum(reshape(z, size(z, 1), size(z, 2), :); dims = 2); dims = 2)
+    z = dropdims(sum(z; dims = 2); dims = 2)
 
     for i = 1:model.lkhood.generator.depth
         new_grid, new_coef = update_fcn_grid(

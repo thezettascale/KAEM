@@ -13,8 +13,8 @@ function cross_entropy_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio x̂[d, t, s, b] = log(x̂[d, t, s, b] + ε) * x[d, t, b]
-    return @tullio ll[b, s] := x̂[d, t, s, b] / size(x̂, 1) / scale
+    @tullio ce[d, t, s, b] := log(x̂[d, t, s, b] + ε) * x[d, t, b]
+    return @tullio ll[b, s] := ce[d, t, s, b] / size(x̂, 1) / scale
 end
 
 function l2_IS(
@@ -23,8 +23,8 @@ function l2_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio x̂[w, h, c, s, b] = (x[w, h, c, b] - x̂[w, h, c, s, b])^2
-    return @tullio ll[b, s] := - x̂[w, h, c, s, b] / scale
+    @tullio l2[w, h, c, s, b] := (x[w, h, c, b] - x̂[w, h, c, s, b])^2
+    return @tullio ll[b, s] := - l2[w, h, c, s, b] / scale
 end
 
 function IS_loss(
@@ -47,8 +47,8 @@ function cross_entropy_MALA(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio x̂[d, t, b] = log(x̂[d, t, b] + ε) * x[d, t, b]
-    return @tullio ll[b] := x̂[d, t, b] / size(x, 1) / scale
+    @tullio ce[d, t, b] := log(x̂[d, t, b] + ε) * x[d, t, b]
+    return @tullio ll[b] := ce[d, t, b] / size(x, 1) / scale
 end
 
 function l2_MALA(
@@ -57,8 +57,8 @@ function l2_MALA(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio x̂[w, h, c, b] = (x[w, h, c, b] - x̂[w, h, c, b])^2
-    return @tullio ll[b] := - x̂[w, h, c, b] / scale
+    @tullio l2[w, h, c, b] := (x[w, h, c, b] - x̂[w, h, c, b])^2
+    return @tullio ll[b] := - l2[w, h, c, b] / scale
 end
 
 function MALA_loss(

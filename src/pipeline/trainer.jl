@@ -351,7 +351,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             (train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
         t.x = pu(x)
-        return loss
+        return t.loss
     end
 
     start_time = time()

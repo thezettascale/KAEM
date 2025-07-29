@@ -81,6 +81,9 @@ function unadjusted_logpos_grad(
         )
     end
 
+    norm_z = norm(∇z)
+    iszero(norm_z) && error("All zero ULA grad")
+    isnan(norm_z) && error("NaN ULA grad")
     return ∇z
 end
 

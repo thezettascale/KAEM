@@ -236,7 +236,7 @@ function Lux.initialstates(
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    st_lyrnorm = (a = zero(T), b = zero(T))
+    st_lyrnorm = (a = [zero(T)], b = [zero(T)])
     if prior.layernorm_bool && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for

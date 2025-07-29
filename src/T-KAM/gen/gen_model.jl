@@ -140,7 +140,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         i = 1:lkhood.generator.depth
     )
 
-    st_lyrnorm = (a = zero(T), b = zero(T))
+    st_lyrnorm = (a = [zero(T)], b = [zero(T)])
     if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] =>
@@ -149,7 +149,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         )
     end
 
-    batchnorm_st = (a = zero(T), b = zero(T))
+    batchnorm_st = (a = [zero(T)], b = [zero(T)])
     if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_st = NamedTuple(
             symbol_map[i] =>
@@ -158,7 +158,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
         )
     end
 
-    attention_st = (a = zero(T), b = zero(T))
+    attention_st = (a = [zero(T)], b = [zero(T)])
     if lkhood.SEQ
         attention_st = (
             Q = Lux.initialstates(rng, lkhood.generator.attention[1]) |> hq,
@@ -168,7 +168,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     end
 
     if lkhood.CNN || lkhood.SEQ
-        return (a = one(T), b = one(T)),
+        return (a = [one(T)], b = [one(T)]),
         (
             fcn = fcn_st,
             layernorm = st_lyrnorm,

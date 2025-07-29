@@ -101,7 +101,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
         symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.Φ_fcns[i]) for
         i = 1:lkhood.generator.depth
     )
-    layernorm_ps = (a = zero(T))
+    layernorm_ps = (a = [zero(T)])
     if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
@@ -109,7 +109,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
         )
     end
 
-    batchnorm_ps = (a = zero(T))
+    batchnorm_ps = (a = [zero(T)])
     if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
@@ -117,7 +117,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
         )
     end
 
-    attention_ps = (a = zero(T))
+    attention_ps = (a = [zero(T)])
     if lkhood.SEQ
         attention_ps = (
             Q = Lux.initialparameters(rng, lkhood.generator.attention[1]),

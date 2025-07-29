@@ -114,10 +114,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         )
 
         push!(functions, func)
-
-        if (layernorm_bool && i < length(widths)-1)
-            push!(layernorms, Lux.LayerNorm(widths[i+1]))
-        end
     end
 
     if length(layernorms) == 0

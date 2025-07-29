@@ -95,10 +95,6 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    if length(batchnorms) == 0
-        batchnorms = (Lux.BatchNorm(0),)
-    end
-
     return CNN_Generator(depth, Φ_functions, batchnorms, batchnorm_bool, false)
 end
 

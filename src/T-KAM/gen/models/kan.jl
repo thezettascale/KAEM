@@ -102,10 +102,6 @@ function init_KAN_Generator(
         end
     end
 
-    if length(layernorms) == 0
-        layernorms = (Lux.LayerNorm(0),)
-    end
-
     return KAN_Generator(
         depth,
         Φ_functions,

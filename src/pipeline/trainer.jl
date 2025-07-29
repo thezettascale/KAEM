@@ -210,7 +210,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         if (
             train_idx == 1 || (train_idx - t.last_grid_update >= t.grid_update_frequency)
         ) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.st_kan, t.st_lux = update_model_grid(
+            t.model, ps_hq, t.st_kan, t.st_lux = update_model_grid(
                 t.model,
                 t.x,
                 ps_hq,
@@ -218,6 +218,8 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 Lux.testmode(t.st_lux);
                 rng = t.rng,
             )
+
+            t.ps = full_quant.(ps_hq)
             t.grid_update_frequency =
                 train_idx > 1 ?
                 floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^train_idx) :

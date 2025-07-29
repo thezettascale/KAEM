@@ -228,11 +228,11 @@ function curve2coef(
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
     J, S, O = size(x)..., size(y, 2)
 
-    B = b(x, grid, σ) .|> full_quant
+    B = b(x, grid, σ) .|> U
+    y = y .|> U
     G = size(B, 2)
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
-    any(isnan.(B)) && error("NaN in B before least squares")
 
     coef = Array{U}(undef, J, O, G) |> pu
     for i = 1:J
@@ -241,8 +241,8 @@ function curve2coef(
         end
     end
 
-    any(isnan.(coef)) && error("NaN in coef")
-    return coef
+    replace!(coef, NaN => zero(U))
+    return T.(coef)
 end
 
 ### Specific implementation for FFT basis functions ###

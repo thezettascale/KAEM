@@ -125,9 +125,9 @@ function update_model_grid(
                         model.prior.layernorms[i],
                         z,
                         ps.ebm.layernorm[symbol_map[i]],
-                        st_lux.ebm.layernorm[symbol_map[i]],
+                        st_lux.ebm[symbol_map[i]],
                     )
-                    @reset st_lux.ebm.layernorm[symbol_map[i]] = st_ebm
+                    @reset st_lux.ebm[symbol_map[i]] = st_ebm
                 end
             end
         end
@@ -195,9 +195,9 @@ function update_model_grid(
                 model.lkhood.generator.layernorms[i],
                 z,
                 ps.gen.layernorm[symbol_map[i]],
-                st_lux.gen.layernorm[symbol_map[i]],
+                st_lux.gen[symbol_map[i]],
             )
-            @reset st_lux.gen.layernorm[symbol_map[i]] = st_gen
+            @reset st_lux.gen[symbol_map[i]] = st_gen
         end
     end
 

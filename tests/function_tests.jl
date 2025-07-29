@@ -54,7 +54,7 @@ function test_derivative()
         return sum(y)
     end
 
-    Enzyme.autodiff(
+    Enzyme.autodiff_deferred(
         Enzyme.Reverse,
         Enzyme.Const(closured_f),
         Enzyme.Active,

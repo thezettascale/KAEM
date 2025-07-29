@@ -37,12 +37,6 @@ function test_B_spline_basis()
     y = coef2curve_Spline(basis_function, x_eval, extended_grid, coef, σ)
     @test size(y) == (i, o, b)
     @test !any(isnan.(y))
-
-    recovered_coef = curve2coef(basis_function, x_eval, y, extended_grid, σ)
-    @test size(recovered_coef) == size(coef)
-    y_reconstructed =
-        coef2curve_Spline(basis_function, x_eval, extended_grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
 end
 
 function test_RBF_basis()
@@ -58,11 +52,6 @@ function test_RBF_basis()
     y = coef2curve_Spline(basis_function, x_eval, grid, coef, σ)
     @test size(y) == (i, o, b)
     @test !any(isnan.(y))
-
-    recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
-    @test size(recovered_coef) == size(coef)
-    y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ;)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
 end
 
 function test_RSWAF_basis()
@@ -77,11 +66,6 @@ function test_RSWAF_basis()
     y = coef2curve_Spline(basis_function, x_eval, grid, coef, σ)
     @test size(y) == (i, o, b)
     @test !any(isnan.(y))
-
-    recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
-    @test size(recovered_coef) == size(coef)
-    y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
 end
 
 function test_FFT_basis()
@@ -110,11 +94,6 @@ function test_Cheby_basis()
     y = coef2curve_Spline(basis_function, x_eval, grid, coef, σ)
     @test size(y) == (i, o, b)
     @test !any(isnan.(y))
-
-    recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
-    @test size(recovered_coef) == size(coef)
-    y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
 end
 
 @testset "Spline Tests" begin

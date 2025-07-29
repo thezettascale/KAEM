@@ -80,7 +80,7 @@ function closure(
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
-    m::T_KAM{T},
+    m::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,

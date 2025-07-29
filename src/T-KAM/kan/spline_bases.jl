@@ -238,10 +238,7 @@ function curve2coef(
     coef = Array{U}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O
-            coef[i, o, :] .= (
-                (B[i, :, :]' * B[i, :, :] + ε * I) # BtB
-                \ (B[i, :, :]' * y[i, o, :]) # Bty
-            )
+            coef[i, o, :] .= B[i,:,:]\y[i,o,:]
         end
     end
 

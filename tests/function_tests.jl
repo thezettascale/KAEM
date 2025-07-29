@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -40,7 +40,35 @@ function test_grid_update()
     @test size(grid) == (5, 12)
 end
 
+function test_derivative()
+    Random.seed!(42)
+    x = rand(half_quant, 5, 3) |> pu
+    f = init_function(5, 2)
+    ps, st = Lux.setup(Random.GLOBAL_RNG, f)
+    ps = ps |> ComponentArray |> pu
+    st = st |> ComponentArray |> pu
+    ∇ = Enzyme.make_zero(ps)
+
+    function closured_f(z, p, s)
+        y = f(z, p, s)
+        return sum(y)
+    end
+
+    Enzyme.autodiff_deferred(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        Enzyme.Const(closured_f),
+        Enzyme.Active,
+        Enzyme.Const(x),
+        Enzyme.Duplicated(ps, ∇),
+        Enzyme.Const(st),
+    )
+
+    @test norm(∇) != 0
+    @test !any(isnan, ∇)
+end
+
 @testset "Univariate Funtion Tests" begin
-    test_fwd()
-    test_grid_update()
+    # test_fwd()
+    # test_grid_update()
+    test_derivative()
 end

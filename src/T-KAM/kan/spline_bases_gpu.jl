@@ -162,14 +162,14 @@ function curve2coef(
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
 
-    coef = Array{U}(undef, J, O, G) |> pu
+    coef = Array{full_quant}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O
             coef[i, o, :] .= B[i, :, :] \ y[i, o, :]
         end
     end
 
-    coef = ifelse.(isnan.(coef), zero(U), coef) |> pu
+    coef = ifelse.(isnan.(coef), zero(full_quant), coef) |> pu
 
     return T.(coef)
 end

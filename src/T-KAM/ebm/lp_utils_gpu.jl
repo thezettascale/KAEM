@@ -7,9 +7,11 @@ using ..Utils
 
 using NNlib: softmax
 using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays
+using KernelAbstractions, Tullio
 
 function log_norm(norm::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
-    return log.(dropdims(sum(norm; dims = 3); dims = 3) .+ ε)
+    @tullio log_Z[q, p] := norm[q, p, g]
+    return @tullio log_Z[q, p] = log(log_Z[q, p] + ε)
 end
 
 function log_alpha(
@@ -20,7 +22,8 @@ function log_alpha(
     P::Int,
     S::Int,
 )::AbstractArray{T} where {T<:half_quant}
-    return log.(reshape(alpha, size(alpha)..., 1) .* log_απ .+ ε)
+    @tullio log_απ[q, p, s] := log(log_απ[q, 1, s] + alpha[q, p] + ε)
+    return log_απ
 end
 
 function log_mix_pdf(
@@ -32,8 +35,8 @@ function log_mix_pdf(
     P::Int,
     S::Int,
 )::AbstractArray{T} where {T<:half_quant}
-    logprob = f + log_απ .- log_Z
-    return dropdims(sum(logprob; dims = (1, 2)); dims = (1, 2)) .+ reg
+    @tullio logprob[q, p, s] := f[q, p, s] + log_απ[q, p, s] - log_Z[q, p] + reg
+    return @tullio logprior[s] := logprob[q, p, s] 
 end
 
 end

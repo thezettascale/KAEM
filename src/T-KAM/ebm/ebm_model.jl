@@ -3,6 +3,7 @@ module EBM_Model
 export EbmModel, init_EbmModel
 
 using CUDA, FastGaussQuadrature
+using ChainRules.ChainRulesCore: @ignore_derivatives
 using ConfParser,
     Random,
     Distributions,
@@ -193,7 +194,8 @@ function (ebm::EbmModel{T,U})(
             Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
             (z, st_lyrnorm)
 
-        (ebm.layernorm_bool && i < ebm.depth) && @reset st_lyrnorm[i] = st_lyrnorm_new
+        (ebm.layernorm_bool && i < ebm.depth) &&
+            @ignore_derivatives @reset st_lyrnorm[i] = st_lyrnorm_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)

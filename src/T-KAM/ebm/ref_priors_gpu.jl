@@ -62,10 +62,11 @@ function (prior::LearnableGaussianPrior)(
     π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
-    pdf = one(T) ./ (
-        abs.(π_σ .* T(sqrt(2π)) .+ prior.ε) .*
-        exp.(-(z .- π_μ .^ 2) ./ (2 .* (π_σ .^ 2) .+ prior.ε))
-    )
+    pdf =
+        one(T) ./ (
+            abs.(π_σ .* T(sqrt(2π)) .+ prior.ε) .*
+            exp.(-(z .- π_μ .^ 2) ./ (2 .* (π_σ .^ 2) .+ prior.ε))
+        )
     log_bool && return log.(pdf .+ prior.ε)
     return pdf
 end

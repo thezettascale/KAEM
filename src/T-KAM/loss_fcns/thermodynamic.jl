@@ -2,7 +2,7 @@ module ThermodynamicIntegration
 
 export initialize_thermo_loss, ThermodynamicLoss
 
-using CUDA, Enzyme, ComponentArrays, Random
+using CUDA, Enzyme, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 
 using ..Utils
@@ -128,20 +128,37 @@ function grad_thermo_llhood(
     st_lux_gen::NamedTuple;
 )::AbstractArray{T} where {T<:half_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(closure),
-        Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z_posterior),
-        Enzyme.Const(z_prior),
-        Enzyme.Const(x),
-        Enzyme.Const(Δt),
-        Enzyme.Const(model),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux_ebm),
-        Enzyme.Const(st_lux_gen),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f =
+            p -> closure(
+                p,
+                z_posterior,
+                z_prior,
+                x,
+                Δt,
+                model,
+                st_kan,
+                st_lux_ebm,
+                st_lux_gen,
+            )
+        f_grad = Zygote.gradient(f, ps)
+        @. ∇ = first(f_grad)
+    else
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(closure),
+            Enzyme.Active,
+            Enzyme.Duplicated(ps, ∇),
+            Enzyme.Const(z_posterior),
+            Enzyme.Const(z_prior),
+            Enzyme.Const(x),
+            Enzyme.Const(Δt),
+            Enzyme.Const(model),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux_ebm),
+            Enzyme.Const(st_lux_gen),
+        )
+    end
 
     return ∇
 end

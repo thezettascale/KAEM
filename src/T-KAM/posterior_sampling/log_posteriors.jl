@@ -1,6 +1,6 @@
 module LogPosteriors
 
-using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme
+using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme, Zygote
 
 using ..Utils
 using ..T_KAM_model
@@ -51,19 +51,35 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(unadjusted_logpos),
-        Enzyme.Active,
-        Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x),
-        Enzyme.Const(temps),
-        Enzyme.Const(model),
-        Enzyme.Const(ps),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux),
-        Enzyme.Const(prior_sampling_bool),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f =
+            z_i -> unadjusted_logpos(
+                z_i,
+                x,
+                temps,
+                model,
+                ps,
+                st_kan,
+                st_lux,
+                prior_sampling_bool,
+            )
+        f_grad = Zygote.gradient(f, z)
+        @. ∇z = first(f_grad)
+    else
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(unadjusted_logpos),
+            Enzyme.Active,
+            Enzyme.Duplicated(z, ∇z),
+            Enzyme.Const(x),
+            Enzyme.Const(temps),
+            Enzyme.Const(model),
+            Enzyme.Const(ps),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux),
+            Enzyme.Const(prior_sampling_bool),
+        )
+    end
 
     return ∇z
 end
@@ -140,18 +156,24 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(autoMALA_logpos_reduced_4D),
-        Enzyme.Active,
-        Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x),
-        Enzyme.Const(temps),
-        Enzyme.Const(model),
-        Enzyme.Const(ps),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f = z_i -> autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux)
+        f_grad = Zygote.gradient(f, z)
+        @. ∇z = first(f_grad)
+    else
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(autoMALA_logpos_reduced_4D),
+            Enzyme.Active,
+            Enzyme.Duplicated(z, ∇z),
+            Enzyme.Const(x),
+            Enzyme.Const(temps),
+            Enzyme.Const(model),
+            Enzyme.Const(ps),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux),
+        )
+    end
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, model, ps, st_kan, st_lux)
@@ -202,18 +224,24 @@ function autoMALA_value_and_grad(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(closure),
-        Enzyme.Active,
-        Enzyme.Duplicated(z, ∇z),
-        Enzyme.Const(x),
-        Enzyme.Const(temps),
-        Enzyme.Const(model),
-        Enzyme.Const(ps),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux)
+        f_grad = Zygote.gradient(f, z)
+        @. ∇z = first(f_grad)
+    else
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(closure),
+            Enzyme.Active,
+            Enzyme.Duplicated(z, ∇z),
+            Enzyme.Const(x),
+            Enzyme.Const(temps),
+            Enzyme.Const(model),
+            Enzyme.Const(ps),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux),
+        )
+    end
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)

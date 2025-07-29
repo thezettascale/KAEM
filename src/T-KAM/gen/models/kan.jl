@@ -4,6 +4,7 @@ module KAN_Model
 export KAN_Generator, init_KAN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 using ..UnivariateFunctions
@@ -151,7 +152,7 @@ function (gen::KAN_Generator{T,U})(
                 st_lyrnorm[symbol_map[i]],
             ) : (z, st_lyrnorm)
         (gen.layernorm_bool && i < gen.depth) &&
-            @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+            @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
     end
 
     return reshape(z, gen.x_shape..., num_samples), st_lyrnorm

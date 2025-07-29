@@ -34,12 +34,12 @@ function loss_accum(
 )::AbstractArray{T} where {T<:half_quant}
     marginal_llhood = @zeros(B, S)
     @parallel (1:B, 1:S) resampled_kernel!(
-            marginal_llhood,
-            weights_resampled,
-            logprior,
-            logllhood,
-            resampled_idxs,
-        )
+        marginal_llhood,
+        weights_resampled,
+        logprior,
+        logllhood,
+        resampled_idxs,
+    )
     return marginal_llhood
 end
 

@@ -3,6 +3,7 @@ module CNN_Model
 export CNN_Generator, init_CNN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 
@@ -125,7 +126,7 @@ function (gen::CNN_Generator)(
     for i = 1:(gen.depth)
         z, st_new =
             Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
-        @reset st_lux.fcn[symbol_map[i]] = st_new
+        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
 
         z, st_new =
             (gen.batchnorm_bool && i < gen.depth) ?
@@ -137,7 +138,7 @@ function (gen::CNN_Generator)(
             ) : (z, st_lux)
         (gen.batchnorm_bool && i < gen.depth) &&
             (gen.batchnorm_bool && i < gen.depth) &&
-            @reset st_lux.batchnorm[symbol_map[i]] = st_new
+            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
 
     return z, st_lux

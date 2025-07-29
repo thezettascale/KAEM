@@ -1,6 +1,6 @@
 module ImportanceSampling
 
-using CUDA, Enzyme, ComponentArrays, Random
+using CUDA, Enzyme, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
 
@@ -66,14 +66,8 @@ function marginal_llhood(
     logllhood, st_gen =
         log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, zero_vec; ε = m.ε)
 
-    marginal_llhood = loss_accum(
-        weights_resampled,
-        logprior,
-        logllhood,
-        resampled_idxs,
-        B,
-        S,
-    )
+    marginal_llhood =
+        loss_accum(weights_resampled, logprior, logllhood, resampled_idxs, B, S)
 
     return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling,
     st_lux_ebm,
@@ -122,21 +116,39 @@ function grad_importance_llhood(
     zero_vec::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(closure),
-        Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z),
-        Enzyme.Const(x),
-        Enzyme.Const(weights_resampled),
-        Enzyme.Const(resampled_idxs),
-        Enzyme.Const(model),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux_ebm),
-        Enzyme.Const(st_lux_gen),
-        Enzyme.Const(zero_vec),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f =
+            p -> closure(
+                p,
+                z,
+                x,
+                weights_resampled,
+                resampled_idxs,
+                model,
+                st_kan,
+                st_lux_ebm,
+                st_lux_gen,
+                zero_vec,
+            )
+        f_grad = Zygote.gradient(f, ps)
+        @. ∇ = first(f_grad)
+    else
+        CUDA.@fastmath Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(closure),
+            Enzyme.Active,
+            Enzyme.Duplicated(ps, ∇),
+            Enzyme.Const(z),
+            Enzyme.Const(x),
+            Enzyme.Const(weights_resampled),
+            Enzyme.Const(resampled_idxs),
+            Enzyme.Const(model),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux_ebm),
+            Enzyme.Const(st_lux_gen),
+            Enzyme.Const(zero_vec),
+        )
+    end
 
     return ∇
 end

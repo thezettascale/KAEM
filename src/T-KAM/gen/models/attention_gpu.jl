@@ -20,7 +20,7 @@ function scaled_dot_product_attention(
     @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b]
     QK = softmax(QK, dims = 2)
     @tullio Q[d, t, b] = QK[t, i, b] * V[d, i, b]
-    return V
+    return Q
 end
 
 end

@@ -110,7 +110,7 @@ function (b::RBF_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / (b.scale * σ[1]))^2 / 2)
+    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / (b.scale * σ[d]))^2 / 2)
     return B
 end
 
@@ -120,7 +120,7 @@ function (b::RSWAF_basis)(
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio B[i, g, s] := 1 - tanh((x[i, s] - grid[i, g]) / σ[1])^2
+    @tullio B[i, g, s] := 1 - tanh((x[i, s] - grid[i, g]) / σ[d])^2
     return B
 end
 
@@ -130,7 +130,7 @@ function (b::Cheby_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
-    @tullio B[i, g, s] := cos(b.lin[g] * acos(tanh(x[i, s] / σ[1])))
+    @tullio B[i, g, s] := cos(b.lin[g] * acos(tanh(x[i, s] / σ[d])))
     return B
 end
 
@@ -191,7 +191,7 @@ function (b::FFT_basis)(
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
     I, S = size(x)
     σ = T(2π) .* σ
-    @tullio freq[i, g, s] := x[i, s] * grid[i, g] * σ[1]
+    @tullio freq[i, g, s] := x[i, s] * grid[i, g] * σ[d]
     return cos.(freq), sin.(freq)
 end
 

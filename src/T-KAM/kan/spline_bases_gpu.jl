@@ -151,7 +151,7 @@ function curve2coef(
     x::AbstractArray{T},
     y::AbstractArray{T},
     grid::AbstractArray{T},
-    σ::AbstractArray{T},
+    σ::AbstractArray{T};
     ε::U = full_quant(1.0f-4),
 )::AbstractArray{U} where {T<:half_quant,U<:full_quant}
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""

@@ -184,8 +184,8 @@ function (b::FFT_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
-    I, S, G = size(x)..., size(grid, 2)
-    freq = reshape(x, I, 1, S) .* reshape(grid, I, G, 1)
+    I, S = size(x)
+    freq = reshape(x, I, 1, 1, S) .* grid
     freq = T(2π) .* freq .* σ
     return cos.(freq), sin.(freq)
 end

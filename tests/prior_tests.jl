@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, Enzyme
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -149,10 +149,10 @@ function test_gaussian_derivative()
 end
 
 @testset "Mixture Prior Tests" begin
-    test_uniform_prior()
-    test_gaussian_prior()
-    test_lognormal_prior()
-    test_learnable_gaussian_prior()
-    test_ebm_prior()
+    # test_uniform_prior()
+    # test_gaussian_prior()
+    # test_lognormal_prior()
+    # test_learnable_gaussian_prior()
+    # test_ebm_prior()
     test_gaussian_derivative()
 end

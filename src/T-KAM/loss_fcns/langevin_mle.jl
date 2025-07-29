@@ -82,7 +82,7 @@ function grad_langevin_llhood(
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f = p -> closure(p, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen)
-        f_grad = Zygote.gradient(f, ps)
+        f_grad = CUDA.@fastmath Zygote.gradient(f, ps)
         @. ∇ = first(f_grad)
     else
         CUDA.@fastmath Enzyme.autodiff(

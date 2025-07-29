@@ -106,7 +106,7 @@ function (b::RBF_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     diff = reshape(x, I, 1, S) .- reshape(grid, I, G, 1)
-    return exp.(-T(0.5) * (diff ./ (b.scale * σ)) .^ 2)
+    return exp.(-(diff ./ (b.scale .* σ) ./ 2) .^ 2)
 end
 
 function (b::RSWAF_basis)(
@@ -161,7 +161,8 @@ function curve2coef(
     G = size(B, 2)
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
-
+    any(isnan.(B)) && error("NaN in B before least squares")
+    
     coef = Array{U}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O

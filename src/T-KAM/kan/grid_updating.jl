@@ -54,7 +54,7 @@ function update_fcn_grid(
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend = l.spline_degree)
     new_coef =
-        l.spline_string == "FFT" ? curve2coef(l.basis_function, x_sort, y, new_grid, τ) :
+        l.spline_string == "FFT" ? curve2coef(l.basis_function, x_sort, y, new_grid, τ; ε=U(ε)) :
         curve2coef(l.basis_function, x_sort, y, new_grid, τ; ε=U(ε))
 
     return new_grid, new_coef

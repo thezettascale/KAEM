@@ -102,14 +102,7 @@ function init_KAN_Generator(
         end
     end
 
-    return KAN_Generator(
-        depth,
-        Φ_functions,
-        layernorms,
-        layernorm_bool,
-        false,
-        x_shape,
-    )
+    return KAN_Generator(depth, Φ_functions, layernorms, layernorm_bool, false, x_shape)
 end
 
 function (gen::KAN_Generator{T,U})(

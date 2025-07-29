@@ -234,7 +234,7 @@ function curve2coef(
 
     B = permutedims(B, [1, 3, 2]) # in_dim x b_size x n_grid
     any(isnan.(B)) && error("NaN in B before least squares")
-    
+
     coef = Array{U}(undef, J, O, G) |> pu
     for i = 1:J
         for o = 1:O

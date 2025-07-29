@@ -46,7 +46,6 @@ function update_model_grid(
     """
 
     z = nothing
-    sampled_bool = false
     if model.update_prior_grid
 
         if model.N_t > 1
@@ -60,9 +59,19 @@ function update_model_grid(
                     temps = temps[2:end],
                     rng = rng,
                 ),
-            )[:, :, :, end]
+            )[
+                :,
+                :,
+                :,
+                end,
+            ]
         elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+                :,
+                :,
+                :,
+                1,
+            ]
         else
             z = first(
                 model.sample_prior(
@@ -75,8 +84,6 @@ function update_model_grid(
                 ),
             )
         end
-
-        sampled_bool = true
 
         # If Cheby or FFT, need to update domain for inverse transform sampling
         if model.prior.fcns_qp[1].spline_string == "FFT" ||
@@ -102,7 +109,7 @@ function update_model_grid(
                     ps.ebm.fcn[symbol_map[i]],
                     st_kan.ebm[symbol_map[i]],
                     z;
-                    ε=model.ε
+                    ε = model.ε,
                 )
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
                 @reset st_kan.ebm[symbol_map[i]].grid = new_grid
@@ -149,34 +156,43 @@ function update_model_grid(
                 temps = temps[2:end],
                 rng = rng,
             ),
-        )[:, :, :, end]
+        )[
+            :,
+            :,
+            :,
+            end,
+        ]
     elseif model.prior.ula || model.MALA
-        z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
+        z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+            :,
+            :,
+            :,
+            1,
+        ]
     else
         z = first(
-            model.sample_prior(
-                model,
-                model.grid_updates_samples,
-                ps,
-                st_kan,
-                st_lux,
-                rng,
-            ),
+            model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng),
         )
     end
 
     z = dropdims(sum(z; dims = 2); dims = 2)
 
     for i = 1:model.lkhood.generator.depth
-        new_grid, new_coef = update_fcn_grid(
-            model.lkhood.generator.Φ_fcns[i],
-            ps.gen.fcn[symbol_map[i]],
-            st_kan.gen[symbol_map[i]],
-            z;
-            ε=model.ε
+
+        if !(
+            model.lkhood.generator.Φ_fcns[i].spline_string == "FFT" ||
+            model.lkhood.generator.Φ_fcns[i].spline_string == "Cheby"
         )
-        @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
-        @reset st_kan.gen[symbol_map[i]].grid = new_grid
+            new_grid, new_coef = update_fcn_grid(
+                model.lkhood.generator.Φ_fcns[i],
+                ps.gen.fcn[symbol_map[i]],
+                st_kan.gen[symbol_map[i]],
+                z;
+                ε = model.ε,
+            )
+            @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
+            @reset st_kan.gen[symbol_map[i]].grid = new_grid
+        end
 
         scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
         model.lkhood.generator.Φ_fcns[i].spline_string == "RBF" &&

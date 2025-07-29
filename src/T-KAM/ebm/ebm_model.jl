@@ -209,7 +209,7 @@ function Lux.initialparameters(
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    layernorm_ps = (a = [zero(T)])
+    layernorm_ps = (a = [zero(T)], b = [zero(T)])
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for

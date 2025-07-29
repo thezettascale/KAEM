@@ -138,33 +138,31 @@ function update_model_grid(
     (!model.update_llhood_grid || model.lkhood.CNN || model.lkhood.SEQ) &&
         return model, T.(ps), st_kan, st_lux
 
-    if !sampled_bool
-        if model.N_t > 1
-            z = first(
-                model.posterior_sampler(
-                    model,
-                    ps,
-                    st_kan,
-                    st_lux,
-                    x;
-                    temps = temps[2:end],
-                    rng = rng,
-                ),
-            )[:, :, :, end]
-        elseif model.prior.ula || model.MALA
-            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
-        else
-            z = first(
-                model.sample_prior(
-                    model,
-                    model.grid_updates_samples,
-                    ps,
-                    st_kan,
-                    st_lux,
-                    rng,
-                ),
-            )
-        end
+    if model.N_t > 1
+        z = first(
+            model.posterior_sampler(
+                model,
+                ps,
+                st_kan,
+                st_lux,
+                x;
+                temps = temps[2:end],
+                rng = rng,
+            ),
+        )[:, :, :, end]
+    elseif model.prior.ula || model.MALA
+        z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[:, :, :, 1]
+    else
+        z = first(
+            model.sample_prior(
+                model,
+                model.grid_updates_samples,
+                ps,
+                st_kan,
+                st_lux,
+                rng,
+            ),
+        )
     end
 
     z = dropdims(sum(z; dims = 2); dims = 2)

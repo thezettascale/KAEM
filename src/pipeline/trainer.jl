@@ -291,7 +291,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             now_time = time() - start_time
             epoch = train_idx == 1 ? 0 : fld(train_idx, num_batches)
 
-            m.verbose && println(
+            t.model.verbose && println(
                 "Epoch: $(epoch), Train Loss: $(train_loss), Test Loss: $(test_loss)",
             )
 

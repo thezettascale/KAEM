@@ -117,7 +117,7 @@ function update_model_grid(
                 if model.prior.fcns_qp[i].spline_string == "RBF"
                     scale =
                         (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
-                    @reset model.prior.fcns_qp[i].basis_function.scale = scale
+                    @reset model.prior.fcns_qp[i].basis_function.scale = scale |> T
                 end
 
                 z = Lux.apply(
@@ -197,7 +197,7 @@ function update_model_grid(
 
             if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
                 scale = (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1)
-                @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale = scale
+                @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale = scale |> T
             end
         end
 

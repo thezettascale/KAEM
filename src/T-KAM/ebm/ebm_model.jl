@@ -22,8 +22,8 @@ include("quadrature.jl")
 using .Quadrature
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Vector{univariate_function{T,U}}
-    layernorms::Vector{Lux.LayerNorm}
+    fcns_qp::Tuple{Vararg{univariate_function{T,U}}}
+    layernorms::Tuple{Vararg{Lux.LayerNorm}}
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
@@ -136,8 +136,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
 
     return EbmModel(
-        functions,
-        layernorms,
+        (functions...,),
+        (layernorms...,),
         layernorm_bool,
         length(widths)-1,
         prior_type,

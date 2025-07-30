@@ -46,8 +46,8 @@ function (prior::GaussianPrior)(
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     scale = T(1 / sqrt(2π))
-    @tullio pdf[q, p, s] := scale * exp(-z[q, p, s]^2 / 2)
-    pdf = T.(pdf)
+    @tullio pdf[q, p, s] := exp(-z[q, p, s]^2 / 2)
+    pdf = scale .* pdf 
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
 end
@@ -60,7 +60,8 @@ function (prior::LogNormalPrior)(
 )::AbstractArray{T} where {T<:half_quant}
     sqrt_2π = T(sqrt(2π))
     denom = z .* sqrt_2π .+ prior.ε
-    @tullio pdf[q, p, s] := exp(-(log(z[q, p, s] + prior.ε))^2 / 2) / denom[q, p, s]
+    z_eps = z .+ prior.ε
+    @tullio pdf[q, p, s] := exp(-(log(z_eps[q, p, s]))^2 / 2) / denom[q, p, s]
     pdf = T.(pdf)
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
@@ -72,9 +73,9 @@ function (prior::LearnableGaussianPrior)(
     π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
-    sqrt_2π = T(sqrt(2π))
-    @tullio pdf[q, p, s] := 1 / (abs(π_σ[q, p] * sqrt_2π + prior.ε) * exp(-(z[q, p, s] - π_μ[q, p]^2) / (2 * (π_σ[q, p]^2) + prior.ε)))
-    pdf = T.(pdf)
+    π_eps = π_σ .* T(sqrt(2π)) .+ prior.ε
+    denom_eps = 2 .* π_σ .^ 2 .+ prior.ε
+    @tullio pdf[q, p, s] := 1 / (abs(π_eps[p]) * exp(-(z[q, p, s] - π_μ[p]^2) / denom_eps[p]))
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
 end

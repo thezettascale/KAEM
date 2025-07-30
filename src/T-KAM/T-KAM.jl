@@ -213,10 +213,11 @@ function (model::T_KAM{T,U})(
         Lux states of the prior.
         Lux states of the likelihood.
     """
-    ps = ps .|> half_quant
+    ps = ps .|> T
     z, st_ebm = model.sample_prior(model, num_samples, ps, st_kan, st_lux, rng)
     x̂, st_gen = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
-    return model.lkhood.output_activation(x̂), st_ebm, st_gen
+    noise = model.lkhood.σ_llhood .* randn(rng, T, size(x̂)) |> pu
+    return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
 end
 
 end

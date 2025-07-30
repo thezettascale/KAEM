@@ -67,7 +67,7 @@ test:
 	@chmod +x scripts/run_tests.sh
 	@tmux kill-session -t tkam_test 2>/dev/null || true
 	@tmux new-session -d -s tkam_test -n testing
-	@tmux send-keys -t tkam_test:testing "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_tests.sh 2>&1 | tee logs/julia_tests_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_tests.sh 2>&1 | tee logs/julia_tests_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@tmux send-keys -t tkam_test:testing "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_tests.sh 2>&1 | tee logs/julia_tests_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_tests.sh 2>&1 | tee logs/julia_tests_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t tkam_test" Enter
 	@echo "Test session started in tmux. Attach with: tmux attach-session -t tkam_test"
 	@echo "Log file: logs/julia_tests_$(shell date +%Y%m%d_%H%M%S).log"
 
@@ -76,7 +76,7 @@ bench:
 	@chmod +x scripts/run_benchmarks.sh
 	@tmux kill-session -t tkam_bench 2>/dev/null || true
 	@tmux new-session -d -s tkam_bench -n benchmarking
-	@tmux send-keys -t tkam_bench:benchmarking "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_benchmarks.sh 2>&1 | tee logs/julia_benchmarks_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_benchmarks.sh 2>&1 | tee logs/julia_benchmarks_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@tmux send-keys -t tkam_bench:benchmarking "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_benchmarks.sh 2>&1 | tee logs/julia_benchmarks_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_benchmarks.sh 2>&1 | tee logs/julia_benchmarks_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t tkam_bench" Enter
 	@echo "Benchmark session started in tmux. Attach with: tmux attach-session -t tkam_bench"
 	@echo "Log file: logs/julia_benchmarks_$(shell date +%Y%m%d_%H%M%S).log"
 
@@ -86,9 +86,9 @@ train:
 	@tmux kill-session -t tkam_train 2>/dev/null || true
 	@tmux new-session -d -s tkam_train -n training
 ifeq ($(MODE),thermo)
-	@tmux send-keys -t tkam_train:training "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main_thermodynamic.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main_thermodynamic.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@tmux send-keys -t tkam_train:training "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main_thermodynamic.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main_thermodynamic.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t tkam_train" Enter
 else
-	@tmux send-keys -t tkam_train:training "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@tmux send-keys -t tkam_train:training "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t tkam_train" Enter
 endif
 	@echo "Training session started in tmux. Attach with: tmux attach-session -t tkam_train"
 ifeq ($(MODE),thermo)
@@ -109,7 +109,7 @@ train-sequential:
 	@echo "Starting sequential training with config: $(CONFIG)"
 	@tmux kill-session -t tkam_sequential 2>/dev/null || true
 	@tmux new-session -d -s tkam_sequential -n sequential
-	@tmux send-keys -t tkam_sequential:sequential "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; fi" Enter
+	@tmux send-keys -t tkam_sequential:sequential "export LD_LIBRARY_PATH=\$$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:\$$LD_LIBRARY_PATH && if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_sequential_training.sh $(CONFIG) 2>&1 | tee logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t tkam_sequential" Enter
 	@echo "Sequential training session started in tmux. Attach with: tmux attach-session -t tkam_sequential"
 	@echo "Log file: logs/sequential_training_$(shell date +%Y%m%d_%H%M%S).log"
 

@@ -36,7 +36,7 @@ function log_mix_pdf(
 )::AbstractArray{T} where {T<:half_quant}
     @tullio lp[q, p, s] := f[q, p, s] + log_απ[q, p, s] - log_Z[q, p]
     lp = lp .+ reg
-    return @tullio logprior[s] := lp[q, p, s] 
+    return @tullio logprior[s] := lp[q, p, s]
 end
 
 end

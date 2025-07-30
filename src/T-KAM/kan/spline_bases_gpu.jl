@@ -203,7 +203,8 @@ function coef2curve_FFT(
 )::AbstractArray{T} where {T<:half_quant}
     even, odd = b(x_eval, grid, σ)
     even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
-    @tullio y[i, o, s] := even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
+    @tullio y[i, o, s] :=
+        even[i, g, s] * even_coef[i, o, g] + odd[i, g, s] * odd_coef[i, o, g]
     return y
 end
 

@@ -47,7 +47,7 @@ function (prior::GaussianPrior)(
 )::AbstractArray{T} where {T<:half_quant}
     scale = T(1 / sqrt(2π))
     @tullio pdf[q, p, s] := exp(-z[q, p, s]^2 / 2)
-    pdf = scale .* pdf 
+    pdf = scale .* pdf
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
 end
@@ -75,7 +75,8 @@ function (prior::LearnableGaussianPrior)(
 )::AbstractArray{T} where {T<:half_quant}
     π_eps = π_σ .* T(sqrt(2π)) .+ prior.ε
     denom_eps = 2 .* π_σ .^ 2 .+ prior.ε
-    @tullio pdf[q, p, s] := 1 / (abs(π_eps[p]) * exp(-(z[q, p, s] - π_μ[p]^2) / denom_eps[p]))
+    @tullio pdf[q, p, s] :=
+        1 / (abs(π_eps[p]) * exp(-(z[q, p, s] - π_μ[p]^2) / denom_eps[p]))
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
 end

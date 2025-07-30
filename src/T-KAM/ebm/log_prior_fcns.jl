@@ -73,10 +73,10 @@ function (lp::LogPriorUnivariate)(
     log_π0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
 
     # Pre-allocate
-    log_p = dropdims(sum(z .* zero(T); dims = (1, 2)); dims = (1, 2))
+    log_p = zeros(T, S) |> pu
     log_Z =
         lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
-        dropdims(sum(z .* zero(T); dims = 3); dims = 3)
+        zeros(T, Q, P) |> pu
 
     for q = 1:Q
         f, st = ebm(ps, st_kan, st_lyrnorm, z[q, :, :])
@@ -122,7 +122,7 @@ function (lp::LogPriorMix)(
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     log_Z =
         lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
-        dropdims(sum(z .* zero(T); dims = 3); dims = 3)
+        zeros(T, Q, P) |> pu
 
     log_p = log_mix_pdf(f, log_απ, log_Z, ebm.λ * sum(abs.(ps.dist.α)), Q, P, S)
     return log_p, st_lyrnorm

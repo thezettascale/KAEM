@@ -247,7 +247,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         @reset t.st_lux.gen = st_gen
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
-        t.model.verbose && println("Iter: $(train_idx), Grad norm: $(norm(G))")
+        t.model.verbose && println("Iter: $(train_idx), Loss: $(t.loss)")
         return G
     end
 

@@ -19,7 +19,12 @@ function sample_thermo(
     x::AbstractArray{T};
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,AbstractArray{T}} where {T<:half_quant}
+)::Tuple{
+    AbstractArray{T},
+    AbstractArray{T},
+    NamedTuple,
+    AbstractArray{T},
+} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
     z, st_lux = model.posterior_sampler(
         model,

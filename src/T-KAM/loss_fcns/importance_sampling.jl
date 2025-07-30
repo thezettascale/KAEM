@@ -153,8 +153,7 @@ function grad_importance_llhood(
     return ∇
 end
 
-struct ImportanceLoss
-end
+struct ImportanceLoss end
 
 function (l::ImportanceLoss)(
     ps::ComponentArray{T},

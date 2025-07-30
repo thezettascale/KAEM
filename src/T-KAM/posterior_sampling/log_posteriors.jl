@@ -189,8 +189,16 @@ function autoMALA_value_and_grad_4D(
         )
     end
 
-    logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos_value_4D(z, x, temps, model, ps, st_kan, st_lux, noise)
+    logpos, st_ebm, st_gen = CUDA.@fastmath autoMALA_logpos_value_4D(
+        z,
+        x,
+        temps,
+        model,
+        ps,
+        st_kan,
+        st_lux,
+        noise,
+    )
     return logpos, ∇z, st_ebm, st_gen
 end
 
@@ -206,8 +214,16 @@ function autoMALA_logpos(
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
     lp, st_ebm = model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    ll, st_gen =
-        log_likelihood_MALA(z, x, model.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = model.ε)
+    ll, st_gen = log_likelihood_MALA(
+        z,
+        x,
+        model.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux.gen,
+        noise;
+        ε = model.ε,
+    )
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
 end
 

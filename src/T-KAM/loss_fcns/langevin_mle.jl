@@ -69,7 +69,17 @@ function closure(
     noise::AbstractArray{T};
 )::T where {T<:half_quant}
     return first(
-        marginal_llhood(ps, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen, noise),
+        marginal_llhood(
+            ps,
+            z_posterior,
+            z_prior,
+            x,
+            model,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+            noise,
+        ),
     )
 end
 
@@ -87,7 +97,18 @@ function grad_langevin_llhood(
 )::AbstractArray{T} where {T<:half_quant}
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f = p -> closure(p, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen, noise)
+        f =
+            p -> closure(
+                p,
+                z_posterior,
+                z_prior,
+                x,
+                model,
+                st_kan,
+                st_lux_ebm,
+                st_lux_gen,
+                noise,
+            )
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
         CUDA.@fastmath Enzyme.autodiff(

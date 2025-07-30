@@ -110,7 +110,7 @@ function (b::RBF_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     σ = b.scale .* σ
-    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / σ[d])^2)
+    @tullio B[i, g, s] := exp(-((x[i, s] - grid[i, g]) / σ[d])^2 / 2)
     return B
 end
 

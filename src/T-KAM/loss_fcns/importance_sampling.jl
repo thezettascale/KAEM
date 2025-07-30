@@ -45,7 +45,7 @@ function sample_importance(
         reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
         dims = 2,
     )
-    return z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs
+    return z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise
 end
 
 function marginal_llhood(
@@ -58,13 +58,13 @@ function marginal_llhood(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    zero_vec::AbstractArray{T},
+    noise::AbstractArray{T},
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     B, S = size(x)[end], size(z)[end]
     logprior, st_lux_ebm = m.log_prior(z, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
     logllhood, st_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, zero_vec; ε = m.ε)
+        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, noise; ε = m.ε)
 
     marginal_llhood =
         loss_accum(weights_resampled, logprior, logllhood, resampled_idxs, B, S)
@@ -84,7 +84,7 @@ function closure(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    zero_vec::AbstractArray{T},
+    noise::AbstractArray{T},
 )::T where {T<:half_quant}
     return first(
         marginal_llhood(
@@ -97,7 +97,7 @@ function closure(
             st_kan,
             st_lux_ebm,
             st_lux_gen,
-            zero_vec,
+            noise,
         ),
     )
 end
@@ -113,7 +113,7 @@ function grad_importance_llhood(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    zero_vec::AbstractArray{T},
+    noise::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
@@ -128,7 +128,7 @@ function grad_importance_llhood(
                 st_kan,
                 st_lux_ebm,
                 st_lux_gen,
-                zero_vec,
+                noise,
             )
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
@@ -145,7 +145,7 @@ function grad_importance_llhood(
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
-            Enzyme.Const(zero_vec),
+            Enzyme.Const(noise),
         )
     end
 
@@ -153,7 +153,6 @@ function grad_importance_llhood(
 end
 
 struct ImportanceLoss
-    zero_vec::AbstractArray{half_quant}
 end
 
 function (l::ImportanceLoss)(
@@ -167,7 +166,7 @@ function (l::ImportanceLoss)(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs =
+    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise =
         sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
 
     ∇ = grad_importance_llhood(
@@ -181,7 +180,7 @@ function (l::ImportanceLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
-        l.zero_vec,
+        noise,
     )
 
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
@@ -194,7 +193,7 @@ function (l::ImportanceLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
-        l.zero_vec,
+        noise,
     )
 
     return loss, ∇, st_lux_ebm, st_lux_gen

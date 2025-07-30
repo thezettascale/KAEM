@@ -73,7 +73,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     max_samples = max(model.IS_samples, batch_size)
 
     # Defaults
-    @reset model.loss_fcn = ImportanceLoss(zero_vec)
+    @reset model.loss_fcn = ImportanceLoss()
     @reset model.posterior_sampler = initialize_ULA_sampler(; η = η_init, N = num_steps)
 
     if model.N_t > 1

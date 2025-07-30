@@ -22,7 +22,7 @@ function log_alpha(
     P::Int,
     S::Int,
 )::AbstractArray{T} where {T<:half_quant}
-    return log(log_απ .+ alpha .+ ε)
+    return log.(log_απ .+ alpha .+ ε)
 end
 
 function log_mix_pdf(

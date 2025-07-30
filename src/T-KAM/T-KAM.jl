@@ -216,8 +216,7 @@ function (model::T_KAM{T,U})(
     ps = ps .|> half_quant
     z, st_ebm = model.sample_prior(model, num_samples, ps, st_kan, st_lux, rng)
     x̂, st_gen = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
-    noise = model.lkhood.σ_llhood * randn(rng, size(x̂)) |> pu
-    return model.lkhood.output_activation(x̂ .+ noise), st_ebm, st_gen
+    return model.lkhood.output_activation(x̂), st_ebm, st_gen
 end
 
 end

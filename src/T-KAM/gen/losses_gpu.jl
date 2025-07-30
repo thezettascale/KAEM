@@ -14,7 +14,7 @@ function cross_entropy_IS(
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
     x̂ = x̂ .+ ε
-    @tullio ce[d, t, b, s] := log(x̂[d, t, s]) * x[d, t, b]
+    @tullio ce[d, t, b, s] := log(x̂[d, t, s, b]) * x[d, t, b]
     @tullio ll[b, s] := ce[d, t, b, s]
     return ll ./ size(x̂, 1) ./ scale
 end
@@ -25,7 +25,7 @@ function l2_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio l2[w, h, c, b, s] := x[w, h, c, b] - x̂[w, h, c, s]
+    @tullio l2[w, h, c, b, s] := x[w, h, c, b] - x̂[w, h, c, s, b]
     @tullio ll[b, s] := l2[w, h, c, b, s] ^ 2
     return - ll ./ scale
 end

@@ -2,6 +2,8 @@ module Attention
 
 export scaled_dot_product_attention
 
+using ..Utils
+
 using CUDA, ParallelStencil
 using NNlib: softmax
 

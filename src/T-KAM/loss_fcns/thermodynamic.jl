@@ -19,7 +19,7 @@ function sample_thermo(
     x::AbstractArray{T};
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple,AbstractArray{T}} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
     z, st_lux = model.posterior_sampler(
         model,
@@ -31,7 +31,8 @@ function sample_thermo(
         rng = rng,
     )
     Δt = pu(temps[2:end] - temps[1:(end-1)])
-    return z, Δt, st_lux
+    noise = randn(rng, T, size(z)) |> pu
+    return z, Δt, st_lux, noise
 end
 
 function marginal_llhood(
@@ -43,7 +44,8 @@ function marginal_llhood(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     Q, P, S, num_temps = size(z_posterior)
     log_ss = zero(T)
@@ -56,7 +58,8 @@ function marginal_llhood(
         model.lkhood,
         ps.gen,
         st_kan.gen,
-        st_lux_gen;
+        st_lux_gen,
+        reshape(noise, Q, P, S*num_temps);
         ε = model.ε,
     )
     log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
@@ -80,7 +83,8 @@ function marginal_llhood(
         model.lkhood,
         ps.gen,
         st_kan.gen,
-        st_lux_gen;
+        st_lux_gen,
+        noise[:, :, :, 1];
         ε = model.ε,
     )
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
@@ -98,7 +102,8 @@ function closure(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::T where {T<:half_quant}
     return first(
         marginal_llhood(
@@ -111,6 +116,7 @@ function closure(
             st_kan,
             st_lux_ebm,
             st_lux_gen,
+            noise,
         ),
     )
 end
@@ -125,7 +131,8 @@ function grad_thermo_llhood(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
@@ -140,6 +147,7 @@ function grad_thermo_llhood(
                 st_kan,
                 st_lux_ebm,
                 st_lux_gen,
+                noise,
             )
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
@@ -156,6 +164,7 @@ function grad_thermo_llhood(
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
+            Enzyme.Const(noise),
         )
     end
 
@@ -174,7 +183,7 @@ function (l::ThermodynamicLoss)(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, Δt, st_lux = sample_thermo(
+    z_posterior, Δt, st_lux, noise = sample_thermo(
         ps,
         st_kan,
         Lux.testmode(st_lux),
@@ -198,6 +207,7 @@ function (l::ThermodynamicLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
     )
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
@@ -209,6 +219,7 @@ function (l::ThermodynamicLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

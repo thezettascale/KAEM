@@ -111,6 +111,7 @@ function (sampler::autoMALA_sampler)(
     log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
     log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N)) |> pu
+    ll_noise = randn(rng, T, model.lkhood.x_shape..., S, sampler.N) |> pu
 
     num_acceptances = zeros(Int, S, num_temps) |> pu
     mean_η = zeros(U, S, num_temps) |> pu
@@ -194,7 +195,8 @@ function (sampler::autoMALA_sampler)(
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_lux.gen;
+                        st_lux.gen,
+                        ll_noise[:, :, :, i];
                         ε = model.ε,
                     )
                     ll_t1, st_gen = log_likelihood_MALA(
@@ -203,7 +205,8 @@ function (sampler::autoMALA_sampler)(
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_gen;
+                        st_gen,
+                        ll_noise[:, :, :, i];
                         ε = model.ε,
                     )
                     log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)

@@ -33,6 +33,7 @@ function sample_importance(
     NamedTuple,
     AbstractArray{T},
     AbstractArray{Int},
+    AbstractArray{T},
 } where {T<:half_quant,U<:full_quant}
     z, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
     noise = pu(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))

@@ -18,9 +18,11 @@ function sample_langevin(
     model::T_KAM{T,full_quant},
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple,AbstractArray{T}} where {T<:half_quant}
     z, st_lux, = model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng)
-    return z[:, :, :, 1], st_lux
+    z = z[:, :, :, 1]
+    noise = randn(rng, T, size(z)) |> pu
+    return z, st_lux, noise
 end
 
 function marginal_llhood(
@@ -31,7 +33,8 @@ function marginal_llhood(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
 
     logprior_pos, st_ebm =
@@ -44,6 +47,7 @@ function marginal_llhood(
         st_kan.gen,
         st_lux_gen;
         ε = model.ε,
+        noise = noise,
     )
 
     logprior, st_ebm = model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
@@ -61,10 +65,11 @@ function closure(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::T where {T<:half_quant}
     return first(
-        marginal_llhood(ps, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen),
+        marginal_llhood(ps, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen, noise),
     )
 end
 
@@ -77,11 +82,12 @@ function grad_langevin_llhood(
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f = p -> closure(p, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen)
+        f = p -> closure(p, z_posterior, z_prior, x, model, st_kan, st_lux_ebm, st_lux_gen, noise)
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
         CUDA.@fastmath Enzyme.autodiff(
@@ -96,6 +102,7 @@ function grad_langevin_llhood(
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
+            Enzyme.Const(noise),
         )
     end
 
@@ -114,7 +121,7 @@ function (l::LangevinLoss)(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, st_new =
+    z_posterior, st_new, noise =
         sample_langevin(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
     st_lux_ebm, st_lux_gen = st_new.ebm, st_new.gen
     z_prior, st_lux_ebm =
@@ -130,6 +137,7 @@ function (l::LangevinLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
     )
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
@@ -140,6 +148,7 @@ function (l::LangevinLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

@@ -394,7 +394,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     idx = length(t.model.lkhood.x_shape) + 1
     ps_hq = half_quant.(t.ps)
     for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-        batch, t.st = CUDA.@fastmath t.model(
+        batch, st_ebm, st_gen = CUDA.@fastmath t.model(
             ps_hq,
             t.st_kan,
             Lux.testmode(t.st_lux),

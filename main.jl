@@ -33,7 +33,7 @@ if dataset == "CIFAR10" || dataset == "SVHN"
     t = init_trainer(rng, conf, dataset; rng = rng)
     train!(t)
 else
-    for prior_idx in [1,2,3,4]
+    for prior_idx in [2,3,1,4]
         commit!(conf, "EbmModel", "π_0", prior_type[prior_idx])
         for base_idx in [5, 6]
             commit!(conf, "EbmModel", "spline_function", bases[base_idx])

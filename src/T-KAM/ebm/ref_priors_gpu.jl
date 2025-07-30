@@ -59,7 +59,8 @@ function (prior::LogNormalPrior)(
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
     sqrt_2π = T(sqrt(2π))
-    @tullio pdf[q, p, s] := exp(-(log(z[q, p, s] + prior.ε))^2 / 2) / (z[q, p, s] * sqrt_2π + prior.ε)
+    denom = z .* sqrt_2π .+ prior.ε
+    @tullio pdf[q, p, s] := exp(-(log(z[q, p, s] + prior.ε))^2 / 2) / denom[q, p, s]
     pdf = T.(pdf)
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
@@ -84,9 +85,9 @@ function (prior::EbmPrior)(
     π_σ::AbstractArray{T};
     log_bool::Bool = false,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio log_pdf[q, p, s] := 0 * z[q, p, s] + 1
-    log_bool && return stable_log(log_pdf, prior.ε)
-    return log_pdf
+    log_pdf = zero(T) .* z
+    log_bool && return log_pdf
+    return log_pdf .+ one(T)
 end
 
 const prior_map = Dict(

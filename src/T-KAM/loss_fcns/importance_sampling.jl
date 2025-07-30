@@ -130,8 +130,7 @@ function grad_importance_llhood(
                 st_lux_gen,
                 zero_vec,
             )
-        f_grad = CUDA.@fastmath Zygote.gradient(f, ps)
-        @. ∇ = first(f_grad)
+        ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
         CUDA.@fastmath Enzyme.autodiff(
             Enzyme.set_runtime_activity(Enzyme.Reverse),

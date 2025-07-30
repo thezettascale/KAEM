@@ -63,8 +63,7 @@ function unadjusted_logpos_grad(
                 st_lux,
                 prior_sampling_bool,
             )
-        f_grad = CUDA.@fastmath Zygote.gradient(f, z)
-        @. ∇z = first(f_grad)
+        ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(
             Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -161,8 +160,7 @@ function autoMALA_value_and_grad_4D(
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f = z_i -> autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux)
-        f_grad = CUDA.@fastmath Zygote.gradient(f, z)
-        @. ∇z = first(f_grad)
+        ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(
             Enzyme.set_runtime_activity(Enzyme.Reverse),
@@ -229,8 +227,7 @@ function autoMALA_value_and_grad(
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux)
-        f_grad = CUDA.@fastmath Zygote.gradient(f, z)
-        @. ∇z = first(f_grad)
+        ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(
             Enzyme.set_runtime_activity(Enzyme.Reverse),

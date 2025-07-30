@@ -13,7 +13,8 @@ function cross_entropy_IS(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio ce[d, t, s, b] := log(x̂[d, t, s, b] + ε) * x[d, t, b]
+    @. x̂ = x̂ + ε
+    @tullio ce[d, t, s, b] := log(x̂[d, t, s, b]) * x[d, t, b]
     @tullio ll[b, s] := ce[d, t, s, b] 
     return ll ./ size(x̂, 1) ./ scale
 end
@@ -49,7 +50,8 @@ function cross_entropy_MALA(
     ε::T,
     scale::T,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio ce[d, t, b] := log(x̂[d, t, b] + ε) * x[d, t, b]
+    @. x̂ = x̂ + ε
+    @tullio ce[d, t, b] := log(x̂[d, t, b]) * x[d, t, b]
     @tullio ll[b] := ce[d, t, b] 
     return ll ./ size(x, 1) ./ scale
 end

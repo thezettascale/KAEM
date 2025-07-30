@@ -11,7 +11,7 @@ using KernelAbstractions, Tullio
 
 function log_norm(norm::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
     @tullio Z[q, p] := norm[q, p, g]
-    return @tullio log_Z[q, p] := log(Z[q, p] + ε)
+    return log.(Z .+ ε)
 end
 
 function log_alpha(
@@ -22,7 +22,7 @@ function log_alpha(
     P::Int,
     S::Int,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio log_π[q, p, s] := log(log_απ[q, 1, s] + alpha[q, p] + ε)
+    @tullio log_π[q, p, s] := log(log_απ[q, d, s] + alpha[q, p] + ε)
     return log_π
 end
 
@@ -35,7 +35,8 @@ function log_mix_pdf(
     P::Int,
     S::Int,
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio f[q, p, s] = f[q, p, s] + log_απ[q, p, s] - log_Z[q, p] + reg
+    @tullio f[q, p, s] = f[q, p, s] + log_απ[q, p, s] - log_Z[q, p]
+    f = f .+ reg
     return @tullio logprior[s] := f[q, p, s] 
 end
 

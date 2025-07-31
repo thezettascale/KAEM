@@ -246,7 +246,7 @@ function curve2coef(
         end
     end
 
-    # coef = ifelse.(isnan.(coef), zero(full_quant), coef) |> pu
+    replace!(coef, NaN => zero(full_quant))
     return T.(coef)
 end
 

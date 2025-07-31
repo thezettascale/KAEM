@@ -61,9 +61,7 @@ struct B_spline_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct RBF_basis <: Lux.AbstractLuxLayer
-    scale::half_quant
-end
+struct RBF_basis <: Lux.AbstractLuxLayer end
 
 struct RSWAF_basis <: Lux.AbstractLuxLayer end
 
@@ -128,10 +126,9 @@ end
     x::AbstractArray{T},
     grid::AbstractArray{T},
     σ::AbstractArray{T},
-    scale::T,
 )::Nothing where {T<:half_quant}
     diff = x[i, s] - grid[i, g]
-    B[i, g, s] = exp(-(diff / scale * σ[1]) ^ 2 / 2)
+    B[i, g, s] = exp(-(diff / σ[1]) ^ 2 / 2)
     return nothing
 end
 
@@ -142,7 +139,7 @@ function (b::RBF_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
-    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ, b.scale)
+    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ)
     return B
 end
 

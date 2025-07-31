@@ -46,9 +46,7 @@ struct B_spline_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct RBF_basis <: Lux.AbstractLuxLayer
-    scale::half_quant
-end
+struct RBF_basis <: Lux.AbstractLuxLayer end
 
 struct RSWAF_basis <: Lux.AbstractLuxLayer end
 
@@ -109,7 +107,6 @@ function (b::RBF_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
-    σ = b.scale .* σ
     @tullio B[i, g, s] := exp(-(((x[i, s] - grid[i, g]) / σ[d])^2) / 2)
     return B
 end

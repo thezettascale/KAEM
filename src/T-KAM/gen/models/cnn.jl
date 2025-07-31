@@ -131,7 +131,7 @@ function (gen::CNN_Generator)(
                 z,
                 ps.batchnorm[symbol_map[i]],
                 st_lux.batchnorm[symbol_map[i]],
-            ) : (z, st_lux.batchnorm[symbol_map[i]])
+            ) : (z, nothing)
         (gen.batchnorm_bool && i < gen.depth) &&
             (gen.batchnorm_bool && i < gen.depth) &&
             @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new

@@ -43,12 +43,12 @@ function log_likelihood_IS(
         The unnormalized log-likelihood.
     """
     B, S = size(x)[end], size(z)[end]
-    x̂, st = lkhood.generator(ps, st_kan, st_lux, z)
+    x̂, st_lux = lkhood.generator(ps, st_kan, st_lux, z)
     noise = lkhood.σ_llhood .* noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
 
     ll = IS_loss(x, x̂_noised, ε, 2*lkhood.σ_llhood^2, B, S, lkhood.SEQ)
-    return ll, st
+    return ll, st_lux
 end
 
 function log_likelihood_MALA(

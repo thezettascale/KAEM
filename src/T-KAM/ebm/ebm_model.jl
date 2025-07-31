@@ -187,11 +187,15 @@ function (ebm::EbmModel{T,U})(
 
         z, st_lyrnorm_new =
             (ebm.layernorm_bool && i < ebm.depth) ?
-            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
-            (z, st_lyrnorm)
+            Lux.apply(
+                ebm.layernorms[i],
+                z,
+                ps.layernorm[symbol_map[i]],
+                st_lyrnorm[symbol_map[i]],
+            ) : (z, st_lyrnorm[symbol_map[i]])
 
         (ebm.layernorm_bool && i < ebm.depth) &&
-            @ignore_derivatives @reset st_lyrnorm[i] = st_lyrnorm_new
+            @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)

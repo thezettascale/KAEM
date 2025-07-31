@@ -70,7 +70,7 @@ function marginal_llhood(
     marginal_llhood =
         loss_accum(weights_resampled, logprior, logllhood, resampled_idxs, B, S)
 
-    return -(mean(sum(marginal_llhood, dims = 2)) - ex_prior)*m.loss_scaling,
+    return -(mean(marginal_llhood) - ex_prior)*m.loss_scaling,
     st_lux_ebm,
     st_lux_gen
 end

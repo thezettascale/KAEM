@@ -40,7 +40,7 @@ function loss_accum(
         logllhood,
         resampled_idxs,
     )
-    return marginal_llhood
+    return sum(marginal_llhood; dims = 2)
 end
 
 end

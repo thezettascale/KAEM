@@ -4,6 +4,8 @@ export loss_accum
 
 using ..Utils
 
+using CUDA, KernelAbstractions, Tullio
+
 function loss_accum(
     weights_resampled::AbstractArray{T},
     logprior::AbstractArray{T},
@@ -14,7 +16,8 @@ function loss_accum(
 )::AbstractArray{T} where {T<:half_quant}
     lp = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
     ll = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-    return weights_resampled .* (lp' .+ ll)
+    @tullio out[b] := weights_resampled[b, s] * (lp[s, b] + ll[b, s])
+    return out
 end
 
 end

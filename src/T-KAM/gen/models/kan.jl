@@ -97,8 +97,8 @@ function init_KAN_Generator(
         )
         push!(Φ_functions, initialize_function(widths[i], widths[i+1], base_scale))
 
-        if (layernorm_bool && i < depth)
-            push!(layernorms, Lux.LayerNorm(widths[i+1]))
+        if layernorm_bool
+            push!(layernorms, Lux.LayerNorm(widths[i]))
         end
     end
 
@@ -136,19 +136,19 @@ function (gen::KAN_Generator{T,U})(
 
     # KAN functions
     for i = 1:gen.depth
-        z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
-        z = dropdims(sum(z, dims = 1); dims = 1)
-
         z, st_lyrnorm_new =
-            (gen.layernorm_bool && i < gen.depth) ?
+            gen.layernorm_bool ?
             Lux.apply(
                 gen.layernorms[i],
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
             ) : (z, nothing)
-        (gen.layernorm_bool && i < gen.depth) &&
+        gen.layernorm_bool &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+
+        z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z = dropdims(sum(z, dims = 1); dims = 1)
     end
 
     return reshape(z, gen.x_shape..., num_samples), st_lyrnorm

@@ -45,9 +45,9 @@ function marginal_llhood(
         model.lkhood,
         ps.gen,
         st_kan.gen,
-        st_lux_gen;
+        st_lux_gen,
+        noise;
         ε = model.ε,
-        noise = noise,
     )
 
     logprior, st_ebm = model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)

@@ -171,7 +171,9 @@ function autoMALA_value_and_grad_4D(
     noise = randn(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f = z_i -> autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux, noise)
+        f =
+            z_i ->
+                autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux, noise)
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(

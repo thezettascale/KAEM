@@ -121,8 +121,8 @@ function get_gausslegendre(
         (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
     if no_grid
-        a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> pu
-        b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> pu
+        a = fill(half_quant(first(ebm.prior_domain)), size(a)) |> pu
+        b = fill(half_quant(last(ebm.prior_domain)), size(b)) |> pu
     end
 
     nodes, weights = pu(ebm.nodes), pu(ebm.weights)

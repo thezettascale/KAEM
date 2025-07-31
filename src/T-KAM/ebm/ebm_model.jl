@@ -39,6 +39,7 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     ula::Bool
     mixture_model::Bool
     λ::T
+    prior_domain::Tuple{T,T}
 end
 
 function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
@@ -73,7 +74,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     mixture_model = parse(Bool, retrieve(conf, "EbmModel", "mixture_model"))
     widths = mixture_model ? reverse(widths) : widths
 
-    grid_range_first = Dict(
+    prior_domain = Dict(
         "ebm" => grid_range,
         "learnable_gaussian" => grid_range,
         "lognormal" => [0, 4] .|> half_quant,
@@ -95,8 +96,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             ) .* (one(full_quant) / √(full_quant(widths[i])))
         )
 
-        grid_range_i = i == 1 ? grid_range_first : grid_range
-
         func = init_function(
             widths[i],
             widths[i+1];
@@ -105,7 +104,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             spline_function = spline_function,
             grid_size = grid_size,
             grid_update_ratio = grid_update_ratio,
-            grid_range = Tuple(grid_range_i),
+            grid_range = Tuple(grid_range),
             ε_scale = ε_scale,
             σ_base = base_scale,
             σ_spline = σ_spline,
@@ -115,8 +114,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
         push!(functions, func)
 
-        if (layernorm_bool && i < length(widths)-1)
-            push!(layernorms, Lux.LayerNorm(widths[i+1]))
+        if layernorm_bool
+            push!(layernorms, Lux.LayerNorm(widths[i]))
         end
     end
 
@@ -153,6 +152,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         ula,
         mixture_model,
         reg,
+        Tuple(prior_domain),
     )
 end
 
@@ -179,14 +179,8 @@ function (ebm::EbmModel{T,U})(
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
 
     for i = 1:ebm.depth
-        z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
-
-        z =
-            (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
-            dropdims(sum(z, dims = 1); dims = 1)
-
         z, st_lyrnorm_new =
-            (ebm.layernorm_bool && i < ebm.depth) ?
+            ebm.layernorm_bool ?
             Lux.apply(
                 ebm.layernorms[i],
                 z,
@@ -194,8 +188,13 @@ function (ebm::EbmModel{T,U})(
                 st_lyrnorm[symbol_map[i]],
             ) : (z, nothing)
 
-        (ebm.layernorm_bool && i < ebm.depth) &&
+        ebm.layernorm_bool &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+
+        z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z =
+            (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
+            dropdims(sum(z, dims = 1); dims = 1)
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
@@ -213,7 +212,7 @@ function Lux.initialparameters(
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
-            i = 1:(prior.depth-1)
+            i = 1:prior.depth
         )
     end
 
@@ -240,7 +239,7 @@ function Lux.initialstates(
     if prior.layernorm_bool && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
-            i = 1:(prior.depth-1)
+            i = 1:prior.depth
         )
     end
 

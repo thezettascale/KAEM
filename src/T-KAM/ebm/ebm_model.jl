@@ -96,6 +96,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             ) .* (one(full_quant) / √(full_quant(widths[i])))
         )
 
+        grid_range_i = i == 1 ? prior_domain : grid_range
+
         func = init_function(
             widths[i],
             widths[i+1];
@@ -104,7 +106,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             spline_function = spline_function,
             grid_size = grid_size,
             grid_update_ratio = grid_update_ratio,
-            grid_range = Tuple(grid_range),
+            grid_range = Tuple(grid_range_i),
             ε_scale = ε_scale,
             σ_base = base_scale,
             σ_spline = σ_spline,
@@ -114,7 +116,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
         push!(functions, func)
 
-        if layernorm_bool
+        if layernorm_bool && i != 1
             push!(layernorms, Lux.LayerNorm(widths[i]))
         end
     end
@@ -180,15 +182,15 @@ function (ebm::EbmModel{T,U})(
 
     for i = 1:ebm.depth
         z, st_lyrnorm_new =
-            ebm.layernorm_bool ?
+            (ebm.layernorm_bool && i != 1) ?
             Lux.apply(
-                ebm.layernorms[i],
+                ebm.layernorms[i-1],
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
             ) : (z, nothing)
 
-        ebm.layernorm_bool &&
+        (ebm.layernorm_bool && i != 1) &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
 
         z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
@@ -212,7 +214,7 @@ function Lux.initialparameters(
     if prior.layernorm_bool && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
-            i = 1:prior.depth
+            i = 1:length(prior.layernorms)
         )
     end
 
@@ -239,7 +241,7 @@ function Lux.initialstates(
     if prior.layernorm_bool && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
-            i = 1:prior.depth
+            i = 1:length(prior.layernorms)
         )
     end
 

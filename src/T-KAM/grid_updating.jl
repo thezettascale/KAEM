@@ -105,9 +105,9 @@ function update_model_grid(
             z = reshape(z, P, Q*B)
 
             for i = 1:model.prior.depth
-                if model.prior.layernorm_bool
+                if model.prior.layernorm_bool && i != 1
                     z, st_ebm = Lux.apply(
-                        model.prior.layernorms[i],
+                        model.prior.layernorms[i-1],
                         z,
                         ps.ebm.layernorm[symbol_map[i]],
                         st_lux.ebm[symbol_map[i]],

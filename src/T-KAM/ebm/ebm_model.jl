@@ -192,7 +192,7 @@ function (ebm::EbmModel{T,U})(
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
-            ) : (z, st_lyrnorm[symbol_map[i]])
+            ) : (z, nothing)
 
         (ebm.layernorm_bool && i < ebm.depth) &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new

@@ -146,7 +146,7 @@ function (gen::KAN_Generator{T,U})(
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
-            ) : (z, st_lyrnorm[symbol_map[i]])
+            ) : (z, nothing)
         (gen.layernorm_bool && i < gen.depth) &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
     end

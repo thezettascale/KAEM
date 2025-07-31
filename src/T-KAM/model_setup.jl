@@ -24,20 +24,20 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""
 
     if model.prior.layernorm_bool
-        for i = 1:(model.prior.depth-1)
+        for i = 1:length(model.prior.layernorms)
             @reset model.prior.layernorms[i] = model.prior.layernorms[i] |> hq
         end
     end
 
     if model.lkhood.generator.layernorm_bool
-        for i = 1:(model.lkhood.generator.depth-1)
+        for i = 1:length(model.lkhood.generator.layernorms)
             @reset model.lkhood.generator.layernorms[i] =
                 model.lkhood.generator.layernorms[i] |> hq
         end
     end
 
     if model.lkhood.CNN
-        for i = 1:(model.lkhood.generator.depth-1)
+        for i = 1:length(model.lkhood.generator.Φ_fcns)
             @reset model.lkhood.generator.Φ_fcns[i] = model.lkhood.generator.Φ_fcns[i] |> hq
             if model.lkhood.generator.batchnorm_bool
                 @reset model.lkhood.generator.batchnorms[i] =

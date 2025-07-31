@@ -61,7 +61,7 @@ function (prior::LogNormalPrior)(
     sqrt_2π = T(sqrt(2π))
     denom = z .* sqrt_2π .+ prior.ε
     z_eps = z .+ prior.ε
-    @tullio pdf[q, p, s] := exp(-(log(z_eps[q, p, s]))^2 / 2) / denom[q, p, s]
+    @tullio pdf[q, p, s] := exp(-((log(z_eps[q, p, s]))^2) / 2) / denom[q, p, s]
     pdf = T.(pdf)
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
@@ -76,7 +76,7 @@ function (prior::LearnableGaussianPrior)(
     π_eps = π_σ .* T(sqrt(2π)) .+ prior.ε
     denom_eps = 2 .* π_σ .^ 2 .+ prior.ε
     @tullio pdf[q, p, s] :=
-        1 / (abs(π_eps[p]) * exp(-(z[q, p, s] - π_μ[p]^2) / denom_eps[p]))
+        1 / (abs(π_eps[p]) * exp(-((z[q, p, s] - π_μ[p])^2) / denom_eps[p]))
     log_bool && return stable_log(pdf, prior.ε)
     return pdf
 end

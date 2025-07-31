@@ -26,7 +26,7 @@ commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 prior_type = Dict(1 => "lognormal", 2 => "gaussian", 3 => "uniform", 4 => "ebm")
 bases = Dict(5 => "RBF", 6 => "FFT")
 acts = Dict(5 => "silu", 6 => "silu")
-grid_sizes = Dict(5 => "10", 6 => "50")
+grid_sizes = Dict(5 => "20", 6 => "50")
 
 if dataset == "CIFAR10" || dataset == "SVHN"
     rng = Random.MersenneTwister(1)

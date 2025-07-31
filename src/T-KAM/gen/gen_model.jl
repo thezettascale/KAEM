@@ -89,6 +89,7 @@ function init_GenModel(
 
     return GenModel(
         generator,
+        noise_var,
         gen_var,
         output_activation,
         x_shape,

@@ -36,6 +36,7 @@ const gen_model_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     generator::Any
+    σ_noise::T
     σ_llhood::T
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
@@ -52,6 +53,7 @@ function init_GenModel(
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
 
+    noise_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_noise"))
     gen_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_variance"))
     ESS_threshold =
         parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))

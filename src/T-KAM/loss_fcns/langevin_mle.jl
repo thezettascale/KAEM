@@ -21,7 +21,7 @@ function sample_langevin(
 )::Tuple{AbstractArray{T},NamedTuple,AbstractArray{T}} where {T<:half_quant}
     z, st_lux, = model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng)
     z = z[:, :, :, 1]
-    noise = randn(rng, T, size(z)) |> pu
+    noise = randn(rng, T, m.lkhood.x_shape..., size(z)[end]) |> pu
     return z, st_lux, noise
 end
 

@@ -243,7 +243,6 @@ function curve2coef(
         end
     end
 
-    replace!(coef, NaN => zero(full_quant))
     return T.(coef)
 end
 

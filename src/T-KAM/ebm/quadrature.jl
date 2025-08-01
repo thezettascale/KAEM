@@ -162,10 +162,9 @@ function (gq::GaussLegendreQuadrature)(
         @parallel (1:Q, 1:B, 1:G) gauss_kernel!(trapz, weights)
         return trapz, grid, st_lyrnorm_new
     else
-        trapz = @zeros(Q, P, G)
         @parallel (1:Q, 1:P, 1:G) pfirst_exp_kernel!(exp_fg, nodes, π_nodes)
-        @parallel (1:Q, 1:P, 1:G) weight_kernel!(trapz, weights)
-        return trapz, grid, st_lyrnorm_new
+        @parallel (1:Q, 1:P, 1:G) weight_kernel!(exp_fg, weights)
+        return exp_fg, grid, st_lyrnorm_new
     end
 end
 

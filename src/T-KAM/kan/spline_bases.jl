@@ -61,7 +61,9 @@ struct B_spline_basis <: Lux.AbstractLuxLayer
     degree::Int
 end
 
-struct RBF_basis <: Lux.AbstractLuxLayer end
+struct RBF_basis <: Lux.AbstractLuxLayer
+    scale::half_quant
+end
 
 struct RSWAF_basis <: Lux.AbstractLuxLayer end
 
@@ -139,6 +141,7 @@ function (b::RBF_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
+    σ = b.scale .* σ
     @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ)
     return B
 end

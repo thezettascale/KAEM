@@ -125,6 +125,12 @@ function update_model_grid(
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
                 @reset st_kan.ebm[symbol_map[i]].grid = new_grid
 
+                if model.prior.fcns_qp[i].spline_string == "RBF"
+                    @reset ps.ebm.fcn[symbol_map[i]].basis_function.scale =
+                        (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1) |>
+                        T
+                end
+
                 z = Lux.apply(
                     model.prior.fcns_qp[i],
                     z,
@@ -198,6 +204,11 @@ function update_model_grid(
             )
             @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
             @reset st_kan.gen[symbol_map[i]].grid = new_grid
+
+            if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
+                @reset ps.gen.fcn[symbol_map[i]].basis_function.scale =
+                    (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1) |> T
+            end
         end
 
         z = Lux.apply(

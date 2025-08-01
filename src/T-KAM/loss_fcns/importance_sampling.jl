@@ -40,9 +40,17 @@ function sample_importance(
     # Prior is proposal for importance sampling
     z_posterior, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
     noise = pu(randn(rng, T, m.lkhood.x_shape..., size(z_posterior)[end], size(x)[end]))
-    logllhood, st_lux_gen =
-        log_likelihood_IS(z_posterior, x, m.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = m.ε)
-    
+    logllhood, st_lux_gen = log_likelihood_IS(
+        z_posterior,
+        x,
+        m.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux.gen,
+        noise;
+        ε = m.ε,
+    )
+
     # Posterior weights and resampling
     weights = softmax(U.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
@@ -51,10 +59,16 @@ function sample_importance(
         reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
         dims = 2,
     )
-    
+
     # Works better with more samples
     z_prior, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
-    return z_posterior, z_prior, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise
+    return z_posterior,
+    z_prior,
+    st_lux_ebm,
+    st_lux_gen,
+    weights_resampled,
+    resampled_idxs,
+    noise
 end
 
 function marginal_llhood(
@@ -72,14 +86,24 @@ function marginal_llhood(
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     B, S = size(x)[end], size(z_posterior)[end]
 
-    logprior_posterior, st_lux_ebm = m.log_prior(z_posterior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
-    logllhood, st_gen =
-        log_likelihood_IS(z_posterior, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, noise; ε = m.ε)
+    logprior_posterior, st_lux_ebm =
+        m.log_prior(z_posterior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
+    logllhood, st_gen = log_likelihood_IS(
+        z_posterior,
+        x,
+        m.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux_gen,
+        noise;
+        ε = m.ε,
+    )
 
     marginal_llhood =
         loss_accum(weights_resampled, logprior_posterior, logllhood, resampled_idxs, B, S)
 
-    logprior_prior, st_lux_ebm = m.log_prior(z_prior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
+    logprior_prior, st_lux_ebm =
+        m.log_prior(z_prior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : zero(T)
 
     return -(mean(marginal_llhood) - ex_prior)*m.loss_scaling, st_lux_ebm, st_lux_gen

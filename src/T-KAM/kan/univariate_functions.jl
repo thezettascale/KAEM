@@ -18,7 +18,7 @@ end
 
 const SplineBasis_mapping = Dict(
     "B-spline" => degree -> B_spline_basis(degree),
-    "RBF" => degree -> RBF_basis(),
+    "RBF" => scale -> RBF_basis(scale),
     "RSWAF" => degree -> RSWAF_basis(),
     "FFT" => degree -> FFT_basis(),
     "Cheby" => degree -> Cheby_basis(degree),
@@ -75,11 +75,15 @@ function init_function(
     initializer =
         get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
 
+    scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
+    basis_function =
+        spline_function == "RBF" ? RBF_basis(scale) : initializer(spline_degree)
+
     return univariate_function(
         in_dim,
         out_dim,
         base_activation,
-        initializer(spline_degree),
+        basis_function,
         spline_function,
         spline_degree,
         grid,

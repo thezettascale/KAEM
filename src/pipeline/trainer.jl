@@ -268,8 +268,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                     ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
-                    size(x)[end];
-                    rng = t.rng,
+                    size(x)[end]
                 )
                 @reset t.st_lux.ebm = st_ebm
                 @reset t.st_lux.gen = st_gen
@@ -319,8 +318,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                     ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
-                    t.batch_size_for_gen;
-                    rng = t.rng,
+                    t.batch_size_for_gen
                 )
                 @reset t.st_lux.ebm = st_ebm
                 @reset t.st_lux.gen = st_gen
@@ -398,8 +396,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             ps_hq,
             t.st_kan,
             Lux.testmode(t.st_lux),
-            t.batch_size_for_gen;
-            rng = t.rng,
+            t.batch_size_for_gen
         )
         gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
     end

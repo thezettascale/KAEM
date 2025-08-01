@@ -29,16 +29,21 @@ function sample_importance(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
     AbstractArray{T},
+    AbstractArray{T},
     NamedTuple,
     NamedTuple,
     AbstractArray{T},
     AbstractArray{Int},
     AbstractArray{T},
 } where {T<:half_quant,U<:full_quant}
-    z, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
-    noise = pu(randn(rng, T, m.lkhood.x_shape..., size(z)[end], size(x)[end]))
+
+    # Prior is proposal for importance sampling
+    z_posterior, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
+    noise = pu(randn(rng, T, m.lkhood.x_shape..., size(z_posterior)[end], size(x)[end]))
     logllhood, st_lux_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = m.ε)
+        log_likelihood_IS(z_posterior, x, m.lkhood, ps.gen, st_kan.gen, st_lux.gen, noise; ε = m.ε)
+    
+    # Posterior weights and resampling
     weights = softmax(U.(logllhood), dims = 2)
     resampled_idxs = m.lkhood.resample_z(weights, rng)
     weights = T.(weights)
@@ -46,12 +51,16 @@ function sample_importance(
         reduce(vcat, map(b -> weights[b:b, resampled_idxs[b, :]], 1:size(x)[end])),
         dims = 2,
     )
-    return z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise
+    
+    # Works better with more samples
+    z_prior, st_lux_ebm = m.sample_prior(m, m.IS_samples, ps, st_kan, st_lux, rng)
+    return z_posterior, z_prior, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise
 end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z::AbstractArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
@@ -61,21 +70,25 @@ function marginal_llhood(
     st_lux_gen::NamedTuple,
     noise::AbstractArray{T},
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
-    B, S = size(x)[end], size(z)[end]
-    logprior, st_lux_ebm = m.log_prior(z, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
-    ex_prior = m.prior.contrastive_div ? mean(logprior) : zero(T)
+    B, S = size(x)[end], size(z_posterior)[end]
+
+    logprior_posterior, st_lux_ebm = m.log_prior(z_posterior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     logllhood, st_gen =
-        log_likelihood_IS(z, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, noise; ε = m.ε)
+        log_likelihood_IS(z_posterior, x, m.lkhood, ps.gen, st_kan.gen, st_lux_gen, noise; ε = m.ε)
 
     marginal_llhood =
-        loss_accum(weights_resampled, logprior, logllhood, resampled_idxs, B, S)
+        loss_accum(weights_resampled, logprior_posterior, logllhood, resampled_idxs, B, S)
+
+    logprior_prior, st_lux_ebm = m.log_prior(z_prior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
+    ex_prior = m.prior.contrastive_div ? mean(logprior_prior) : zero(T)
 
     return -(mean(marginal_llhood) - ex_prior)*m.loss_scaling, st_lux_ebm, st_lux_gen
 end
 
 function closure(
     ps::ComponentArray{T},
-    z::AbstractArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
@@ -88,7 +101,8 @@ function closure(
     return first(
         marginal_llhood(
             ps,
-            z,
+            z_posterior,
+            z_prior,
             x,
             weights_resampled,
             resampled_idxs,
@@ -104,7 +118,8 @@ end
 function grad_importance_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    z::AbstractArray{T},
+    z_posterior::AbstractArray{T},
+    z_prior::AbstractArray{T},
     x::AbstractArray{T},
     weights_resampled::AbstractArray{T},
     resampled_idxs::AbstractArray{Int},
@@ -119,7 +134,8 @@ function grad_importance_llhood(
         f =
             p -> closure(
                 p,
-                z,
+                z_posterior,
+                z_prior,
                 x,
                 weights_resampled,
                 resampled_idxs,
@@ -136,7 +152,8 @@ function grad_importance_llhood(
             Enzyme.Const(closure),
             Enzyme.Active,
             Enzyme.Duplicated(ps, ∇),
-            Enzyme.Const(z),
+            Enzyme.Const(z_posterior),
+            Enzyme.Const(z_prior),
             Enzyme.Const(x),
             Enzyme.Const(weights_resampled),
             Enzyme.Const(resampled_idxs),
@@ -164,13 +181,14 @@ function (l::ImportanceLoss)(
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
 
-    z, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise =
+    z_posterior, z_prior, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise =
         sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
 
     ∇ = grad_importance_llhood(
         ps,
         ∇,
-        z,
+        z_posterior,
+        z_prior,
         x,
         weights_resampled,
         resampled_idxs,
@@ -183,7 +201,8 @@ function (l::ImportanceLoss)(
 
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
-        z,
+        z_posterior,
+        z_prior,
         x,
         weights_resampled,
         resampled_idxs,

@@ -16,8 +16,9 @@ function loss_accum(
 )::AbstractArray{T} where {T<:half_quant}
     lp = reduce(hcat, map(b -> logprior[resampled_idxs[b, :], :], 1:B))
     ll = reduce(vcat, map(b -> logllhood[b:b, resampled_idxs[b, :]], 1:B))
-    @tullio out[b] := weights_resampled[b, s] * (lp[s, b] + ll[b, s])
-    return out
+    @tullio lp_loss[b] := weights_resampled[b, s] * lp[s, b]
+    @tullio ll_loss[b] := weights_resampled[b, s] * ll[b, s]
+    return lp_loss + ll_loss
 end
 
 end

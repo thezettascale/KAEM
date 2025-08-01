@@ -119,8 +119,7 @@ function update_model_grid(
                     model.prior.fcns_qp[i],
                     ps.ebm.fcn[symbol_map[i]],
                     st_kan.ebm[symbol_map[i]],
-                    z;
-                    ε = model.ε,
+                    z
                 )
                 @reset ps.ebm.fcn[symbol_map[i]].coef = new_coef
                 @reset st_kan.ebm[symbol_map[i]].grid = new_grid
@@ -199,14 +198,13 @@ function update_model_grid(
                 model.lkhood.generator.Φ_fcns[i],
                 ps.gen.fcn[symbol_map[i]],
                 st_kan.gen[symbol_map[i]],
-                z;
-                ε = model.ε,
+                z
             )
             @reset ps.gen.fcn[symbol_map[i]].coef = new_coef
             @reset st_kan.gen[symbol_map[i]].grid = new_grid
 
             if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
-                @reset model.prior.fcns_qp[i].basis_function.scale =
+                @reset model.lkhood.generator.Φ_fcns[i].basis_function.scale =
                     (maximum(new_grid) - minimum(new_grid)) / (size(new_grid, 2) - 1) |> T
             end
         end

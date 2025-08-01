@@ -77,9 +77,9 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     prior_domain = Dict(
         "ebm" => grid_range,
         "learnable_gaussian" => grid_range,
-        "lognormal" => [0, 4] .|> half_quant,
-        "gaussian" => [-1, 1] .|> half_quant,
-        "uniform" => [0, 1] .|> half_quant,
+        "lognormal" => [-0.2, 4.2] .|> half_quant,
+        "gaussian" => [-1.2, 1.2] .|> half_quant,
+        "uniform" => [-0.2, 1.2] .|> half_quant,
     )[prior_type]
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))

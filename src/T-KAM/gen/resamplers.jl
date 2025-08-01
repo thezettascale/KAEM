@@ -32,7 +32,7 @@ end
         end
     else
 
-        # Deterministic replication as explicit assignment loop
+        # Deterministic replication
         for s = 1:N
             count = integer_counts[b, s]
             if count > 0
@@ -43,7 +43,7 @@ end
             end
         end
 
-        # Multinomial resampling as explicit assignment loop
+        # Multinomial resampling
         if num_remaining[b] > 0
             for k = 1:num_remaining[b]
                 idx = N
@@ -118,7 +118,7 @@ end
             idxs[b, n] = n
         end
     else
-        # Searchsortedfirst as explicit assignment loop
+        # Searchsortedfirst
         for n = 1:N
             idx = N
             for j = 1:N

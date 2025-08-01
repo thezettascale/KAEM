@@ -40,8 +40,8 @@ end
         z[q, p, b] = grid[p, 1]
 
         # Edge case 2: Random value is larger than last CDF value
-    elseif idx > grid_size + 1
-        z[q, p, b] = grid[p, grid_size+1]
+    elseif idx > grid_size
+        z[q, p, b] = grid[p, grid_size]
 
         # Interpolate into interval   
     else
@@ -114,8 +114,8 @@ end
         z[q, 1, b] = grid[q, 1]
 
         # Edge case 2: Random value is larger than last CDF value
-    elseif idx > grid_size + 1
-        z[q, 1, b] = grid[q, grid_size+1]
+    elseif idx > grid_size
+        z[q, 1, b] = grid[q, grid_size]
 
         # Interpolate into interval   
     else

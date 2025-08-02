@@ -18,7 +18,7 @@ function unadjusted_logpos(
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     prior_sampling_bool::Bool,
-    noise::AbstractArray{T},
+    zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
@@ -33,7 +33,7 @@ function unadjusted_logpos(
             ps.gen,
             st_kan.gen,
             st_lux.gen,
-            noise;
+            zero_vector;
             ε = model.ε,
         ),
     )
@@ -53,7 +53,7 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    noise = randn(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
+    zero_vector = zeros(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f =
@@ -66,7 +66,7 @@ function unadjusted_logpos_grad(
                 st_kan,
                 st_lux,
                 prior_sampling_bool,
-                noise,
+                zero_vector,
             )
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
@@ -82,7 +82,7 @@ function unadjusted_logpos_grad(
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux),
             Enzyme.Const(prior_sampling_bool),
-            Enzyme.Const(noise),
+            Enzyme.Const(zero_vector),
         )
     end
 
@@ -100,7 +100,7 @@ function autoMALA_logpos_value_4D(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    noise::AbstractArray{T},
+    zero_vector::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
@@ -113,7 +113,7 @@ function autoMALA_logpos_value_4D(
         ps.gen,
         st_kan.gen,
         st_lux.gen,
-        noise;
+        zero_vector;
         ε = model.ε,
     )
     logpos = reshape(lp, S, num_temps) + temps .* reshape(ll, S, num_temps)
@@ -128,7 +128,7 @@ function autoMALA_logpos_reduced_4D(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    noise::AbstractArray{T},
+    zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
     Q, P, S, num_temps = size(z)
     z_reshaped = reshape(z, Q, P, S*num_temps)
@@ -143,7 +143,7 @@ function autoMALA_logpos_reduced_4D(
             ps.gen,
             st_kan.gen,
             st_lux.gen,
-            noise;
+            zero_vector;
             ε = model.ε,
         ),
     )
@@ -167,12 +167,12 @@ function autoMALA_value_and_grad_4D(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    noise = randn(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
+    zero_vector = zeros(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f =
             z_i ->
-                autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux, noise)
+                autoMALA_logpos_reduced_4D(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(
@@ -186,7 +186,7 @@ function autoMALA_value_and_grad_4D(
             Enzyme.Const(ps),
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux),
-            Enzyme.Const(noise),
+            Enzyme.Const(zero_vector),
         )
     end
 
@@ -198,7 +198,7 @@ function autoMALA_value_and_grad_4D(
         ps,
         st_kan,
         st_lux,
-        noise,
+        zero_vector,
     )
     return logpos, ∇z, st_ebm, st_gen
 end
@@ -211,7 +211,7 @@ function autoMALA_logpos(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    noise::AbstractArray{T},
+    zero_vector::AbstractArray{T},
 )::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
     lp, st_ebm = model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
@@ -222,7 +222,7 @@ function autoMALA_logpos(
         ps.gen,
         st_kan.gen,
         st_lux.gen,
-        noise;
+        zero_vector;
         ε = model.ε,
     )
     return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
@@ -236,9 +236,9 @@ function closure(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    noise::AbstractArray{T},
+    zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
-    return sum(first(autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux, noise)))
+    return sum(first(autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux, zero_vector)))
 end
 
 function autoMALA_value_and_grad(
@@ -257,10 +257,10 @@ function autoMALA_value_and_grad(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
-    noise = randn(T, model.lkhood.x_shape..., size(z)[end]) |> pu
+    zero_vector = zeros(T, model.lkhood.x_shape..., size(z)[end]) |> pu
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, noise)
+        f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
         CUDA.@fastmath Enzyme.autodiff(
@@ -274,12 +274,12 @@ function autoMALA_value_and_grad(
             Enzyme.Const(ps),
             Enzyme.Const(st_kan),
             Enzyme.Const(st_lux),
-            Enzyme.Const(noise),
+            Enzyme.Const(zero_vector),
         )
     end
 
     logpos, st_ebm, st_gen =
-        CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux)
+        CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux, zero_vector)
     return logpos, ∇z, st_ebm, st_gen
 end
 

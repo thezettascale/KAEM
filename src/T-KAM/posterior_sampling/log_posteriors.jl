@@ -20,8 +20,7 @@ function unadjusted_logpos(
     prior_sampling_bool::Bool,
     zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
-    lp =
-        sum(first(model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
+    lp = sum(first(model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
     ll = first(
         log_likelihood_MALA(
             z,

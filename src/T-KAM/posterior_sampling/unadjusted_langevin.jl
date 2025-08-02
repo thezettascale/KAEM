@@ -128,9 +128,8 @@ function (sampler::ULA_sampler)(
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
-    x_t =
-        model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
-    
+    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
+
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> pu

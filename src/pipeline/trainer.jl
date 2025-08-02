@@ -353,7 +353,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         t.x = pu(x)
 
         ## Final generation
-        if train_idx == t.max_iters-1
+        if train_idx == num_param_updates
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
             ps_hq = half_quant.(t.ps)

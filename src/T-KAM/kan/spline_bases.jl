@@ -153,7 +153,7 @@ end
     σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
     diff = x[i, s] - grid[i, g]
-    B[i, g, s] = 1 - tanh(diff / σ[1]) ^ 2
+    B[i, g, s] = 1 - NNlib.tanh_fast(diff / σ[1]) ^ 2
     return nothing
 end
 
@@ -173,7 +173,7 @@ end
     x::AbstractArray{T},
     σ::AbstractArray{T},
 )::Nothing where {T<:half_quant}
-    z = NNlib.tanh_fast(x[i, s] / σ[1])
+    z = NNlib.tanh_fast(x[i, s]) / σ[1] # Scale > 1 to place well within [-1, 1]
     B[i, d, s] = cos((d-1) * acos(z))
     return nothing
 end

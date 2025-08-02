@@ -119,7 +119,9 @@ function (b::RSWAF_basis)(
     grid::AbstractArray{T},
     σ::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
-    @tullio B[i, g, s] := 1 - tanh((x[i, s] - grid[i, g]) / σ[d])^2
+    @tullio diff[i, g, s] := x[i, s] - grid[i, g]
+    diff = NNlib.tanh_fast(diff ./ σ)
+    @tullio B[i, g, s] := 1 - diff[i, g, s]^2
     return B
 end
 
@@ -129,7 +131,8 @@ function (b::Cheby_basis)(
     σ::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
     lin = b.lin
-    @tullio B[i, g, s] := cos(lin[g] * acos(tanh(x[i, s] / σ[d])))
+    x = NNlib.tanh_fast(x) ./ σ # Scale > 1 to place well within [-1, 1]
+    @tullio B[i, g, s] := cos(lin[g] * acos(x[i, s]))
     return B
 end
 

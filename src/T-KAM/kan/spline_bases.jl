@@ -141,8 +141,7 @@ function (b::RBF_basis)(
 )::AbstractArray{T} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
-    σ = b.scale .* σ
-    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, σ)
+    @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, b.scale .* σ)
     return B
 end
 

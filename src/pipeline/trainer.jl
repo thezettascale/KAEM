@@ -387,8 +387,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         allow_outer_f_increases = true,
     )
 
-    # Not always best to use the minimizer
-    # t.ps = res.minimizer
+    t.ps = res.minimizer
 
     # Generate samples
     gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)

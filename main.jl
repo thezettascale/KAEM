@@ -20,7 +20,6 @@ ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 include("src/pipeline/trainer.jl")
 using .trainer
 
-commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 prior_type = Dict(1 => "lognormal", 2 => "gaussian", 3 => "uniform", 4 => "ebm")
@@ -33,6 +32,7 @@ if dataset == "CIFAR10" || dataset == "SVHN"
     t = init_trainer(rng, conf, dataset)
     train!(t)
 else
+    commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
     for prior_idx in [3, 2, 1, 4]
         commit!(conf, "EbmModel", "π_0", prior_type[prior_idx])
         for base_idx in [5, 6]

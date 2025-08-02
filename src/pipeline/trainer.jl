@@ -351,6 +351,46 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             (train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
         t.x = pu(x)
+
+        ## Final generation
+        if train_idx == t.max_iters-1
+            gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+            idx = length(t.model.lkhood.x_shape) + 1
+            ps_hq = half_quant.(t.ps)
+            for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
+                batch, st_ebm, st_gen = CUDA.@fastmath t.model(
+                    ps_hq,
+                    t.st_kan,
+                    Lux.testmode(t.st_lux),
+                    t.batch_size_for_gen;
+                    rng = t.rng,
+                )
+                gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
+            end
+            
+            try
+                h5write(
+                    t.model.file_loc * "generated_$(t.gen_type).h5",
+                    "samples",
+                    Float32.(gen_data),
+                )
+            catch
+                rm(t.model.file_loc * "generated_$(t.gen_type).h5")
+                h5write(
+                    t.model.file_loc * "generated_$(t.gen_type).h5",
+                    "samples",
+                    Float32.(gen_data),
+                )
+            end
+
+            t.save_model && jldsave(
+                t.model.file_loc * "saved_model.jld2";
+                params = t.ps |> cpu_device(),
+                kan_state = t.st_kan |> cpu_device(),
+                lux_state = t.st_lux |> cpu_device(),
+                train_idx = train_idx,
+            )
+
         return t.loss
     end
 
@@ -387,45 +427,54 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         allow_outer_f_increases = true,
     )
 
-    t.ps = res.minimizer
+    # Now done in loss callback due to instability at end of Optimizer.jl solve
+    # t.ps = res.minimizer
 
-    # Generate samples
-    gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
-    idx = length(t.model.lkhood.x_shape) + 1
-    ps_hq = half_quant.(t.ps)
-    for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-        batch, st_ebm, st_gen = CUDA.@fastmath t.model(
-            ps_hq,
-            t.st_kan,
-            Lux.testmode(t.st_lux),
-            t.batch_size_for_gen;
-            rng = t.rng,
-        )
-        gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
-    end
+    # # Generate samples
+    # gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
+    # idx = length(t.model.lkhood.x_shape) + 1
+    # ps_hq = half_quant.(t.ps)
+    # for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
+    #     batch, st_ebm, st_gen = CUDA.@fastmath t.model(
+    #         ps_hq,
+    #         t.st_kan,
+    #         Lux.testmode(t.st_lux),
+    #         t.batch_size_for_gen;
+    #         rng = t.rng,
+    #     )
+    #     gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
+    # end
 
-    try
-        h5write(
-            t.model.file_loc * "generated_$(t.gen_type).h5",
-            "samples",
-            Float32.(gen_data),
-        )
-    catch
-        rm(t.model.file_loc * "generated_$(t.gen_type).h5")
-        h5write(
-            t.model.file_loc * "generated_$(t.gen_type).h5",
-            "samples",
-            Float32.(gen_data),
-        )
-    end
+    # try
+    #     h5write(
+    #         t.model.file_loc * "generated_$(t.gen_type).h5",
+    #         "samples",
+    #         Float32.(gen_data),
+    #     )
+    # catch
+    #     rm(t.model.file_loc * "generated_$(t.gen_type).h5")
+    #     h5write(
+    #         t.model.file_loc * "generated_$(t.gen_type).h5",
+    #         "samples",
+    #         Float32.(gen_data),
+    #     )
+    # end
 
-    t.save_model && jldsave(
-        t.model.file_loc * "saved_model.jld2";
-        params = t.ps |> cpu_device(),
-        kan_state = t.st_kan |> cpu_device(),
-        lux_state = t.st_lux |> cpu_device(),
-        train_idx = train_idx,
-    )
+    # t.save_model && jldsave(
+    #     t.model.file_loc * "saved_model.jld2";
+    #     params = t.ps |> cpu_device(),
+    #     kan_state = t.st_kan |> cpu_device(),
+    #     lux_state = t.st_lux |> cpu_device(),
+    #     train_idx = train_idx,
+    # )
+
+    # t.save_model && jldsave(
+    #     t.model.file_loc * "saved_model.jld2";
+    #     params = t.ps |> cpu_device(),
+    #     kan_state = t.st_kan |> cpu_device(),
+    #     lux_state = t.st_lux |> cpu_device(),
+    #     train_idx = train_idx,
+    # )
 end
 
 end

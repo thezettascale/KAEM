@@ -11,7 +11,8 @@ using CUDA,
     Accessors,
     Statistics,
     Enzyme,
-    ComponentArrays
+    ComponentArrays,
+    ParallelStencil
 
 using ..Utils
 using ..T_KAM_model
@@ -19,12 +20,29 @@ using ..T_KAM_model
 include("log_posteriors.jl")
 using .LogPosteriors: unadjusted_logpos_grad, log_likelihood_MALA
 
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
+
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
     "gaussian" => (p, b, rng) -> randn(rng, p, 1, b),
     "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
     "ebm" => (p, b, rng) -> randn(rng, p, 1, b),
 )
+
+@parallel_indices (q, p, s, t) function update_z!(
+    z::AbstractArray{U},
+    ∇z::AbstractArray{U},
+    η::U,
+    ξ::AbstractArray{U},
+    sqrt_2η::U,
+)::Nothing where {U<:full_quant}
+    z[q, p, s, t] = z[q, p, s, t] + η * ∇z[q, p, s, t] + sqrt_2η * ξ[q, p, s, t]
+    return nothing
+end
 
 struct ULA_sampler{U<:full_quant}
     prior_sampling_bool::Bool
@@ -135,7 +153,7 @@ function (sampler::ULA_sampler)(
                 ),
             ) ./ loss_scaling
 
-        @. z_fq += η * ∇z_fq + sqrt_2η * ξ
+        @parallel (1:Q, 1:P, 1:S, 1:num_temps) update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η)
         z_hq = T.(z_fq)
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

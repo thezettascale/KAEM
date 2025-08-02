@@ -20,15 +20,12 @@ function unadjusted_logpos(
     prior_sampling_bool::Bool,
     zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
-    Q, P, S, num_temps = size(z)
-    z_reshaped = reshape(z, Q, P, S*num_temps)
-    x_reshaped = reshape(x, model.lkhood.x_shape..., S*num_temps)
     lp =
-        sum(first(model.log_prior(z_reshaped, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
+        sum(first(model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
     ll = first(
         log_likelihood_MALA(
-            z_reshaped,
-            x_reshaped,
+            z,
+            x,
             model.lkhood,
             ps.gen,
             st_kan.gen,
@@ -37,7 +34,7 @@ function unadjusted_logpos(
             ε = model.ε,
         ),
     )
-    tempered_ll = sum(temps .* reshape(ll, num_temps, S))
+    tempered_ll = sum(temps .* ll)
     return (lp + tempered_ll) * model.loss_scaling
 end
 
@@ -53,7 +50,7 @@ function unadjusted_logpos_grad(
     prior_sampling_bool::Bool,
 )::AbstractArray{T} where {T<:half_quant,U<:full_quant}
 
-    zero_vector = zeros(T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
+    zero_vector = zeros(T, model.lkhood.x_shape..., size(z)[end]) |> pu
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
         f =

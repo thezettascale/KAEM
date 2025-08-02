@@ -24,6 +24,7 @@ function sample_thermo(
     AbstractArray{T},
     NamedTuple,
     AbstractArray{T},
+    AbstractArray{T},
 } where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
     z, st_lux = model.posterior_sampler(
@@ -35,9 +36,11 @@ function sample_thermo(
         temps = temps[2:end],
         rng = rng,
     )
+
     Δt = pu(temps[2:end] - temps[1:(end-1)])
-    noise = randn(rng, T, model.lkhood.x_shape..., size(z)[end]) |> pu
-    return z, Δt, st_lux, noise
+    tempered_noise = randn(rng, T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
+    noise = randn(rng, T, model.lkhood.x_shape..., size(x)[end]) |> pu
+    return z, Δt, st_lux, noise, tempered_noise
 end
 
 function marginal_llhood(
@@ -50,13 +53,14 @@ function marginal_llhood(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    noise::AbstractArray{T};
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     Q, P, S, num_temps = size(z_posterior)
     log_ss = zero(T)
 
     # Steppingstone estimator
-    x_rep = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
+    x_rep = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
     ll, st_lux_gen = log_likelihood_MALA(
         reshape(z_posterior, Q, P, S*num_temps),
         x_rep,
@@ -64,7 +68,7 @@ function marginal_llhood(
         ps.gen,
         st_kan.gen,
         st_lux_gen,
-        reshape(noise, Q, P, S*num_temps);
+        tempered_noise;
         ε = model.ε,
     )
     log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
@@ -83,13 +87,13 @@ function marginal_llhood(
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
 
     logllhood, st_lux_gen = log_likelihood_MALA(
-        z_prior[:, :, :, 1],
+        z_prior,
         x,
         model.lkhood,
         ps.gen,
         st_kan.gen,
         st_lux_gen,
-        noise[:, :, :, 1];
+        noise;
         ε = model.ε,
     )
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
@@ -108,7 +112,8 @@ function closure(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    noise::AbstractArray{T};
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
 )::T where {T<:half_quant}
     return first(
         marginal_llhood(
@@ -122,6 +127,7 @@ function closure(
             st_lux_ebm,
             st_lux_gen,
             noise,
+            tempered_noise,
         ),
     )
 end
@@ -137,7 +143,8 @@ function grad_thermo_llhood(
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
     st_lux_gen::NamedTuple,
-    noise::AbstractArray{T};
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
 
     if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
@@ -153,6 +160,7 @@ function grad_thermo_llhood(
                 st_lux_ebm,
                 st_lux_gen,
                 noise,
+                tempered_noise,
             )
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
@@ -170,6 +178,7 @@ function grad_thermo_llhood(
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
             Enzyme.Const(noise),
+            Enzyme.Const(tempered_noise),
         )
     end
 
@@ -188,7 +197,7 @@ function (l::ThermodynamicLoss)(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, Δt, st_lux, noise = sample_thermo(
+    z_posterior, Δt, st_lux, noise, tempered_noise = sample_thermo(
         ps,
         st_kan,
         Lux.testmode(st_lux),
@@ -213,6 +222,7 @@ function (l::ThermodynamicLoss)(
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
         noise,
+        tempered_noise,
     )
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
@@ -225,6 +235,7 @@ function (l::ThermodynamicLoss)(
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
         noise,
+        tempered_noise,
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

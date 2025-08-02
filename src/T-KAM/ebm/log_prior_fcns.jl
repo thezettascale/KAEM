@@ -115,7 +115,7 @@ function (lp::LogPriorMix)(
     alpha = softmax(ps.dist.α; dims = 2)
     Q, P, S = size(alpha)..., size(z)[end]
 
-    log_απ = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
+    log_απ = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = false)
     log_απ = log_alpha(log_απ, alpha, lp.ε, Q, P, S)
 
     # Energy functions of each component, q -> p

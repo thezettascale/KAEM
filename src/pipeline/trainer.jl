@@ -390,6 +390,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 lux_state = t.st_lux |> cpu_device(),
                 train_idx = train_idx,
             )
+        end
 
         return t.loss
     end

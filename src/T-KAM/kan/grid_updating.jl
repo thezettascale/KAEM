@@ -12,7 +12,7 @@ function update_fcn_grid(
     l::univariate_function{T,U},
     ps::ComponentArray{T},
     st::ComponentArray{T},
-    x::AbstractArray{T}
+    x::AbstractArray{T},
 )::Tuple{AbstractArray{T},AbstractArray{U}} where {T<:half_quant,U<:full_quant}
     """
     Adapt the function's grid to the distribution of the input data.
@@ -53,8 +53,7 @@ function update_fcn_grid(
     grid = l.grid_update_ratio .* grid_uniform + (1 - l.grid_update_ratio) .* grid_adaptive
     new_grid = extend_grid(grid; k_extend = l.spline_degree)
     new_coef =
-        l.spline_string == "FFT" ?
-        curve2coef(l.basis_function, x_sort, y, new_grid, τ) :
+        l.spline_string == "FFT" ? curve2coef(l.basis_function, x_sort, y, new_grid, τ) :
         curve2coef(l.basis_function, x_sort, y, new_grid, τ)
 
     return new_grid, new_coef

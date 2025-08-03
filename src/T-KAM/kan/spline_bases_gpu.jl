@@ -17,21 +17,8 @@ using Tullio, KernelAbstractions
 
 using ..Utils
 
-
-function SplineMUL(
-    l::Lux.AbstractLuxLayer,
-    ps::ComponentArray{T},
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    """Top-level function for KAN with spline basis functions."""
-    x = l.base_activation(x)
-    w_base, w_sp = ps.w_base, ps.w_sp
-    return @tullio out[i, o, s] := w_base[i, o] * x[i, s] + w_sp[i, o] * y[i, o, s]
-end
-
 ## Basis functions with Stencil loops ##
-function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_quant}
+function extend_grid(grid::AbstractArray{T,2}; k_extend::Int = 0)::AbstractArray{T,2} where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
     for i = 1:k_extend
@@ -42,17 +29,29 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     return grid
 end
 
-struct B_spline_basis <: Lux.AbstractLuxLayer
+function SplineMUL(
+    l::Lux.AbstractLuxLayer,
+    ps::ComponentArray{T},
+    x::AbstractArray{T,2},
+    y::AbstractArray{T,3},
+)::AbstractArray{T,3} where {T<:half_quant}
+    """Top-level function for KAN with spline basis functions."""
+    x = l.base_activation(x)
+    w_base, w_sp = ps.w_base, ps.w_sp
+    return @tullio out[i, o, s] := w_base[i, o] * x[i, s] + w_sp[i, o] * y[i, o, s]
+end
+
+struct B_spline_basis <: AbstractBasis
     degree::Int
 end
 
-struct RBF_basis <: Lux.AbstractLuxLayer
+struct RBF_basis <: AbstractBasis
     scale::half_quant
 end
 
-struct RSWAF_basis <: Lux.AbstractLuxLayer end
+struct RSWAF_basis <: AbstractBasis end
 
-struct Cheby_basis <: Lux.AbstractLuxLayer
+struct Cheby_basis <: AbstractBasis
     degree::Int
     lin::AbstractArray{half_quant}
 end
@@ -63,10 +62,10 @@ function Cheby_basis(degree::Int)
 end
 
 function (b::B_spline_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T};
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1};
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
 
     # Initialize degree 0, piecewise const
@@ -105,20 +104,20 @@ function (b::B_spline_basis)(
 end
 
 function (b::RBF_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     σ = b.scale .* σ
     @tullio B[i, g, s] := exp(-(((x[i, s] - grid[i, g]) / σ[d])^2) / 2)
     return B
 end
 
 function (b::RSWAF_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T};
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     @tullio diff[i, g, s] := x[i, s] - grid[i, g]
     diff = NNlib.tanh_fast(diff ./ σ)
     @tullio B[i, g, s] := 1 - diff[i, g, s]^2
@@ -126,10 +125,10 @@ function (b::RSWAF_basis)(
 end
 
 function (b::Cheby_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     lin = b.lin
     x = NNlib.tanh_fast(x) ./ σ # Scale > 1 to place well within [-1, 1]
     @tullio B[i, g, s] := cos(lin[g] * acos(x[i, s]))
@@ -137,12 +136,12 @@ function (b::Cheby_basis)(
 end
 
 function coef2curve_Spline(
-    b::Lux.AbstractLuxLayer,
-    x_eval::AbstractArray{T},
-    grid::AbstractArray{T},
-    coef::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x_eval::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    coef::AbstractArray{T,3},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     """Top-level function for coef multiplication for all splines."""
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     G = b == Cheby_basis ? b.degree : G
@@ -152,12 +151,12 @@ function coef2curve_Spline(
 end
 
 function curve2coef(
-    b::Lux.AbstractLuxLayer,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x::AbstractArray{T,2},
+    y::AbstractArray{T,3},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
     J, S, O = size(x)..., size(y, 2)
 
@@ -178,13 +177,13 @@ function curve2coef(
 end
 
 ## Specific implementation for FFT basis functions ###
-struct FFT_basis <: Lux.AbstractLuxLayer end
+struct FFT_basis <: AbstractBasis end
 
 function (b::FFT_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::Tuple{AbstractArray{T,3},AbstractArray{T,3}} where {T<:half_quant}
     I, S = size(x)
     σ = T(2π) .* σ
     @tullio freq[i, g, s] := x[i, s] * grid[i, g] * σ[d]
@@ -192,12 +191,12 @@ function (b::FFT_basis)(
 end
 
 function coef2curve_FFT(
-    b::Lux.AbstractLuxLayer,
-    x_eval::AbstractArray{T},
-    grid::AbstractArray{T},
-    coef::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x_eval::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    coef::AbstractArray{T,4},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     even, odd = b(x_eval, grid, σ)
     even_coef, odd_coef = coef[1, :, :, :], coef[2, :, :, :]
     @tullio y[i, o, s] :=

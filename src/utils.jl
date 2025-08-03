@@ -1,6 +1,6 @@
 module Utils
 
-export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
+export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping, AbstractBasis
 
 using Lux,
     LinearAlgebra,
@@ -50,5 +50,7 @@ const activation_mapping = Dict(
     "celu" => NNlib.celu,
     "none" => x -> x .* zero(half_quant),
 )
+
+abstract type AbstractBasis end
 
 end

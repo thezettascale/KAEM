@@ -23,11 +23,11 @@ else
 end
 
 @parallel_indices (i, o, b) function spl_kernel!(
-    y::AbstractArray{T},
-    x::AbstractArray{T},
-    w_base::AbstractArray{T},
-    w_sp::AbstractArray{T},
-) where {T<:half_quant}
+    y::AbstractArray{T,3},
+    x::AbstractArray{T,2},
+    w_base::AbstractArray{T,2},
+    w_sp::AbstractArray{T,2},
+)::Nothing where {T<:half_quant}
     y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b]
     return nothing
 end
@@ -35,9 +35,9 @@ end
 function SplineMUL(
     l::Lux.AbstractLuxLayer,
     ps::ComponentArray{T},
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    y::AbstractArray{T,3},
+)::AbstractArray{T,3} where {T<:half_quant}
     """Top-level function for KAN with spline basis functions."""
     I, O, B = size(y)
     base = l.base_activation(x)
@@ -46,7 +46,7 @@ function SplineMUL(
 end
 
 ## Basis functions with Stencil loops ##
-function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_quant}
+function extend_grid(grid::AbstractArray{T,2}; k_extend::Int = 0)::AbstractArray{T,2} where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
     for i = 1:k_extend
@@ -57,33 +57,33 @@ function extend_grid(grid::AbstractArray{T}; k_extend::Int = 0) where {T<:half_q
     return grid
 end
 
-struct B_spline_basis <: Lux.AbstractLuxLayer
+struct B_spline_basis <: AbstractBasis
     degree::Int
 end
 
-struct RBF_basis <: Lux.AbstractLuxLayer
+struct RBF_basis <: AbstractBasis
     scale::half_quant
 end
 
-struct RSWAF_basis <: Lux.AbstractLuxLayer end
+struct RSWAF_basis <: AbstractBasis end
 
-struct Cheby_basis <: Lux.AbstractLuxLayer
+struct Cheby_basis <: AbstractBasis
     degree::Int
 end
 
 @parallel_indices (i, g, s) function B_spline_deg0!(
-    B::AbstractArray{T},
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
+    B::AbstractArray{T,4},
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     B[i, g, s, 1] = x[i, s] >= grid[i, g] && x[i, s] < grid[i, g+1] |> hq
     return nothing
 end
 
 @parallel_indices (i, g, s) function B_spline_degk!(
-    B::AbstractArray{T},
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
+    B::AbstractArray{T,4},
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
     k::Int,
 )::Nothing where {T<:half_quant}
     xi = x[i, s]
@@ -106,10 +106,10 @@ end
 end
 
 function (b::B_spline_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T};
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1};
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G-1, S, b.degree+1)
     @parallel (1:I, 1:(G-1), 1:S) B_spline_deg0!(B, x, grid)
@@ -124,10 +124,10 @@ end
 
 
 @parallel_indices (i, g, s) function RBF_kernel!(
-    B::AbstractArray{T},
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
+    B::AbstractArray{T,3},
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
 )::Nothing where {T<:half_quant}
     diff = x[i, s] - grid[i, g]
     B[i, g, s] = exp(-(diff / σ[1]) ^ 2 / 2)
@@ -135,10 +135,10 @@ end
 end
 
 function (b::RBF_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
     @parallel (1:I, 1:G, 1:S) RBF_kernel!(B, x, grid, b.scale .* σ)
@@ -146,10 +146,10 @@ function (b::RBF_basis)(
 end
 
 @parallel_indices (i, g, s) function RSWAF_kernel!(
-    B::AbstractArray{T},
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
+    B::AbstractArray{T,3},
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
 )::Nothing where {T<:half_quant}
     diff = x[i, s] - grid[i, g]
     B[i, g, s] = 1 - NNlib.tanh_fast(diff / σ[1]) ^ 2
@@ -157,10 +157,10 @@ end
 end
 
 function (b::RSWAF_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T};
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1};
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, G, S)
     @parallel (1:I, 1:G, 1:S) RSWAF_kernel!(B, x, grid, σ)
@@ -168,9 +168,9 @@ function (b::RSWAF_basis)(
 end
 
 @parallel_indices (i, d, s) function Cheby_kernel!(
-    B::AbstractArray{T},
-    x::AbstractArray{T},
-    σ::AbstractArray{T},
+    B::AbstractArray{T,3},
+    x::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
 )::Nothing where {T<:half_quant}
     z = NNlib.tanh_fast(x[i, s]) / σ[1] # Scale > 1 to place well within [-1, 1]
     B[i, d, s] = cos((d-1) * acos(z))
@@ -178,10 +178,10 @@ end
 end
 
 function (b::Cheby_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     B = @zeros(I, b.degree+1, S)
     @parallel (1:I, 1:(b.degree+1), 1:S) Cheby_kernel!(B, x, σ)
@@ -189,10 +189,10 @@ function (b::Cheby_basis)(
 end
 
 @parallel_indices (i, o, s) function spline_mul!(
-    y::AbstractArray{T},
-    spl::AbstractArray{T},
-    coef::AbstractArray{T},
-) where {T<:half_quant}
+    y::AbstractArray{T,3},
+    spl::AbstractArray{T,3},
+    coef::AbstractArray{T,3},
+)::Nothing where {T<:half_quant}
     acc = zero(T)
     @inbounds for g = 1:size(spl, 2)
         acc = acc + spl[i, g, s] * coef[i, o, g]
@@ -202,12 +202,12 @@ end
 end
 
 function coef2curve_Spline(
-    b::Lux.AbstractLuxLayer,
-    x_eval::AbstractArray{T},
-    grid::AbstractArray{T},
-    coef::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x_eval::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    coef::AbstractArray{T,3},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     """Top-level function for coef multiplication for all splines."""
     I, S, O, G = size(x_eval)..., size(coef)[2:3]...
     G = b == Cheby_basis ? b.degree : G
@@ -218,12 +218,12 @@ function coef2curve_Spline(
 end
 
 function curve2coef(
-    b::Lux.AbstractLuxLayer,
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x::AbstractArray{T,2},
+    y::AbstractArray{T,3},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     """Least sqaures fit of coefs from spline curves, (only for spline-types)."""
     J, S, O = size(x)..., size(y, 2)
 
@@ -244,14 +244,14 @@ function curve2coef(
 end
 
 ### Specific implementation for FFT basis functions ###
-struct FFT_basis <: Lux.AbstractLuxLayer end
+struct FFT_basis <: AbstractBasis end
 
 @parallel_indices (i, g, s) function FFT_kernel!(
-    even::AbstractArray{T},
-    odd::AbstractArray{T},
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
+    even::AbstractArray{T,3},
+    odd::AbstractArray{T,3},
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
 )::Nothing where {T<:half_quant}
     freq = x[i, s] * grid[i, g]
     freq = 2π * freq * σ[1]
@@ -261,10 +261,10 @@ struct FFT_basis <: Lux.AbstractLuxLayer end
 end
 
 function (b::FFT_basis)(
-    x::AbstractArray{T},
-    grid::AbstractArray{T},
-    σ::AbstractArray{T},
-)::Tuple{AbstractArray{T},AbstractArray{T}} where {T<:half_quant}
+    x::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    σ::AbstractArray{T,1},
+)::Tuple{AbstractArray{T,3},AbstractArray{T,3}} where {T<:half_quant}
     I, S, G = size(x)..., size(grid, 2)
     even = @zeros(I, G, S)
     odd = @zeros(I, G, S)
@@ -273,11 +273,11 @@ function (b::FFT_basis)(
 end
 
 @parallel_indices (i, o, s) function FFT_mul!(
-    y::AbstractArray{T},
-    even::AbstractArray{T},
-    odd::AbstractArray{T},
-    even_coef::AbstractArray{T},
-    odd_coef::AbstractArray{T},
+    y::AbstractArray{T,3},
+    even::AbstractArray{T,3},
+    odd::AbstractArray{T,3},
+    even_coef::AbstractArray{T,3},
+    odd_coef::AbstractArray{T,3},
 )::Nothing where {T<:half_quant}
     acc = zero(T)
     @inbounds for g = 1:size(even, 2)
@@ -288,12 +288,12 @@ end
 end
 
 function coef2curve_FFT(
-    b::Lux.AbstractLuxLayer,
-    x_eval::AbstractArray{T},
-    grid::AbstractArray{T},
-    coef::AbstractArray{T},
-    σ::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
+    b::AbstractBasis,
+    x_eval::AbstractArray{T,2},
+    grid::AbstractArray{T,2},
+    coef::AbstractArray{T,4},
+    σ::AbstractArray{T,1},
+)::AbstractArray{T,3} where {T<:half_quant}
     I, S, O, G = size(x_eval)..., size(coef)[3:4]...
     even, odd = b(x_eval, grid, σ)
     y = @zeros(I, O, S)

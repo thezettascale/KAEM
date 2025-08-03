@@ -57,6 +57,6 @@ abstract type AbstractPrior end
 
 abstract type AbstractLogPrior end
 
-abstract type AbstractQuadrature end end
+abstract type AbstractQuadrature end
 
 end

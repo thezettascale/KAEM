@@ -19,6 +19,11 @@ using .KAN_Model
 using .CNN_Model
 using .Transformer_Model
 
+struct σ_conf{T<:half_quant}
+    noise::T
+    llhood::T
+end
+
 const output_activation_mapping =
     Dict("tanh" => tanh_fast, "sigmoid" => sigmoid_fast, "none" => identity)
 
@@ -36,8 +41,7 @@ const gen_model_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     generator::Any
-    σ_noise::T
-    σ_llhood::T
+    σ::σ_conf{T}
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
     resample_z::Function
@@ -89,8 +93,7 @@ function init_GenModel(
 
     return GenModel(
         generator,
-        noise_var,
-        gen_var,
+        σ_conf(noise_var, gen_var),
         output_activation,
         x_shape,
         resample_fcn,

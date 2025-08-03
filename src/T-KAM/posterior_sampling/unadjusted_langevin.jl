@@ -111,8 +111,6 @@ function (sampler::ULA_sampler)(
         end
     end
 
-    loss_scaling = U(model.loss_scaling)
-
     η = sampler.η
     sqrt_2η = sqrt(2 * η)
     seq = model.lkhood.SEQ
@@ -150,7 +148,7 @@ function (sampler::ULA_sampler)(
                     st_lux,
                     sampler.prior_sampling_bool,
                 ),
-            ) ./ loss_scaling
+            ) ./ model.loss_scaling.full
 
         @parallel (1:Q, 1:P, 1:S) update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η)
         z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))

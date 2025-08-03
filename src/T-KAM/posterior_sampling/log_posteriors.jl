@@ -34,7 +34,7 @@ function unadjusted_logpos(
         ),
     )
     tempered_ll = sum(temps .* ll)
-    return (lp + tempered_ll) * model.loss_scaling
+    return (lp + tempered_ll) * model.loss_scaling.reduced
 end
 
 function unadjusted_logpos_grad(
@@ -110,7 +110,7 @@ function autoMALA_logpos(
         zero_vector;
         ε = model.ε,
     )
-    return (lp + temps .* ll) .* model.loss_scaling, st_ebm, st_gen
+    return (lp + temps .* ll) .* model.loss_scaling.reduced, st_ebm, st_gen
 end
 
 function closure(

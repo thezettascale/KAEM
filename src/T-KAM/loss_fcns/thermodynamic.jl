@@ -97,7 +97,7 @@ function marginal_llhood(
         ε = model.ε,
     )
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
-    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * model.loss_scaling,
+    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * model.loss_scaling.reduced,
     st_lux_ebm,
     st_lux_gen
 end

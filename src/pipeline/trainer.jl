@@ -180,9 +180,6 @@ end
 
 function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
-    # (Move off GPU)
-    loss_scaling = t.model.loss_scaling |> full_quant
-
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
@@ -241,8 +238,8 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             train_idx = train_idx,
             rng = t.rng,
         )
-        t.loss = full_quant(loss) / loss_scaling
-        copy!(G, full_quant.(grads) ./ loss_scaling)
+        t.loss = full_quant(loss) / t.model.loss_scaling.full
+        copy!(G, full_quant.(grads) ./ t.model.loss_scaling.full)
         @reset t.st_lux.ebm = st_ebm
         @reset t.st_lux.gen = st_gen
 

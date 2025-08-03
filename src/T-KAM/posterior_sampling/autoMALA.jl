@@ -110,7 +110,6 @@ function (sampler::autoMALA_sampler)(
     # Initialize from prior 
     z_hq, st_ebm =
         model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
-    loss_scaling = U(model.loss_scaling)
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)

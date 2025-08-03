@@ -30,6 +30,11 @@ using .GeneratorModel
 include("ebm/log_prior_fcns.jl")
 using .LogPriorFCNs
 
+struct LossScaler{T<:half_quant,U<:full_quant}
+    reduced::T
+    full::U
+end
+
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel
     lkhood::GenModel
@@ -46,7 +51,7 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     sample_prior::Function
     posterior_sampler::Any
     loss_fcn::Any
-    loss_scaling::T
+    loss_scaling::LossScaler{T,U}
     ε::T
     file_loc::AbstractString
     max_samples::Int
@@ -86,7 +91,7 @@ function init_T_KAM(
         rng = rng,
     )
     test_loader = DataLoader(test_data, batchsize = batch_size, shuffle = false)
-    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : size(dataset, 1) * size(dataset, 2))
@@ -148,7 +153,7 @@ function init_T_KAM(
         sample_prior,
         nothing,
         nothing,
-        loss_scaling,
+        LossScaler(T(loss_scaling), loss_scaling),
         eps,
         file_loc,
         max_samples,

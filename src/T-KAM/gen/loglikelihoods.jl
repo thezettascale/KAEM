@@ -44,10 +44,10 @@ function log_likelihood_IS(
     """
     B, S = size(x)[end], size(z)[end]
     x̂, st_lux = lkhood.generator(ps, st_kan, st_lux, z)
-    noise = lkhood.σ_noise .* noise
+    noise = lkhood.σ.noise .* noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise)
 
-    ll = IS_loss(x, x̂_noised, ε, 2*lkhood.σ_llhood^2, B, S, lkhood.SEQ)
+    ll = IS_loss(x, x̂_noised, ε, 2*lkhood.σ.llhood^2, B, S, lkhood.SEQ)
     return ll, st_lux
 end
 
@@ -77,10 +77,10 @@ function log_likelihood_MALA(
     """
     B = size(z)[end]
     x̂, st_lux = lkhood.generator(ps, st_kan, st_lux, z)
-    noise = lkhood.σ_noise .* noise
+    noise = lkhood.σ.noise .* noise
     x̂_act = lkhood.output_activation(x̂ .+ noise)
 
-    ll = MALA_loss(x, x̂_act, ε, 2*lkhood.σ_llhood^2, B, lkhood.SEQ)
+    ll = MALA_loss(x, x̂_act, ε, 2*lkhood.σ.llhood^2, B, lkhood.SEQ)
     return ll, st_lux
 end
 

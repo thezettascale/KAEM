@@ -52,7 +52,7 @@ function marginal_llhood(
 
     logprior, st_lux_ebm = model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
     ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
-    return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*model.loss_scaling,
+    return -(mean(logprior_pos) + mean(logllhood) - ex_prior)*model.loss_scaling.reduced,
     st_lux_ebm,
     st_lux_gen
 end

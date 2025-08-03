@@ -57,8 +57,8 @@ function logpos_withgrad(
     @reset st_lux.ebm = st_ebm
     @reset st_lux.gen = st_gen
 
-    return U.(logpos) ./ U(model.loss_scaling),
-    U.(∇z_k) ./ U(model.loss_scaling),
+    return U.(logpos) ./ model.loss_scaling.full,
+    U.(∇z_k) ./ model.loss_scaling.full,
     st_lux
 end
 

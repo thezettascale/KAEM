@@ -14,12 +14,12 @@ else
 end
 
 @parallel_indices (t, i, b) function scaled_dot_prod!(
-    QK::AbstractArray{T},
-    Q::AbstractArray{T},
-    K::AbstractArray{T},
+    QK::AbstractArray{T,3},
+    Q::AbstractArray{T,3},
+    K::AbstractArray{T,3},
     scale::T,
     d_model::Int,
-) where {T<:half_quant}
+)::Nothing where {T<:half_quant}
     acc = zero(T)
     for d = 1:d_model
         acc = acc + Q[d, t, b] * K[d, i, b]
@@ -29,11 +29,11 @@ end
 end
 
 @parallel_indices (d, t, b) function value_kernel!(
-    out::AbstractArray{T},
-    QK::AbstractArray{T},
-    V::AbstractArray{T},
+    out::AbstractArray{T,3},
+    QK::AbstractArray{T,3},
+    V::AbstractArray{T,3},
     I::Int,
-) where {T<:half_quant}
+)::Nothing where {T<:half_quant}
     acc = zero(T)
     for i = 1:I
         acc = acc + QK[t, i, b] * V[d, i, b]
@@ -43,11 +43,11 @@ end
 end
 
 function scaled_dot_product_attention(
-    Q::AbstractArray{T},
-    K::AbstractArray{T},
-    V::AbstractArray{T},
+    Q::AbstractArray{T,3},
+    K::AbstractArray{T,3},
+    V::AbstractArray{T,3},
     d_model::Int,
-) where {T<:half_quant}
+)::AbstractArray{T,3} where {T<:half_quant}
     D, L, B = size(Q)
     I = size(K, 2)
     scale = sqrt(T(d_model))

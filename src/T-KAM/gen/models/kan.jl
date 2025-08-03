@@ -116,7 +116,7 @@ function (gen::KAN_Generator{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Generate data from the KAN likelihood model.

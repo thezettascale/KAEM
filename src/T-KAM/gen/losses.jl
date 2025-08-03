@@ -13,9 +13,9 @@ end
 
 ## Fcns for model with Importance Sampling ##
 @parallel_indices (b, s) function cross_entropy_IS!(
-    ll::AbstractArray{T},
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    ll::AbstractArray{T,2},
+    x::AbstractArray{T,3},
+    x̂::AbstractArray{T,4},
     ε::T,
     scale::T,
 )::Nothing where {T<:half_quant}
@@ -28,9 +28,9 @@ end
 end
 
 @parallel_indices (b, s) function l2_IS!(
-    ll::AbstractArray{T},
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    ll::AbstractArray{T,2},
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,5},
     ε::T,
     scale::T,
 )::Nothing where {T<:half_quant}
@@ -50,7 +50,7 @@ function IS_loss(
     B::Int,
     S::Int,
     SEQ::Bool,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,2} where {T<:half_quant}
     ll = @zeros(B, S)
     stencil = SEQ ? cross_entropy_IS! : l2_IS!
     @parallel (1:B, 1:S) stencil(ll, x, x̂, ε, scale)
@@ -59,9 +59,9 @@ end
 
 ## Fcns for model with Langevin methods ##
 @parallel_indices (b) function cross_entropy_MALA!(
-    ll::AbstractArray{T},
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    ll::AbstractArray{T,1},
+    x::AbstractArray{T,3},
+    x̂::AbstractArray{T,3},
     ε::T,
     scale::T,
 )::Nothing where {T<:half_quant}
@@ -74,9 +74,9 @@ end
 end
 
 @parallel_indices (b) function l2_MALA!(
-    ll::AbstractArray{T},
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    ll::AbstractArray{T,1},
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,4},
     ε::T,
     scale::T,
 )::Nothing where {T<:half_quant}
@@ -95,7 +95,7 @@ function MALA_loss(
     scale::T,
     B::Int,
     SEQ::Bool,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     ll = @zeros(B)
     stencil = SEQ ? cross_entropy_MALA! : l2_MALA!
     @parallel (1:B) stencil(ll, x, x̂, ε, scale)

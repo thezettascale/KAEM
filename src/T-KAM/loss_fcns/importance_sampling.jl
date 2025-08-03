@@ -28,12 +28,12 @@ function sample_importance(
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
-    AbstractArray{T},
-    AbstractArray{T},
+    AbstractArray{T,3},
+    AbstractArray{T,3},
     NamedTuple,
     NamedTuple,
-    AbstractArray{T},
-    AbstractArray{Int},
+    AbstractArray{T,2},
+    AbstractArray{Int,2},
     AbstractArray{T},
 } where {T<:half_quant,U<:full_quant}
 
@@ -73,11 +73,11 @@ end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    weights_resampled::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
+    weights_resampled::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
     m::T_KAM{T},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
@@ -111,11 +111,11 @@ end
 
 function closure(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    weights_resampled::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
+    weights_resampled::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
     m::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
@@ -142,11 +142,11 @@ end
 function grad_importance_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    weights_resampled::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
+    weights_resampled::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,

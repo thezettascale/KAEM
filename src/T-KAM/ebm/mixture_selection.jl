@@ -16,9 +16,9 @@ else
 end
 
 @parallel_indices (q, b) function mask_kernel!(
-    mask::AbstractArray{T},
-    α::AbstractArray{T},
-    rand_vals::AbstractArray{T},
+    mask::AbstractArray{T,3},
+    α::AbstractArray{T,2},
+    rand_vals::AbstractArray{T,2},
     p_size::Int,
 )::Nothing where {T<:half_quant}
     idx = p_size
@@ -40,12 +40,12 @@ end
 end
 
 function choose_component(
-    α::AbstractArray{T},
+    α::AbstractArray{T,2},
     num_samples::Int,
     q_size::Int,
     p_size::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,3} where {T<:half_quant}
     """
     Creates a one-hot mask for mixture model, q, to select one component, p.
 

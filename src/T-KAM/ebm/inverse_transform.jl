@@ -17,10 +17,10 @@ else
 end
 
 @parallel_indices (q, p, b) function interp_kernel!(
-    z::AbstractArray{U},
-    cdf::AbstractArray{U},
-    grid::AbstractArray{U},
-    rand_vals::AbstractArray{U},
+    z::AbstractArray{U,3},
+    cdf::AbstractArray{U,3},
+    grid::AbstractArray{U,2},
+    rand_vals::AbstractArray{U,3},
     grid_size::Int,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, p, b]
@@ -66,7 +66,7 @@ function sample_univariate(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,3},NamedTuple} where {T<:half_quant}
 
     cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm)
     grid_size = size(grid, 2)
@@ -91,10 +91,10 @@ function sample_univariate(
 end
 
 @parallel_indices (q, b) function interp_kernel_mixture!(
-    z::AbstractArray{U},
-    cdf::AbstractArray{U},
-    grid::AbstractArray{U},
-    rand_vals::AbstractArray{U},
+    z::AbstractArray{U,3},
+    cdf::AbstractArray{U,3},
+    grid::AbstractArray{U,2},
+    rand_vals::AbstractArray{U,2},
     grid_size::Int,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, b]
@@ -140,7 +140,7 @@ function sample_mixture(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,3},NamedTuple} where {T<:half_quant}
     """
     Component-wise inverse transform sampling for the ebm-prior.
     p = components of model

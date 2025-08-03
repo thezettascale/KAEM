@@ -102,8 +102,8 @@ function (gen::CNN_Generator)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+    z::AbstractArray{T,3},
+)::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
     """
     Generate data from the CNN likelihood model.
 

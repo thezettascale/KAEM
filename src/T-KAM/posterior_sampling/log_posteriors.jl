@@ -10,9 +10,9 @@ using .LogLikelihoods: log_likelihood_MALA
 
 ### ULA ### 
 function unadjusted_logpos(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     x::AbstractArray{T},
-    temps::AbstractArray{T},
+    temps::AbstractArray{T,1},
     model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -38,10 +38,10 @@ function unadjusted_logpos(
 end
 
 function unadjusted_logpos_grad(
-    z::AbstractArray{T},
-    ∇z::AbstractArray{T},
+    z::AbstractArray{T,3},
+    ∇z::AbstractArray{T,3},
     x::AbstractArray{T},
-    temps::AbstractArray{T},
+    temps::AbstractArray{T,1},
     model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},

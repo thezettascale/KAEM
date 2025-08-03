@@ -151,10 +151,10 @@ function Lux.initialstates(
 end
 
 function (l::univariate_function{T,U})(
-    x::AbstractArray{T},
+    x::AbstractArray{T,2},
     ps::ComponentArray{T},
     st::ComponentArray{T}, # Unlike standard Lux, states are a ComponentArray
-)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+)::AbstractArray{T,3} where {T<:half_quant,U<:full_quant}
     basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     y =
         l.spline_string == "FFT" ?

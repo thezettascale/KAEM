@@ -8,22 +8,22 @@ using CUDA, KernelAbstractions, Tullio
 
 ## Fcns for model with Importance Sampling ##
 function cross_entropy_IS(
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x::AbstractArray{T,3},
+    x̂::AbstractArray{T,4},
     ε::T,
     scale::T,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,2} where {T<:half_quant}
     x̂ = x̂ .+ ε
     @tullio ll[b, s] := log(x̂[d, t, s, b]) * x[d, t, b]
     return ll ./ size(x̂, 1) ./ scale
 end
 
 function l2_IS(
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,5},
     ε::T,
     scale::T,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,2} where {T<:half_quant}
     @tullio ll[b, s] := - (x[w, h, c, b] - x̂[w, h, c, s, b]) ^ 2
     return ll ./ scale
 end
@@ -36,29 +36,29 @@ function IS_loss(
     B::Int,
     S::Int,
     SEQ::Bool,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,2} where {T<:half_quant}
     loss_fcn = SEQ ? cross_entropy_IS : l2_IS
     return loss_fcn(x, x̂, ε, scale)
 end
 
 ## Fcns for model with Langevin methods ##
 function cross_entropy_MALA(
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x::AbstractArray{T,3},
+    x̂::AbstractArray{T,3},
     ε::T,
     scale::T,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     x̂ = x̂ .+ ε
     @tullio ll[b] := log(x̂[d, t, b]) * x[d, t, b]
     return ll ./ size(x, 1) ./ scale
 end
 
 function l2_MALA(
-    x::AbstractArray{T},
-    x̂::AbstractArray{T},
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,4},
     ε::T,
     scale::T,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     @tullio ll[b] := - (x[w, h, c, b] - x̂[w, h, c, b]) ^ 2
     return ll ./ scale
 end
@@ -70,7 +70,7 @@ function MALA_loss(
     scale::T,
     B::Int,
     SEQ::Bool,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     loss_fcn = SEQ ? cross_entropy_MALA : l2_MALA
     return loss_fcn(x, x̂, ε, scale)
 end

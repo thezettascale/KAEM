@@ -16,27 +16,27 @@ else
     using .LogPriorUtils
 end
 
-struct LogPriorULA{T<:half_quant} <: Lux.AbstractLuxLayer
+struct LogPriorULA{T<:half_quant} <: AbstractLogPrior
     ε::T
 end
 
-struct LogPriorUnivariate{T<:half_quant} <: Lux.AbstractLuxLayer
+struct LogPriorUnivariate{T<:half_quant} <: AbstractLogPrior
     ε::T
     normalize::Bool
 end
 
-struct LogPriorMix{T<:half_quant} <: Lux.AbstractLuxLayer
+struct LogPriorMix{T<:half_quant} <: AbstractLogPrior
     ε::T
     normalize::Bool
 end
 
 function (lp::LogPriorULA)(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     ebm::EbmModel{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     Q, P, S = size(z)
     log_π0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
     f, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
@@ -44,12 +44,12 @@ function (lp::LogPriorULA)(
 end
 
 function (lp::LogPriorUnivariate)(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     ebm,
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the ebm-prior.
 
@@ -88,12 +88,12 @@ function (lp::LogPriorUnivariate)(
 end
 
 function (lp::LogPriorMix)(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     ebm::EbmModel{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the mixture ebm-prior.
 

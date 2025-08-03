@@ -27,10 +27,10 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     layernorm_bool::Bool
     depth::Int
     prior_type::AbstractString
-    π_pdf::Lux.AbstractLuxLayer
+    π_pdf::AbstractPrior
     p_size::Int
     q_size::Int
-    quad::Lux.AbstractLuxLayer
+    quad::AbstractQuadrature
     N_quad::Int
     nodes::AbstractArray{T}
     weights::AbstractArray{T}

@@ -34,10 +34,10 @@ else
 end
 
 @parallel_indices (q, p, s) function update_z!(
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
+    z::AbstractArray{U,3},
+    ∇z::AbstractArray{U,3},
     η::U,
-    ξ::AbstractArray{U},
+    ξ::AbstractArray{U,3},
     sqrt_2η::U,
 )::Nothing where {U<:full_quant}
     z[q, p, s] += η * ∇z[q, p, s] + sqrt_2η * ξ[q, p, s]

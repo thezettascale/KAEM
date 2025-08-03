@@ -14,32 +14,32 @@ end
 
 negative_one = pu([-one(half_quant)])
 
-struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
+struct TrapeziumQuadrature <: AbstractQuadrature end
 
-struct GaussLegendreQuadrature <: Lux.AbstractLuxLayer end
+struct GaussLegendreQuadrature <: AbstractQuadrature end
 
 @parallel_indices (q, p, g) function qfirst_exp_kernel!(
-    exp_fg::AbstractArray{T},
-    f::AbstractArray{T},
-    π0::AbstractArray{T},
+    exp_fg::AbstractArray{T,3},
+    f::AbstractArray{T,3},
+    π0::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     exp_fg[q, p, g] = exp(f[q, p, g]) * π0[q, g]
     return nothing
 end
 
 @parallel_indices (q, p, g) function pfirst_exp_kernel!(
-    exp_fg::AbstractArray{T},
-    f::AbstractArray{T},
-    π0::AbstractArray{T},
+    exp_fg::AbstractArray{T,3},
+    f::AbstractArray{T,3},
+    π0::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     exp_fg[q, p, g] = exp(f[q, p, g]) * π0[p, g]
     return nothing
 end
 
 @parallel_indices (q, b, g) function apply_mask!(
-    trapz::AbstractArray{T},
-    exp_fg::AbstractArray{T},
-    component_mask::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    exp_fg::AbstractArray{T,3},
+    component_mask::AbstractArray{T,3},
 )::Nothing where {T<:half_quant}
     acc = zero(T)
     for p = 1:size(component_mask, 2)
@@ -50,16 +50,16 @@ end
 end
 
 @parallel_indices (q, p, g) function weight_kernel!(
-    trapz::AbstractArray{T},
-    weight::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    weight::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     trapz[q, p, g] = weight[p, g] * trapz[q, p, g]
     return nothing
 end
 
 @parallel_indices (q, b, g) function gauss_kernel!(
-    trapz::AbstractArray{T},
-    weight::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    weight::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     trapz[q, b, g] = weight[q, g] * trapz[q, b, g]
     return nothing
@@ -70,8 +70,8 @@ function (tq::TrapeziumQuadrature)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::AbstractArray{T} = negative_one,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+    component_mask::AbstractArray{T,3} = negative_one,
+)::Tuple{AbstractArray{T,3},AbstractArray{T,2},NamedTuple} where {T<:half_quant}
     """Trapezoidal rule for numerical integration: 1/2 * (u(z_{i-1}) + u(z_i)) * Δx"""
 
     # Evaluate prior on grid [0,1]
@@ -135,8 +135,8 @@ function (gq::GaussLegendreQuadrature)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::AbstractArray{T} = negative_one,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+    component_mask::AbstractArray{T,3} = negative_one,
+)::Tuple{AbstractArray{T,3},AbstractArray{T,2},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights = get_gausslegendre(ebm, ps, st_kan)

@@ -15,12 +15,12 @@ end
 
 ### Potential thread divergence on GPU for resampler searchsortedfirsts
 @parallel_indices (b) function residual_kernel!(
-    idxs::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
-    cdf::AbstractArray{U},
-    u::AbstractArray{U},
-    num_remaining::AbstractArray{Int},
-    integer_counts::AbstractArray{Int},
+    idxs::AbstractArray{U,2},
+    ESS_bool::AbstractArray{Bool,1},
+    cdf::AbstractArray{U,2},
+    u::AbstractArray{U,2},
+    num_remaining::AbstractArray{Int,1},
+    integer_counts::AbstractArray{Int,2},
     B::Int,
     N::Int,
 )::Nothing where {U<:full_quant}
@@ -63,12 +63,12 @@ end
 end
 
 function residual_resampler(
-    weights::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
+    weights::AbstractArray{U,2},
+    ESS_bool::AbstractArray{Bool,1},
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{Int} where {U<:full_quant}
+)::AbstractArray{Int,2} where {U<:full_quant}
     """
     Residual resampling for weight filtering.
 
@@ -106,10 +106,10 @@ function residual_resampler(
 end
 
 @parallel_indices (b) function systematic_kernel!(
-    idxs::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
-    cdf::AbstractArray{U},
-    u::AbstractArray{U},
+    idxs::AbstractArray{U,2},
+    ESS_bool::AbstractArray{Bool,1},
+    cdf::AbstractArray{U,2},
+    u::AbstractArray{U,2},
     B::Int,
     N::Int,
 )::Nothing where {U<:full_quant}
@@ -135,12 +135,12 @@ end
 end
 
 function systematic_resampler(
-    weights::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
+    weights::AbstractArray{U,2},
+    ESS_bool::AbstractArray{Bool,1},
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{Int} where {U<:full_quant}
+)::AbstractArray{Int,2} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -164,12 +164,12 @@ function systematic_resampler(
 end
 
 function stratified_resampler(
-    weights::AbstractArray{U},
-    ESS_bool::AbstractArray{Bool},
+    weights::AbstractArray{U,2},
+    ESS_bool::AbstractArray{Bool,1},
     B::Int,
     N::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::AbstractArray{Int} where {U<:full_quant}
+)::AbstractArray{Int,2} where {U<:full_quant}
     """
     Systematic resampling for weight filtering.
 
@@ -193,12 +193,12 @@ function stratified_resampler(
 end
 
 function importance_resampler(
-    weights::AbstractArray{U};
+    weights::AbstractArray{U,2};
     rng::AbstractRNG = Random.default_rng(),
     ESS_threshold::U = full_quant(0.5),
     resampler::Function = systematic_sampler,
     verbose::Bool = false,
-)::AbstractArray{Int} where {U<:full_quant}
+)::AbstractArray{Int,2} where {U<:full_quant}
     """
     Filter the latent variable for a index of the Steppingstone sum using residual resampling.
 

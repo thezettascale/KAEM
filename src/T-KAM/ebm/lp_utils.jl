@@ -15,8 +15,8 @@ else
 end
 
 @parallel_indices (q, p) function log_norm_kernel!(
-    log_Z::AbstractArray{T},
-    norm::AbstractArray{T},
+    log_Z::AbstractArray{T,2},
+    norm::AbstractArray{T,3},
     ε::T,
 )::Nothing where {T<:half_quant}
     G, acc = size(norm, 3), zero(T)
@@ -27,7 +27,7 @@ end
     return nothing
 end
 
-function log_norm(norm::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:half_quant}
+function log_norm(norm::AbstractArray{T,3}, ε::T)::AbstractArray{T,2} where {T<:half_quant}
     Q, P = size(norm, 1), size(norm, 2)
     log_Z = @zeros(Q, P)
     @parallel (1:Q, 1:P) log_norm_kernel!(log_Z, norm, ε)
@@ -35,8 +35,8 @@ function log_norm(norm::AbstractArray{T}, ε::T)::AbstractArray{T} where {T<:hal
 end
 
 @parallel_indices (q, p, s) function stable_logalpha!(
-    log_pdf::AbstractArray{T},
-    alpha::AbstractArray{T},
+    log_pdf::AbstractArray{T,3},
+    alpha::AbstractArray{T,2},
     ε::T,
 )::Nothing where {T<:half_quant}
     log_pdf[q, p, s] = log(log_pdf[q, 1, s] + alpha[q, p] + ε)
@@ -44,22 +44,22 @@ end
 end
 
 function log_alpha(
-    log_απ::AbstractArray{T},
-    alpha::AbstractArray{T},
+    log_απ::AbstractArray{T,3},
+    alpha::AbstractArray{T,2},
     ε::T,
     Q::Int,
     P::Int,
     S::Int,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,3} where {T<:half_quant}
     @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
     return log_απ
 end
 
 @parallel_indices (s) function mix_kernel!(
-    logprob::AbstractArray{T},
-    f::AbstractArray{T},
-    log_απ::AbstractArray{T},
-    log_Z::AbstractArray{T},
+    logprob::AbstractArray{T,1},
+    f::AbstractArray{T,3},
+    log_απ::AbstractArray{T,3},
+    log_Z::AbstractArray{T,2},
     reg::T,
     Q::Int,
     P::Int,
@@ -75,14 +75,14 @@ end
 end
 
 function log_mix_pdf(
-    f::AbstractArray{T},
-    log_απ::AbstractArray{T},
-    log_Z::AbstractArray{T},
+    f::AbstractArray{T,3},
+    log_απ::AbstractArray{T,3},
+    log_Z::AbstractArray{T,2},
     reg::T,
     Q::Int,
     P::Int,
     S::Int,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     log_p = @zeros(S)
     @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, reg, Q, P)
     return log_p

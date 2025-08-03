@@ -18,7 +18,7 @@ function sample_langevin(
     model::T_KAM{T,full_quant},
     x::AbstractArray{T};
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,AbstractArray{T}} where {T<:half_quant}
+)::Tuple{AbstractArray{T,3},NamedTuple,AbstractArray{T}} where {T<:half_quant}
     z, st_lux, = model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng)
     z = z[:, :, :, 1]
     noise = randn(rng, T, model.lkhood.x_shape..., size(z)[end]) |> pu
@@ -27,8 +27,8 @@ end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
@@ -59,8 +59,8 @@ end
 
 function closure(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
@@ -86,8 +86,8 @@ end
 function grad_langevin_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,3},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},

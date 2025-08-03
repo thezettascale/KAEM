@@ -13,11 +13,11 @@ else
 end
 
 @parallel_indices (b, s) function resampled_kernel!(
-    loss::AbstractArray{T},
-    weights_resampled::AbstractArray{T},
-    logprior::AbstractArray{T},
-    logllhood::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
+    loss::AbstractArray{T,2},
+    weights_resampled::AbstractArray{T,2},
+    logprior::AbstractArray{T,1},
+    logllhood::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
 )::Nothing where {T<:half_quant}
     idx = resampled_idxs[b, s]
     loss[b, s] = weights_resampled[b, s] * (logprior[idx] + logllhood[b, idx])
@@ -25,13 +25,13 @@ end
 end
 
 function loss_accum(
-    weights_resampled::AbstractArray{T},
-    logprior::AbstractArray{T},
-    logllhood::AbstractArray{T},
-    resampled_idxs::AbstractArray{Int},
+    weights_resampled::AbstractArray{T,2},
+    logprior::AbstractArray{T,1},
+    logllhood::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
     B::Int,
     S::Int,
-)::AbstractArray{T} where {T<:half_quant}
+)::AbstractArray{T,1} where {T<:half_quant}
     marginal_llhood = @zeros(B, S)
     @parallel (1:B, 1:S) resampled_kernel!(
         marginal_llhood,
@@ -40,7 +40,7 @@ function loss_accum(
         logllhood,
         resampled_idxs,
     )
-    return sum(marginal_llhood; dims = 2)
+    return dropdims(sum(marginal_llhood; dims = 2); dims = 2)
 end
 
 end

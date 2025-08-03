@@ -18,7 +18,7 @@ end
 
 ## Log-likelihood functions ##
 function log_likelihood_IS(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     x::AbstractArray{T},
     lkhood::GenModel{T},
     ps::ComponentArray{T},
@@ -26,7 +26,7 @@ function log_likelihood_IS(
     st_lux::NamedTuple,
     noise::AbstractArray{T};
     ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,2},NamedTuple} where {T<:half_quant}
     """
     Conditional likelihood of the generator.
 
@@ -52,7 +52,7 @@ function log_likelihood_IS(
 end
 
 function log_likelihood_MALA(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     x::AbstractArray{T},
     lkhood::GenModel{T},
     ps::ComponentArray{T},
@@ -60,7 +60,7 @@ function log_likelihood_MALA(
     st_lux::NamedTuple,
     noise::AbstractArray{T};
     ε::T = eps(half_quant),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     """
     Conditional likelihood of the generator sampled by Langevin.
 

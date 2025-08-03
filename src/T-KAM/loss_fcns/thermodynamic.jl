@@ -20,8 +20,8 @@ function sample_thermo(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
-    AbstractArray{T},
-    AbstractArray{T},
+    AbstractArray{T,4},
+    AbstractArray{T,1},
     NamedTuple,
     AbstractArray{T},
     AbstractArray{T},
@@ -45,10 +45,10 @@ end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
@@ -104,10 +104,10 @@ end
 
 function closure(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
@@ -135,10 +135,10 @@ end
 function grad_thermo_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,

@@ -1,6 +1,6 @@
 module Utils
 
-export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping, AbstractBasis
+export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping, AbstractBasis, AbstractLogPrior, AbstractQuadrature
 
 using Lux,
     LinearAlgebra,
@@ -52,5 +52,11 @@ const activation_mapping = Dict(
 )
 
 abstract type AbstractBasis end
+
+abstract type AbstractLogPrior end
+
+abstract type AbstractQuadrature end
+
+abstract type AbstractPrior end
 
 end

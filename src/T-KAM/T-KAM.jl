@@ -153,7 +153,7 @@ function init_T_KAM(
         sample_prior,
         nothing,
         nothing,
-        LossScaler(T(loss_scaling), loss_scaling),
+        LossScaler(half_quant(loss_scaling), loss_scaling),
         eps,
         file_loc,
         max_samples,

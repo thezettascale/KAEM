@@ -110,7 +110,7 @@ function leapfrog(
             dims = (1, 2),
         ) ./ 2
 
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st_lux
+    return z, logpos_ẑ, ∇ẑ, -p, log_r, st_lux
 end
 
 end

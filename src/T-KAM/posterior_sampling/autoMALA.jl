@@ -134,8 +134,8 @@ function (sampler::autoMALA_sampler)(
     log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N)) |> pu
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, sampler.N) |> pu
 
-    num_acceptances = zeros(Int, S, num_temps) |> pu
-    mean_η = zeros(U, S, num_temps) |> pu
+    num_acceptances = zeros(Int, S*num_temps) |> pu
+    mean_η = zeros(U, S*num_temps) |> pu
     momentum = Enzyme.make_zero(z_fq)
 
     burn_in = 0

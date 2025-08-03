@@ -34,7 +34,7 @@ end
 
     # One-hot vector for this (q, b)
     for k = 1:p_size
-        mask[q, b, k] = (idx == k) ? one(T) : zero(T)
+        mask[q, k, b] = (idx == k) ? one(T) : zero(T)
     end
     return nothing
 end

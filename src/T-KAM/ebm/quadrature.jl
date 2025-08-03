@@ -12,7 +12,7 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-negative_one = pu([-one(half_quant)])
+negative_one = - ones(half_quant, 1, 1, 1) |> pu
 
 struct TrapeziumQuadrature <: AbstractQuadrature end
 

@@ -28,7 +28,7 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
     base_activation::Function
-    basis_function::Lux.AbstractLuxLayer
+    basis_function::AbstractBasis
     spline_string::String
     spline_degree::Int
     init_grid::AbstractArray{T}

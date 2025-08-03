@@ -9,7 +9,7 @@ using ..Utils
 using ..T_KAM_model
 
 include("log_posteriors.jl")
-using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
+using .LogPosteriors: autoMALA_value_and_grad
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
     @init_parallel_stencil(CUDA, full_quant, 3)

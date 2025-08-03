@@ -77,7 +77,7 @@ end
     η::AbstractArray{U,1},
     η_prop::AbstractArray{U,1},
     num_acceptances::AbstractArray{Int,1},
-)
+)::Nothing where {U<:full_quant}
     accept = (log_u[s] < log_r[s]) * reversible[s]
     z_fq[q, p, s] = ẑ[q, p, s] * accept + z_fq[q, p, s] * (1 - accept)
     mean_η[s] = mean_η[s] + η_prop[s] * accept

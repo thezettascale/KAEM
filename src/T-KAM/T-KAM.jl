@@ -159,7 +159,7 @@ function init_T_KAM(
         max_samples,
         MALA,
         conf,
-        LogPriorUnivariate(eps, !prior_model.contrastive_div),
+        LogPriorUnivariate(eps, !prior_model.bool_config.contrastive_div),
     )
 end
 

@@ -7,12 +7,16 @@ using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 
+struct BoolConfig
+    layernorm::Bool
+    batchnorm::Bool
+end
+
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Tuple{Vararg{Lux.ConvTranspose}}
     batchnorms::Tuple{Vararg{Lux.BatchNorm}}
-    batchnorm_bool::Bool
-    layernorm_bool::Bool
+    bool_config::BoolConfig
 end
 
 function init_CNN_Generator(
@@ -95,7 +99,7 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), batchnorm_bool, false)
+    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), BoolConfig(false, batchnorm_bool))
 end
 
 function (gen::CNN_Generator)(
@@ -125,15 +129,15 @@ function (gen::CNN_Generator)(
         @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
 
         z, st_new =
-            (gen.batchnorm_bool && i < gen.depth) ?
+            (gen.bool_config.batchnorm && i < gen.depth) ?
             Lux.apply(
                 gen.batchnorms[i],
                 z,
                 ps.batchnorm[symbol_map[i]],
                 st_lux.batchnorm[symbol_map[i]],
             ) : (z, nothing)
-        (gen.batchnorm_bool && i < gen.depth) &&
-            (gen.batchnorm_bool && i < gen.depth) &&
+        (gen.bool_config.batchnorm && i < gen.depth) &&
+            (gen.bool_config.batchnorm && i < gen.depth) &&
             @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
 

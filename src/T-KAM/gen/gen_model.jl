@@ -108,7 +108,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
         i = 1:lkhood.generator.depth
     )
     layernorm_ps = (a = [zero(T)], b = [zero(T)])
-    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
+    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
             for i = 1:length(lkhood.generator.layernorms)
@@ -116,7 +116,7 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:
     end
 
     batchnorm_ps = (a = [zero(T)], b = [zero(T)])
-    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
+    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
             for i = 1:length(lkhood.generator.batchnorms)
@@ -147,7 +147,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     )
 
     st_lyrnorm = (a = [zero(T)], b = [zero(T)])
-    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
+    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
@@ -156,7 +156,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     end
 
     batchnorm_st = (a = [zero(T)], b = [zero(T)])
-    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
+    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
         batchnorm_st = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for

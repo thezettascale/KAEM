@@ -16,6 +16,11 @@ else
     using .Attention
 end
 
+struct BoolConfig
+    layernorm::Bool
+    batchnorm::Bool
+end
+
 struct SEQ_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::NTuple{3,Lux.Dense}
@@ -23,8 +28,7 @@ struct SEQ_Generator <: Lux.AbstractLuxLayer
     attention::NTuple{3,Lux.Dense}
     seq_length::Int
     d_model::Int
-    layernorm_bool::Bool
-    batchnorm_bool::Bool
+    bool_config::BoolConfig
 end
 
 function init_SEQ_Generator(
@@ -93,8 +97,7 @@ function init_SEQ_Generator(
         (attention...,),
         sequence_length,
         d_model,
-        true,
-        false,
+        BoolConfig(true, false),
     )
 end
 

@@ -23,13 +23,13 @@ using .ULA_sampling
 function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     """Moves the model to half precision."""
 
-    if model.prior.layernorm_bool
+    if model.prior.bool_config.layernorm
         for i = 1:length(model.prior.layernorms)
             @reset model.prior.layernorms[i] = model.prior.layernorms[i] |> hq
         end
     end
 
-    if model.lkhood.generator.layernorm_bool
+    if model.lkhood.generator.bool_config.layernorm
         for i = 1:length(model.lkhood.generator.layernorms)
             @reset model.lkhood.generator.layernorms[i] =
                 model.lkhood.generator.layernorms[i] |> hq
@@ -39,7 +39,7 @@ function move_to_hq(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
     if model.lkhood.CNN
         for i = 1:length(model.lkhood.generator.Φ_fcns)
             @reset model.lkhood.generator.Φ_fcns[i] = model.lkhood.generator.Φ_fcns[i] |> hq
-            if model.lkhood.generator.batchnorm_bool
+            if model.lkhood.generator.bool_config.batchnorm
                 @reset model.lkhood.generator.batchnorms[i] =
                     model.lkhood.generator.batchnorms[i] |> hq
             end
@@ -110,13 +110,13 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r)
 
-        @reset model.log_prior = LogPriorMix(model.ε, !model.prior.contrastive_div)
+        @reset model.log_prior = LogPriorMix(model.ε, !model.prior.bool_config.contrastive_div)
         println("Prior sampler: Mix ITS, Quadrature method: $(model.prior.quad_type)")
     else
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r)
-        @reset model.log_prior = LogPriorUnivariate(model.ε, !model.prior.contrastive_div)
+        @reset model.log_prior = LogPriorUnivariate(model.ε, !model.prior.bool_config.contrastive_div)
         println("Prior sampler: Univar ITS, Quadrature method: $(model.prior.quad_type)")
     end
 

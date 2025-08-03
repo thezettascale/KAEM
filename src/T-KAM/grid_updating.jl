@@ -105,7 +105,7 @@ function update_model_grid(
             z = reshape(z, P, Q*B)
 
             for i = 1:model.prior.depth
-                if model.prior.layernorm_bool && i != 1
+                if model.prior.bool_config.layernorm && i != 1
                     z, st_ebm = Lux.apply(
                         model.prior.layernorms[i-1],
                         z,
@@ -180,7 +180,7 @@ function update_model_grid(
     z = dropdims(sum(z; dims = 2); dims = 2)
 
     for i = 1:model.lkhood.generator.depth
-        if model.lkhood.generator.layernorm_bool
+        if model.lkhood.generator.bool_config.layernorm
             z, st_gen = Lux.apply(
                 model.lkhood.generator.layernorms[i],
                 z,

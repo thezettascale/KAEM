@@ -9,12 +9,16 @@ using ChainRules.ChainRulesCore: @ignore_derivatives
 using ..Utils
 using ..UnivariateFunctions
 
+struct BoolConfig
+    layernorm::Bool
+    batchnorm::Bool
+end
+
 struct KAN_Generator{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Tuple{Vararg{univariate_function{T,U}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
-    layernorm_bool::Bool
-    batchnorm_bool::Bool
+    bool_config::BoolConfig
     x_shape::Tuple
 end
 
@@ -106,8 +110,7 @@ function init_KAN_Generator(
         depth,
         (Φ_functions...,),
         (layernorms...,),
-        layernorm_bool,
-        false,
+        BoolConfig(layernorm_bool, false),
         x_shape,
     )
 end
@@ -137,14 +140,14 @@ function (gen::KAN_Generator{T,U})(
     # KAN functions
     for i = 1:gen.depth
         z, st_lyrnorm_new =
-            gen.layernorm_bool ?
+            gen.bool_config.layernorm ?
             Lux.apply(
                 gen.layernorms[i],
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
             ) : (z, nothing)
-        gen.layernorm_bool &&
+        gen.bool_config.layernorm &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
 
         z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])

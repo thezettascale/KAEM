@@ -84,7 +84,7 @@ function marginal_llhood(
 
     logprior, st_lux_ebm =
         model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
-    ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
+    ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : zero(T)
 
     logllhood, st_lux_gen = log_likelihood_MALA(
         z_prior,

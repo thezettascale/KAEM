@@ -21,10 +21,15 @@ using ..RefPriors
 include("quadrature.jl")
 using .Quadrature
 
+struct BoolConfig
+    layernorm::Bool
+    contrastive_div::Bool
+end
+
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     fcns_qp::Tuple{Vararg{univariate_function{T,U}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
-    layernorm_bool::Bool
+    bool_config::BoolConfig
     depth::Int
     prior_type::AbstractString
     π_pdf::AbstractPrior
@@ -34,7 +39,6 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     N_quad::Int
     nodes::AbstractArray{T}
     weights::AbstractArray{T}
-    contrastive_div::Bool
     quad_type::AbstractString
     ula::Bool
     mixture_model::Bool
@@ -139,7 +143,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     return EbmModel(
         (functions...,),
         (layernorms...,),
-        layernorm_bool,
+        BoolConfig(layernorm_bool, contrastive_div),
         length(widths)-1,
         prior_type,
         ref_initializer(eps),
@@ -149,7 +153,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         N_quad,
         nodes,
         weights,
-        contrastive_div,
         quad_type,
         ula,
         mixture_model,
@@ -182,7 +185,7 @@ function (ebm::EbmModel{T,U})(
 
     for i = 1:ebm.depth
         z, st_lyrnorm_new =
-            (ebm.layernorm_bool && i != 1) ?
+            (ebm.bool_config.layernorm && i != 1) ?
             Lux.apply(
                 ebm.layernorms[i-1],
                 z,
@@ -190,7 +193,7 @@ function (ebm::EbmModel{T,U})(
                 st_lyrnorm[symbol_map[i]],
             ) : (z, nothing)
 
-        (ebm.layernorm_bool && i != 1) &&
+        (ebm.bool_config.layernorm && i != 1) &&
             @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
 
         z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
@@ -211,7 +214,7 @@ function Lux.initialparameters(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
     layernorm_ps = (a = [zero(T)], b = [zero(T)])
-    if prior.layernorm_bool && length(prior.layernorms) > 0
+    if prior.bool_config.layernorm && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
             i = 1:length(prior.layernorms)
@@ -238,7 +241,7 @@ function Lux.initialstates(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
     st_lyrnorm = (a = [zero(T)], b = [zero(T)])
-    if prior.layernorm_bool && length(prior.layernorms) > 0
+    if prior.bool_config.layernorm && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
             i = 1:length(prior.layernorms)

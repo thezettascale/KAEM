@@ -21,7 +21,7 @@ using ..RefPriors
 include("quadrature.jl")
 using .Quadrature
 
-struct BoolConfig
+struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     contrastive_div::Bool
 end

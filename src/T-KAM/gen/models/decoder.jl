@@ -16,7 +16,7 @@ else
     using .Attention
 end
 
-struct BoolConfig
+struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     batchnorm::Bool
 end

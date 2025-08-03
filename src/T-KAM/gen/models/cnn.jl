@@ -7,7 +7,7 @@ using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 
-struct BoolConfig
+struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     batchnorm::Bool
 end

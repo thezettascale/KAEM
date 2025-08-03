@@ -9,7 +9,7 @@ using ..T_KAM_model
 using ..HamiltonianMonteCarlo
 
 function safe_step_size_update(
-    η::AbstractArray{U},
+    η::AbstractArray{U,1},
     δ::AbstractArray{Int},
     Δη::U,
 ) where {U<:full_quant}
@@ -18,12 +18,12 @@ function safe_step_size_update(
 end
 
 function check_reversibility(
-    ẑ::AbstractArray{U},
-    z::AbstractArray{U},
-    η::AbstractArray{U},
-    η_prime::AbstractArray{U};
+    ẑ::AbstractArray{U,3},
+    z::AbstractArray{U,3},
+    η::AbstractArray{U,1},
+    η_prime::AbstractArray{U,1};
     tol::U = full_quant(1e-6),
-) where {U<:full_quant}
+)::AbstractArray{Bool,1} where {U<:full_quant}
     # Both checks may be required to maintain detailed balance
     # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
     step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
@@ -31,16 +31,16 @@ function check_reversibility(
 end
 
 function select_step_size(
-    log_a::AbstractArray{U},
-    log_b::AbstractArray{U},
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
+    log_a::AbstractArray{U,1},
+    log_b::AbstractArray{U,1},
+    z::AbstractArray{U,3},
+    ∇z::AbstractArray{U,3},
     x::AbstractArray{T},
-    temps::AbstractArray{T},
-    logpos_z::AbstractArray{U},
-    momentum::AbstractArray{U},
-    M::AbstractArray{U},
-    η_init::AbstractArray{U},
+    temps::AbstractArray{T,1},
+    logpos_z::AbstractArray{U,1},
+    momentum::AbstractArray{U,3},
+    M::AbstractArray{U,2},
+    η_init::AbstractArray{U,1},
     Δη::U,
     model::T_KAM{T,U},
     ps::ComponentArray{T},
@@ -49,12 +49,12 @@ function select_step_size(
     η_min::U = full_quant(1e-5),
     η_max::U = one(full_quant),
 )::Tuple{
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
+    AbstractArray{U,3},
+    AbstractArray{U,1},
+    AbstractArray{U,3},
+    AbstractArray{U,3},
+    AbstractArray{U,1},
+    AbstractArray{U,1},
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
@@ -81,7 +81,7 @@ function select_step_size(
             temps[active_chains],
             logpos_z[active_chains],
             momentum[:, :, active_chains],
-            M[:, :, active_chains],
+            M,
             η_init[active_chains],
             model,
             ps,
@@ -117,30 +117,30 @@ function select_step_size(
 end
 
 function autoMALA_step(
-    log_a::AbstractArray{U},
-    log_b::AbstractArray{U},
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
+    log_a::AbstractArray{U,1},
+    log_b::AbstractArray{U,1},
+    z::AbstractArray{U,3},
+    ∇z::AbstractArray{U,3},
     x::AbstractArray{T},
-    temps::AbstractArray{T},
-    logpos_z::AbstractArray{U},
-    momentum::AbstractArray{U},
-    M::AbstractArray{U},
+    temps::AbstractArray{T,1},
+    logpos_z::AbstractArray{U,1},
+    momentum::AbstractArray{U,3},
+    M::AbstractArray{U,2},
     model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    η_init::AbstractArray{U},
+    η_init::AbstractArray{U,1},
     Δη::U,
     η_min::U,
     η_max::U,
     ε::U,
 )::Tuple{
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
+    AbstractArray{U,3},
+    AbstractArray{U,1},
+    AbstractArray{U,1},
+    AbstractArray{U,1},
+    AbstractArray{U,1},
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 

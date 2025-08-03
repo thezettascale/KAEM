@@ -144,8 +144,8 @@ function (sampler::autoMALA_sampler)(
     for i = 1:sampler.N
         momentum, M = sample_momentum(z_fq, M)
 
-        log_a, log_b = dropdims(minimum(ratio_bounds[:, :, i]; dims = 3); dims = 3),
-        dropdims(maximum(ratio_bounds[:, :, i]; dims = 3); dims = 3)
+        log_a, log_b = dropdims(minimum(ratio_bounds[:, :, i]; dims = 2); dims = 2),
+        dropdims(maximum(ratio_bounds[:, :, i]; dims = 2); dims = 2)
         
         logpos_z, ∇z_fq, st_lux =
             logpos_withgrad(T.(z_fq), T.(∇z_fq), x_t, t_expanded, model, ps, st_kan, st_lux)

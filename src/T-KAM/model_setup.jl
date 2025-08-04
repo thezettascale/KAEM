@@ -74,7 +74,11 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 
     # Defaults
     @reset model.loss_fcn = ImportanceLoss()
-    @reset model.posterior_sampler = initialize_ULA_sampler(; η = η_init, N = num_steps)
+    @reset model.posterior_sampler = initialize_ULA_sampler(;
+        η = η_init,
+        N = num_steps,
+        RE_frequency = replica_exchange_frequency,
+    )
 
     if model.N_t > 1
         @reset model.loss_fcn = ThermodynamicLoss()
@@ -110,13 +114,15 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r)
 
-        @reset model.log_prior = LogPriorMix(model.ε, !model.prior.bool_config.contrastive_div)
+        @reset model.log_prior =
+            LogPriorMix(model.ε, !model.prior.bool_config.contrastive_div)
         println("Prior sampler: Mix ITS, Quadrature method: $(model.prior.quad_type)")
     else
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r)
-        @reset model.log_prior = LogPriorUnivariate(model.ε, !model.prior.bool_config.contrastive_div)
+        @reset model.log_prior =
+            LogPriorUnivariate(model.ε, !model.prior.bool_config.contrastive_div)
         println("Prior sampler: Univar ITS, Quadrature method: $(model.prior.quad_type)")
     end
 

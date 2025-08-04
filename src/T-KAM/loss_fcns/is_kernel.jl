@@ -31,7 +31,7 @@ function loss_accum(
     resampled_idxs::AbstractArray{Int,2},
     B::Int,
     S::Int,
-)::AbstractArray{T,1} where {T<:half_quant}
+)::T where {T<:half_quant}
     marginal_llhood = @zeros(B, S)
     @parallel (1:B, 1:S) resampled_kernel!(
         marginal_llhood,
@@ -40,7 +40,7 @@ function loss_accum(
         logllhood,
         resampled_idxs,
     )
-    return dropdims(sum(marginal_llhood; dims = 2); dims = 2)
+    return mean(sum(marginal_llhood; dims = 2))
 end
 
 end

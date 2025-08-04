@@ -18,7 +18,10 @@ using Tullio, KernelAbstractions
 using ..Utils
 
 ## Basis functions with Stencil loops ##
-function extend_grid(grid::AbstractArray{T,2}; k_extend::Int = 0)::AbstractArray{T,2} where {T<:half_quant}
+function extend_grid(
+    grid::AbstractArray{T,2};
+    k_extend::Int = 0,
+)::AbstractArray{T,2} where {T<:half_quant}
     h = (grid[:, end] - grid[:, 1]) / (size(grid, 2) - 1)
 
     for i = 1:k_extend

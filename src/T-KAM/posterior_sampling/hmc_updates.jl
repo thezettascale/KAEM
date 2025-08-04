@@ -53,7 +53,8 @@ function logpos_withgrad(
     AbstractArray{U,3},
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
-    logpos, ∇z_k, st_ebm, st_gen = autoMALA_value_and_grad(z, ∇z, x, temps, model, ps, st_kan, st_lux)
+    logpos, ∇z_k, st_ebm, st_gen =
+        autoMALA_value_and_grad(z, ∇z, x, temps, model, ps, st_kan, st_lux)
     @reset st_lux.ebm = st_ebm
     @reset st_lux.gen = st_gen
 
@@ -96,7 +97,8 @@ function leapfrog(
     @parallel (1:Q, 1:P, 1:S) position_update!(z, p, ∇z, M, η)
 
     # Get gradient at new position
-    logpos_ẑ, ∇ẑ, st_lux = logpos_withgrad(T.(z), T.(∇z), x, temps, model, ps, st_kan, st_lux)
+    logpos_ẑ, ∇ẑ, st_lux =
+        logpos_withgrad(T.(z), T.(∇z), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
     @parallel (1:Q, 1:P, 1:S) momentum_update!(p, ∇ẑ, M, η)

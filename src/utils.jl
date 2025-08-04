@@ -1,6 +1,17 @@
 module Utils
 
-export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping, AbstractBasis, AbstractPrior, AbstractLogPrior, AbstractQuadrature, AbstractBoolConfig
+export pu,
+    half_quant,
+    full_quant,
+    hq,
+    fq,
+    symbol_map,
+    activation_mapping,
+    AbstractBasis,
+    AbstractPrior,
+    AbstractLogPrior,
+    AbstractQuadrature,
+    AbstractBoolConfig
 
 using Lux,
     LinearAlgebra,

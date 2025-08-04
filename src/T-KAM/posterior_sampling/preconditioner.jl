@@ -73,10 +73,10 @@ function init_mass_matrix(
     z::AbstractArray{U,3},
     rng::AbstractRNG = Random.default_rng(),
 )::AbstractArray{U,2} where {U<:full_quant}
-    Σ = sum((z .- mean(z; dims=3)).^2; dims=3) ./ (size(z, 3) - 1) # Diagonal Covariance
+    Σ = sum((z .- mean(z; dims = 3)) .^ 2; dims = 3) ./ (size(z, 3) - 1) # Diagonal Covariance
     β = rand(rng, Truncated(Beta(1, 1), 0.5, 2/3)) |> U
     @. Σ = sqrt(β * (1 / Σ) + (1 - β)) # Augmented mass matrix 
-    return dropdims(Σ; dims=3)
+    return dropdims(Σ; dims = 3)
 end
 
 # This is transformed momentum!
@@ -88,8 +88,8 @@ function sample_momentum(
 )::Tuple{AbstractArray{U,3},AbstractArray{U,2}} where {U<:full_quant}
 
     # Initialize M^{1/2}
-    Σ = sqrt.(sum((z .- mean(z; dims=3)).^2; dims=3) ./ (size(z, 3) - 1))
-    build_preconditioner!(M, preconditioner, dropdims(Σ; dims=3); rng = rng)
+    Σ = sqrt.(sum((z .- mean(z; dims = 3)) .^ 2; dims = 3) ./ (size(z, 3) - 1))
+    build_preconditioner!(M, preconditioner, dropdims(Σ; dims = 3); rng = rng)
 
     # Sample y ~ N(0,I) directly (transformed momentum)
     y = randn(rng, U, size(z)) |> pu

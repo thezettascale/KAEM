@@ -14,8 +14,8 @@ end
 
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{Lux.ConvTranspose}}
-    batchnorms::Tuple{Vararg{Lux.BatchNorm}}
+    Φ_fcns::Vector{Lux.ConvTranspose}
+    batchnorms::Vector{Lux.BatchNorm}
     bool_config::BoolConfig
 end
 
@@ -99,7 +99,7 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), BoolConfig(false, batchnorm_bool))
+    return CNN_Generator(depth, Φ_functions, batchnorms, BoolConfig(false, batchnorm_bool))
 end
 
 function (gen::CNN_Generator)(

@@ -210,8 +210,8 @@ function (sampler::autoMALA_sampler)(
                     z_t = copy(z_hq[:, :, :, t])
                     z_t1 = copy(z_hq[:, :, :, t+1])
 
-                    noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, i]
-                    noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, i]
+                    noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
+                    noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
 
                     ll_t, st_gen = log_likelihood_MALA(
                         z_t,

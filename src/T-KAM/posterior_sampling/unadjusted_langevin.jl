@@ -131,7 +131,7 @@ function (sampler::ULA_sampler)(
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> pu
-    ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, sampler.N) |> pu
+    ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, i])
@@ -158,6 +158,9 @@ function (sampler::ULA_sampler)(
 
                 z_t = copy(z_hq[:, :, :, t])
                 z_t1 = copy(z_hq[:, :, :, t+1])
+                
+                noise_1 = ll_noise[:, :, :, 1, t, i]
+                noise_2 = ll_noise[:, :, :, 2, t, i]
 
                 ll_t, st_gen = log_likelihood_MALA(
                     z_t,
@@ -166,7 +169,7 @@ function (sampler::ULA_sampler)(
                     ps.gen,
                     st_kan.gen,
                     st_lux.gen,
-                    ll_noise[:, :, :, 1, i];
+                    noise_1;
                     ε = model.ε,
                 )
                 ll_t1, st_gen = log_likelihood_MALA(
@@ -176,7 +179,7 @@ function (sampler::ULA_sampler)(
                     ps.gen,
                     st_kan.gen,
                     st_lux.gen,
-                    ll_noise[:, :, :, 2, i];
+                    noise_2;
                     ε = model.ε,
                 )
 

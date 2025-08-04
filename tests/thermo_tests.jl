@@ -38,7 +38,12 @@ function test_posterior_sampling()
         train_idx = 1,
         rng = Random.default_rng(),
     )
-    @test size(z_posterior) == (10, 5, 10, 4)
+
+    if model.prior.mixture_model || model.prior.ula
+        @test size(z_posterior) == (10, 5, 10, 4)
+    else
+        @test size(z_posterior) == (10, 1, 10, 4)
+    end
     @test size(temps) == (4,)
     @test !any(isnan, z_posterior)
 end

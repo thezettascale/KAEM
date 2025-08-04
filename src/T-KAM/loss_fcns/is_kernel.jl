@@ -40,7 +40,7 @@ function loss_accum(
         logllhood,
         resampled_idxs,
     )
-    return mean(sum(marginal_llhood; dims = 2))
+    return sum(marginal_llhood) / B
 end
 
 end

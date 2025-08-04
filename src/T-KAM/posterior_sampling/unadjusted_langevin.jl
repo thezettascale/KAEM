@@ -130,7 +130,7 @@ function (sampler::ULA_sampler)(
 
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, num_temps-1, sampler.N)) |> pu
+    log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
 
     for i = 1:sampler.N

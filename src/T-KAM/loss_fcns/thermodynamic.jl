@@ -164,7 +164,7 @@ function grad_thermo_llhood(
             )
         ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
     else
-        CUDA.@fastmath Enzyme.autodiff(
+        CUDA.@fastmath Enzyme.autodiff_deferred(
             Enzyme.set_runtime_activity(Enzyme.Reverse),
             Enzyme.Const(closure),
             Enzyme.Active,

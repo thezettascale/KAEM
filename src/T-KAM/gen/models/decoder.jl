@@ -23,9 +23,9 @@ end
 
 struct SEQ_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::NTuple{3,Lux.Dense}
-    layernorms::NTuple{2,Lux.LayerNorm}
-    attention::NTuple{3,Lux.Dense}
+    Φ_fcns::Vector{Lux.Dense}
+    layernorms::Vector{Lux.LayerNorm}
+    attention::Vector{Lux.Dense}
     seq_length::Int
     d_model::Int
     bool_config::BoolConfig
@@ -92,9 +92,9 @@ function init_SEQ_Generator(
 
     return SEQ_Generator(
         depth,
-        (Φ_functions...,),
-        (layernorms...,),
-        (attention...,),
+        Φ_functions,
+        layernorms,
+        attention,
         sequence_length,
         d_model,
         BoolConfig(true, false),

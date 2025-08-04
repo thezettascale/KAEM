@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # File path to your HDF5 file
-file_path = 'logs/Vanilla/n_z=100/ULA/cnn=true/CIFAR10_1/generated_images_epoch_20.h5'
+file_path = 'logs/Vanilla/SVHN/mixture/generated_images_epoch_3.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
     image_data = h5_file['samples'][()] 
 
 # Define grid dimensions
-grid_size = (20, 20) 
+grid_size = (5, 5) 
 fig, axes = plt.subplots(grid_size[0], grid_size[1], figsize=(10, 10))
 
 for i in range(grid_size[0] * grid_size[1]):

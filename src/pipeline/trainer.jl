@@ -2,32 +2,36 @@ module trainer
 
 export T_KAM_trainer, init_trainer, train!
 
-include("../T-KAM/T-KAM.jl")
-include("../T-KAM/model_setup.jl")
-include("../T-KAM/grid_updating.jl")
-include("optimizer.jl")
-include("../utils.jl")
-include("data_utils.jl")
-using .T_KAM_model
-using .ModelSetup
-using .ModelGridUpdating: update_model_grid
-using .optimization
-using .Utils: pu, half_quant, full_quant, hq, fq
-using .DataUtils: get_vision_dataset, get_text_dataset
 using Flux: onecold, mse
-
 using CUDA
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
 using Enzyme
+
+include("../utils.jl")
+using .Utils
+
+include("../T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../T-KAM/model_setup.jl")
+using .ModelSetup
+
+include("../T-KAM/grid_updating.jl")
+using .ModelGridUpdating
+
+include("optimizer.jl")
+include("data_utils.jl")
+using .optimization
+using .DataUtils: get_vision_dataset, get_text_dataset
 
 mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     model::Any
     cnn::Bool
     o::opt
     dataset_name::AbstractString
-    ps::ComponentArray
-    st_kan::ComponentArray
+    ps::ComponentArray{U}
+    st_kan::ComponentArray{T}
     st_lux::NamedTuple
     N_epochs::Int
     train_loader_state::Tuple{Any,Int}
@@ -39,7 +43,7 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     save_model::Bool
     gen_type::AbstractString
     checkpoint_every::Int
-    loss::full_quant
+    loss::U
     rng::AbstractRNG
 end
 
@@ -103,7 +107,7 @@ function init_trainer(
     end
 
 
-    model_type = N_t > 1 ? "thermo/$(dataset_name)" : "vanilla/$(dataset_name)"
+    model_type = N_t > 1 ? "Thermodynamic/$(dataset_name)" : "Vanilla/$(dataset_name)"
 
     prior_spline_fcn =
         "importance" *
@@ -111,7 +115,7 @@ function init_trainer(
         retrieve(conf, "EbmModel", "π_0") *
         "_" *
         retrieve(conf, "EbmModel", "spline_function")
-    if dataset_name in ["DARCY_PERM", "DARCY_FLOW", "MNIST", "FMNIST"]
+    if dataset_name in ["DARCY_FLOW", "MNIST", "FMNIST"]
         model_type = model_type * "/" * prior_spline_fcn
     end
 
@@ -176,9 +180,6 @@ end
 
 function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
-    # (Move off GPU)
-    loss_scaling = t.model.loss_scaling |> full_quant
-
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
@@ -200,19 +201,22 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     # Gradient for a single batch
     function grad_fcn(G, u, args...)
         t.ps = u
+        ps_hq = half_quant.(t.ps)
 
         # Grid updating for likelihood model
         if (
             train_idx == 1 || (train_idx - t.last_grid_update >= t.grid_update_frequency)
         ) && (t.model.update_llhood_grid || t.model.update_prior_grid)
-            t.model, t.ps, t.st_kan, t.st_lux = update_model_grid(
+            t.model, ps_hq, t.st_kan, t.st_lux = update_model_grid(
                 t.model,
                 t.x,
-                t.ps,
+                ps_hq,
                 t.st_kan,
                 Lux.testmode(t.st_lux);
                 rng = t.rng,
             )
+
+            t.ps = full_quant.(ps_hq)
             t.grid_update_frequency =
                 train_idx > 1 ?
                 floor(t.grid_update_frequency * (2 - t.model.grid_update_decay)^train_idx) :
@@ -225,7 +229,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
 
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
         loss, grads, st_ebm, st_gen = t.model.loss_fcn(
-            half_quant(t.ps),
+            ps_hq,
             Enzyme.make_zero(grads),
             t.st_kan,
             t.st_lux,
@@ -234,13 +238,13 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             train_idx = train_idx,
             rng = t.rng,
         )
-        t.loss = full_quant(loss) / loss_scaling
-        copy!(G, full_quant.(grads) ./ loss_scaling)
+        t.loss = full_quant(loss) / t.model.loss_scaling.full
+        copy!(G, full_quant.(grads) ./ t.model.loss_scaling.full)
         @reset t.st_lux.ebm = st_ebm
         @reset t.st_lux.gen = st_gen
 
         isnan(norm(G)) || isinf(norm(G)) && find_nan(G)
-        t.model.verbose && println("Iter: $(train_idx), Grad norm: $(norm(G))")
+        t.model.verbose && println("Iter: $(train_idx), Loss: $(t.loss)")
         return G
     end
 
@@ -255,9 +259,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         if train_idx % num_batches == 0 || train_idx == 1
 
             test_loss = 0
+            ps_hq = half_quant.(t.ps)
             for x in t.model.test_loader
                 x_gen, st_ebm, st_gen = CUDA.@fastmath t.model(
-                    t.ps,
+                    ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
                     size(x)[end];
@@ -283,7 +288,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             now_time = time() - start_time
             epoch = train_idx == 1 ? 0 : fld(train_idx, num_batches)
 
-            m.verbose && println(
+            t.model.verbose && println(
                 "Epoch: $(epoch), Train Loss: $(train_loss), Test Loss: $(test_loss)",
             )
 
@@ -305,9 +310,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             # Save images
             gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
             idx = length(t.model.lkhood.x_shape) + 1
-            for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
+            ps_hq = half_quant.(t.ps)
+            for i = 1:(fld(t.num_generated_samples, 10)//t.batch_size_for_gen) # Save 1/10 of the samples to conserve space
                 batch, st_ebm, st_gen = CUDA.@fastmath t.model(
-                    t.ps,
+                    ps_hq,
                     t.st_kan,
                     Lux.testmode(t.st_lux),
                     t.batch_size_for_gen;
@@ -342,7 +348,8 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             (train_idx % num_batches == 0) ? iterate(t.model.train_loader) :
             iterate(t.model.train_loader, t.train_loader_state)
         t.x = pu(x)
-        return loss
+
+        return t.loss
     end
 
     start_time = time()
@@ -383,9 +390,10 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     # Generate samples
     gen_data = zeros(half_quant, t.model.lkhood.x_shape..., 0)
     idx = length(t.model.lkhood.x_shape) + 1
+    ps_hq = half_quant.(t.ps)
     for i = 1:(t.num_generated_samples//t.batch_size_for_gen)
-        batch, t.st = CUDA.@fastmath t.model(
-            t.ps,
+        batch, st_ebm, st_gen = CUDA.@fastmath t.model(
+            ps_hq,
             t.st_kan,
             Lux.testmode(t.st_lux),
             t.batch_size_for_gen;
@@ -408,6 +416,14 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             Float32.(gen_data),
         )
     end
+
+    t.save_model && jldsave(
+        t.model.file_loc * "saved_model.jld2";
+        params = t.ps |> cpu_device(),
+        kan_state = t.st_kan |> cpu_device(),
+        lux_state = t.st_lux |> cpu_device(),
+        train_idx = train_idx,
+    )
 
     t.save_model && jldsave(
         t.model.file_loc * "saved_model.jld2";

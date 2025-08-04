@@ -11,7 +11,8 @@ using CUDA,
     Accessors,
     Statistics,
     Enzyme,
-    ComponentArrays
+    ComponentArrays,
+    ParallelStencil
 
 using ..Utils
 using ..T_KAM_model
@@ -27,6 +28,12 @@ using .HamiltonianMonteCarlo
 
 include("step_search.jl")
 using .autoMALA_StepSearch
+
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
+end
 
 struct autoMALA_sampler{U<:full_quant}
     N::Int
@@ -53,12 +60,30 @@ function initialize_autoMALA_sampler(;
     return autoMALA_sampler(
         N,
         N_unadjusted,
-        repeat([η], samples, num_temps) |> pu,
+        repeat([η], samples*num_temps) |> pu,
         Δη,
         η_min,
         η_max,
         RE_frequency,
     )
+end
+
+@parallel_indices (q, p, s) function accept_reject!(
+    z_fq::AbstractArray{U,3},
+    log_u::AbstractArray{U,1},
+    log_r::AbstractArray{U,1},
+    reversible::AbstractArray{Bool,1},
+    mean_η::AbstractArray{U,1},
+    η::AbstractArray{U,1},
+    η_prop::AbstractArray{U,1},
+    num_acceptances::AbstractArray{Int,1},
+)::Nothing where {U<:full_quant}
+    accept = (log_u[s] < log_r[s]) * reversible[s]
+    z_fq[q, p, s] = ẑ[q, p, s] * accept + z_fq[q, p, s] * (1 - accept)
+    mean_η[s] = mean_η[s] + η_prop[s] * accept
+    η[s] = η_prop[s] * accept + η[s] * (1 - accept)
+    num_acceptances[s] = num_acceptances[s] + accept
+    return nothing
 end
 
 function (sampler::autoMALA_sampler)(
@@ -85,51 +110,44 @@ function (sampler::autoMALA_sampler)(
     # Initialize from prior 
     z_hq, st_ebm =
         model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
-    loss_scaling = U(model.loss_scaling)
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)
+    ∇z_hq = Enzyme.make_zero(z_hq)
 
     # Pre-allocate for both precisions
-    z_fq = U.(z_hq)
+    z_fq = U.(reshape(z_hq, Q, P, S*num_temps))
     ∇z_fq = Enzyme.make_zero(z_fq)
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
-    t_expanded = repeat(reshape(temps, 1, num_temps), S, 1) |> pu
-    x_t =
-        model.lkhood.SEQ ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, 1, 1, num_temps)
+    t_expanded = repeat(temps, S) |> pu
+    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
 
     # Initialize preconditioner
-    M = zeros(U, Q, P, 1, num_temps)
-    z_cpu = cpu_device()(z_fq)
-    for k = 1:num_temps
-        M[:, :, 1, k] = init_mass_matrix(view(z_cpu,:,:,:,k))
-    end
+    M = init_mass_matrix(z_fq)
     @reset sampler.η = pu(sampler.η)
 
-    log_u = log.(rand(rng, num_temps, sampler.N)) |> pu
-    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S, num_temps, 2, sampler.N))) |> pu
-    log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N)) |> pu
+    log_u = log.(rand(rng, S*num_temps, sampler.N)) |> pu
+    ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S*num_temps, 2, sampler.N))) |> pu
+    log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N))
+    ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
 
-    num_acceptances = zeros(Int, S, num_temps) |> pu
-    mean_η = zeros(U, S, num_temps) |> pu
+    num_acceptances = zeros(Int, S*num_temps) |> pu
+    mean_η = zeros(U, S*num_temps) |> pu
     momentum = Enzyme.make_zero(z_fq)
 
     burn_in = 0
     η = sampler.η
 
     for i = 1:sampler.N
-        z_cpu = cpu_device()(z_fq)
-        for k = 1:num_temps
-            momentum[:, :, :, k], M[:, :, 1, k] =
-                sample_momentum(z_cpu[:, :, :, k], M[:, :, 1, k])
-        end
+        momentum, M = sample_momentum(z_fq, M)
 
-        log_a, log_b = dropdims(minimum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3),
-        dropdims(maximum(ratio_bounds[:, :, :, i]; dims = 3); dims = 3)
+        log_a, log_b = dropdims(minimum(ratio_bounds[:, :, i]; dims = 2); dims = 2),
+        dropdims(maximum(ratio_bounds[:, :, i]; dims = 2); dims = 2)
+
         logpos_z, ∇z_fq, st_lux =
-            logpos_withgrad(z_hq, x_t, t_expanded, model, ps, st_kan, st_lux)
+            logpos_withgrad(T.(z_fq), T.(∇z_fq), x_t, t_expanded, model, ps, st_kan, st_lux)
 
         if burn_in < sampler.N
             burn_in += 1
@@ -139,15 +157,15 @@ function (sampler::autoMALA_sampler)(
                 x_t,
                 t_expanded,
                 logpos_z,
-                pu(momentum),
-                pu(repeat(M, 1, 1, S, 1)),
+                momentum,
+                M,
                 η,
                 model,
                 ps,
                 st_kan,
                 st_lux,
             )
-            z_hq = T.(z_fq)
+            z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
         else
             ẑ, η_prop, η_prime, reversible, log_r, st_lux = autoMALA_step(
@@ -158,8 +176,8 @@ function (sampler::autoMALA_sampler)(
                 x_t,
                 t_expanded,
                 logpos_z,
-                pu(momentum),
-                pu(repeat(M, 1, 1, S, 1)),
+                momentum,
+                M,
                 model,
                 ps,
                 st_kan,
@@ -171,15 +189,18 @@ function (sampler::autoMALA_sampler)(
                 model.ε,
             )
 
-            accept = (log_u[:, :, i] .< log_r) .* reversible
-            z_fq =
-                ẑ .* reshape(accept, 1, 1, S, num_temps) .+
-                z_fq .* reshape(1 .- accept, 1, 1, S, num_temps)
-            mean_η .= mean_η .+ η_prop .* accept
-            η .= η_prop .* accept .+ η .* (1 .- accept)
-            num_acceptances .= num_acceptances .+ accept
+            @parallel (1:Q, 1:P, 1:(S*num_temps)) accept_reject!(
+                z_fq,
+                log_u[:, :, i],
+                log_r,
+                reversible,
+                mean_η,
+                η,
+                η_prop,
+                num_acceptances,
+            )
 
-            z_hq = T.(z_fq)
+            z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
             # Replica exchange Monte Carlo
             if i % sampler.RE_frequency == 0 && num_temps > 1
@@ -188,13 +209,18 @@ function (sampler::autoMALA_sampler)(
                     # Global swap criterion
                     z_t = copy(z_hq[:, :, :, t])
                     z_t1 = copy(z_hq[:, :, :, t+1])
+
+                    noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
+                    noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+
                     ll_t, st_gen = log_likelihood_MALA(
                         z_t,
                         x,
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_lux.gen;
+                        st_lux.gen,
+                        noise_1;
                         ε = model.ε,
                     )
                     ll_t1, st_gen = log_likelihood_MALA(
@@ -203,18 +229,19 @@ function (sampler::autoMALA_sampler)(
                         model.lkhood,
                         ps.gen,
                         st_kan.gen,
-                        st_gen;
+                        st_gen,
+                        noise_2;
                         ε = model.ε,
                     )
-                    log_swap_ratio = (temps[t+1] - temps[t]) .* (ll_t - ll_t1)
 
-                    swap = T(log_u_swap[t, i] < mean(log_swap_ratio))
+                    log_swap_ratio = mean((temps[t+1] - temps[t]) .* (ll_t - ll_t1))
+                    swap = T(log_u_swap[t, i] < log_swap_ratio)
                     @reset st_lux.gen = st_gen
 
                     # Swap population if likelihood of population in new temperature is higher on average
                     z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
                     z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                    z_fq = U.(z_hq)
+                    z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
                 end
             end
         end

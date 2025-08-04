@@ -3,15 +3,20 @@ module CNN_Model
 export CNN_Generator, init_CNN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 
+struct BoolConfig <: AbstractBoolConfig
+    layernorm::Bool
+    batchnorm::Bool
+end
+
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{Lux.ConvTranspose}}
-    batchnorms::Tuple{Vararg{Lux.BatchNorm}}
-    batchnorm_bool::Bool
-    layernorm_bool::Bool
+    Φ_fcns::Vector{Lux.ConvTranspose}
+    batchnorms::Vector{Lux.BatchNorm}
+    bool_config::BoolConfig
 end
 
 function init_CNN_Generator(
@@ -94,19 +99,15 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    if length(batchnorms) == 0
-        batchnorms = (Lux.BatchNorm(0),)
-    end
-
-    return CNN_Generator(depth, (Φ_functions...,), (batchnorms...,), batchnorm_bool, false)
+    return CNN_Generator(depth, Φ_functions, batchnorms, BoolConfig(false, batchnorm_bool))
 end
 
 function (gen::CNN_Generator)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+    z::AbstractArray{T,3},
+)::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
     """
     Generate data from the CNN likelihood model.
 
@@ -125,19 +126,19 @@ function (gen::CNN_Generator)(
     for i = 1:(gen.depth)
         z, st_new =
             Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
-        @reset st_lux.fcn[symbol_map[i]] = st_new
+        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
 
         z, st_new =
-            (gen.batchnorm_bool && i < gen.depth) ?
+            (gen.bool_config.batchnorm && i < gen.depth) ?
             Lux.apply(
                 gen.batchnorms[i],
                 z,
                 ps.batchnorm[symbol_map[i]],
                 st_lux.batchnorm[symbol_map[i]],
-            ) : (z, st_lux)
-        (gen.batchnorm_bool && i < gen.depth) &&
-            (gen.batchnorm_bool && i < gen.depth) &&
-            @reset st_lux.batchnorm[symbol_map[i]] = st_new
+            ) : (z, nothing)
+        (gen.bool_config.batchnorm && i < gen.depth) &&
+            (gen.bool_config.batchnorm && i < gen.depth) &&
+            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
 
     return z, st_lux

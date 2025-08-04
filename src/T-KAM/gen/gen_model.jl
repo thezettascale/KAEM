@@ -19,6 +19,11 @@ using .KAN_Model
 using .CNN_Model
 using .Transformer_Model
 
+struct σ_conf{T<:half_quant}
+    noise::T
+    llhood::T
+end
+
 const output_activation_mapping =
     Dict("tanh" => tanh_fast, "sigmoid" => sigmoid_fast, "none" => identity)
 
@@ -36,7 +41,7 @@ const gen_model_map = Dict(
 
 struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     generator::Any
-    σ_llhood::T
+    σ::σ_conf{T}
     output_activation::Function
     x_shape::Tuple{Vararg{Int}}
     resample_z::Function
@@ -52,6 +57,7 @@ function init_GenModel(
     CNN = parse(Bool, retrieve(conf, "CNN", "use_cnn_lkhood"))
     sequence_length = parse(Int, retrieve(conf, "SEQ", "sequence_length"))
 
+    noise_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_noise"))
     gen_var = parse(half_quant, retrieve(conf, "GeneratorModel", "generator_variance"))
     ESS_threshold =
         parse(full_quant, retrieve(conf, "TRAINING", "resampling_threshold_factor"))
@@ -87,7 +93,7 @@ function init_GenModel(
 
     return GenModel(
         generator,
-        gen_var,
+        σ_conf(noise_var, gen_var),
         output_activation,
         x_shape,
         resample_fcn,
@@ -99,25 +105,25 @@ end
 function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.Φ_fcns[i]) for
-        i in eachindex(lkhood.generator.Φ_fcns)
+        i = 1:lkhood.generator.depth
     )
-    layernorm_ps = (a = zero(T))
-    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
+    layernorm_ps = (a = [zero(T)], b = [zero(T)])
+    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
-            for i in eachindex(lkhood.generator.layernorms)
+            for i = 1:length(lkhood.generator.layernorms)
         )
     end
 
-    batchnorm_ps = (a = zero(T))
-    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
+    batchnorm_ps = (a = [zero(T)], b = [zero(T)])
+    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
         batchnorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
-            for i in eachindex(lkhood.generator.batchnorms)
+            for i = 1:length(lkhood.generator.batchnorms)
         )
     end
 
-    attention_ps = (a = zero(T))
+    attention_ps = (a = [zero(T)], b = [zero(T)])
     if lkhood.SEQ
         attention_ps = (
             Q = Lux.initialparameters(rng, lkhood.generator.attention[1]),
@@ -137,28 +143,28 @@ end
 function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half_quant}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, lkhood.generator.Φ_fcns[i]) |> hq for
-        i in eachindex(lkhood.generator.Φ_fcns)
+        i = 1:lkhood.generator.depth
     )
 
-    st_lyrnorm = (a = zero(T), b = zero(T))
-    if lkhood.generator.layernorm_bool && length(lkhood.generator.layernorms) > 0
+    st_lyrnorm = (a = [zero(T)], b = [zero(T)])
+    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> hq for
-            i in eachindex(lkhood.generator.layernorms)
+            i = 1:length(lkhood.generator.layernorms)
         )
     end
 
-    batchnorm_st = (a = zero(T))
-    if lkhood.generator.batchnorm_bool && length(lkhood.generator.batchnorms) > 0
+    batchnorm_st = (a = [zero(T)], b = [zero(T)])
+    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
         batchnorm_st = NamedTuple(
             symbol_map[i] =>
                 Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> hq for
-            i in eachindex(lkhood.generator.batchnorms)
+            i = 1:length(lkhood.generator.batchnorms)
         )
     end
 
-    attention_st = (a = zero(T))
+    attention_st = (a = [zero(T)], b = [zero(T)])
     if lkhood.SEQ
         attention_st = (
             Q = Lux.initialstates(rng, lkhood.generator.attention[1]) |> hq,
@@ -168,7 +174,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T}) where {T<:half
     end
 
     if lkhood.CNN || lkhood.SEQ
-        return (a = one(T), b = one(T)),
+        return (a = [one(T)], b = [one(T)]),
         (
             fcn = fcn_st,
             layernorm = st_lyrnorm,

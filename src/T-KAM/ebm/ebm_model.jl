@@ -3,6 +3,7 @@ module EBM_Model
 export EbmModel, init_EbmModel
 
 using CUDA, FastGaussQuadrature
+using ChainRules.ChainRulesCore: @ignore_derivatives
 using ConfParser,
     Random,
     Distributions,
@@ -20,24 +21,29 @@ using ..RefPriors
 include("quadrature.jl")
 using .Quadrature
 
+struct BoolConfig <: AbstractBoolConfig
+    layernorm::Bool
+    contrastive_div::Bool
+end
+
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple{Vararg{univariate_function{T,U}}}
-    layernorms::Tuple{Vararg{Lux.LayerNorm}}
-    layernorm_bool::Bool
+    fcns_qp::Vector{univariate_function{T,U}}
+    layernorms::Vector{Lux.LayerNorm}
+    bool_config::BoolConfig
     depth::Int
     prior_type::AbstractString
-    π_pdf!::Lux.AbstractLuxLayer
+    π_pdf::AbstractPrior
     p_size::Int
     q_size::Int
-    quad::Lux.AbstractLuxLayer
+    quad::AbstractQuadrature
     N_quad::Int
     nodes::AbstractArray{T}
     weights::AbstractArray{T}
-    contrastive_div::Bool
     quad_type::AbstractString
     ula::Bool
     mixture_model::Bool
     λ::T
+    prior_domain::Tuple{T,T}
 end
 
 function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
@@ -72,12 +78,12 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     mixture_model = parse(Bool, retrieve(conf, "EbmModel", "mixture_model"))
     widths = mixture_model ? reverse(widths) : widths
 
-    grid_range_first = Dict(
+    prior_domain = Dict(
         "ebm" => grid_range,
         "learnable_gaussian" => grid_range,
-        "lognormal" => [0, 4] .|> half_quant,
-        "gaussian" => [-1, 1] .|> half_quant,
-        "uniform" => [0, 1] .|> half_quant,
+        "lognormal" => [0.0, 4.0] .|> half_quant,
+        "gaussian" => [-1.2, 1.2] .|> half_quant,
+        "uniform" => [-0.1, 1.1] .|> half_quant,
     )[prior_type]
 
     eps = parse(half_quant, retrieve(conf, "TRAINING", "eps"))
@@ -94,7 +100,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             ) .* (one(full_quant) / √(full_quant(widths[i])))
         )
 
-        grid_range_i = i == 1 ? grid_range_first : grid_range
+        grid_range_i = i == 1 ? prior_domain : grid_range
 
         func = init_function(
             widths[i],
@@ -114,13 +120,9 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
 
         push!(functions, func)
 
-        if (layernorm_bool && i < length(widths)-1)
-            push!(layernorms, Lux.LayerNorm(widths[i+1]))
+        if layernorm_bool && i != 1
+            push!(layernorms, Lux.LayerNorm(widths[i]))
         end
-    end
-
-    if length(layernorms) == 0
-        layernorms = (Lux.LayerNorm(0),)
     end
 
     ula = length(widths) > 2
@@ -139,9 +141,9 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
 
     return EbmModel(
-        (functions...,),
-        (layernorms...,),
-        layernorm_bool,
+        functions,
+        layernorms,
+        BoolConfig(layernorm_bool, contrastive_div),
         length(widths)-1,
         prior_type,
         ref_initializer(eps),
@@ -151,20 +153,20 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         N_quad,
         nodes,
         weights,
-        contrastive_div,
         quad_type,
         ula,
         mixture_model,
         reg,
+        Tuple(prior_domain),
     )
 end
 
-function (ebm::EbmModel{T})(
+function (ebm::EbmModel{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
     z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Forward pass through the ebm-prior, returning the energy function.
 
@@ -182,33 +184,40 @@ function (ebm::EbmModel{T})(
     mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
 
     for i = 1:ebm.depth
-        z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z, st_lyrnorm_new =
+            (ebm.bool_config.layernorm && i != 1) ?
+            Lux.apply(
+                ebm.layernorms[i-1],
+                z,
+                ps.layernorm[symbol_map[i]],
+                st_lyrnorm[symbol_map[i]],
+            ) : (z, nothing)
 
+        (ebm.bool_config.layernorm && i != 1) &&
+            @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+
+        z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
         z =
             (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
-
-        z, st_lyrnorm_new =
-            (ebm.layernorm_bool && i < ebm.depth) ?
-            Lux.apply(ebm.layernorms[i], z, ps.layernorm[i], st_lyrnorm[i]) :
-            (z, st_lyrnorm)
-
-        (ebm.layernorm_bool && i < ebm.depth) && @reset st_lyrnorm[i] = st_lyrnorm_new
     end
 
     z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st_lyrnorm
 end
 
-function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
+function Lux.initialparameters(
+    rng::AbstractRNG,
+    prior::EbmModel{T,U},
+) where {T<:half_quant,U<:full_quant}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    layernorm_ps = (a = zero(T))
-    if prior.layernorm_bool && length(prior.layernorms) > 0
+    layernorm_ps = (a = [zero(T)], b = [zero(T)])
+    if prior.bool_config.layernorm && length(prior.layernorms) > 0
         layernorm_ps = NamedTuple(
             symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
-            i = 1:(prior.depth-1)
+            i = 1:length(prior.layernorms)
         )
     end
 
@@ -217,22 +226,25 @@ function Lux.initialparameters(rng::AbstractRNG, prior::EbmModel{T}) where {T<:h
               zeros(half_quant, prior.p_size) : [zero(T)],
         π_σ = prior.prior_type == "learnable_gaussian" ?
               ones(half_quant, prior.p_size) : [zero(T)],
-        α = prior.mixture_model ?
-            glorot_uniform(rng, full_quant, prior.q_size, prior.p_size) : [zero(T)],
+        α = prior.mixture_model ? glorot_uniform(rng, U, prior.q_size, prior.p_size) :
+            [zero(T)],
     )
 
     return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)
 end
 
-function Lux.initialstates(rng::AbstractRNG, prior::EbmModel{T}) where {T<:half_quant}
+function Lux.initialstates(
+    rng::AbstractRNG,
+    prior::EbmModel{T,U},
+) where {T<:half_quant,U<:full_quant}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i = 1:prior.depth
     )
-    st_lyrnorm = (a = zero(T), b = zero(T))
-    if prior.layernorm_bool && length(prior.layernorms) > 0
+    st_lyrnorm = (a = [zero(T)], b = [zero(T)])
+    if prior.bool_config.layernorm && length(prior.layernorms) > 0
         st_lyrnorm = NamedTuple(
             symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> hq for
-            i = 1:(prior.depth-1)
+            i = 1:length(prior.layernorms)
         )
     end
 

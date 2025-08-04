@@ -1,13 +1,19 @@
-using Test, Random, LinearAlgebra
+using Test, Random, LinearAlgebra, CUDA
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
 include("../src/utils.jl")
-include("../src/T-KAM/kan/spline_bases.jl")
 using .Utils
-using .spline_functions
+
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("../src/T-KAM/kan/spline_bases_gpu.jl")
+    using .spline_functions # Broadcast version
+else
+    include("../src/T-KAM/kan/spline_bases_gpu.jl")
+    using .spline_functions # Stencil loops
+end
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, pu([one(half_quant)])
 
@@ -36,7 +42,7 @@ function test_B_spline_basis()
     @test size(recovered_coef) == size(coef)
     y_reconstructed =
         coef2curve_Spline(basis_function, x_eval, extended_grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
+    @test norm(y - y_reconstructed) < half_quant(0.1)
 end
 
 function test_RBF_basis()
@@ -56,7 +62,7 @@ function test_RBF_basis()
     recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
     @test size(recovered_coef) == size(coef)
     y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ;)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
+    @test norm(y - y_reconstructed) < half_quant(0.1)
 end
 
 function test_RSWAF_basis()
@@ -75,7 +81,7 @@ function test_RSWAF_basis()
     recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
     @test size(recovered_coef) == size(coef)
     y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
+    @test norm(y - y_reconstructed) < half_quant(0.1)
 end
 
 function test_FFT_basis()
@@ -108,7 +114,7 @@ function test_Cheby_basis()
     recovered_coef = curve2coef(basis_function, x_eval, y, grid, σ)
     @test size(recovered_coef) == size(coef)
     y_reconstructed = coef2curve_Spline(basis_function, x_eval, grid, recovered_coef, σ)
-    @test norm(y - y_reconstructed) / norm(y) < half_quant(2)
+    @test norm(y - y_reconstructed) < half_quant(0.1)
 end
 
 @testset "Spline Tests" begin

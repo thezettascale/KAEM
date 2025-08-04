@@ -4,16 +4,21 @@ module KAN_Model
 export KAN_Generator, init_KAN_Generator
 
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
+using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 using ..UnivariateFunctions
 
+struct BoolConfig <: AbstractBoolConfig
+    layernorm::Bool
+    batchnorm::Bool
+end
+
 struct KAN_Generator{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{univariate_function{T,U}}}
-    layernorms::Tuple{Vararg{Lux.LayerNorm}}
-    layernorm_bool::Bool
-    batchnorm_bool::Bool
+    Φ_fcns::Vector{univariate_function{T,U}}
+    layernorms::Vector{Lux.LayerNorm}
+    bool_config::BoolConfig
     x_shape::Tuple
 end
 
@@ -96,21 +101,16 @@ function init_KAN_Generator(
         )
         push!(Φ_functions, initialize_function(widths[i], widths[i+1], base_scale))
 
-        if (layernorm_bool && i < depth)
-            push!(layernorms, Lux.LayerNorm(widths[i+1]))
+        if layernorm_bool
+            push!(layernorms, Lux.LayerNorm(widths[i]))
         end
-    end
-
-    if length(layernorms) == 0
-        layernorms = (Lux.LayerNorm(0),)
     end
 
     return KAN_Generator(
         depth,
-        (Φ_functions...,),
-        (layernorms...,),
-        layernorm_bool,
-        false,
+        Φ_functions,
+        layernorms,
+        BoolConfig(layernorm_bool, false),
         x_shape,
     )
 end
@@ -119,7 +119,7 @@ function (gen::KAN_Generator{T,U})(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
 )::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Generate data from the KAN likelihood model.
@@ -139,19 +139,19 @@ function (gen::KAN_Generator{T,U})(
 
     # KAN functions
     for i = 1:gen.depth
-        z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
-        z = dropdims(sum(z, dims = 1); dims = 1)
-
         z, st_lyrnorm_new =
-            (gen.layernorm_bool && i < gen.depth) ?
+            gen.bool_config.layernorm ?
             Lux.apply(
                 gen.layernorms[i],
                 z,
                 ps.layernorm[symbol_map[i]],
                 st_lyrnorm[symbol_map[i]],
-            ) : (z, st_lyrnorm)
-        (gen.layernorm_bool && i < gen.depth) &&
-            @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+            ) : (z, nothing)
+        gen.bool_config.layernorm &&
+            @ignore_derivatives @reset st_lyrnorm[symbol_map[i]] = st_lyrnorm_new
+
+        z = Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
+        z = dropdims(sum(z, dims = 1); dims = 1)
     end
 
     return reshape(z, gen.x_shape..., num_samples), st_lyrnorm

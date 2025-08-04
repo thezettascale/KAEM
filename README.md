@@ -1,6 +1,6 @@
 # T-KAM 
 
-T-KAM is a generative model presented [here.](https://www.arxiv.org/abs/2506.14167)
+T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167) to be explained at a later date.
 
 ## Setup:
 
@@ -48,7 +48,7 @@ make train-thermo DATASET=SVHN
 ```
 
 To automatically run experiments one after the other:
-```
+```bash
 vim jobs.txt # Schedule jobs
 make train-sequential CONFIG=jobs.txt
 ```
@@ -58,6 +58,14 @@ For benchmarking run:
 ```bash
 make bench
 ```
+
+## Performance tuning and dev preferences
+
+| Stack                                                                    | Reason                                                                                                                                                                                                                                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                    |
+|--------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Julia/Lux.jl](https://github.com/LuxDL/Lux.jl)                                                             | Adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ) ₊˚✩♡ | Explicitly parameterised, and all functions are strongly typed.                                                                                                                                                                                                                                                                                                                                              |
+| [Enzyme.jl](https://enzyme.mit.edu/julia/stable/) for CPU                  | Switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl). Enzyme provides much more efficient reverse autodiff of statically analyzable LLVM.                                                                                                                                                    | The next step is [Reactant.jl](https://github.com/EnzymeAD/Reactant.jl) for GPU support, which first compiles into MLIR. Autodiff on GPU is currently still reliant on Zygote, since Enzyme isn't fully workable with native CUDA yet.                                                                                                                                                                                                                                                                                                                   |
+| [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl) | In place of broadcasts, Threads, and CUDA, this enables extraordinarily optimised stencil computations, agnostic to the device in use.                                                                                                                                                                           | Any files involved in autodiff have two counterparts; either using stencil loops for CPU parallelization or [Tullio.jl](https://github.com/mcabbott/Tullio.jl) for GPU kernels. CPU parallelization can actually outperform GPU kernels for the smaller experiments involving B-splines, inverse transform sampling, or resampling, since search and recursion can cause thread divergence on the GPU. |
 
 ## Julia flow:
 
@@ -103,7 +111,7 @@ model = init_T_KAM(
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
-ps_hq = half_quant.(ps) #Mixed precision
+ps_hq = half_quant.(ps) #Mixed precision will return NaN train loss, but grads will be defined
 
 grads = Enzyme.make_zero(ps_hq) # or zero(ps_hq)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
@@ -120,23 +128,6 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 # States reset with Accessors.jl:
 @reset st.ebm = st_ebm
 @reset st.gen = st_gen
-```
-
-## Performance tuning and dev preferences
-
-In this project, implicit types/quantization are never used. Quantization is explicitly declared in function headers using `half_quant` and `full_quant`, defined in [utils.jl](src/utils.jl). Model parameterization is also explicit.
-
-Julia/Lux is adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ)₊˚✩♡.
-
-The following optimisations are in place:
-
-- Autodifferentiation was switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl) to [Enzyme.jl](https://enzyme.mit.edu/julia/stable/), which provides much more efficient reverse autodiff of statically analyzable LLVM. 
-- Broadcasts, Threads, and CUDA Kernels are now realised with [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl), which allows for supremely optimized stencil computations, agnostic to the device in use. 
-
-If there's trouble sourcing cuDNN libraries, the following fix might be applicable:
-
-```bash
-export LD_LIBRARY_PATH=$HOME/.julia/artifacts/2eb570b35b597d106228383c5cfa490f4bf538ee/lib:$LD_LIBRARY_PATH
 ```
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

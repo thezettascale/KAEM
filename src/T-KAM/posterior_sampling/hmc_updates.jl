@@ -2,81 +2,86 @@ module HamiltonianMonteCarlo
 
 export leapfrog, logpos_withgrad
 
-using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors
+using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, ParallelStencil
 using Enzyme: make_zero
 
 using ..Utils
 using ..T_KAM_model
 
 include("log_posteriors.jl")
-using .LogPosteriors: autoMALA_value_and_grad_4D, autoMALA_value_and_grad
+using .LogPosteriors: autoMALA_value_and_grad
 
-function position_update(
-    z::AbstractArray{U},
-    momentum::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    M::AbstractArray{U},
-    η::AbstractArray{U},
-)::Tuple{AbstractArray{U},AbstractArray{U}} where {U<:full_quant}
-    ηr = reshape(η, 1, 1, size(η)...)
-    y = @. momentum + (ηr / 2) * ∇z / M
-    @. z = z + ηr * y / M
-    return y, z
+@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    @init_parallel_stencil(CUDA, full_quant, 3)
+else
+    @init_parallel_stencil(Threads, full_quant, 3)
 end
 
-function momentum_update!(
-    y::AbstractArray{U},
-    ∇ẑ::AbstractArray{U},
-    M::AbstractArray{U},
-    η::AbstractArray{U},
+@parallel_indices (q, p, s) function position_update!(
+    z::AbstractArray{U,3},
+    momentum::AbstractArray{U,3}, # p*
+    ∇z::AbstractArray{U,3},
+    M::AbstractArray{U,2},
+    η::AbstractArray{U,1},
 )::Nothing where {U<:full_quant}
-    ηr = reshape(η, 1, 1, size(η)...)
-    @. y + (ηr / 2) * ∇ẑ / M
+    momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇z[q, p, s] / M[q, p]
+    z[q, p, s] = z[q, p, s] + η[s] * momentum[q, p, s] / M[q, p]
+    return nothing
+end
+
+@parallel_indices (q, p, s) function momentum_update!(
+    momentum::AbstractArray{U,3}, # p*
+    ∇ẑ::AbstractArray{U,3},
+    M::AbstractArray{U,2},
+    η::AbstractArray{U,1},
+)::Nothing where {U<:full_quant}
+    momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇ẑ[q, p, s] / M[q, p]
     return nothing
 end
 
 function logpos_withgrad(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
+    ∇z::AbstractArray{T,3},
     x::AbstractArray{T},
-    temps::AbstractArray{T},
-    model,
-    ps::ComponentArray{T},
-    st_kan::ComponentArray{T},
-    st_lux::NamedTuple,
-)::Tuple{
-    AbstractArray{full_quant},
-    AbstractArray{full_quant},
-    NamedTuple,
-} where {T<:half_quant}
-    fcn = ndims(z) == 4 ? autoMALA_value_and_grad_4D : autoMALA_value_and_grad
-    logpos, ∇z_k, st_ebm, st_gen = fcn(z, make_zero(z), x, temps, model, ps, st_kan, st_lux)
-    @reset st_lux.ebm = st_ebm
-    @reset st_lux.gen = st_gen
-
-    return full_quant.(logpos) ./ full_quant(model.loss_scaling),
-    full_quant.(∇z_k) ./ full_quant(model.loss_scaling),
-    st_lux
-end
-
-function leapfrog(
-    z::AbstractArray{U},
-    ∇z::AbstractArray{U},
-    x::AbstractArray{T},
-    temps::AbstractArray{T},
-    logpos_z::AbstractArray{U},
-    momentum::AbstractArray{U},  # This is y = M^{-1/2}p
-    M::AbstractArray{U},         # This is M^{1/2}
-    η::AbstractArray{U},
+    temps::AbstractArray{T,1},
     model::T_KAM{T,U},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
 )::Tuple{
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
-    AbstractArray{U},
+    AbstractArray{U,1},
+    AbstractArray{U,3},
+    NamedTuple,
+} where {T<:half_quant,U<:full_quant}
+    logpos, ∇z_k, st_ebm, st_gen =
+        autoMALA_value_and_grad(z, ∇z, x, temps, model, ps, st_kan, st_lux)
+    @reset st_lux.ebm = st_ebm
+    @reset st_lux.gen = st_gen
+
+    return U.(logpos) ./ model.loss_scaling.full,
+    U.(∇z_k) ./ model.loss_scaling.full,
+    st_lux
+end
+
+function leapfrog(
+    z::AbstractArray{U,3},
+    ∇z::AbstractArray{U,3},
+    x::AbstractArray{T},
+    temps::AbstractArray{T,1},
+    logpos_z::AbstractArray{U,1},
+    p::AbstractArray{U,3},  # This is momentum = M^{-1/2}p
+    M::AbstractArray{U,2},         # This is M^{1/2}
+    η::AbstractArray{U,1},
+    model::T_KAM{T,U},
+    ps::ComponentArray{T},
+    st_kan::ComponentArray{T},
+    st_lux::NamedTuple,
+)::Tuple{
+    AbstractArray{U,3},
+    AbstractArray{U,1},
+    AbstractArray{U,3},
+    AbstractArray{U,3},
+    AbstractArray{U,1},
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
     """
@@ -85,15 +90,18 @@ function leapfrog(
     x'(x,y*)  = x  + eps M^{-1/2}y*
     y'(x',y*) = y* + (eps/2)M^{-1/2}grad(log pi)(x')
     """
-    # # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
-    p, ẑ = position_update(z, momentum, ∇z, M, η)
+    Q, P, S = size(z)
+
+    # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
+    momentum = copy(p)
+    @parallel (1:Q, 1:P, 1:S) position_update!(z, p, ∇z, M, η)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st_lux =
-        logpos_withgrad(T.(ẑ), x, temps, model, ps, st_kan, st_lux)
+        logpos_withgrad(T.(z), T.(∇z), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    momentum_update!(p, ∇ẑ, M, η)
+    @parallel (1:Q, 1:P, 1:S) momentum_update!(p, ∇ẑ, M, η)
 
     # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)
@@ -104,7 +112,7 @@ function leapfrog(
             dims = (1, 2),
         ) ./ 2
 
-    return ẑ, logpos_ẑ, ∇ẑ, -p, log_r, st_lux
+    return z, logpos_ẑ, ∇ẑ, -p, log_r, st_lux
 end
 
 end

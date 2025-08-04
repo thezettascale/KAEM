@@ -12,9 +12,15 @@ include("kan/univariate_functions.jl")
 using .UnivariateFunctions
 
 include("ebm/inverse_transform.jl")
-include("ebm/ref_priors.jl")
 using .InverseTransformSampling
-using .RefPriors
+
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("ebm/ref_priors_gpu.jl")
+    using .RefPriors
+else
+    include("ebm/ref_priors.jl")
+    using .RefPriors
+end
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
@@ -23,6 +29,11 @@ using .GeneratorModel
 
 include("ebm/log_prior_fcns.jl")
 using .LogPriorFCNs
+
+struct LossScaler{T<:half_quant,U<:full_quant}
+    reduced::T
+    full::U
+end
 
 struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     prior::EbmModel
@@ -40,13 +51,13 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     sample_prior::Function
     posterior_sampler::Any
     loss_fcn::Any
-    loss_scaling::T
+    loss_scaling::LossScaler{T,U}
     ε::T
     file_loc::AbstractString
     max_samples::Int
     MALA::Bool
     conf::ConfParse
-    log_prior::Any
+    log_prior::AbstractLogPrior
 end
 
 function init_T_KAM(
@@ -80,7 +91,7 @@ function init_T_KAM(
         rng = rng,
     )
     test_loader = DataLoader(test_data, batchsize = batch_size, shuffle = false)
-    loss_scaling = parse(half_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
+    loss_scaling = parse(full_quant, retrieve(conf, "MIXED_PRECISION", "loss_scaling"))
     out_dim = (
         cnn ? size(dataset, 3) :
         (seq ? size(dataset, 1) : size(dataset, 1) * size(dataset, 2))
@@ -142,13 +153,13 @@ function init_T_KAM(
         sample_prior,
         nothing,
         nothing,
-        loss_scaling,
+        LossScaler(half_quant(loss_scaling), loss_scaling),
         eps,
         file_loc,
         max_samples,
         MALA,
         conf,
-        LogPriorUnivariate(eps, !prior_model.contrastive_div),
+        LogPriorUnivariate(eps, !prior_model.bool_config.contrastive_div),
     )
 end
 
@@ -185,11 +196,11 @@ end
 
 function (model::T_KAM{T,U})(
     ps::ComponentArray{T},
-    kan_st::ComponentArray{T},
+    st_kan::ComponentArray{T},
     st_lux::NamedTuple,
     num_samples::Int;
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple,Int} where {T<:half_quant,U<:full_quant}
+)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     """
     Inference pass to generate a batch of data from the model.
     This is the same for both the standard and thermodynamic models.
@@ -197,7 +208,7 @@ function (model::T_KAM{T,U})(
     Args:
         model: The model.
         ps: The parameters of the model.
-        kan_st: The states of the KAN model.
+        st_kan: The states of the KAN model.
         st_lux: The states of the Lux model.
         num_samples: The number of samples to generate.
         rng: The random number generator.
@@ -207,11 +218,10 @@ function (model::T_KAM{T,U})(
         Lux states of the prior.
         Lux states of the likelihood.
     """
-    ps = ps .|> half_quant
-    z, st_ebm = model.sample_prior(model, num_samples, ps, kan_st, st_lux, rng)
-    x̂, st_gen = model.lkhood.generator(ps.gen, st_lux.gen, kan_st.gen, z)
-    noise = model.lkhood.σ_llhood * randn(rng, size(x̂))
-    return model.lkhood.output_activation(x̂ + noise), st_ebm, st_gen
+    ps = ps .|> T
+    z, st_ebm = model.sample_prior(model, num_samples, ps, st_kan, st_lux, rng)
+    x̂, st_gen = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
+    return model.lkhood.output_activation(x̂), st_ebm, st_gen
 end
 
 end

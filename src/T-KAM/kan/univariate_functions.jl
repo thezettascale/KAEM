@@ -3,17 +3,17 @@ module UnivariateFunctions
 export univariate_function, init_function, activation_mapping
 
 using CUDA, Accessors, ComponentArrays, NNlib
-using Lux, NNlib, LinearAlgebra, Random, LuxCUDA, ParallelStencil
+using Lux, NNlib, LinearAlgebra, Random, LuxCUDA
 
 using ..Utils
 
-include("spline_bases.jl")
-using .spline_functions
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+# Stencil loops are much faster than broadcast, but are launched host-side, which is not supported by Enzyme GPU yet.
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("spline_bases_gpu.jl")
+    using .spline_functions # Broadcast version
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    include("spline_bases.jl")
+    using .spline_functions # Stencil loops
 end
 
 const SplineBasis_mapping = Dict(
@@ -28,7 +28,7 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
     base_activation::Function
-    basis_function::Lux.AbstractLuxLayer
+    basis_function::AbstractBasis
     spline_string::String
     spline_degree::Int
     init_grid::AbstractArray{T}
@@ -40,29 +40,6 @@ struct univariate_function{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     σ_spline::U
     init_τ::AbstractArray{U}
     τ_trainable::Bool
-end
-
-## Stencils much faster than broadcast ##
-@parallel_indices (i, o, b) function spl_kernel!(
-    y::AbstractArray{T},
-    x::AbstractArray{T},
-    w_base::AbstractArray{T},
-    w_sp::AbstractArray{T},
-) where {T<:half_quant}
-    y[i, o, b] = w_base[i, o] * x[i, b] + w_sp[i, o] * y[i, o, b]
-    return nothing
-end
-
-function SplineMUL(
-    l::univariate_function{T,full_quant},
-    ps::ComponentArray{T},
-    x::AbstractArray{T},
-    y::AbstractArray{T},
-)::AbstractArray{T} where {T<:half_quant}
-    I, O, B = size(y)
-    base = l.base_activation(x)
-    @parallel (1:I, 1:O, 1:B) spl_kernel!(y, base, ps.w_base, ps.w_sp)
-    return y
 end
 
 function init_function(
@@ -97,9 +74,10 @@ function init_function(
 
     initializer =
         get(SplineBasis_mapping, spline_function, degree -> B_spline_basis(degree))
+
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1)
     basis_function =
-        spline_function == "RBF" ? initializer(scale) : initializer(spline_degree)
+        spline_function == "RBF" ? RBF_basis(scale) : initializer(spline_degree)
 
     return univariate_function(
         in_dim,
@@ -173,10 +151,10 @@ function Lux.initialstates(
 end
 
 function (l::univariate_function{T,U})(
-    x::AbstractArray{T},
+    x::AbstractArray{T,2},
     ps::ComponentArray{T},
     st::ComponentArray{T}, # Unlike standard Lux, states are a ComponentArray
-)::AbstractArray{T} where {T<:half_quant,U<:full_quant}
+)::AbstractArray{T,3} where {T<:half_quant,U<:full_quant}
     basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     y =
         l.spline_string == "FFT" ?

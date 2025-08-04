@@ -1,12 +1,36 @@
 module Utils
 
-export pu, half_quant, full_quant, hq, fq, symbol_map, activation_mapping
+export pu,
+    half_quant,
+    full_quant,
+    hq,
+    fq,
+    symbol_map,
+    activation_mapping,
+    AbstractBasis,
+    AbstractPrior,
+    AbstractLogPrior,
+    AbstractQuadrature,
+    AbstractBoolConfig
 
-using Lux, LinearAlgebra, Statistics, Random, Accessors, BFloat16s
-using CUDA, LuxCUDA, Enzyme.EnzymeRules, NNlib
+using Lux,
+    LinearAlgebra,
+    Statistics,
+    Random,
+    Accessors,
+    BFloat16s,
+    CUDA,
+    LuxCUDA,
+    Enzyme,
+    Enzyme.EnzymeRules,
+    NNlib
 
 const pu =
-    CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false")) ? gpu_device() : cpu_device()
+    (CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))) ? gpu_device() : cpu_device()
+
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    CUDA.allowscalar(false)
+end
 
 # # Mixed precision - sometimes unstable, use FP16 when Tensor Cores are available
 const QUANT_MAP =
@@ -37,5 +61,15 @@ const activation_mapping = Dict(
     "celu" => NNlib.celu,
     "none" => x -> x .* zero(half_quant),
 )
+
+abstract type AbstractBasis end
+
+abstract type AbstractPrior end
+
+abstract type AbstractLogPrior end
+
+abstract type AbstractQuadrature end
+
+abstract type AbstractBoolConfig end
 
 end

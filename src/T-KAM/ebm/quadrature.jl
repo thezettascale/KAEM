@@ -12,34 +12,34 @@ else
     @init_parallel_stencil(Threads, half_quant, 3)
 end
 
-negative_one = pu([-one(half_quant)])
+negative_one = - ones(half_quant, 1, 1, 1) |> pu
 
-struct TrapeziumQuadrature <: Lux.AbstractLuxLayer end
+struct TrapeziumQuadrature <: AbstractQuadrature end
 
-struct GaussLegendreQuadrature <: Lux.AbstractLuxLayer end
+struct GaussLegendreQuadrature <: AbstractQuadrature end
 
 @parallel_indices (q, p, g) function qfirst_exp_kernel!(
-    exp_fg::AbstractArray{T},
-    f::AbstractArray{T},
-    π0::AbstractArray{T},
+    exp_fg::AbstractArray{T,3},
+    f::AbstractArray{T,3},
+    π0::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     exp_fg[q, p, g] = exp(f[q, p, g]) * π0[q, g]
     return nothing
 end
 
 @parallel_indices (q, p, g) function pfirst_exp_kernel!(
-    exp_fg::AbstractArray{T},
-    f::AbstractArray{T},
-    π0::AbstractArray{T},
+    exp_fg::AbstractArray{T,3},
+    f::AbstractArray{T,3},
+    π0::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     exp_fg[q, p, g] = exp(f[q, p, g]) * π0[p, g]
     return nothing
 end
 
 @parallel_indices (q, b, g) function apply_mask!(
-    trapz::AbstractArray{T},
-    exp_fg::AbstractArray{T},
-    component_mask::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    exp_fg::AbstractArray{T,3},
+    component_mask::AbstractArray{T,3},
 )::Nothing where {T<:half_quant}
     acc = zero(T)
     for p = 1:size(component_mask, 2)
@@ -50,16 +50,16 @@ end
 end
 
 @parallel_indices (q, p, g) function weight_kernel!(
-    trapz::AbstractArray{T},
-    weight::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    weight::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     trapz[q, p, g] = weight[p, g] * trapz[q, p, g]
     return nothing
 end
 
 @parallel_indices (q, b, g) function gauss_kernel!(
-    trapz::AbstractArray{T},
-    weight::AbstractArray{T},
+    trapz::AbstractArray{T,3},
+    weight::AbstractArray{T,2},
 )::Nothing where {T<:half_quant}
     trapz[q, b, g] = weight[q, g] * trapz[q, b, g]
     return nothing
@@ -70,8 +70,8 @@ function (tq::TrapeziumQuadrature)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::AbstractArray{T} = negative_one,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+    component_mask::AbstractArray{T,3} = negative_one,
+)::Tuple{AbstractArray{T,3},AbstractArray{T,2},NamedTuple} where {T<:half_quant}
     """Trapezoidal rule for numerical integration: 1/2 * (u(z_{i-1}) + u(z_i)) * Δx"""
 
     # Evaluate prior on grid [0,1]
@@ -79,8 +79,7 @@ function (tq::TrapeziumQuadrature)(
     Δg = f_grid[:, 2:end] - f_grid[:, 1:(end-1)]
 
     I, O = size(f_grid)
-    π_grid = @zeros(I, O, 1)
-    ebm.π_pdf!(π_grid, f_grid[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
+    π_grid = ebm.π_pdf(f_grid[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
     π_grid =
         ebm.prior_type == "learnable_gaussian" ? dropdims(π_grid, dims = 3)' :
         dropdims(π_grid, dims = 3)
@@ -122,8 +121,8 @@ function get_gausslegendre(
         (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
     if no_grid
-        a = fill(half_quant(first(ebm.fcns_qp[1].grid_range)), size(a)) |> pu
-        b = fill(half_quant(last(ebm.fcns_qp[1].grid_range)), size(b)) |> pu
+        a = fill(half_quant(first(ebm.prior_domain)), size(a)) |> pu
+        b = fill(half_quant(last(ebm.prior_domain)), size(b)) |> pu
     end
 
     nodes, weights = pu(ebm.nodes), pu(ebm.weights)
@@ -136,16 +135,15 @@ function (gq::GaussLegendreQuadrature)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
-    component_mask::AbstractArray{T} = negative_one,
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+    component_mask::AbstractArray{T,3} = negative_one,
+)::Tuple{AbstractArray{T,3},AbstractArray{T,2},NamedTuple} where {T<:half_quant}
     """Gauss-Legendre quadrature for numerical integration"""
 
     nodes, weights = get_gausslegendre(ebm, ps, st_kan)
     grid = nodes
 
     I, O = size(nodes)
-    π_nodes = @zeros(I, O, 1)
-    ebm.π_pdf!(π_nodes, nodes[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
+    π_nodes = ebm.π_pdf(nodes[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
     π_nodes =
         ebm.prior_type == "learnable_gaussian" ? dropdims(π_nodes, dims = 3)' :
         dropdims(π_nodes, dims = 3)
@@ -164,10 +162,9 @@ function (gq::GaussLegendreQuadrature)(
         @parallel (1:Q, 1:B, 1:G) gauss_kernel!(trapz, weights)
         return trapz, grid, st_lyrnorm_new
     else
-        trapz = @zeros(Q, P, G)
         @parallel (1:Q, 1:P, 1:G) pfirst_exp_kernel!(exp_fg, nodes, π_nodes)
-        @parallel (1:Q, 1:P, 1:G) weight_kernel!(trapz, weights)
-        return trapz, grid, st_lyrnorm_new
+        @parallel (1:Q, 1:P, 1:G) weight_kernel!(exp_fg, weights)
+        return exp_fg, grid, st_lyrnorm_new
     end
 end
 

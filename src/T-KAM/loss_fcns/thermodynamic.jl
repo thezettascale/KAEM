@@ -2,7 +2,7 @@ module ThermodynamicIntegration
 
 export initialize_thermo_loss, ThermodynamicLoss
 
-using CUDA, Enzyme, ComponentArrays, Random
+using CUDA, Enzyme, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 
 using ..Utils
@@ -19,7 +19,13 @@ function sample_thermo(
     x::AbstractArray{T};
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
-)::Tuple{AbstractArray{T},AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{
+    AbstractArray{T,4},
+    AbstractArray{T,1},
+    NamedTuple,
+    AbstractArray{T},
+    AbstractArray{T},
+} where {T<:half_quant}
     temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 0:model.N_t])
     z, st_lux = model.posterior_sampler(
         model,
@@ -30,33 +36,39 @@ function sample_thermo(
         temps = temps[2:end],
         rng = rng,
     )
+
     Δt = pu(temps[2:end] - temps[1:(end-1)])
-    return z, Δt, st_lux
+    tempered_noise = randn(rng, T, model.lkhood.x_shape..., prod(size(z)[3:4])) |> pu
+    noise = randn(rng, T, model.lkhood.x_shape..., size(x)[end]) |> pu
+    return z, Δt, st_lux, noise, tempered_noise
 end
 
 function marginal_llhood(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
 )::Tuple{T,NamedTuple,NamedTuple} where {T<:half_quant}
     Q, P, S, num_temps = size(z_posterior)
     log_ss = zero(T)
 
     # Steppingstone estimator
-    x_rep = ndims(x) == 4 ? repeat(x, 1, 1, 1, num_temps) : repeat(x, 1, 1, num_temps)
+    x_rep = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
     ll, st_lux_gen = log_likelihood_MALA(
         reshape(z_posterior, Q, P, S*num_temps),
         x_rep,
         model.lkhood,
         ps.gen,
         st_kan.gen,
-        st_lux_gen;
+        st_lux_gen,
+        tempered_noise;
         ε = model.ε,
     )
     log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
@@ -72,33 +84,37 @@ function marginal_llhood(
 
     logprior, st_lux_ebm =
         model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
-    ex_prior = model.prior.contrastive_div ? mean(logprior) : zero(T)
+    ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : zero(T)
 
     logllhood, st_lux_gen = log_likelihood_MALA(
-        z_prior[:, :, :, 1],
+        z_prior,
         x,
         model.lkhood,
         ps.gen,
         st_kan.gen,
-        st_lux_gen;
+        st_lux_gen,
+        noise;
         ε = model.ε,
     )
     steppingstone_loss = mean(logllhood .* view(Δt, 1)) + log_ss
-    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) * model.loss_scaling,
+    return -(steppingstone_loss + mean(logprior_pos) - ex_prior) *
+           model.loss_scaling.reduced,
     st_lux_ebm,
     st_lux_gen
 end
 
 function closure(
     ps::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
 )::T where {T<:half_quant}
     return first(
         marginal_llhood(
@@ -111,6 +127,8 @@ function closure(
             st_kan,
             st_lux_ebm,
             st_lux_gen,
+            noise,
+            tempered_noise,
         ),
     )
 end
@@ -118,32 +136,54 @@ end
 function grad_thermo_llhood(
     ps::ComponentArray{T},
     ∇::ComponentArray{T},
-    z_posterior::AbstractArray{T},
-    z_prior::AbstractArray{T},
+    z_posterior::AbstractArray{T,4},
+    z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
-    Δt::AbstractVector{T},
+    Δt::AbstractArray{T,1},
     model::T_KAM{T,full_quant},
     st_kan::ComponentArray{T},
     st_lux_ebm::NamedTuple,
-    st_lux_gen::NamedTuple;
-)::Tuple{AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
+    st_lux_gen::NamedTuple,
+    noise::AbstractArray{T},
+    tempered_noise::AbstractArray{T};
+)::AbstractArray{T} where {T<:half_quant}
 
-    CUDA.@fastmath Enzyme.autodiff_deferred(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        Enzyme.Const(closure),
-        Enzyme.Active,
-        Enzyme.Duplicated(ps, ∇),
-        Enzyme.Const(z_posterior),
-        Enzyme.Const(z_prior),
-        Enzyme.Const(x),
-        Enzyme.Const(Δt),
-        Enzyme.Const(model),
-        Enzyme.Const(st_kan),
-        Enzyme.Const(st_lux_ebm),
-        Enzyme.Const(st_lux_gen),
-    )
+    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+        f =
+            p -> closure(
+                p,
+                z_posterior,
+                z_prior,
+                x,
+                Δt,
+                model,
+                st_kan,
+                st_lux_ebm,
+                st_lux_gen,
+                noise,
+                tempered_noise,
+            )
+        ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
+    else
+        Enzyme.autodiff_deferred(
+            Enzyme.set_runtime_activity(Enzyme.Reverse),
+            Enzyme.Const(closure),
+            Enzyme.Active,
+            Enzyme.Duplicated(ps, ∇),
+            Enzyme.Const(z_posterior),
+            Enzyme.Const(z_prior),
+            Enzyme.Const(x),
+            Enzyme.Const(Δt),
+            Enzyme.Const(model),
+            Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux_ebm),
+            Enzyme.Const(st_lux_gen),
+            Enzyme.Const(noise),
+            Enzyme.Const(tempered_noise),
+        )
+    end
 
-    return ∇, st_lux_ebm, st_lux_gen
+    return ∇
 end
 
 struct ThermodynamicLoss end
@@ -158,7 +198,7 @@ function (l::ThermodynamicLoss)(
     train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{T,AbstractArray{T},NamedTuple,NamedTuple} where {T<:half_quant}
-    z_posterior, Δt, st_lux = sample_thermo(
+    z_posterior, Δt, st_lux, noise, tempered_noise = sample_thermo(
         ps,
         st_kan,
         Lux.testmode(st_lux),
@@ -168,9 +208,10 @@ function (l::ThermodynamicLoss)(
         rng = rng,
     )
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
-    z_prior, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+    z_prior, st_ebm =
+        model.sample_prior(model, size(x)[end], ps, st_kan, Lux.testmode(st_lux), rng)
 
-    ∇, st_lux_ebm, st_lux_gen = grad_thermo_llhood(
+    ∇ = grad_thermo_llhood(
         ps,
         ∇,
         z_posterior,
@@ -181,6 +222,8 @@ function (l::ThermodynamicLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
+        tempered_noise,
     )
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
@@ -192,6 +235,8 @@ function (l::ThermodynamicLoss)(
         st_kan,
         Lux.trainmode(st_lux_ebm),
         Lux.trainmode(st_lux_gen),
+        noise,
+        tempered_noise,
     )
     return loss, ∇, st_lux_ebm, st_lux_gen
 end

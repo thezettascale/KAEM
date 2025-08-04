@@ -18,7 +18,6 @@ dataset_mapping = Dict(
     "SVHN" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
     # "UD_ENGLISH" => MLDatasets.UD_English(),
-    "DARCY_PERM" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["x"],
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
 

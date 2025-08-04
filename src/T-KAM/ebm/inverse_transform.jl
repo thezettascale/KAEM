@@ -17,37 +17,45 @@ else
 end
 
 @parallel_indices (q, p, b) function interp_kernel!(
-    z::AbstractArray{U},
-    cdf::AbstractArray{U},
-    grid::AbstractArray{U},
-    rand_vals::AbstractArray{U},
+    z::AbstractArray{U,3},
+    cdf::AbstractArray{U,3},
+    grid::AbstractArray{U,2},
+    rand_vals::AbstractArray{U,3},
     grid_size::Int,
-    ε::U,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, p, b]
     idx = 1
 
     # Manual searchsortedfirst over cdf[q, p, :] - potential thread divergence on GPU
-    for j = 1:grid_size
+    for j = 1:(grid_size+1)
         if cdf[q, p, j] >= rv
             idx = j
             break
         end
-        idx = j + 1
+        idx = j
     end
 
-    idx = idx == 1 ? 2 : idx
-    idx = idx > grid_size ? grid_size : idx
+    # Edge case 1: Random value is smaller than first CDF value
+    if idx == 1
+        z[q, p, b] = grid[p, 1]
 
-    # Get bounds
-    z1, z2 = grid[p, idx-1], grid[p, idx]
-    cd1, cd2 = cdf[q, p, idx-1], cdf[q, p, idx]
+        # Edge case 2: Random value is larger than last CDF value
+    elseif idx > grid_size
+        z[q, p, b] = grid[p, grid_size]
 
-    length = cd2 - cd1
-    length = length == 0 ? ε : length
+        # Interpolate into interval   
+    else
+        z1, z2 = grid[p, idx-1], grid[p, idx]
+        cd1, cd2 = cdf[q, p, idx-1], cdf[q, p, idx]
 
-    # Linear interpolation
-    z[q, p, b] = z1 + (z2 - z1) * ((rv - cd1) / length)
+        # Handle exact match without instability
+        length = cd2 - cd1
+        if length == 0
+            z[q, p, b] = z1
+        else
+            z[q, p, b] = z1 + (z2 - z1) * ((rv - cd1) / length)
+        end
+    end
     return nothing
 end
 
@@ -58,8 +66,7 @@ function sample_univariate(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
-    ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,3},NamedTuple} where {T<:half_quant}
 
     cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm)
     grid_size = size(grid, 2)
@@ -79,40 +86,50 @@ function sample_univariate(
         grid,
         rand_vals,
         grid_size,
-        full_quant(ε),
     )
     return T.(z), st_lyrnorm_new
 end
 
 @parallel_indices (q, b) function interp_kernel_mixture!(
-    z::AbstractArray{U},
-    cdf::AbstractArray{U},
-    grid::AbstractArray{U},
-    rand_vals::AbstractArray{U},
+    z::AbstractArray{U,3},
+    cdf::AbstractArray{U,3},
+    grid::AbstractArray{U,2},
+    rand_vals::AbstractArray{U,2},
     grid_size::Int,
-    ε::U,
 )::Nothing where {U<:full_quant}
     rv = rand_vals[q, b]
     idx = 1
 
     # Manual searchsortedfirst over cdf[q, b, :] - potential thread divergence on GPU
-    for j = 1:grid_size
+    for j = 1:(grid_size+1)
         if cdf[q, b, j] >= rv
             idx = j
             break
         end
-        idx = j + 1
+        idx = j
     end
 
-    idx = idx == 1 ? 2 : idx
-    idx = idx > grid_size ? grid_size : idx
+    # Edge case 1: Random value is smaller than first CDF value
+    if idx == 1
+        z[q, 1, b] = grid[q, 1]
 
-    length = cdf[q, b, idx] - cdf[q, b, idx-1]
-    length = length == 0 ? ε : length
+        # Edge case 2: Random value is larger than last CDF value
+    elseif idx > grid_size
+        z[q, 1, b] = grid[q, grid_size]
 
-    z[q, 1, b] =
-        grid[q, idx-1] +
-        (grid[q, idx] - grid[q, idx-1]) * ((rv - cdf[q, b, idx-1]) / length)
+        # Interpolate into interval   
+    else
+        z1, z2 = grid[q, idx-1], grid[q, idx]
+        cd1, cd2 = cdf[q, b, idx-1], cdf[q, b, idx]
+
+        # Handle exact match without instability
+        length = cd2 - cd1
+        if length == 0
+            z[q, 1, b] = z1
+        else
+            z[q, 1, b] = z1 + (z2 - z1) * ((rv - cd1) / length)
+        end
+    end
     return nothing
 end
 
@@ -123,8 +140,7 @@ function sample_mixture(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
     rng::AbstractRNG = Random.default_rng(),
-    ε::T = eps(T),
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+)::Tuple{AbstractArray{T,3},NamedTuple} where {T<:half_quant}
     """
     Component-wise inverse transform sampling for the ebm-prior.
     p = components of model
@@ -158,7 +174,6 @@ function sample_mixture(
         full_quant.(grid),
         rand_vals,
         grid_size,
-        full_quant(ε),
     )
     return T.(z), st_lyrnorm_new
 end

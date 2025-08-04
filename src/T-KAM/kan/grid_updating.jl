@@ -12,8 +12,8 @@ function update_fcn_grid(
     l::univariate_function{T,U},
     ps::ComponentArray{T},
     st::ComponentArray{T},
-    x::AbstractArray{T},
-)::Tuple{AbstractArray{T},AbstractArray{U}} where {T<:half_quant,U<:full_quant}
+    x::AbstractArray{T,2},
+)::Tuple{AbstractArray{T,2},AbstractArray{T,3}} where {T<:half_quant,U<:full_quant}
     """
     Adapt the function's grid to the distribution of the input data.
 

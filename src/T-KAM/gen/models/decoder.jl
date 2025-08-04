@@ -2,72 +2,33 @@ module Transformer_Model
 
 export SEQ_Generator, init_SEQ_Generator
 
-using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser, ParallelStencil
+using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 using NNlib: softmax, gelu
+using ChainRules.ChainRulesCore: @ignore_derivatives
 
 using ..Utils
 
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
+if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
+    include("attention_gpu.jl")
+    using .Attention
 else
-    @init_parallel_stencil(Threads, full_quant, 3)
+    include("attention.jl")
+    using .Attention
 end
 
-@parallel_indices (t, i, b) function scaled_dot_prod!(
-    QK::AbstractArray{T},
-    Q::AbstractArray{T},
-    K::AbstractArray{T},
-    scale::T,
-    d_model::Int,
-) where {T<:half_quant}
-    acc = zero(T)
-    for d = 1:d_model
-        acc = acc + Q[d, t, b] * K[d, i, b]
-    end
-    QK[t, i, b] = acc / scale
-    return nothing
-end
-
-@parallel_indices (d, t, b) function value_kernel!(
-    out::AbstractArray{T},
-    QK::AbstractArray{T},
-    V::AbstractArray{T},
-    I::Int,
-) where {T<:half_quant}
-    acc = zero(T)
-    for i = 1:I
-        acc = acc + QK[t, i, b] * V[d, i, b]
-    end
-    out[d, t, b] = acc
-    return nothing
-end
-
-function scaled_dot_product_attention(
-    Q::AbstractArray{T},
-    K::AbstractArray{T},
-    V::AbstractArray{T},
-    d_model::Int,
-) where {T<:half_quant}
-    D, L, B = size(Q)
-    I = size(K, 2)
-    scale = sqrt(T(d_model))
-
-    QK = @zeros(L, I, B)
-    @parallel (1:L, 1:I, 1:B) scaled_dot_prod!(QK, Q, K, scale, d_model)
-    QK = softmax(QK, dims = 2)
-    @parallel (1:D, 1:L, 1:B) value_kernel!(Q, QK, V, I)
-    return Q
+struct BoolConfig <: AbstractBoolConfig
+    layernorm::Bool
+    batchnorm::Bool
 end
 
 struct SEQ_Generator <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::NTuple{3,Lux.Dense}
-    layernorms::NTuple{2,Lux.LayerNorm}
-    attention::NTuple{3,Lux.Dense}
+    Φ_fcns::Vector{Lux.Dense}
+    layernorms::Vector{Lux.LayerNorm}
+    attention::Vector{Lux.Dense}
     seq_length::Int
     d_model::Int
-    layernorm_bool::Bool
-    batchnorm_bool::Bool
+    bool_config::BoolConfig
 end
 
 function init_SEQ_Generator(
@@ -131,13 +92,12 @@ function init_SEQ_Generator(
 
     return SEQ_Generator(
         depth,
-        (Φ_functions...,),
-        (layernorms...,),
-        (attention...,),
+        Φ_functions,
+        layernorms,
+        attention,
         sequence_length,
         d_model,
-        true,
-        false,
+        BoolConfig(true, false),
     )
 end
 
@@ -145,8 +105,8 @@ function (gen::SEQ_Generator)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple,
-    z::AbstractArray{T},
-)::Tuple{AbstractArray{T},NamedTuple} where {T<:half_quant}
+    z::AbstractArray{T,3},
+)::Tuple{AbstractArray{T,3},NamedTuple} where {T<:half_quant}
     """
     Generate data from the Transformer decoder.
 
@@ -163,34 +123,34 @@ function (gen::SEQ_Generator)(
 
     # Projection
     z, st_new = Lux.apply(gen.Φ_fcns[1], z, ps.fcn[:a], st_lux.fcn[:a])
-    @reset st_lux.fcn[:a] = st_new
+    @ignore_derivatives @reset st_lux.fcn[:a] = st_new
     z, st_new = Lux.apply(gen.layernorms[1], z, ps.layernorm[:a], st_lux.layernorm[:a])
-    @reset st_lux.layernorm[:a] = st_new
+    @ignore_derivatives @reset st_lux.layernorm[:a] = st_new
 
     z_prev = z
     for t = 2:gen.seq_length
 
         # Self-attention
         Q, st_new = Lux.apply(gen.attention[1], z, ps.attention[:Q], st_lux.attention[:Q])
-        @reset st_lux.attention[:Q] = st_new
+        @ignore_derivatives @reset st_lux.attention[:Q] = st_new
         K, st_new = Lux.apply(gen.attention[2], z, ps.attention[:K], st_lux.attention[:K])
-        @reset st_lux.attention[:K] = st_new
+        @ignore_derivatives @reset st_lux.attention[:K] = st_new
         V, st_new = Lux.apply(gen.attention[3], z, ps.attention[:V], st_lux.attention[:V])
-        @reset st_lux.attention[:V] = st_new
+        @ignore_derivatives @reset st_lux.attention[:V] = st_new
 
         attn = scaled_dot_product_attention(Q, K, V, gen.d_model)
         z = z + attn
 
         # Feed forward
         z, st_new = Lux.apply(gen.Φ_fcns[2], z, ps.fcn[:b], st_lux.fcn[:b])
-        @reset st_lux.fcn[:b] = st_new
+        @ignore_derivatives @reset st_lux.fcn[:b] = st_new
         z, st_new = Lux.apply(
             gen.layernorms[2],
             z[:, end:end, :],
             ps.layernorm[:b],
             st_lux.layernorm[:b],
         )
-        @reset st_lux.layernorm[:b] = st_new
+        @ignore_derivatives @reset st_lux.layernorm[:b] = st_new
 
         z = cat(z_prev, z, dims = 2)
         z_prev = z
@@ -198,7 +158,7 @@ function (gen::SEQ_Generator)(
 
     # Output layer
     z, st_new = Lux.apply(gen.Φ_fcns[3], z, ps.fcn[:c], st_lux.fcn[:c])
-    @reset st_lux.fcn[:c] = st_new
+    @ignore_derivatives @reset st_lux.fcn[:c] = st_new
 
     return z, st_lux
 end

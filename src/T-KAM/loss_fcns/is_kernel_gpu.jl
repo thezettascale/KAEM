@@ -25,7 +25,7 @@ function loss_accum(
 )::T where {T<:half_quant}
 
     loss = reduce(
-        mean,
+        sum,
         map(
             b -> accumulator(
                 weights_resampled[b, :],
@@ -36,7 +36,7 @@ function loss_accum(
         ),
     )
 
-    return loss
+    return loss / B
 end
 
 end

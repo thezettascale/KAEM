@@ -66,7 +66,7 @@ function unadjusted_logpos_grad(
             )
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
-        CUDA.@fastmath Enzyme.autodiff_deferred(
+        Enzyme.autodiff_deferred(
             Enzyme.set_runtime_activity(Enzyme.Reverse),
             Enzyme.Const(unadjusted_logpos),
             Enzyme.Active,
@@ -148,7 +148,7 @@ function autoMALA_value_and_grad(
         f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
         ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
     else
-        CUDA.@fastmath Enzyme.autodiff_deferred(
+        Enzyme.autodiff_deferred(
             Enzyme.set_runtime_activity(Enzyme.Reverse),
             Enzyme.Const(closure),
             Enzyme.Active,

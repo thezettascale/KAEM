@@ -23,17 +23,14 @@ function loss_accum(
     S::Int,
 )::T where {T<:half_quant}
 
-    loss = reduce(
-        sum,
-        map(
-            b -> accumulator(
-                weights_resampled[b, :],
-                logprior[resampled_idxs[b, :]],
-                logllhood[b, resampled_idxs[b, :]],
-            ),
-            1:B,
-        ),
-    )
+    loss = zero(T)
+    for b in 1:B
+        loss = loss + accumulator(
+            weights_resampled[b, :],
+            logprior[resampled_idxs[b, :]],
+            logllhood[b, resampled_idxs[b, :]],
+        )
+    end
 
     return loss / B
 end

@@ -4,14 +4,14 @@ export loss_accum
 
 using ..Utils
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions
 
 function accumulator(
     weights::AbstractArray{T,1},
     logprior::AbstractArray{T,1},
     logllhood::AbstractArray{T,1},
 )::T where {T<:half_quant}
-    return @tullio loss := weights[s] * (logprior[s] + logllhood[s])
+    return weights' * (logprior + logllhood)
 end
 
 function loss_accum(

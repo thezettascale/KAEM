@@ -13,6 +13,7 @@ conf = Dict(
 )[dataset]
 parse_conf!(conf)
 
+ENV["THERMO"] = "false"
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")

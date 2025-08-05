@@ -1,5 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
 
+ENV["THERMO"] = "true"
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP16"
@@ -40,9 +41,9 @@ function test_posterior_sampling()
     )
 
     if model.prior.mixture_model || model.prior.ula
-        @test size(z_posterior) == (10, 5, 10, 4)
-    else
         @test size(z_posterior) == (10, 1, 10, 4)
+    else
+        @test size(z_posterior) == (10, 5, 10, 4)
     end
     @test size(temps) == (4,)
     @test !any(isnan, z_posterior)

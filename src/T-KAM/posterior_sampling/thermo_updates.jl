@@ -1,9 +1,8 @@
-module HamiltonianMonteCarlo
+module LangevinUpdates
 
-export leapfrog, logpos_withgrad
+export update_z!, logpos_withgrad, leapfrog
 
-using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, ParallelStencil
-using Enzyme: make_zero
+using CUDA, KernelAbstractions, Lux, LuxCUDA, ComponentArrays, Accessors, Tullio
 
 using ..Utils
 using ..T_KAM_model
@@ -11,31 +10,41 @@ using ..T_KAM_model
 include("log_posteriors.jl")
 using .LogPosteriors: autoMALA_value_and_grad
 
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
-else
-    @init_parallel_stencil(Threads, full_quant, 3)
+## ULA ##
+function update_z!(
+    z::AbstractArray{U,3},
+    ∇z::AbstractArray{U,3},
+    η::U,
+    ξ::AbstractArray{U,3},
+    sqrt_2η::U,
+    Q::Int,
+    P::Int,
+    S::Int,
+)::Nothing where {U<:full_quant}
+    @tullio z[q, p, s] = z[q, p, s] + η * ∇z[q, p, s] + sqrt_2η * ξ[q, p, s]
+    return nothing
 end
 
-@parallel_indices (q, p, s) function position_update!(
+## autoMALA ##
+function position_update!(
     z::AbstractArray{U,3},
     momentum::AbstractArray{U,3}, # p*
     ∇z::AbstractArray{U,3},
     M::AbstractArray{U,2},
     η::AbstractArray{U,1},
 )::Nothing where {U<:full_quant}
-    momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇z[q, p, s] / M[q, p]
-    z[q, p, s] = z[q, p, s] + η[s] * momentum[q, p, s] / M[q, p]
+    @tullio momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇z[q, p, s] / M[q, p]
+    @tullio z[q, p, s] = z[q, p, s] + η[s] * momentum[q, p, s] / M[q, p]
     return nothing
 end
 
-@parallel_indices (q, p, s) function momentum_update!(
+function momentum_update!(
     momentum::AbstractArray{U,3}, # p*
     ∇ẑ::AbstractArray{U,3},
     M::AbstractArray{U,2},
     η::AbstractArray{U,1},
 )::Nothing where {U<:full_quant}
-    momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇ẑ[q, p, s] / M[q, p]
+    @tullio momentum[q, p, s] = momentum[q, p, s] + (η[s] / 2) * ∇ẑ[q, p, s] / M[q, p]
     return nothing
 end
 
@@ -94,14 +103,14 @@ function leapfrog(
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad) and full step position update
     momentum = copy(p)
-    @parallel (1:Q, 1:P, 1:S) position_update!(z, p, ∇z, M, η)
+    position_update!(z, p, ∇z, M, η)
 
     # Get gradient at new position
     logpos_ẑ, ∇ẑ, st_lux =
         logpos_withgrad(T.(z), T.(∇z), x, temps, model, ps, st_kan, st_lux)
 
     # Half-step momentum update (p* = p + (eps/2)M^{-1/2}grad)
-    @parallel (1:Q, 1:P, 1:S) momentum_update!(p, ∇ẑ, M, η)
+    momentum_update!(p, ∇ẑ, M, η)
 
     # Hamiltonian difference for transformed momentum
     # H(x,y) = -log(pi(x)) + (1/2)||p||^2 since p ~ N(0,I)

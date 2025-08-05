@@ -6,7 +6,7 @@ using CUDA, Accessors, Lux, LuxCUDA, Statistics, ComponentArrays
 
 using ..Utils
 using ..T_KAM_model
-using ..HamiltonianMonteCarlo
+using ..LangevinUpdates
 
 function safe_step_size_update(
     η::AbstractArray{U,1},

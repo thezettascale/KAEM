@@ -23,8 +23,13 @@ using .Preconditioning
 include("../gen/loglikelihoods.jl")
 using .LogLikelihoods: log_likelihood_MALA
 
-include("hmc_updates.jl")
-using .HamiltonianMonteCarlo
+if parse(Bool, get(ENV, "THERMO", "false"))
+    include("thermo_updates.jl")
+    using .LangevinUpdates
+else
+    include("updates.jl")
+    using .LangevinUpdates
+end
 
 include("step_search.jl")
 using .autoMALA_StepSearch

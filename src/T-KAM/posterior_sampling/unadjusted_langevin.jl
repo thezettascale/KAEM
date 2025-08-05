@@ -20,29 +20,21 @@ using ..T_KAM_model
 include("log_posteriors.jl")
 using .LogPosteriors: unadjusted_logpos_grad, log_likelihood_MALA
 
+
+if parse(Bool, get(ENV, "THERMO", "false"))
+    include("thermo_updates.jl")
+    using .LangevinUpdates: update_z!
+else
+    include("updates.jl")
+    using .LangevinUpdates: update_z!
+end
+
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
     "gaussian" => (p, b, rng) -> randn(rng, p, 1, b),
     "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
     "ebm" => (p, b, rng) -> randn(rng, p, 1, b),
 )
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
-else
-    @init_parallel_stencil(Threads, full_quant, 3)
-end
-
-@parallel_indices (q, p, s) function update_z!(
-    z::AbstractArray{U,3},
-    ∇z::AbstractArray{U,3},
-    η::U,
-    ξ::AbstractArray{U,3},
-    sqrt_2η::U,
-)::Nothing where {U<:full_quant}
-    z[q, p, s] += η * ∇z[q, p, s] + sqrt_2η * ξ[q, p, s]
-    return nothing
-end
 
 struct ULA_sampler{U<:full_quant}
     prior_sampling_bool::Bool
@@ -162,7 +154,7 @@ function (sampler::ULA_sampler)(
                 ),
             ) ./ model.loss_scaling.full
 
-        @parallel (1:Q, 1:P, 1:S) update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η)
+        update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η, Q, P, S)
         z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool

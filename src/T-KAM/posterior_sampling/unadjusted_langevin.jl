@@ -98,8 +98,16 @@ function (sampler::ULA_sampler)(
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             z = pu(z)
         else
-            z = zeros(T, model.prior.q_size, 1, 0) |> pu
-            for i = 1:length(temps)
+            z, st_ebm = model.sample_prior(
+                    model,
+                    size(x)[end],
+                    ps,
+                    st_kan,
+                    st_lux,
+                    rng
+                )
+            
+            for i = 1:length(temps)-1
                 z_i, st_ebm = model.sample_prior(
                     model,
                     size(x)[end],
@@ -109,8 +117,8 @@ function (sampler::ULA_sampler)(
                     rng
                 )
                 z = cat(z, z_i, dims = 3)
-                @reset st_lux.ebm = st_ebm
             end
+            @reset st_lux.ebm = st_ebm
             z
         end
     end

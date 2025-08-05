@@ -9,8 +9,7 @@ using CUDA, KernelAbstractions, Tullio
 function accumulator(
     weights::AbstractArray{T,1},
     logprior::AbstractArray{T,1},
-    logllhood::AbstractArray{T,2},
-    resampled_idxs::AbstractArray{Int,2},
+    logllhood::AbstractArray{T,1},
 )::T where {T<:half_quant}
     return @tullio loss := weights[s] * (logprior[s] + logllhood[s])
 end

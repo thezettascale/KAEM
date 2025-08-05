@@ -98,7 +98,7 @@ function (sampler::ULA_sampler)(
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             z = pu(z)
         else
-            z = zeros(T, model.q_size, model.p_size, 0) |> pu
+            z = zeros(T, model.prior.q_size, 1, 0) |> pu
             for i = 1:length(temps)
                 z_i, st_ebm = model.sample_prior(
                     model,

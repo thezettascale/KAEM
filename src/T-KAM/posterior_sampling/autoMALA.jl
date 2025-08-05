@@ -108,7 +108,7 @@ function (sampler::autoMALA_sampler)(
         rng: The random number generator.
     """
     # Initialize from prior 
-    z_hq = zeros(T, model.q_size, model.p_size, 0) |> pu
+    z_hq = zeros(T, model.q_size, 1, 0) |> pu
     for i in 1:length(temps)
         z_i, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
         z_hq = cat(z_hq, z_i; dims = 3)

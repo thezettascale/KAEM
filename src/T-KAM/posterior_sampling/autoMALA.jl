@@ -108,8 +108,12 @@ function (sampler::autoMALA_sampler)(
         rng: The random number generator.
     """
     # Initialize from prior 
-    z_hq, st_ebm =
-        model.sample_prior(model, size(x)[end]*length(temps), ps, st_kan, st_lux, rng)
+    z_hq = zeros(T, model.q_size, model.p_size, 0) |> pu
+    for i in 1:length(temps)
+        z_i, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+        z_hq = cat(z_hq, z_i; dims = 3)
+        @reset st_lux.ebm = st_ebm
+    end
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)

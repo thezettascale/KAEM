@@ -213,6 +213,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 ps_hq,
                 t.st_kan,
                 Lux.testmode(t.st_lux);
+                train_idx = train_idx,
                 rng = t.rng,
             )
 

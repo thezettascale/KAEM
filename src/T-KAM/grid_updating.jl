@@ -18,7 +18,7 @@ function update_model_grid(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple;
-    temps::AbstractArray{T} = [one(T)],
+    train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
     Any,
@@ -49,6 +49,7 @@ function update_model_grid(
     if model.update_prior_grid
 
         if model.N_t > 1
+            temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     model,
@@ -56,7 +57,7 @@ function update_model_grid(
                     st_kan,
                     st_lux,
                     x;
-                    temps = temps[2:end],
+                    temps = temps,
                     rng = rng,
                 ),
             )[
@@ -148,6 +149,7 @@ function update_model_grid(
         return model, T.(ps), st_kan, st_lux
 
     if model.N_t > 1
+        temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 1:model.N_t])
         z = first(
             model.posterior_sampler(
                 model,
@@ -155,7 +157,7 @@ function update_model_grid(
                 st_kan,
                 st_lux,
                 x;
-                temps = temps[2:end],
+                temps = temps,
                 rng = rng,
             ),
         )[

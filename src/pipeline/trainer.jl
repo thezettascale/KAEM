@@ -43,6 +43,7 @@ mutable struct T_KAM_trainer{T<:half_quant,U<:full_quant}
     save_model::Bool
     gen_type::AbstractString
     checkpoint_every::Int
+    gen_every::Int
     loss::U
     rng::AbstractRNG
 end
@@ -143,7 +144,7 @@ function init_trainer(
 
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
-
+    gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
     try
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     catch
@@ -173,6 +174,7 @@ function init_trainer(
         save_model,
         gen_type,
         checkpoint_every,
+        gen_every,
         zero(full_quant),
         rng,
     )
@@ -325,19 +327,21 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
                 gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
             end
 
-            try
-                h5write(
-                    t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
-                    "samples",
-                    Float32.(gen_data),
-                )
-            catch
-                rm(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5")
-                h5write(
-                    t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
-                    "samples",
-                    Float32.(gen_data),
-                )
+            if (t.gen_every > 0 && epoch % t.gen_every == 0)
+                try
+                    h5write(
+                        t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
+                        "samples",
+                        Float32.(gen_data),
+                    )
+                catch
+                    rm(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5")
+                    h5write(
+                        t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
+                        "samples",
+                        Float32.(gen_data),
+                    )
+                end
             end
 
         end

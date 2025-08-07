@@ -145,6 +145,7 @@ function init_trainer(
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
+    
     try
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     catch

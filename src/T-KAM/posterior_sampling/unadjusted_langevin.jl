@@ -187,7 +187,7 @@ function (sampler::ULA_sampler)(
                     ε = model.ε,
                 )
 
-                log_swap_ratio = mean((temps[t+1] - temps[t]) .* (ll_t - ll_t1))
+                log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
                 swap = T(log_u_swap[t, i] < log_swap_ratio)
                 @reset st_lux.gen = st_gen
 

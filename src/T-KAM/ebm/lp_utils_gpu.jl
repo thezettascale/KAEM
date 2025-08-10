@@ -21,7 +21,8 @@ function log_alpha(
     P::Int,
     S::Int,
 )::AbstractArray{T,3} where {T<:half_quant}
-    return log.(log_απ .+ alpha .+ ε)
+    alpha = alpha .+ ε
+    return @tullio out[q, p, s] := log_απ[q, 1, s] + log(alpha[q, p])
 end
 
 function log_mix_pdf(

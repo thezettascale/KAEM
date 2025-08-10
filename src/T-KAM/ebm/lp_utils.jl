@@ -39,7 +39,7 @@ end
     alpha::AbstractArray{T,2},
     ε::T,
 )::Nothing where {T<:half_quant}
-    log_pdf[q, p, s] = log(log_pdf[q, 1, s] + alpha[q, p] + ε)
+    log_pdf[q, p, s] = log_pdf[q, 1, s] + log(alpha[q, p] + ε)
     return nothing
 end
 

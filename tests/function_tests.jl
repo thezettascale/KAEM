@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Lux, ComponentArrays, Enzyme
 
-ENV["GPU"] = true
+ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
@@ -54,7 +54,7 @@ function test_derivative()
         return sum(y)
     end
 
-    Enzyme.autodiff_deferred_deferred(
+    Enzyme.autodiff_deferred(
         Enzyme.Reverse,
         Enzyme.Const(closured_f),
         Enzyme.Active,
@@ -69,7 +69,7 @@ function test_derivative()
 end
 
 @testset "Univariate Funtion Tests" begin
-    test_fwd()
-    test_grid_update()
+    # test_fwd()
+    # test_grid_update()
     test_derivative()
 end

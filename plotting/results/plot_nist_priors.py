@@ -19,7 +19,7 @@ plt.rcParams.update(
 )
 
 DATASETS = ["MNIST", "FMNIST"]
-GRID_SIZES = [10, 20]
+GRID_SIZES = [4, 8]
 FNCS = ["RBF", "FFT"]
 
 for dataset in DATASETS:
@@ -27,14 +27,14 @@ for dataset in DATASETS:
         for fnc in FNCS:
             # File paths to HDF5 files
             file_paths = [
-                "logs/Vanilla/NIST/importance_ebm_FFT/generated_images.h5",
-                "logs/Vanilla/NIST/importance_ebm_RBF/generated_images.h5",
-                "logs/Vanilla/NIST/importance_gaussian_FFT/generated_images.h5",
-                "logs/Vanilla/NIST/importance_gaussian_RBF/generated_images.h5",
-                "logs/Vanilla/NIST/importance_lognormal_FFT/generated_images.h5",
-                "logs/Vanilla/NIST/importance_lognormal_RBF/generated_images.h5",
-                "logs/Vanilla/NIST/importance_uniform_FFT/generated_images.h5",
-                "logs/Vanilla/NIST/importance_uniform_RBF/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_ebm_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_ebm_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/univariate/generated_images.h5",
             ]
 
             # titles = ['Gaussian', 'Lognormal', 'Uniform']
@@ -50,7 +50,7 @@ for dataset in DATASETS:
                 with h5py.File(file_path, "r") as h5_file:
                     images.append(h5_file["samples"][()])
 
-            fig, axes = plt.subplots(grid_size, grid_size * 3, figsize=(18, 6))
+            fig, axes = plt.subplots(grid_size, grid_size * 8, figsize=(32, 4))
 
             for dataset_idx, image_set in enumerate(images):
                 for i in range(grid_size * grid_size):
@@ -62,7 +62,7 @@ for dataset in DATASETS:
                     images = np.transpose(image_set[i, :, :, :], (1, 2, 0))
 
                     # Use inverted colormap for middle dataset
-                    if dataset_idx == 1:
+                    if dataset_idx == 1 or dataset_idx == 3 or dataset_idx == 5 or dataset_idx == 7:
                         ax.imshow(images, cmap="gray_r")  # gray_r is inverted gray
                     else:
                         ax.imshow(images, cmap="gray")

@@ -104,15 +104,13 @@ function init_trainer(
         "importance"
 
     if mala == "autoMALA" && !parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_autoMALA"))
-        mala = "ULA_mixture"
+        mala = "ULA"
     end
 
 
-    model_type = N_t > 1 ? "Thermodynamic/$(dataset_name)" : "Vanilla/$(dataset_name)"
+    model_type = N_t > 1 ? "Thermodynamic/$(dataset_name)/$(mala)" : "Vanilla/$(dataset_name)/$(mala)"
 
     prior_spline_fcn =
-        "importance" *
-        "_" *
         retrieve(conf, "EbmModel", "π_0") *
         "_" *
         retrieve(conf, "EbmModel", "spline_function")

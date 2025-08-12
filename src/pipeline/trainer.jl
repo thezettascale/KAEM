@@ -116,7 +116,7 @@ function init_trainer(
         retrieve(conf, "EbmModel", "π_0") *
         "_" *
         retrieve(conf, "EbmModel", "spline_function")
-    if dataset_name in ["DARCY_FLOW", "MNIST", "FMNIST"]
+    if mala == "importance"
         model_type = model_type * "/" * prior_spline_fcn
     end
 

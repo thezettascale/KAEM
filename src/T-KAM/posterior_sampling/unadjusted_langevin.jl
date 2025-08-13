@@ -136,6 +136,7 @@ function (sampler::ULA_sampler)(
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
+    swap_replica_idxs = rand(rng, 1:num_temps-1, sampler.N)
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, i])
@@ -158,44 +159,41 @@ function (sampler::ULA_sampler)(
         z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
-            for t = 1:(num_temps-1)
+            t = swap_replica_idxs[i] # Randomly pick two adjacent temperatures to swap
+            z_t = copy(z_hq[:, :, :, t])
+            z_t1 = copy(z_hq[:, :, :, t+1])
+            
+            noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
+            noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
 
-                z_t = copy(z_hq[:, :, :, t])
-                z_t1 = copy(z_hq[:, :, :, t+1])
-                
-                noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
-                noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+            ll_t, st_gen = log_likelihood_MALA(
+                z_t,
+                x,
+                model.lkhood,
+                ps.gen,
+                st_kan.gen,
+                st_lux.gen,
+                noise_1;
+                ε = model.ε,
+            )
+            ll_t1, st_gen = log_likelihood_MALA(
+                z_t1,
+                x,
+                model.lkhood,
+                ps.gen,
+                st_kan.gen,
+                st_lux.gen,
+                noise_2;
+                ε = model.ε,
+            )
 
-                ll_t, st_gen = log_likelihood_MALA(
-                    z_t,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_kan.gen,
-                    st_lux.gen,
-                    noise_1;
-                    ε = model.ε,
-                )
-                ll_t1, st_gen = log_likelihood_MALA(
-                    z_t1,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_kan.gen,
-                    st_lux.gen,
-                    noise_2;
-                    ε = model.ε,
-                )
+            log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
+            swap = T(log_u_swap[t, i] < log_swap_ratio)
+            @reset st_lux.gen = st_gen
 
-                log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
-                swap = T(log_u_swap[t, i] < log_swap_ratio)
-                @reset st_lux.gen = st_gen
-
-                # Swap population if likelihood of population in new temperature is higher on average
-                z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
-                z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
-            end
+            z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+            z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+            z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
         end
     end
 

@@ -40,6 +40,8 @@ else
     @init_parallel_stencil(Threads, full_quant, 3)
 end
 
+const target_rate = 0.574  # Optimal acceptance rate for MALA
+
 struct autoMALA_sampler{U<:full_quant}
     N::Int
     N_unadjusted::Int
@@ -82,6 +84,7 @@ end
     η::AbstractArray{U,1},
     η_prop::AbstractArray{U,1},
     num_acceptances::AbstractArray{Int,1},
+    ẑ::AbstractArray{U,3},
 )::Nothing where {U<:full_quant}
     accept = (log_u[s] < log_r[s]) * reversible[s]
     z_fq[q, p, s] = ẑ[q, p, s] * accept + z_fq[q, p, s] * (1 - accept)
@@ -148,6 +151,7 @@ function (sampler::autoMALA_sampler)(
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S*num_temps, 2, sampler.N))) |> pu
     log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
+    swap_replica_idxs = rand(rng, 1:num_temps-1, sampler.N)
 
     num_acceptances = zeros(Int, S*num_temps) |> pu
     mean_η = zeros(U, S*num_temps) |> pu
@@ -214,57 +218,62 @@ function (sampler::autoMALA_sampler)(
                 η,
                 η_prop,
                 num_acceptances,
+                ẑ,
             )
 
             z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
             # Replica exchange Monte Carlo
             if i % sampler.RE_frequency == 0 && num_temps > 1
-                for t = 1:(num_temps-1)
+                t = swap_replica_idxs[i] # Randomly pick two adjacent temperatures to swap
+                # Global swap criterion
+                z_t = copy(z_hq[:, :, :, t])
+                z_t1 = copy(z_hq[:, :, :, t+1])
 
-                    # Global swap criterion
-                    z_t = copy(z_hq[:, :, :, t])
-                    z_t1 = copy(z_hq[:, :, :, t+1])
+                noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
+                noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
 
-                    noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
-                    noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+                ll_t, st_gen = log_likelihood_MALA(
+                    z_t,
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st_kan.gen,
+                    st_lux.gen,
+                    noise_1;
+                    ε = model.ε,
+                )
+                ll_t1, st_gen = log_likelihood_MALA(
+                    z_t1,
+                    x,
+                    model.lkhood,
+                    ps.gen,
+                    st_kan.gen,
+                    st_gen,
+                    noise_2;
+                    ε = model.ε,
+                )
 
-                    ll_t, st_gen = log_likelihood_MALA(
-                        z_t,
-                        x,
-                        model.lkhood,
-                        ps.gen,
-                        st_kan.gen,
-                        st_lux.gen,
-                        noise_1;
-                        ε = model.ε,
-                    )
-                    ll_t1, st_gen = log_likelihood_MALA(
-                        z_t1,
-                        x,
-                        model.lkhood,
-                        ps.gen,
-                        st_kan.gen,
-                        st_gen,
-                        noise_2;
-                        ε = model.ε,
-                    )
+                log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
+                swap = T(log_u_swap[t, i] < log_swap_ratio)
+                @reset st_lux.gen = st_gen
 
-                    log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
-                    swap = T(log_u_swap[t, i] < log_swap_ratio)
-                    @reset st_lux.gen = st_gen
-
-                    # Swap population if likelihood of population in new temperature is higher on average
-                    z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
-                    z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                    z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
-                end
+                # Swap population if likelihood of population in new temperature is higher on average
+                z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+                z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+                z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
             end
         end
     end
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)
     mean_η = ifelse.(isnan.(mean_η), sampler.η, mean_η) |> pu
+    
+    acceptance_rate = num_acceptances ./ sampler.N
+    η_adjustment = ifelse.(acceptance_rate .> target_rate, 
+                          sampler.Δη, 
+                          one(U) ./ sampler.Δη)
+    mean_η = clamp.(mean_η .* η_adjustment, sampler.η_min, sampler.η_max)
     @reset sampler.η = mean_η
 
     return z_hq, st_lux

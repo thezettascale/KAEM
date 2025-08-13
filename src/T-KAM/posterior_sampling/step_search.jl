@@ -24,10 +24,10 @@ function check_reversibility(
     η_prime::AbstractArray{U,1};
     tol::U = full_quant(1e-6),
 )::AbstractArray{Bool,1} where {U<:full_quant}
-    # Both checks may be required to maintain detailed balance
-    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z)) # leapfrog reversibility check
-    step_diff = abs.(η - η_prime) .< tol .* η # autoMALA reversibility check
-    return step_diff
+    # Check both position differences and step size differences for detailed balance
+    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
+    step_diff = abs.(η - η_prime) .< tol .* η
+    return pos_diff .&& step_diff
 end
 
 function select_step_size(
@@ -63,12 +63,12 @@ function select_step_size(
 
     δ = (log_r .>= log_b) - (log_r .<= log_a)
     active_chains = findall(δ .!= 0) |> cpu_device()
-    isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st
+    isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_lux
 
     geq_bool = log_r .>= log_b
 
     while !isempty(active_chains)
-
+        
         η_init[active_chains] .=
             safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
 

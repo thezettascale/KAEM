@@ -151,7 +151,7 @@ function (sampler::autoMALA_sampler)(
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S*num_temps, 2, sampler.N))) |> pu
     log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
-    swap_replica_idxs = rand(rng, 1:num_temps-1, sampler.N)
+    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:num_temps-1, sampler.N) : nothing
 
     num_acceptances = zeros(Int, S*num_temps) |> pu
     mean_η = zeros(U, S*num_temps) |> pu

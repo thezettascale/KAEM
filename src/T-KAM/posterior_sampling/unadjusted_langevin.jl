@@ -136,7 +136,7 @@ function (sampler::ULA_sampler)(
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
-    swap_replica_idxs = rand(rng, 1:num_temps-1, sampler.N)
+    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:num_temps-1, sampler.N) : nothing
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, i])

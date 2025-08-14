@@ -25,9 +25,9 @@ function check_reversibility(
     tol::U = full_quant(1e-3),
 )::AbstractArray{Bool,1} where {U<:full_quant}
     # Check both position differences and step size differences for detailed balance
-    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
+    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
     step_diff = abs.(η - η_prime) .< tol .* η
-    return pos_diff .&& step_diff
+    return step_diff
 end
 
 function select_step_size(

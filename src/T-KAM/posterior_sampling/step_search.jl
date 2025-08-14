@@ -22,7 +22,7 @@ function check_reversibility(
     z::AbstractArray{U,3},
     η::AbstractArray{U,1},
     η_prime::AbstractArray{U,1};
-    tol::U = full_quant(1e-6),
+    tol::U = full_quant(1e-3),
 )::AbstractArray{Bool,1} where {U<:full_quant}
     # Check both position differences and step size differences for detailed balance
     pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))

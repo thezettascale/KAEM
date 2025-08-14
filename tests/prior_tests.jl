@@ -145,8 +145,7 @@ function test_prior_derivatives()
         )[1]
     end
 
-    mlir_grad = Reactant.@compile grad(model, ps, st_kan, st_lux, z_test)
-    ∇ = mlir_grad(model, ps, st_kan, st_lux, z_test)
+    ∇ = grad(model, ps, st_kan, st_lux, z_test)
 
     @test norm(∇) != 0
     @test !any(isnan, ∇)

@@ -226,7 +226,6 @@ function (sampler::autoMALA_sampler)(
             # Replica exchange Monte Carlo
             if i % sampler.RE_frequency == 0 && num_temps > 1
                 t = swap_replica_idxs[i] # Randomly pick two adjacent temperatures to swap
-                # Global swap criterion
                 z_t = copy(z_hq[:, :, :, t])
                 z_t1 = copy(z_hq[:, :, :, t+1])
 

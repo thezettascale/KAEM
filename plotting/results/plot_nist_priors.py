@@ -27,14 +27,14 @@ for dataset in DATASETS:
         for fnc in FNCS:
             # File paths to HDF5 files
             file_paths = [
-                f"logs/Vanilla/{dataset}/importance_ebm_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_ebm_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_gaussian_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_lognormal_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/univariate/generated_images.h5",
-                f"logs/Vanilla/{dataset}/importance_uniform_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/ebm_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/ebm_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/gaussian_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/gaussian_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/lognormal_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/lognormal_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/uniform_{fnc}/univariate/generated_images.h5",
+                f"logs/Vanilla/{dataset}/importance/uniform_{fnc}/univariate/generated_images.h5",
             ]
 
             # titles = ['Gaussian', 'Lognormal', 'Uniform']
@@ -80,7 +80,7 @@ for dataset in DATASETS:
 
             plt.subplots_adjust(wspace=0, hspace=0)
             plt.savefig(
-                "figures/results/nist.png",
+                f"figures/results/{dataset.lower()}_{fnc.lower()}_{grid_size}x{grid_size}.png",
                 dpi=300,
                 bbox_inches="tight",
             )

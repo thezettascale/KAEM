@@ -5,9 +5,9 @@
 # Available modes: thermo, vanilla
 
 # MNIST vanilla
-SVHN vanilla
 # FMNIST vanilla
+DARCY_FLOW vanilla
+SVHN vanilla
 CIFAR10 vanilla
-# DARCY_FLOW vanilla
 SVHN thermo
 CIFAR10 thermo

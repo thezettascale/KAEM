@@ -34,41 +34,23 @@ function log_norm(norm::AbstractArray{T,3}, ε::T)::AbstractArray{T,2} where {T<
     return log_Z
 end
 
-@parallel_indices (q, p, s) function stable_logalpha!(
-    log_pdf::AbstractArray{T,3},
-    alpha::AbstractArray{T,2},
-    ε::T,
-)::Nothing where {T<:half_quant}
-    log_pdf[q, p, s] = log_pdf[q, 1, s] + log(alpha[q, p] + ε)
-    return nothing
-end
-
-function log_alpha(
-    log_απ::AbstractArray{T,3},
-    alpha::AbstractArray{T,2},
-    ε::T,
-    Q::Int,
-    P::Int,
-    S::Int,
-)::AbstractArray{T,3} where {T<:half_quant}
-    @parallel (1:Q, 1:P, 1:S) stable_logalpha!(log_απ, alpha, ε)
-    return log_απ
-end
-
 @parallel_indices (s) function mix_kernel!(
     logprob::AbstractArray{T,1},
     f::AbstractArray{T,3},
-    log_απ::AbstractArray{T,3},
-    log_Z::AbstractArray{T,2},
-    reg::T,
+    α::AbstractArray{T,2},
+    π_0::AbstractArray{T,3},
+    Z::AbstractArray{T,2},
+    ε::T,
     Q::Int,
     P::Int,
 )::Nothing where {T<:half_quant}
     acc = zero(T)
     @inbounds for q = 1:Q
+        acc_ = zero(T)
         @inbounds for p = 1:P
-            acc = acc + log_απ[q, p, s] + f[q, p, s] - log_Z[q, p] + reg
+            acc_ = acc_ + (exp(f[q, p, s]) * π_0[q, 1, s] * α[q, p] / Z[q, p])
         end
+        acc = acc + log(acc_ + ε)
     end
     logprob[s] = acc
     return nothing
@@ -76,15 +58,16 @@ end
 
 function log_mix_pdf(
     f::AbstractArray{T,3},
-    log_απ::AbstractArray{T,3},
-    log_Z::AbstractArray{T,2},
-    reg::T,
+    α::AbstractArray{T,2},
+    π_0::AbstractArray{T,3},
+    Z::AbstractArray{T,2},
+    ε::T,
     Q::Int,
     P::Int,
     S::Int,
 )::AbstractArray{T,1} where {T<:half_quant}
     log_p = @zeros(S)
-    @parallel (1:S) mix_kernel!(log_p, f, log_απ, log_Z, reg, Q, P)
+    @parallel (1:S) mix_kernel!(log_p, f, α, π_0, Z, ε, Q, P)
     return log_p
 end
 

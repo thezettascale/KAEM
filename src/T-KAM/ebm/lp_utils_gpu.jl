@@ -13,26 +13,20 @@ function log_norm(norm::AbstractArray{T,3}, ε::T)::AbstractArray{T,2} where {T<
     return dropdims(log.(sum(norm, dims = 3) .+ ε), dims = 3)
 end
 
-function log_alpha(
-    log_απ::AbstractArray{T,3},
-    alpha::AbstractArray{T,2},
-    Q::Int,
-    P::Int,
-    S::Int,
-)::AbstractArray{T,3} where {T<:half_quant}
-    return @tullio out[q, p, s] := log_απ[q, 1, s] + alpha[q, p]
-end
-
 function log_mix_pdf(
     f::AbstractArray{T,3},
-    log_απ::AbstractArray{T,3},
-    log_Z::AbstractArray{T,2},
+    α::AbstractArray{T,2},
+    π_0::AbstractArray{T,3},
+    Z::AbstractArray{T,2},
+    ε::T,
     Q::Int,
     P::Int,
     S::Int,
 )::AbstractArray{T,1} where {T<:half_quant}
-    @tullio lp[s] := f[q, p, s] + log_απ[q, p, s] - log_Z[q, p]
-    return lp
+    @tullio lp[q, s] := exp(f[q, p, s]) * π_0[q, 1, s] * α[q, p] / Z[q, p]
+    lp = lp .+ ε
+    @tullio out[s] := log(lp[q, s])
+    return out
 end
 
 end

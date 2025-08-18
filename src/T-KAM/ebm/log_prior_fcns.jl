@@ -112,19 +112,19 @@ function (lp::LogPriorMix)(
         The unnormalized log-probability of the mixture ebm-prior.
         The updated states of the mixture ebm-prior.
     """
-    Q, P, S = size(ps.dist.α)..., size(z)[end]
-    log_απ = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
-    log_απ = log_alpha(log_απ, logsoftmax(ps.dist.α; dims = 2), Q, P, S)
+    alpha = softmax(ps.dist.α; dims = 2)
+    Q, P, S = size(alpha)..., size(z)[end]
+    π_0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = false)
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
-    log_Z =
-        lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
-        zeros(T, Q, P) |> pu
+    Z =
+        lp.normalize ? dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), dims = 3), dims = 3) :
+        ones(T, Q, P) |> pu
 
-    reg = ebm.λ > 0 ? ebm.λ * sum(abs.(softmax(ps.dist.α; dims = 2))) : zero(T)
-    log_p = log_mix_pdf(f, log_απ, log_Z, reg, Q, P, S)
-    return log_p + reg, st_lyrnorm
+    reg = ebm.λ > 0 ? ebm.λ * sum(abs.(alpha)) : zero(T)
+    log_p = log_mix_pdf(f, alpha, π_0, Z, lp.ε, Q, P, S)
+    return log_p .+ reg, st_lyrnorm
 end
 
 end

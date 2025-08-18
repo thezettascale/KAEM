@@ -6,7 +6,7 @@
 
 # MNIST vanilla
 # FMNIST vanilla
-DARCY_FLOW vanilla
+# DARCY_FLOW vanilla
 SVHN vanilla
 CIFAR10 vanilla
 SVHN thermo

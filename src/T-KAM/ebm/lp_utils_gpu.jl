@@ -16,26 +16,23 @@ end
 function log_alpha(
     log_απ::AbstractArray{T,3},
     alpha::AbstractArray{T,2},
-    ε::T,
     Q::Int,
     P::Int,
     S::Int,
 )::AbstractArray{T,3} where {T<:half_quant}
-    alpha = alpha .+ ε
-    return @tullio out[q, p, s] := log_απ[q, 1, s] + log(alpha[q, p])
+    return @tullio out[q, p, s] := log_απ[q, 1, s] + alpha[q, p]
 end
 
 function log_mix_pdf(
     f::AbstractArray{T,3},
     log_απ::AbstractArray{T,3},
     log_Z::AbstractArray{T,2},
-    reg::T,
     Q::Int,
     P::Int,
     S::Int,
 )::AbstractArray{T,1} where {T<:half_quant}
     @tullio lp[s] := f[q, p, s] + log_απ[q, p, s] - log_Z[q, p]
-    return lp .+ reg
+    return lp
 end
 
 end

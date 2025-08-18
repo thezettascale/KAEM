@@ -2,7 +2,7 @@ module LogPriorFCNs
 
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
-using NNlib: softmax
+using NNlib: logsoftmax, softmax
 using CUDA, Lux, LuxCUDA, LinearAlgebra, Accessors, Random, ComponentArrays
 
 using ..Utils
@@ -112,11 +112,9 @@ function (lp::LogPriorMix)(
         The unnormalized log-probability of the mixture ebm-prior.
         The updated states of the mixture ebm-prior.
     """
-    alpha = softmax(ps.dist.α; dims = 2)
-    Q, P, S = size(alpha)..., size(z)[end]
-
+    Q, P, S = size(ps.dist.α)..., size(z)[end]
     log_απ = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
-    log_απ = log_alpha(log_απ, alpha, lp.ε, Q, P, S)
+    log_απ = log_alpha(log_απ, logsoftmax(ps.dist.α; dims = 2), Q, P, S)
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
@@ -124,8 +122,9 @@ function (lp::LogPriorMix)(
         lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
         zeros(T, Q, P) |> pu
 
-    log_p = log_mix_pdf(f, log_απ, log_Z, ebm.λ * sum(abs.(ps.dist.α)), Q, P, S)
-    return log_p, st_lyrnorm
+    reg = ebm.λ > 0 ? ebm.λ * sum(abs.(softmax(ps.dist.α; dims = 2))) : zero(T)
+    log_p = log_mix_pdf(f, log_απ, log_Z, reg, Q, P, S)
+    return log_p + reg, st_lyrnorm
 end
 
 end

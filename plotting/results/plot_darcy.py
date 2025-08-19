@@ -20,7 +20,7 @@ plt.rcParams.update(
 
 # File paths to HDF5 files
 # prior = 'lognormal'
-priors = ["lognormal", "uniform", "gaussian"]
+priors = ["lognormal", "uniform", "gaussian", "ebm"]
 formulas = [
     r"$\text{Lognormal}(\bm{z}; \; \bm{0}, \bm{1})$",
     r"$\mathcal{U}(\bm{z}; \; \bm{0}, \bm{1})$",
@@ -85,13 +85,13 @@ for prior_idx, prior in enumerate(priors):
         )
 
     # Add prior type label
-    axes[prior_idx * grid_size[0] + grid_size[0] // 2, 0].text(
+    axes[prior_idx * grid_size[0] + grid_size[0] // 4, 0].text(
         -0,
         0.5,
         formulas[prior_idx],
         fontsize=44,
         rotation=45,
-        transform=axes[prior_idx * grid_size[0] + grid_size[0] // 2, 0].transAxes,
+        transform=axes[prior_idx * grid_size[0] + grid_size[0] // 4, 0].transAxes,
         verticalalignment="center",
         horizontalalignment="right",
     )

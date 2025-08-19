@@ -18,7 +18,7 @@ plt.rcParams.update(
     }
 )
 
-PRIORS = ["uniform", "lognormal", "gaussian"]
+PRIORS = ["uniform", "lognormal", "gaussian", "ebm"]
 GRID_SIZES = [10, 20]
 
 for prior in PRIORS:

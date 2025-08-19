@@ -59,13 +59,18 @@ For benchmarking run:
 make bench
 ```
 
-## Performance tuning and dev preferences
+## Samples
 
-| Stack                                                                    | Reason                                                                                                                                                                                                                                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                    |
-|--------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Julia/Lux.jl](https://github.com/LuxDL/Lux.jl)                                                             | Adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ) ₊˚✩♡ | Explicitly parameterised, and all functions are strongly typed.                                                                                                                                                                                                                                                                                                                                              |
-| [Enzyme.jl](https://enzyme.mit.edu/julia/stable/) for CPU                  | Switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl). Enzyme provides much more efficient reverse autodiff of statically analyzable LLVM.                                                                                                                                                    | The next step is [Reactant.jl](https://github.com/EnzymeAD/Reactant.jl) for GPU support, which first compiles into MLIR. Autodiff on GPU is currently still reliant on Zygote, since Enzyme isn't fully workable with native CUDA yet.                                                                                                                                                                                                                                                                                                                   |
-| [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl) | In place of broadcasts, Threads, and CUDA, this enables extraordinarily optimised stencil computations, agnostic to the device in use.                                                                                                                                                                           | Any files involved in autodiff have two counterparts; either using stencil loops for CPU parallelization or [Tullio.jl](https://github.com/mcabbott/Tullio.jl) for GPU kernels. CPU parallelization can actually outperform GPU kernels for the smaller experiments involving B-splines, inverse transform sampling, or resampling, since search and recursion can cause thread divergence on the GPU. |
+You don't need MCMC, an encoder, or heuristics. Fast and unbiased sampling is made feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
+
+<div style="display: flex; justify-content: space-between;">
+    <img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="32%" />
+    <img src="figures/results/individual_plots/fmnist_ebm_rbf.png" width="32%" />
+    <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
+</div>
+
+
+
 
 ## Julia flow:
 
@@ -81,7 +86,7 @@ t = init_trainer(
       rng, 
       conf, # See config directory for examples
       dataset_name; 
-      img_resize = (16,16), 
+      img_resize = (16,16), # Downsize for prototyping
       file_loc = loc
 )
 train!(t)
@@ -111,7 +116,7 @@ model = init_T_KAM(
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
-ps_hq = half_quant.(ps) #Mixed precision will return NaN train loss, but grads will be defined
+ps_hq = half_quant.(ps) # Mixed precision will return NaN train loss, but grads will be defined
 
 grads = Enzyme.make_zero(ps_hq) # or zero(ps_hq)
 loss, grads, st_ebm, st_gen = model.loss_fcn(

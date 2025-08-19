@@ -19,7 +19,7 @@ plt.rcParams.update(
 )
 
 DATASETS = ["MNIST", "FMNIST"]
-GRID_SIZES = [4, 8]
+GRID_SIZES = [5, 10]
 FNCS = ["RBF", "FFT"]
 
 for dataset in DATASETS:

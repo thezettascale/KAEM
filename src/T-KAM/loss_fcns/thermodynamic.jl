@@ -135,7 +135,6 @@ end
 
 function grad_thermo_llhood(
     ps::ComponentArray{T},
-    ∇::ComponentArray{T},
     z_posterior::AbstractArray{T,4},
     z_prior::AbstractArray{T,3},
     x::AbstractArray{T},

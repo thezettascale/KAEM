@@ -2,7 +2,7 @@ module T_KAM_model
 
 export T_KAM, init_T_KAM
 
-using CUDA, Enzyme
+using CUDA
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
 
@@ -14,13 +14,8 @@ using .UnivariateFunctions
 include("ebm/inverse_transform.jl")
 using .InverseTransformSampling
 
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("ebm/ref_priors_gpu.jl")
-    using .RefPriors
-else
-    include("ebm/ref_priors.jl")
-    using .RefPriors
-end
+include("ebm/ref_priors.jl")
+using .RefPriors
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")

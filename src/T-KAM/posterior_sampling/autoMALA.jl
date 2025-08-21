@@ -10,7 +10,6 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    Enzyme,
     ComponentArrays,
     ParallelStencil
 
@@ -23,13 +22,8 @@ using .Preconditioning
 include("../gen/loglikelihoods.jl")
 using .LogLikelihoods: log_likelihood_MALA
 
-if parse(Bool, get(ENV, "THERMO", "false"))
-    include("thermo_updates.jl")
-    using .LangevinUpdates
-else
-    include("updates.jl")
-    using .LangevinUpdates
-end
+include("updates.jl")
+using .LangevinUpdates
 
 include("step_search.jl")
 using .autoMALA_StepSearch
@@ -132,11 +126,11 @@ function (sampler::autoMALA_sampler)(
 
     num_temps, Q, P, S = length(temps), size(z_hq)[1:2]..., size(x)[end]
     z_hq = reshape(z_hq, Q, P, S, num_temps)
-    ∇z_hq = Enzyme.make_zero(z_hq)
+    ∇z_hq = zero(T) .* z_hq
 
     # Pre-allocate for both precisions
     z_fq = U.(reshape(z_hq, Q, P, S*num_temps))
-    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_fq = zero(U) .* z_fq
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
@@ -155,7 +149,7 @@ function (sampler::autoMALA_sampler)(
 
     num_acceptances = zeros(Int, S*num_temps) |> pu
     mean_η = zeros(U, S*num_temps) |> pu
-    momentum = Enzyme.make_zero(z_fq)
+    momentum = zero(U) .* z_fq
 
     burn_in = 0
     η = sampler.η

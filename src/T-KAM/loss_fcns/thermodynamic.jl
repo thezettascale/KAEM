@@ -2,7 +2,7 @@ module ThermodynamicIntegration
 
 export initialize_thermo_loss, ThermodynamicLoss
 
-using CUDA, Enzyme, ComponentArrays, Random, Zygote
+using CUDA, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 
 using ..Utils
@@ -71,7 +71,7 @@ function marginal_llhood(
         tempered_noise;
         ε = model.ε,
     )
-    log_ss = sum(mean(reshape(ll, num_temps, S) .* Δt; dims = 2))
+    log_ss = sum(reshape(ll, num_temps, S) .* Δt) / S
 
     # MLE estimator
     logprior_pos, st_lux_ebm = model.log_prior(
@@ -148,42 +148,22 @@ function grad_thermo_llhood(
     tempered_noise::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
 
-    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f =
-            p -> closure(
-                p,
-                z_posterior,
-                z_prior,
-                x,
-                Δt,
-                model,
-                st_kan,
-                st_lux_ebm,
-                st_lux_gen,
-                noise,
-                tempered_noise,
-            )
-        ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
-    else
-        Enzyme.autodiff_deferred(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            Enzyme.Const(closure),
-            Enzyme.Active,
-            Enzyme.Duplicated(ps, ∇),
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(Δt),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
-            Enzyme.Const(tempered_noise),
+    f =
+        p -> closure(
+            p,
+            z_posterior,
+            z_prior,
+            x,
+            Δt,
+            model,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+            noise,
+            tempered_noise,
         )
-    end
 
-    return ∇
+    return CUDA.@fastmath first(Zygote.gradient(f, ps))
 end
 
 struct ThermodynamicLoss end
@@ -211,9 +191,8 @@ function (l::ThermodynamicLoss)(
     z_prior, st_ebm =
         model.sample_prior(model, size(x)[end], ps, st_kan, Lux.testmode(st_lux), rng)
 
-    ∇ = grad_thermo_llhood(
+    ∇ .= grad_thermo_llhood(
         ps,
-        ∇,
         z_posterior,
         z_prior,
         x,

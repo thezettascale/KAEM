@@ -21,8 +21,6 @@ using Lux,
     BFloat16s,
     CUDA,
     LuxCUDA,
-    Enzyme,
-    Enzyme.EnzymeRules,
     NNlib
 
 const pu =

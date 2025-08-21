@@ -6,7 +6,6 @@ using Flux: onecold, mse
 using CUDA
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
-using Enzyme
 
 include("../utils.jl")
 using .Utils
@@ -184,7 +183,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
     num_batches = length(t.model.train_loader)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
-    grads = Enzyme.make_zero(half_quant.(t.ps))
+    grads = half_quant.(t.ps .* 0)
 
     loss_file = t.model.file_loc * "loss.csv"
 
@@ -232,7 +231,7 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         # Reduced precision grads, (switches to full precision for accumulation, not forward passes)
         loss, grads, st_ebm, st_gen = t.model.loss_fcn(
             ps_hq,
-            Enzyme.make_zero(grads),
+            zero(half_quant) .* grads,
             t.st_kan,
             t.st_lux,
             t.model,

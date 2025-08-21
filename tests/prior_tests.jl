@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, Enzyme, Reactant
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, CUDA, Reactant
 
 ENV["GPU"] = false
 ENV["FULL_QUANT"] = "FP32"
@@ -121,41 +121,10 @@ function test_ebm_prior()
     @test !any(isnan, log_p)
 end
 
-function test_prior_derivatives()
-    commit!(conf, "EbmModel", "π_0", "ebm")
-    z_test =
-        first(model.sample_prior(model, b_size, ps, st_kan, st_lux, Random.default_rng()))
-
-    ∇ = Enzyme.make_zero(ps)
-
-    function closure(m, p, sk, sl, z)
-        lp, new_st = m.log_prior(z, m.prior, p.ebm, sk, sl)
-        return sum(lp)
-    end
-
-    function grad(m, p, sk, sl, z)
-        return Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(closure),
-            Enzyme.Const(m),
-            Enzyme.Duplicated(p, ∇),
-            Enzyme.DuplicatedNoNeed(sk, Enzyme.make_zero(sk)),
-            Enzyme.DuplicatedNoNeed(sl, Enzyme.make_zero(sl)),
-            Enzyme.DuplicatedNoNeed(z, Enzyme.make_zero(z)),
-        )[1]
-    end
-
-    ∇ = grad(model, ps, st_kan, st_lux, z_test)
-
-    @test norm(∇) != 0
-    @test !any(isnan, ∇)
-end
-
 @testset "Mixture Prior Tests" begin
-    # test_uniform_prior()
-    # test_gaussian_prior()
-    # test_lognormal_prior()
-    # test_learnable_gaussian_prior()
-    # test_ebm_prior()
-    test_prior_derivatives()
+    test_uniform_prior()
+    test_gaussian_prior()
+    test_lognormal_prior()
+    test_learnable_gaussian_prior()
+    test_ebm_prior()
 end

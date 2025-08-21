@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays
 
 ENV["THERMO"] = "true"
 ENV["GPU"] = true
@@ -56,7 +56,7 @@ function test_model_derivative()
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = zero(half_quant) .* ps
 
     loss, ∇, st_ebm, st_gen =
         model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())

@@ -10,7 +10,6 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    Enzyme,
     ComponentArrays,
     ParallelStencil
 
@@ -20,14 +19,8 @@ using ..T_KAM_model
 include("log_posteriors.jl")
 using .LogPosteriors: unadjusted_logpos_grad, log_likelihood_MALA
 
-
-if parse(Bool, get(ENV, "THERMO", "false"))
-    include("thermo_updates.jl")
-    using .LangevinUpdates: update_z!
-else
-    include("updates.jl")
-    using .LangevinUpdates: update_z!
-end
+include("updates.jl")
+using .LangevinUpdates
 
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
@@ -126,7 +119,7 @@ function (sampler::ULA_sampler)(
 
     # Pre-allocate for both precisions
     z_fq = U.(reshape(z_hq, Q, P, S*num_temps))
-    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_fq = zero(U) .* z_fq
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
@@ -144,7 +137,7 @@ function (sampler::ULA_sampler)(
             U.(
                 unadjusted_logpos_grad(
                     T.(z_fq),
-                    Enzyme.make_zero(T.(z_fq)),
+                    zero(T) .* T.(z_fq),
                     x_t,
                     temps_gpu,
                     model,

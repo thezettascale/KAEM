@@ -2,7 +2,7 @@ module LangevinMLE
 
 export LangevinLoss, initialize_langevin_loss
 
-using CUDA, Enzyme, ComponentArrays, Random, Zygote
+using CUDA, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 
 using ..Utils
@@ -86,7 +86,6 @@ end
 
 function grad_langevin_llhood(
     ps::ComponentArray{T},
-    ∇::ComponentArray{T},
     z_posterior::AbstractArray{T,3},
     z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
@@ -97,38 +96,20 @@ function grad_langevin_llhood(
     noise::AbstractArray{T};
 )::AbstractArray{T} where {T<:half_quant}
 
-    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f =
-            p -> closure(
-                p,
-                z_posterior,
-                z_prior,
-                x,
-                model,
-                st_kan,
-                st_lux_ebm,
-                st_lux_gen,
-                noise,
-            )
-        ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
-    else
-        Enzyme.autodiff_deferred(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            Enzyme.Const(closure),
-            Enzyme.Active,
-            Enzyme.Duplicated(ps, ∇),
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
+    f =
+        p -> closure(
+            p,
+            z_posterior,
+            z_prior,
+            x,
+            model,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+            noise,
         )
-    end
 
-    return ∇
+    return CUDA.@fastmath first(Zygote.gradient(f, ps))
 end
 
 struct LangevinLoss end
@@ -149,9 +130,8 @@ function (l::LangevinLoss)(
     z_prior, st_lux_ebm =
         model.sample_prior(model, size(x)[end], ps, st_kan, Lux.testmode(st_lux), rng)
 
-    ∇ = grad_langevin_llhood(
+    ∇ .= grad_langevin_llhood(
         ps,
-        ∇,
         z_posterior,
         z_prior,
         x,

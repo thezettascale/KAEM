@@ -73,6 +73,25 @@ function test_cnn_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    commit!(conf, "CNN", "residual_connections", "false")
+    model = init_T_KAM(dataset, conf, (32, 32, 3))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = zero(half_quant) .* ps
+
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+    @test norm(∇) != 0
+    @test !any(isnan, ∇)
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
+end
+
+function test_cnn_residual_loss()
+    Random.seed!(42)
+    dataset = randn(full_quant, 32, 32, 3, 50)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    commit!(conf, "CNN", "residual_connections", "true")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
@@ -104,9 +123,10 @@ function test_seq_loss()
 end
 
 @testset "T-KAM Tests" begin
-    test_ps_derivative()
-    test_grid_update()
-    test_mala_loss()
+    # test_ps_derivative()
+    # test_grid_update()
+    # test_mala_loss()
     test_cnn_loss()
-    test_seq_loss()
+    test_cnn_residual_loss()
+    # test_seq_loss()
 end

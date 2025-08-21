@@ -37,7 +37,9 @@ fig, axes = plt.subplots(
 
 for prior_idx, prior in enumerate(priors):
     # Load true images
-    true_images_path = f"logs/Vanilla/DARCY_FLOW/importance/{prior}_RBF/univariate/real_images.h5"
+    true_images_path = (
+        f"logs/Vanilla/DARCY_FLOW/importance/{prior}_RBF/univariate/real_images.h5"
+    )
     with h5py.File(true_images_path, "r") as h5_file:
         true_images = h5_file["samples"][()]
 

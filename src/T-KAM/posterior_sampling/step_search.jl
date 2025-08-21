@@ -68,7 +68,7 @@ function select_step_size(
     geq_bool = log_r .>= log_b
 
     while !isempty(active_chains)
-        
+
         η_init[active_chains] .=
             safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
 

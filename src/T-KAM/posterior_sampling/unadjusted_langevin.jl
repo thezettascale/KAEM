@@ -83,24 +83,11 @@ function (sampler::ULA_sampler)(
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             z = pu(z)
         else
-            z, st_ebm = model.sample_prior(
-                    model,
-                    size(x)[end],
-                    ps,
-                    st_kan,
-                    st_lux,
-                    rng
-                )
-            
-            for i = 1:length(temps)-1
-                z_i, st_ebm = model.sample_prior(
-                    model,
-                    size(x)[end],
-                    ps,
-                    st_kan,
-                    st_lux,
-                    rng
-                )
+            z, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+
+            for i = 1:(length(temps)-1)
+                z_i, st_ebm =
+                    model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
                 z = cat(z, z_i, dims = 3)
             end
             @reset st_lux.ebm = st_ebm
@@ -129,7 +116,7 @@ function (sampler::ULA_sampler)(
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
     log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
-    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:num_temps-1, sampler.N) : nothing
+    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:(num_temps-1), sampler.N) : nothing
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, i])
@@ -158,9 +145,13 @@ function (sampler::ULA_sampler)(
             t = swap_replica_idxs[i] # Randomly pick two adjacent temperatures to swap
             z_t = copy(z_hq[:, :, :, t])
             z_t1 = copy(z_hq[:, :, :, t+1])
-            
-            noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
-            noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+
+            noise_1 =
+                model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] :
+                ll_noise[:, :, :, :, 1, t, i]
+            noise_2 =
+                model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] :
+                ll_noise[:, :, :, :, 2, t, i]
 
             ll_t, st_gen = log_likelihood_MALA(
                 z_t,

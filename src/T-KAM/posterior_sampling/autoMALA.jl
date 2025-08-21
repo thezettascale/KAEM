@@ -110,15 +110,8 @@ function (sampler::autoMALA_sampler)(
         rng: The random number generator.
     """
     # Initialize from prior 
-    z_hq, st_ebm = model.sample_prior(
-        model,
-        size(x)[end],
-        ps,
-        st_kan,
-        st_lux,
-        rng
-    )
-    for i in 1:length(temps)-1
+    z_hq, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+    for i = 1:(length(temps)-1)
         z_i, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
         z_hq = cat(z_hq, z_i; dims = 3)
     end
@@ -145,7 +138,7 @@ function (sampler::autoMALA_sampler)(
     ratio_bounds = log.(U.(rand(rng, Uniform(0, 1), S*num_temps, 2, sampler.N))) |> pu
     log_u_swap = log.(rand(rng, U, S, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
-    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:num_temps-1, sampler.N) : nothing
+    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:(num_temps-1), sampler.N) : nothing
 
     num_acceptances = zeros(Int, S*num_temps) |> pu
     mean_η = zeros(U, S*num_temps) |> pu
@@ -226,8 +219,12 @@ function (sampler::autoMALA_sampler)(
                 z_t = copy(z_hq[:, :, :, t])
                 z_t1 = copy(z_hq[:, :, :, t+1])
 
-                noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
-                noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+                noise_1 =
+                    model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] :
+                    ll_noise[:, :, :, :, 1, t, i]
+                noise_2 =
+                    model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] :
+                    ll_noise[:, :, :, :, 2, t, i]
 
                 ll_t, st_gen = log_likelihood_MALA(
                     z_t,
@@ -264,11 +261,9 @@ function (sampler::autoMALA_sampler)(
 
     mean_η = clamp.(mean_η ./ num_acceptances, sampler.η_min, sampler.η_max)
     mean_η = ifelse.(isnan.(mean_η), sampler.η, mean_η) |> pu
-    
+
     acceptance_rate = num_acceptances ./ sampler.N
-    η_adjustment = ifelse.(acceptance_rate .> target_rate, 
-                          sampler.Δη, 
-                          one(U) ./ sampler.Δη)
+    η_adjustment = ifelse.(acceptance_rate .> target_rate, sampler.Δη, one(U) ./ sampler.Δη)
     mean_η = clamp.(mean_η .* η_adjustment, sampler.η_min, sampler.η_max)
     @reset sampler.η = mean_η
 

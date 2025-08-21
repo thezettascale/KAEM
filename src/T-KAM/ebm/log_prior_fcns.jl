@@ -132,7 +132,8 @@ function (lp::LogPriorMix)(
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     Z =
-        lp.normalize ? dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), dims = 3), dims = 3) :
+        lp.normalize ?
+        dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), dims = 3), dims = 3) :
         ones(T, Q, P) |> pu
 
     reg = ebm.λ > 0 ? ebm.λ * sum(abs.(alpha)) : zero(T)

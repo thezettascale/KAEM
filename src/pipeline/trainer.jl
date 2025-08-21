@@ -107,7 +107,9 @@ function init_trainer(
     end
 
 
-    model_type = N_t > 1 ? "Thermodynamic/$(dataset_name)/$(mala)" : "Vanilla/$(dataset_name)/$(mala)"
+    model_type =
+        N_t > 1 ? "Thermodynamic/$(dataset_name)/$(mala)" :
+        "Vanilla/$(dataset_name)/$(mala)"
 
     prior_spline_fcn =
         retrieve(conf, "EbmModel", "π_0") *
@@ -142,7 +144,7 @@ function init_trainer(
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
-    
+
     try
         h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
     catch

@@ -151,15 +151,7 @@ function update_model_grid(
     if model.N_t > 1
         temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 1:model.N_t])
         z = first(
-            model.posterior_sampler(
-                model,
-                ps,
-                st_kan,
-                st_lux,
-                x;
-                temps = temps,
-                rng = rng,
-            ),
+            model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps, rng = rng),
         )[
             :,
             :,

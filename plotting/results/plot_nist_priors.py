@@ -62,7 +62,12 @@ for dataset in DATASETS:
                     images = np.transpose(image_set[i, :, :, :], (1, 2, 0))
 
                     # Use inverted colormap for middle dataset
-                    if dataset_idx == 1 or dataset_idx == 3 or dataset_idx == 5 or dataset_idx == 7:
+                    if (
+                        dataset_idx == 1
+                        or dataset_idx == 3
+                        or dataset_idx == 5
+                        or dataset_idx == 7
+                    ):
                         ax.imshow(images, cmap="gray_r")  # gray_r is inverted gray
                     else:
                         ax.imshow(images, cmap="gray")

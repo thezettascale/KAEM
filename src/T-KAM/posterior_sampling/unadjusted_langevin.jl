@@ -148,6 +148,9 @@ function (sampler::ULA_sampler)(
                 ),
             ) ./ model.loss_scaling.full
 
+        all(iszero.(∇z_fq)) && error("All zero ULA grad")
+        any(isnan.(∇z_fq)) && error("NaN in ULA grad")
+
         update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η, Q, P, S)
         z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 

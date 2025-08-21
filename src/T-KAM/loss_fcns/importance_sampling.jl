@@ -222,6 +222,9 @@ function (l::ImportanceLoss)(
         noise,
     )
 
+    all(iszero.(∇)) && error("All zero importance grad")
+    any(isnan.(∇)) && error("NaN in importance grad")
+
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
         z_posterior,

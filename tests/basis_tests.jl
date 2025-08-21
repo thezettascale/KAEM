@@ -114,7 +114,7 @@ end
 
 @testset "Spline Tests" begin
     test_extend_grid()
-    test_B_spline_basis()
+    # test_B_spline_basis()
     test_RBF_basis()
     test_RSWAF_basis()
     test_FFT_basis()

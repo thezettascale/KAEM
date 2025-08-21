@@ -204,6 +204,10 @@ function (l::ThermodynamicLoss)(
         noise,
         tempered_noise,
     )
+
+    all(iszero.(∇)) && error("All zero thermo grad")
+    any(isnan.(∇)) && error("NaN in thermo grad")
+
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,
         z_posterior,

@@ -163,6 +163,9 @@ function (sampler::autoMALA_sampler)(
         logpos_z, ∇z_fq, st_lux =
             logpos_withgrad(T.(z_fq), T.(∇z_fq), x_t, t_expanded, model, ps, st_kan, st_lux)
 
+        all(iszero.(∇z_fq)) && error("All zero MALA grad")
+        any(isnan.(∇z_fq)) && error("NaN in MALA grad")
+
         if burn_in < sampler.N
             burn_in += 1
             z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux = leapfrog(

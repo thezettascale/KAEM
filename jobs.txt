@@ -11,3 +11,7 @@ SVHN vanilla
 CIFAR10 vanilla
 SVHN thermo
 CIFAR10 thermo
+SVHNPANG vanilla
+CIFAR10PANG vanilla
+SVHNPANG thermo
+CIFAR10PANG thermo

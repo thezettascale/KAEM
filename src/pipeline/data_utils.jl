@@ -16,6 +16,8 @@ dataset_mapping = Dict(
     "FMNIST" => MLDatasets.FashionMNIST(),
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
+    "CIFAR10PANG" => MLDatasets.CIFAR10(),
+    "SVHNPANG" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
     # "UD_ENGLISH" => MLDatasets.UD_English(),
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
@@ -57,11 +59,19 @@ function get_vision_dataset(
     img_shape = size(dataset)[1:(end-1)]
 
     img_shape =
-        (dataset_name == "CIFAR10" || dataset_name == "SVHN") ? img_shape :
-        (img_shape..., 1)
+        (
+            dataset_name == "CIFAR10" ||
+            dataset_name == "SVHN" ||
+            dataset_name == "CIFAR10PANG" ||
+            dataset_name == "SVHNPANG"
+        ) ? img_shape : (img_shape..., 1)
     dataset =
-        (dataset_name == "CIFAR10" || dataset_name == "SVHN") ? dataset :
-        reshape(dataset, img_shape..., :)
+        (
+            dataset_name == "CIFAR10" ||
+            dataset_name == "SVHN" ||
+            dataset_name == "CIFAR10PANG" ||
+            dataset_name == "SVHNPANG"
+        ) ? dataset : reshape(dataset, img_shape..., :)
     save_dataset = dataset[:, :, :, 1:min(num_generated_samples, size(dataset)[end])]
 
     println("Resized dataset to $(img_shape)")

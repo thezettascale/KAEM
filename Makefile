@@ -31,7 +31,7 @@ help:
 	@echo "  julia-setup - Install Julia dependencies"
 	@echo "  help        - Show this help"
 	@echo ""
-	@echo "Available datasets: MNIST, FMNIST, CIFAR10, SVHN, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW"
+	@echo "Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CIFAR10PANG, SVHNPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW"
 	@echo "Available modes: thermo, vanilla"
 
 install:

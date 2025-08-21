@@ -7,6 +7,8 @@ conf = Dict(
     "FMNIST" => ConfParse("config/nist_config.ini"),
     "CIFAR10" => ConfParse("config/cifar_config.ini"),
     "SVHN" => ConfParse("config/svhn_config.ini"),
+    "CIFAR10PANG" => ConfParse("config/cifar_pang_config.ini"),
+    "SVHNPANG" => ConfParse("config/svhn_pang_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
@@ -27,7 +29,7 @@ bases = Dict(5 => "RBF", 6 => "FFT")
 acts = Dict(5 => "silu", 6 => "silu")
 grid_sizes = Dict(5 => "20", 6 => "50")
 
-if dataset == "CIFAR10" || dataset == "SVHN"
+if dataset == "CIFAR10" || dataset == "SVHN" || dataset == "CIFAR10PANG" || dataset == "SVHNPANG"
     rng = Random.MersenneTwister(1)
     t = init_trainer(rng, conf, dataset)
     train!(t)

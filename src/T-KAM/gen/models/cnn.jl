@@ -38,7 +38,7 @@ function apply_skip_connection(
 )::AbstractArray{T,4} where {T<:half_quant}
     size(skip_input) == size(target) && return target + skip_input
     upsampled_skip = upsample_to_match(skip_input, target)
-    return target + upsampled_skip
+    return cat(target, upsampled_skip, dims = 3)
 end
 
 function layer_with_skip(
@@ -172,26 +172,32 @@ function init_CNN_Generator(
     length(paddings) != length(hidden_c) &&
         (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
+    prev_c = 0
     for i in eachindex(hidden_c[1:(end-1)])
         push!(
             Φ_functions,
             Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
-                hidden_c[i] => hidden_c[i+1],
+                hidden_c[i] + prev_c => hidden_c[i+1],
                 identity;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
+
         if batchnorm_bool
             push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
+        end
+
+        if skip_bool && i > 1
+            prev_c += hidden_c[i]
         end
     end
     push!(
         Φ_functions,
         Lux.ConvTranspose(
             (k_size[end], k_size[end]),
-            hidden_c[end] => last(x_shape),
+            hidden_c[end] + prev_c => last(x_shape),
             identity;
             stride = strides[end],
             pad = paddings[end],

@@ -25,9 +25,9 @@ function check_reversibility(
     tol::U = full_quant(1e-3),
 )::AbstractArray{Bool,1} where {U<:full_quant}
     # Check both position differences and step size differences for detailed balance
-    # pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
+    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
     step_diff = abs.(η - η_prime) .< tol .* η
-    return step_diff
+    return U.(step_diff .* pos_diff)
 end
 
 function select_step_size(
@@ -65,15 +65,13 @@ function select_step_size(
     active_chains = findall(δ .!= 0) |> cpu_device()
     isempty(active_chains) && return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_lux
 
-    geq_bool = log_r .>= log_b
+    geq_bool = U.(log_r .>= log_b)
 
     while !isempty(active_chains)
 
-        η_init[active_chains] .=
-            safe_step_size_update(η_init[active_chains], δ[active_chains], Δη)
+        η_init[active_chains] = η_init[active_chains] .* (Δη .^ δ[active_chains])
 
         x_active = model.lkhood.SEQ ? x[:, :, active_chains] : x[:, :, :, active_chains]
-
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_lux = leapfrog(
             z[:, :, active_chains],
             ∇z[:, :, active_chains],
@@ -112,7 +110,7 @@ function select_step_size(
     end
 
     # Reduce step size for chains that initially had too high acceptance with safety check
-    η_init = safe_step_size_update(η_init, -1 .* geq_bool, Δη)
+    η_init = η_init .* (Δη .^ (-1 .* geq_bool))
     return ẑ, logpos_ẑ, ∇ẑ, p̂, η_init, log_r, st_lux
 end
 
@@ -144,6 +142,7 @@ function autoMALA_step(
     NamedTuple,
 } where {T<:half_quant,U<:full_quant}
 
+    z_before, η_before = copy(z), copy(η_init)
     ẑ, logpos_ẑ, ∇ẑ, p̂, η, log_r, st_lux = select_step_size(
         log_a,
         log_b,
@@ -184,7 +183,7 @@ function autoMALA_step(
         η_max = η_max,
     )
 
-    reversible = check_reversibility(z, z_rev, η, η_prime; tol = ε)
+    reversible = check_reversibility(z_before, z_rev, η_before, η_prime; tol = ε)    
     return ẑ, η, η_prime, reversible, log_r, st_lux
 end
 

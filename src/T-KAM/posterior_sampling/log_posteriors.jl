@@ -125,7 +125,7 @@ function autoMALA_value_and_grad(
     zero_vector = zeros(T, model.lkhood.x_shape..., size(z)[end]) |> pu
 
     f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
-    ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
+    ∇z .= CUDA.@fastmath first(Zygote.gradient(f, z))
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux, zero_vector)

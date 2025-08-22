@@ -11,7 +11,8 @@ using CUDA,
     Accessors,
     Statistics,
     ComponentArrays,
-    ParallelStencil
+    KernelAbstractions,
+    Tullio
 
 using ..Utils
 using ..T_KAM_model
@@ -27,12 +28,6 @@ using .LangevinUpdates
 
 include("step_search.jl")
 using .autoMALA_StepSearch
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
-else
-    @init_parallel_stencil(Threads, full_quant, 3)
-end
 
 const target_rate = 0.574  # Optimal acceptance rate for MALA
 
@@ -67,25 +62,6 @@ function initialize_autoMALA_sampler(;
         η_max,
         RE_frequency,
     )
-end
-
-@parallel_indices (q, p, s) function accept_reject!(
-    z_fq::AbstractArray{U,3},
-    log_u::AbstractArray{U,1},
-    log_r::AbstractArray{U,1},
-    reversible::AbstractArray{Bool,1},
-    mean_η::AbstractArray{U,1},
-    η::AbstractArray{U,1},
-    η_prop::AbstractArray{U,1},
-    num_acceptances::AbstractArray{Int,1},
-    ẑ::AbstractArray{U,3},
-)::Nothing where {U<:full_quant}
-    accept = (log_u[s] < log_r[s]) * reversible[s]
-    z_fq[q, p, s] = ẑ[q, p, s] * accept + z_fq[q, p, s] * (1 - accept)
-    mean_η[s] = mean_η[s] + η_prop[s] * accept
-    η[s] = η_prop[s] * accept + η[s] * (1 - accept)
-    num_acceptances[s] = num_acceptances[s] + accept
-    return nothing
 end
 
 function (sampler::autoMALA_sampler)(
@@ -142,6 +118,7 @@ function (sampler::autoMALA_sampler)(
 
     num_acceptances = zeros(Int, S*num_temps) |> pu
     mean_η = zeros(U, S*num_temps) |> pu
+    accept = zeros(U, S*num_temps) |> pu
     momentum = zero(U) .* z_fq
 
     burn_in = 0
@@ -159,7 +136,7 @@ function (sampler::autoMALA_sampler)(
         all(iszero.(∇z_fq)) && error("All zero MALA grad")
         any(isnan.(∇z_fq)) && error("NaN in MALA grad")
 
-        if burn_in < sampler.N
+        if burn_in < sampler.N_unadjusted
             burn_in += 1
             z_fq, logpos_ẑ, ∇ẑ, p̂, log_r, st_lux = leapfrog(
                 z_fq,
@@ -178,6 +155,7 @@ function (sampler::autoMALA_sampler)(
             z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
         else
+            z_before, η_before = copy(z_fq), copy(η)
             ẑ, η_prop, η_prime, reversible, log_r, st_lux = autoMALA_step(
                 log_a,
                 log_b,
@@ -199,17 +177,14 @@ function (sampler::autoMALA_sampler)(
                 model.ε,
             )
 
-            @parallel (1:Q, 1:P, 1:(S*num_temps)) accept_reject!(
-                z_fq,
-                log_u[:, :, i],
-                log_r,
-                reversible,
-                mean_η,
-                η,
-                η_prop,
-                num_acceptances,
-                ẑ,
-            )
+            mh = U.(log_u[:, i] .< log_r)
+            @tullio accept[s] = mh[s] * reversible[s]
+            reject = one(U) .- accept
+
+            @tullio z_fq[q, p, s] = ẑ[q, p, s] * accept[s] + z_before[q, p, s] * reject[s]
+            @tullio mean_η[s] = mean_η[s] + η_prop[s] * accept[s]
+            @tullio η[s] = η_prop[s] * accept[s] + η_before[s] * reject[s]
+            @tullio num_acceptances[s] = num_acceptances[s] + accept[s]
 
             z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
@@ -252,8 +227,8 @@ function (sampler::autoMALA_sampler)(
                 @reset st_lux.gen = st_gen
 
                 # Swap population if likelihood of population in new temperature is higher on average
-                z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
-                z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+                z_hq[:, :, :, t] .= swap .* z_t1 .+ (one(T) - swap) .* z_t
+                z_hq[:, :, :, t+1] .= (one(T) - swap) .* z_t1 .+ swap .* z_t
                 z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
             end
         end

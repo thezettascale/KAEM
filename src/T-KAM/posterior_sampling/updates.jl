@@ -78,8 +78,8 @@ function leapfrog(
     x::AbstractArray{T},
     temps::AbstractArray{T,1},
     logpos_z::AbstractArray{U,1},
-    p::AbstractArray{U,3},  # This is momentum = M^{-1/2}p
-    M::AbstractArray{U,2},         # This is M^{1/2}
+    p::AbstractArray{U,3}, # This is momentum = M^{-1/2}p
+    M::AbstractArray{U,2}, # This is M^{1/2}
     η::AbstractArray{U,1},
     model::T_KAM{T,U},
     ps::ComponentArray{T},

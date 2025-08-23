@@ -25,7 +25,9 @@ function check_reversibility(
     tol::U = full_quant(1e-3),
 )::AbstractArray{Bool,1} where {U<:full_quant}
     # Check both position differences and step size differences for detailed balance
-    pos_diff = dropdims(maximum(abs.(ẑ - z); dims=(1,2)); dims=(1,2)) .< tol * maximum(abs.(z))
+    pos_diff =
+        dropdims(maximum(abs.(ẑ - z); dims = (1, 2)); dims = (1, 2)) .<
+        tol * maximum(abs.(z))
     step_diff = abs.(η - η_prime) .< tol .* η
     return U.(step_diff .* pos_diff)
 end
@@ -183,7 +185,7 @@ function autoMALA_step(
         η_max = η_max,
     )
 
-    reversible = check_reversibility(z_before, z_rev, η_before, η_prime; tol = ε)    
+    reversible = check_reversibility(z_before, z_rev, η_before, η_prime; tol = ε)
     return ẑ, η, η_prime, reversible, log_r, st_lux
 end
 

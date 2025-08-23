@@ -29,7 +29,10 @@ bases = Dict(5 => "RBF", 6 => "FFT")
 acts = Dict(5 => "silu", 6 => "silu")
 grid_sizes = Dict(5 => "20", 6 => "50")
 
-if dataset == "CIFAR10" || dataset == "SVHN" || dataset == "CIFAR10PANG" || dataset == "SVHNPANG"
+if dataset == "CIFAR10" ||
+   dataset == "SVHN" ||
+   dataset == "CIFAR10PANG" ||
+   dataset == "SVHNPANG"
     rng = Random.MersenneTwister(1)
     t = init_trainer(rng, conf, dataset)
     train!(t)

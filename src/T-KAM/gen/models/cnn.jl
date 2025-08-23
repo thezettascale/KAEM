@@ -32,62 +32,43 @@ function upsample_to_match(
     return upsampled
 end
 
-function apply_skip_connection(
-    skip_input::AbstractArray{T,4},
-    target::AbstractArray{T,4},
-)::AbstractArray{T,4} where {T<:half_quant}
-    size(skip_input) == size(target) && return target + skip_input
-    upsampled_skip = upsample_to_match(skip_input, target)
-    return cat(target, upsampled_skip, dims = 3)
-end
-
-function layer_with_skip(
+function forward_with_latent_concat(
     gen::CNN_Generator,
     z::AbstractArray{T,4},
     ps::ComponentArray{T},
     st_lux::NamedTuple,
-    layer_idx::Int,
-    skip_input::Union{AbstractArray{T,4},Nothing},
 )::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
 
-    z, st_new = Lux.apply(
-        gen.Φ_fcns[layer_idx],
-        z,
-        ps.fcn[symbol_map[layer_idx]],
-        st_lux.fcn[symbol_map[layer_idx]],
-    )
-    @ignore_derivatives @reset st_lux.fcn[symbol_map[layer_idx]] = st_new
+    original_z = z
+    current_z = z .* one(T)
 
-    if gen.bool_config.batchnorm && layer_idx < gen.depth
-        z, st_new = Lux.apply(
-            gen.batchnorms[layer_idx],
-            z,
-            ps.batchnorm[symbol_map[layer_idx]],
-            st_lux.batchnorm[symbol_map[layer_idx]],
+    for i = 1:(gen.depth)
+        if i > 1
+            upsampled_z = upsample_to_match(original_z .* one(T), current_z .* one(T))
+            current_z = cat(current_z, upsampled_z, dims = 3)
+        end
+
+        current_z, st_new = Lux.apply(
+            gen.Φ_fcns[i],
+            current_z,
+            ps.fcn[symbol_map[i]],
+            st_lux.fcn[symbol_map[i]],
         )
-        @ignore_derivatives @reset st_lux.batchnorm[symbol_map[layer_idx]] = st_new
+        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
+
+        current_z, st_new =
+            (gen.bool_config.batchnorm && i < gen.depth) ?
+            Lux.apply(
+                gen.batchnorms[i],
+                current_z,
+                ps.batchnorm[symbol_map[i]],
+                st_lux.batchnorm[symbol_map[i]],
+            ) : (current_z, nothing)
+        (gen.bool_config.batchnorm && i < gen.depth) &&
+            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
     end
 
-    if gen.bool_config.skip_bool && skip_input !== nothing
-        z = apply_skip_connection(skip_input, z)
-    end
-
-    return z, st_lux
-end
-
-function forward_recursive(
-    gen::CNN_Generator,
-    z::AbstractArray{T,4},
-    ps::ComponentArray{T},
-    st_lux::NamedTuple,
-    current_layer::Int = 1,
-    skip_input::Union{AbstractArray{T,4},Nothing} = nothing,
-)::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
-    current_layer == gen.depth &&
-        return layer_with_skip(gen, z, ps, st_lux, current_layer, nothing)
-    z_layer, st_lux = layer_with_skip(gen, z, ps, st_lux, current_layer, skip_input)
-    next_skip_input = gen.bool_config.skip_bool ? z_layer : nothing
-    return forward_recursive(gen, z_layer, ps, st_lux, current_layer + 1, next_skip_input)
+    return current_z, st_lux
 end
 
 function forward(
@@ -160,7 +141,7 @@ function init_CNN_Generator(
     paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
     act = activation_mapping[retrieve(conf, "CNN", "activation")]
     batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
-    skip_bool = parse(Bool, retrieve(conf, "CNN", "residual_connections")) # Residual connection
+    skip_bool = parse(Bool, retrieve(conf, "CNN", "latent_concat")) # Residual connection
 
     Φ_functions = Vector{Lux.ConvTranspose}(undef, 0)
     batchnorms = Vector{Lux.BatchNorm}(undef, 0)
@@ -189,9 +170,7 @@ function init_CNN_Generator(
             push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
         end
 
-        if skip_bool && i > 1
-            prev_c += hidden_c[i]
-        end
+        prev_c = (i == 1 && skip_bool) ? hidden_c[1] : prev_c
     end
     push!(
         Φ_functions,
@@ -234,7 +213,7 @@ function (gen::CNN_Generator)(
         The generated data.
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
-    gen.bool_config.skip_bool && return forward_recursive(gen, z, ps, st_lux)
+    gen.bool_config.skip_bool && return forward_with_latent_concat(gen, z, ps, st_lux)
     return forward(gen, z, ps, st_lux)
 end
 

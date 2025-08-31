@@ -87,14 +87,14 @@ function (lp::LogPriorUnivariate)(
 
     # Pre-allocate
     log_p = zeros(T, S) |> pu
-    log_Z =
-        lp.normalize ? log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) :
-        zeros(T, Q, P) |> pu
+    log_π0 =
+        lp.normalize ?
+        log_π0 .- log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) : log_π0
 
-    for q = 1:Q
-        f, st = ebm(ps, st_kan, st_lyrnorm, z[q, :, :])
-        lp = f[q, :, :] .+ log_π0[q, :, :] .- log_Z[q, :]
-        log_p = log_p + dropdims(sum(lp; dims = 1); dims = 1)
+    @inbounds @simd for q = 1:Q
+        f, st = ebm(ps, st_kan, st_lyrnorm, view(z,q,:,:))
+        log_p =
+            log_p + dropdims(sum(view(f,q,:,:) .+ view(log_π0,q,:,:); dims = 1); dims = 1)
     end
 
     return log_p, st_lyrnorm

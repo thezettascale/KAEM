@@ -61,7 +61,7 @@ make bench
 
 ## Samples
 
-You don't need MCMC, an encoder, or heuristics. Fast and unbiased sampling is made feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
+T-KAM does not use an encoder or score-based approximations, and it often doesn't need MCMC. Fast and unbiased sampling can be feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
 
 <div style="display: flex; justify-content: space-between;">
     <img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="32%" />

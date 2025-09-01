@@ -1,15 +1,15 @@
 # Training Configuration File
 # Format: dataset mode
 # One job per line: DATASET MODE
-# Available datasets: MNIST, FMNIST, CIFAR10, SVHN, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
+# Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CIFAR10PANG, SVHNPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
 # Available modes: thermo, vanilla
 
 # MNIST vanilla
 # FMNIST vanilla
 # DARCY_FLOW vanilla
-# SVHN vanilla
-# CIFAR10 vanilla
+SVHN vanilla
 SVHNPANG vanilla
+CIFAR10 vanilla
 CIFAR10PANG vanilla
 SVHN thermo
 CIFAR10 thermo

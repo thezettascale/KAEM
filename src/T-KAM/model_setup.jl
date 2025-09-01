@@ -104,6 +104,8 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
             prior_sampling_bool = true,
         )
 
+        x = zeros(half_quant, model.lkhood.x_shape..., max_samples) |> pu
+
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) -> prior_sampler(m, p, sk, Lux.testmode(sl), x; rng = r)
 

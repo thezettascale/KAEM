@@ -7,11 +7,11 @@
 # MNIST vanilla
 # FMNIST vanilla
 # DARCY_FLOW vanilla
-SVHN vanilla
-SVHNPANG vanilla
+# SVHN vanilla
 CIFAR10 vanilla
+SVHNPANG vanilla
 CIFAR10PANG vanilla
-SVHN thermo
-CIFAR10 thermo
-SVHNPANG thermo
-CIFAR10PANG thermo
+# SVHN thermo
+# CIFAR10 thermo
+# SVHNPANG thermo
+# CIFAR10PANG thermo

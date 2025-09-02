@@ -61,16 +61,15 @@ make bench
 
 ## Samples
 
-T-KAM does not use an encoder or score-based approximations, and it often doesn't need MCMC. Fast and unbiased sampling can be feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
+T-KAM is uniquely structured to be able to work without an encoder, score-based approximations, and even MCMC (dep. on conditions).
+
+Fast and unbiased sampling can be feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
 
 <div style="display: flex; justify-content: space-between;">
-    <img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="32%" />
-    <img src="figures/results/individual_plots/fmnist_ebm_rbf.png" width="32%" />
+    <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
+    <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
     <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
 </div>
-
-
-
 
 ## Julia flow:
 

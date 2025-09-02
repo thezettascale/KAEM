@@ -21,9 +21,9 @@ using .trainer
 using .Utils: pu, half_quant, hq
 
 for fcn_type in ["RBF", "FFT"]
-    for prior_type in ["gaussian", "lognormal", "uniform"]
+    for prior_type in ["gaussian", "lognormal", "uniform", "ebm"]
         for dataset_name in ["DARCY_FLOW", "MNIST", "FMNIST"]
-            file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"
+            file = "logs/Vanilla/$(dataset_name)/$(prior_type)_$(fcn_type)/saved_model.jld2"
 
             conf_loc = Dict(
                 "DARCY_FLOW" => "config/darcy_flow_config.ini",
@@ -55,14 +55,14 @@ for fcn_type in ["RBF", "FFT"]
             ps = ps.ebm
             st = st.ebm
             t = nothing
+            a, b = minimum(st_kan[:a].grid; dims = 2), maximum(st_kan[:a].grid; dims = 2)
 
-            grid_range =
-                Dict("uniform" => (0, 1), "lognormal" => (0, 3), "gaussian" => (-3, 3))[prior_type]
+            no_grid =
+                (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
-            a, b = minimum(st.fcn[1].grid; dims = 2), maximum(st.fcn[1].grid; dims = 2)
-            if fcn_type == "FFT"
-                a = fill(half_quant(first(grid_range)), size(a)) |> pu
-                b = fill(half_quant(last(grid_range)), size(b)) |> pu
+            if no_grid
+                a = fill(half_quant(first(ebm.prior_domain)), size(a)) |> pu
+                b = fill(half_quant(last(ebm.prior_domain)), size(b)) |> pu
             end
 
             z = (a + b) ./ 2 .+ (b - a) ./ 2 .* pu(prior.nodes)
@@ -84,7 +84,7 @@ for fcn_type in ["RBF", "FFT"]
 
             for (i, (q, p)) in enumerate(plot_components)
                 fig = Makie.Figure(
-                    size = (1000, 1000),
+                    size = (800, 800),
                     ffont = "Computer Modern",
                     fontsize = 50,
                     backgroundcolor = :white,

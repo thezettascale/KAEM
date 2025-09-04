@@ -50,7 +50,10 @@ function (lp::LogPriorULA)(
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple,
 )::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
-    log_π0 = dropdims(sum(ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true); dims = 1), dims = (1, 2))
+    log_π0 = dropdims(
+        sum(ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true); dims = 1),
+        dims = (1, 2),
+    )
     f, st_lyrnorm_new = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     return dropdims(sum(f; dims = 1); dims = 1) + log_π0, st_lyrnorm_new
 end

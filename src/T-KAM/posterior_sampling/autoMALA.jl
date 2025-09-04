@@ -104,7 +104,10 @@ function (sampler::autoMALA_sampler)(
     z_t, z_t1 = z_copy, z_copy
 
     t_expanded = repeat(temps, S) |> pu
-    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
+    x_t = (
+        model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) :
+        (model.use_pca ? repeat(x, 1, num_temps) : repeat(x, 1, 1, 1, num_temps))
+    )
 
     # Initialize preconditioner
     M = init_mass_matrix(z_fq)

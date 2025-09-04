@@ -5,6 +5,7 @@ export T_KAM, init_T_KAM
 using CUDA
 using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, LuxCUDA
 using Flux: DataLoader
+using MultivariateStats: PCA, transform, fit
 
 using ..Utils
 
@@ -53,6 +54,9 @@ struct T_KAM{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     MALA::Bool
     conf::ConfParse
     log_prior::AbstractLogPrior
+    use_pca::Bool
+    PCA_model::Union{PCA,Nothing}
+    original_data_size::Tuple
 end
 
 function init_T_KAM(
@@ -78,6 +82,24 @@ function init_T_KAM(
     test_data =
         seq ? dataset[:, :, (N_train+1):(N_train+N_test)] :
         dataset[:, :, :, (N_train+1):(N_train+N_test)]
+
+    original_data_size = x_shape
+    use_pca = parse(Bool, retrieve(conf, "PCA", "use_pca"))
+    pca_components = parse(Int, retrieve(conf, "PCA", "pca_components"))
+
+    M = nothing
+    if !cnn && !seq && use_pca
+        train_data = reshape(cpu_device()(train_data), :, size(train_data)[end])
+        test_data = reshape(cpu_device()(test_data), :, size(test_data)[end])
+        M = fit(PCA, train_data; maxoutdim = pca_components)
+
+        train_data = transform(M, train_data) |> pu
+        test_data = transform(M, test_data) |> pu
+        x_shape = (size(train_data, 1),)
+
+        println("PCA model: num components = $pca_components")
+    end
+
 
     train_loader = DataLoader(
         train_data .|> half_quant,
@@ -155,6 +177,9 @@ function init_T_KAM(
         MALA,
         conf,
         LogPriorUnivariate(eps, !prior_model.bool_config.contrastive_div),
+        use_pca,
+        M,
+        original_data_size,
     )
 end
 

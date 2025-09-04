@@ -57,8 +57,10 @@ for fcn_type in ["RBF", "FFT"]
             t = nothing
             a, b = minimum(st_kan[:a].grid; dims = 2), maximum(st_kan[:a].grid; dims = 2)
 
-            no_grid =
-                (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
+            no_grid = (
+                ebm.fcns_qp[1].spline_string == "FFT" ||
+                ebm.fcns_qp[1].spline_string == "Cheby"
+            )
 
             if no_grid
                 a = fill(half_quant(first(ebm.prior_domain)), size(a)) |> pu

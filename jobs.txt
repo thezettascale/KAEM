@@ -9,9 +9,9 @@
 # DARCY_FLOW vanilla
 SVHN vanilla
 CIFAR10 vanilla
-SVHNPANG vanilla
-CIFAR10PANG vanilla
 SVHN thermo
 CIFAR10 thermo
-SVHNPANG thermo
-CIFAR10PANG thermo
+# SVHNPANG vanilla
+# CIFAR10PANG vanilla
+# SVHNPANG thermo
+# CIFAR10PANG thermo

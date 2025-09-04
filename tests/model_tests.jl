@@ -1,4 +1,5 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays
+using MultivariateStats: reconstruct
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
@@ -51,6 +52,22 @@ function test_grid_update()
         update_model_grid(model, x, ps, st_kan, Lux.testmode(st_lux))
     @test all(size(st_kan.ebm[:a].grid) .== size_grid)
     @test !any(isnan, ps)
+end
+
+function test_pca()
+    Random.seed!(42)
+    dataset = randn(full_quant, 32, 32, 1, 50)
+    commit!(conf, "PCA", "use_pca", "true")
+    commit!(conf, "PCA", "pca_components", "10")
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+
+    @test size(x_test, 1) == 9
+
+    x_recon = reconstruct(model.PCA_model, cpu_device()(x_test))
+    x_recon = reshape(x_recon, model.original_data_size..., :)
+    @test all(size(x_recon)[1:3] .== size(dataset)[1:3])
 end
 
 function test_mala_loss()
@@ -125,6 +142,7 @@ end
 @testset "T-KAM Tests" begin
     test_ps_derivative()
     test_grid_update()
+    test_pca()
     test_mala_loss()
     test_cnn_loss()
     test_cnn_residual_loss()

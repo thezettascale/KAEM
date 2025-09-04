@@ -3,9 +3,9 @@ module trainer
 export T_KAM_trainer, init_trainer, train!
 
 using Flux: onecold, mse
-using CUDA
-using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
+using CUDA, Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser
 using Optimization, OptimizationOptimJL, Lux, LuxCUDA, LinearAlgebra, Accessors
+using MultivariateStats: reconstruct
 
 include("../utils.jl")
 using .Utils
@@ -146,10 +146,10 @@ function init_trainer(
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
 
     try
-        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
+        h5write(file_loc * "real_$(gen_type).h5", "samples", save_dataset)
     catch
         rm(file_loc * "real_$(gen_type).h5")
-        h5write(file_loc * "real_$(gen_type).h5", "samples", Float32.(save_dataset))
+        h5write(file_loc * "real_$(gen_type).h5", "samples", save_dataset)
     end
 
     open(file_loc * "loss.csv", "w") do file
@@ -328,18 +328,30 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
             end
 
             if (t.gen_every > 0 && epoch % t.gen_every == 0)
+
+                if !t.model.lkhood.SEQ && !t.model.lkhood.CNN && t.model.use_pca
+                    gen_data = reconstruct(t.model.PCA_model, gen_data)
+                    gen_data = Float32.(
+                        reshape(
+                            gen_data,
+                            t.model.original_data_size...,
+                            size(gen_data)[end],
+                        ),
+                    )
+                end
+
                 try
                     h5write(
                         t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
                         "samples",
-                        Float32.(gen_data),
+                        gen_data,
                     )
                 catch
                     rm(t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5")
                     h5write(
                         t.model.file_loc * "generated_$(t.gen_type)_epoch_$(epoch).h5",
                         "samples",
-                        Float32.(gen_data),
+                        gen_data,
                     )
                 end
             end
@@ -405,19 +417,17 @@ function train!(t::T_KAM_trainer; train_idx::Int = 1)
         gen_data = cat(gen_data, cpu_device()(batch), dims = idx)
     end
 
+    if !t.model.lkhood.SEQ && !t.model.lkhood.CNN && t.model.use_pca
+        gen_data = reconstruct(t.model.PCA_model, gen_data)
+        gen_data =
+            Float32.(reshape(gen_data, t.model.original_data_size..., size(gen_data)[end]))
+    end
+
     try
-        h5write(
-            t.model.file_loc * "generated_$(t.gen_type).h5",
-            "samples",
-            Float32.(gen_data),
-        )
+        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", gen_data)
     catch
         rm(t.model.file_loc * "generated_$(t.gen_type).h5")
-        h5write(
-            t.model.file_loc * "generated_$(t.gen_type).h5",
-            "samples",
-            Float32.(gen_data),
-        )
+        h5write(t.model.file_loc * "generated_$(t.gen_type).h5", "samples", gen_data)
     end
 
     t.save_model && jldsave(

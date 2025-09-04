@@ -28,6 +28,16 @@ function l2_IS(
     return ll ./ scale
 end
 
+function l2_IS_PCA(
+    x::AbstractArray{T,2},
+    x̂::AbstractArray{T,3},
+    ε::T,
+    scale::T,
+)::AbstractArray{T,2} where {T<:half_quant}
+    @tullio ll[b, s] := - (x[d, b] - x̂[d, s, b]) ^ 2
+    return ll ./ scale
+end
+
 function IS_loss(
     x::AbstractArray{T},
     x̂::AbstractArray{T},
@@ -37,7 +47,7 @@ function IS_loss(
     S::Int,
     SEQ::Bool,
 )::AbstractArray{T,2} where {T<:half_quant}
-    loss_fcn = SEQ ? cross_entropy_IS : l2_IS
+    loss_fcn = (SEQ ? cross_entropy_IS : (ndims(x) == 2 ? l2_IS_PCA : l2_IS))
     return loss_fcn(x, x̂, ε, scale)
 end
 
@@ -63,6 +73,16 @@ function l2_MALA(
     return ll ./ scale
 end
 
+function l2_PCA(
+    x::AbstractArray{T,2},
+    x̂::AbstractArray{T,2},
+    ε::T,
+    scale::T,
+)::AbstractArray{T,1} where {T<:half_quant}
+    @tullio ll[b] := - (x[d, b] - x̂[d, b]) ^ 2
+    return ll ./ scale
+end
+
 function MALA_loss(
     x::AbstractArray{T},
     x̂::AbstractArray{T},
@@ -71,7 +91,7 @@ function MALA_loss(
     B::Int,
     SEQ::Bool,
 )::AbstractArray{T,1} where {T<:half_quant}
-    loss_fcn = SEQ ? cross_entropy_MALA : l2_MALA
+    loss_fcn = (SEQ ? cross_entropy_MALA : (ndims(x) == 2 ? l2_PCA : l2_MALA))
     return loss_fcn(x, x̂, ε, scale)
 end
 

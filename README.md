@@ -59,17 +59,27 @@ For benchmarking run:
 make bench
 ```
 
-## Samples
+## How to sample
 
-T-KAM is uniquely structured to be able to work without an encoder, score-based approximations, and even MCMC (dep. on conditions).
+T-KAM is uniquely structured to be able to work without an encoder, score-based approximations, and even MCMC (depending on conditions).
 
-Fast and unbiased sampling can be feasible with inverse transform sampling from the prior (inference) and importance sampling for the posterior (training):
+Fast and unbiased sampling can be feasible with:
+- **Inverse transform sampling** from the prior (inference)
+- **Importance sampling** for the posterior (training)
 
-<div style="display: flex; justify-content: space-between;">
-    <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
-    <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
-    <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
-</div>
+<p align="center">
+  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
+  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
+</p>
+
+When importance sampling fails, the unadjusted Langevin algorithm (ULA) can be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. When ULA and maximum likelihood fail, T-KAM can also be trained by a strategy based on Thermodynamic Integration:
+
+<p align="center">
+<img src="figures/results/individual_plots/svhn_real_reference.png" width="32%" />
+  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="32%" />
+  <img src="figures/results/individual_plots/svhn_thermodynamic_ula_mixture.png" width="32%" />
+</p>
 
 ## Julia flow:
 

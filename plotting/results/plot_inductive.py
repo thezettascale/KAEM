@@ -21,9 +21,9 @@ plt.rcParams.update(
 )
 
 DATASETS = {
-    "DARCY_FLOW": {"grid_size": 20, "cmap": "viridis"},
-    "MNIST": {"grid_size": 20, "cmap": "gray"},
-    "FMNIST": {"grid_size": 20, "cmap": "gray"},
+    "DARCY_FLOW": {"grid_size": 10, "cmap": "viridis"},
+    "MNIST": {"grid_size": 10, "cmap": "gray"},
+    "FMNIST": {"grid_size": 10, "cmap": "gray"},
 }
 
 PRIORS = ["uniform", "lognormal", "gaussian", "ebm"]
@@ -95,13 +95,11 @@ def plot_real_images_reference(dataset, grid_size, cmap):
                 with h5py.File(real_path, "r") as h5_file:
                     real_images = h5_file["samples"][()]
 
-                # Create square grid for real images
                 fig, axes = plt.subplots(grid_size, grid_size, figsize=(6, 6))
 
                 if grid_size == 1:
                     axes = axes.reshape(1, 1)
 
-                # Plot real images in square grid
                 for i in range(grid_size * grid_size):
                     row, col = divmod(i, grid_size)
                     ax = axes[row, col]
@@ -115,7 +113,6 @@ def plot_real_images_reference(dataset, grid_size, cmap):
                 )
                 plt.subplots_adjust(wspace=0.1, hspace=0.1)
 
-                # Save the reference plot
                 filename = f"{dataset.lower()}_real_reference.png"
                 filepath = os.path.join(output_dir, filename)
                 plt.savefig(filepath, dpi=300, bbox_inches="tight")
@@ -139,11 +136,8 @@ def main():
 
     for dataset, config in DATASETS.items():
         print(f"\nProcessing dataset: {dataset}")
-
-        # First create reference plot with real images
         plot_real_images_reference(dataset, config["grid_size"], config["cmap"])
 
-        # Then create individual prior-function plots
         for prior in PRIORS:
             for function in FUNCTIONS:
                 plot_prior_function_grid(

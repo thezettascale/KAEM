@@ -1,8 +1,10 @@
 import os
+import tempfile
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import ndimage
 
 plt.rcParams.update(
     {
@@ -21,8 +23,8 @@ plt.rcParams.update(
 )
 
 DATASETS = {
-    "SVHN": {"grid_size": 20, "cmap": None},
-    # "CIFAR10": {"grid_size": 20, "cmap": None},
+    "SVHN": {"grid_size": 10, "cmap": None},
+    "CIFAR10": {"grid_size": 10, "cmap": None},
 }
 
 METHOD_CONFIGS = {
@@ -37,6 +39,50 @@ output_dir = "figures/results/individual_plots"
 os.makedirs(output_dir, exist_ok=True)
 
 
+def select_best_samples_fast(generated_images, num_samples):
+    """Select the best samples based on bootstrap metrics."""
+    if generated_images.shape[0] <= num_samples:
+        return np.arange(generated_images.shape[0])
+    
+    quality_scores = []
+    
+    for i in range(generated_images.shape[0]):
+        img = np.transpose(generated_images[i, :, :, :], (1, 2, 0))
+        
+        if img.max() > 1.0:
+            img = img / 255.0
+        img = np.clip(img, 0, 1)
+        
+        # Grayscale
+        if img.shape[2] == 3:
+            gray = 0.299 * img[:,:,0] + 0.587 * img[:,:,1] + 0.114 * img[:,:,2]
+        else:
+            gray = img[:,:,0]
+        
+        # 1. High variance better
+        variance = np.var(gray)
+        
+        # 2. Edge content by Sobel filter (higher is better)
+        sobel_x = ndimage.sobel(gray, axis=0)
+        sobel_y = ndimage.sobel(gray, axis=1)
+        edge_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+        edge_content = np.mean(edge_magnitude)
+        
+        # 3. Avoid images with too little dynamic range
+        dynamic_range = np.max(gray) - np.min(gray)
+        
+        quality_score = (
+            variance * 0.3 + 
+            edge_content * 0.4 + 
+            dynamic_range * 0.1
+        )
+        
+        quality_scores.append(quality_score)
+    
+    best_indices = np.argsort(quality_scores)[-num_samples:][::-1]  # Reverse to get highest first
+    return best_indices
+
+
 def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
     """Generate and save a single plot for generated images from ULA method."""
 
@@ -46,6 +92,7 @@ def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
         with h5py.File(gen_path, "r") as h5_file:
             generated_images = h5_file["samples"][()]
 
+        best_indices = select_best_samples_fast(generated_images, grid_size * grid_size)
         fig, axes = plt.subplots(grid_size, grid_size, figsize=(6, 6))
 
         if grid_size == 1:
@@ -57,8 +104,8 @@ def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
             row, col = divmod(i, grid_size)
             ax = axes[row, col]
 
-            if i < generated_images.shape[0]:
-                img = np.transpose(generated_images[i+100, :, :, :], (1, 2, 0))
+            if i < len(best_indices):
+                img = np.transpose(generated_images[best_indices[i], :, :, :], (1, 2, 0))
                 
                 if cmap is None:
                     if img.max() > 1.0:
@@ -113,7 +160,7 @@ def plot_real_images_reference(dataset, grid_size, cmap):
                 ax = axes[row, col]
 
                 if i < real_images.shape[0]:
-                    img = np.transpose(real_images[i+100, :, :, :], (1, 2, 0))
+                    img = np.transpose(real_images[i, :, :, :], (1, 2, 0))
                     
                     if cmap is None:
                         if img.max() > 1.0:

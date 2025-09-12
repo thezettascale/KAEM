@@ -4,12 +4,17 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/T-KAM.jl")
 include("../src/pipeline/data_utils.jl")
-include("../src/utils.jl")
-using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: pu, half_quant
+
+include("../src/utils.jl")
+using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
 
 conf = ConfParse("config/svhn_pang_config.ini")
 parse_conf!(conf)
@@ -20,7 +25,7 @@ commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0")
 commit!(conf, "TRAINING", "verbose", "false")
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
-commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "1")
+commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 dataset, img_size = get_vision_dataset(
     "SVHN",
@@ -36,13 +41,13 @@ function setup_model(N_l)
 
     x_test, loader_state = iterate(model.train_loader)
     x_test = pu(x_test)
-    model, ps, st = prep_model(model, x_test)
+    model, ps, st_kan, st_lux = prep_model(model, x_test; rng = rng)
 
-    return model, half_quant.(ps), st
+    return model, half_quant.(ps), st_kan, st_lux
 end
 
-function benchmark_prior(model, ps, st)
-    first(model.sample_prior(model, model.grid_updates_samples, ps, st, rng))
+function benchmark_prior(model, ps, st_kan, st_lux)
+    first(model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng))
 end
 
 
@@ -58,12 +63,12 @@ results = DataFrame(
 for N_l in [10, 20, 30, 40, 50]
     println("Benchmarking N_l = $N_l...")
 
-    model, ps, st = setup_model(N_l)
+    model, ps, st_kan, st_lux = setup_model(N_l)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark benchmark_prior($model, $ps, $st)
+    b = @benchmark benchmark_prior($model, $ps, $st_kan, $st_lux)
 
     push!(
         results,

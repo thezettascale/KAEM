@@ -69,10 +69,10 @@ prior_steps_ref = {
 
 keys = [r"$n_z$", r"$N_{t}$", r"$N_{prior}$"]
 colours = ["viridis", "cividis", "plasma"]
-elevations = [0.545, 0.6, 0.6]
+elevations = [0.3, 0.35, 0.4]
 datasets = [latent_dim, mala_steps, prior_steps]
 references = [None, mala_steps_ref, prior_steps_ref]
-titles = ["Latent Dimension", "Power Posteriors", "Prior ULA Steps"]
+titles = [r"Latent Dimension", r"Power Posteriors", "Prior ULA Steps"]
 
 
 def add_text_annotations(ax, round=False, elevation=0.45):
@@ -168,7 +168,7 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
         ax=axs[1, 0],
         color=colors[2] if len(colors) > 2 else colors[0],
     )
-    add_text_annotations(axs[1, 0], round=False, elevation=elevations[idx] + 0.27)
+    add_text_annotations(axs[1, 0], round=False, elevation=elevations[idx])
 
     if ref is not None:
         if idx == 1:  # MALA steps plot

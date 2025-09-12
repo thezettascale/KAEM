@@ -155,7 +155,7 @@ function prep_model(
         ps |> ComponentArray |> pu, st_kan |> ComponentArray |> pu, st_lux |> pu
     model = move_to_hq(model::T_KAM{T,U})
     model = setup_training(model::T_KAM{T,U})
-    return model, ps, T.(st_kan), st_lux
+    return model, full_quant.(ps), T.(st_kan), st_lux
 end
 
 end

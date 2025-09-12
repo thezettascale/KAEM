@@ -4,12 +4,17 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/T-KAM.jl")
 include("../src/pipeline/data_utils.jl")
-include("../src/utils.jl")
-using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: pu, half_quant
+
+include("../src/utils.jl")
+using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
 
 conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
@@ -35,10 +40,10 @@ function setup_model(N_t)
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
     x_test, loader_state = iterate(model.train_loader)
     x_test = pu(x_test)
-    model, ps, st = prep_model(model, x_test)
+    model, ps, st_kan, st_lux = prep_model(model, x_test; rng = rng)
     ∇ = zero(half_quant.(ps))
 
-    return model, half_quant.(ps), ∇, st, x_test
+    return model, half_quant.(ps), ∇, st_kan, st_lux, x_test
 end
 
 results = DataFrame(
@@ -50,15 +55,19 @@ results = DataFrame(
     gc_percent = Float64[],
 )
 
-for N_t in [1, 2, 4, 6, 8, 10]
+function benchmark_temps(params, ∇, st_kan, st_lux, model, x_test)
+    model.loss_fcn(params, ∇, st_kan, st_lux, model, x_test)
+end
+
+for N_t in [2, 4, 6, 8, 10, 12]
     println("Benchmarking N_t = $N_t...")
 
-    model, ps, ∇, st, x_test = setup_model(N_t)
+    model, ps, ∇, st_kan, st_lux, x_test = setup_model(N_t)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
+    b = @benchmark benchmark_temps($ps, $∇, $st_kan, $st_lux, $model, $x_test)
 
     push!(
         results,

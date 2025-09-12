@@ -88,36 +88,20 @@ def process_file_pair(gen_file_path, real_file_path):
 # Example usage
 file_paths = [
     (
-        "logs/Vanilla/SVHN/mixture/generated_images.h5",
-        "logs/Vanilla/SVHN/mixture/real_images.h5",
+        "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
+        "logs/Vanilla/SVHN/ULA/mixture/real_images.h5",
     ),
     (
-        "logs/Vanilla/CIFAR10/mixture/generated_images.h5",
-        "logs/Vanilla/CIFAR10/mixture/real_images.h5",
+        "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
+        "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
     ),
     (
-        "logs/Vanilla/SVHN/deep/generated_images.h5",
-        "logs/Vanilla/SVHN/deep/real_images.h5",
+        "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
+        "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
     ),
     (
-        "logs/Vanilla/CIFAR10/deep/generated_images.h5",
-        "logs/Vanilla/CIFAR10/deep/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic/SVHN/deep/generated_images.h5",
-        "logs/Thermodynamic/SVHN/deep/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic/CIFAR10/deep/generated_images.h5",
-        "logs/Thermodynamic/CIFAR10/deep/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic_mixture/SVHN/mixture/generated_images.h5",
-        "logs/Thermodynamic_mixture/SVHN/mixture/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic_mixture/CIFAR10/mixture/generated_images.h5",
-        "logs/Thermodynamic_mixture/CIFAR10/mixture/real_images.h5",
+        "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
+        "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
     ),
 ]
 

@@ -28,6 +28,12 @@ dataset_mapping = Dict(
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
 
+# Huggingface datasets loading is lazy, so batch load
+function batch_process(subset; img_resize::Union{Nothing,Tuple{Int,Int}} = (32, 32))
+    subdata = reduce((x, y) -> cat(x, y, dims = 4), map(x -> channelview(x), subset))
+    return imresize(permutedims(subdata, (2, 3, 1, 4)), img_resize) ./ 255
+end
+
 function get_vision_dataset(
     dataset_name::String,
     N_train::Int,
@@ -57,35 +63,31 @@ function get_vision_dataset(
         if dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW"
             data = dataset_mapping[dataset_name][:, :, 1:(N_train+N_test)]
             (data .- minimum(data)) ./ (maximum(data) - minimum(data))
+            data = isnothing(img_resize) ? data : imresize(data, img_resize)
+            data
         elseif dataset_name == "CELEBA" || dataset_name == "CELEBAPANG"
             celeba = dataset_mapping[dataset_name]
-
-            # Huggingface datasets loading is lazy, so batch load
-            function batch_process(subset)
-                subdata = reduce(
-                    (x, y) -> cat(x, y, dims = 4),
-                    map(x -> channelview(x), subset),
-                )
-                return permutedims(subdata, (2, 3, 1, 4)) ./ 255
-            end
-
             num_iters = fld(N_train+N_test, batch_size)
-            data = zeros(Float32, 178, 218, 3, N_train+N_test)
+            data = zeros(full_quant, img_resize..., 3, N_train+N_test)
             for i = 1:num_iters
                 start_idx = (i - 1) * batch_size + 1
                 end_idx = min(i * batch_size, N_train+N_test)
                 data[:, :, :, start_idx:end_idx] =
-                    batch_process(celeba[start_idx:end_idx]["image"])
+                    batch_process(celeba[start_idx:end_idx]["image"]) .|> full_quant
+
+                if i % 10 == 0
+                    GC.gc()
+                end
             end
 
             data
         else
-            dataset_mapping[dataset_name][1:(N_train+N_test)].features
+            data = dataset_mapping[dataset_name][1:(N_train+N_test)].features
+            data = isnothing(img_resize) ? data : imresize(data, img_resize)
+            data
         end
     end
 
-
-    dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     dataset = dataset .|> full_quant
     img_shape = size(dataset)[1:(end-1)]
 

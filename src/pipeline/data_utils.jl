@@ -8,6 +8,7 @@ using .Utils: pu, full_quant
 
 using MLDatasets, Embeddings, Images, ImageTransformations, HDF5
 using Flux: onehotbatch
+using HuggingFaceDatasets: load_dataset
 
 ENV["DATADEPS_ALWAYS_ACCEPT"] = true
 
@@ -19,6 +20,10 @@ dataset_mapping = Dict(
     "CIFAR10PANG" => MLDatasets.CIFAR10(),
     "SVHNPANG" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
+    "CELEBA" =>
+        load_dataset("nielsr/CelebA-faces", split = "train").with_format("julia"),
+    "CELEBAPANG" =>
+        load_dataset("nielsr/CelebA-faces", split = "train").with_format("julia"),
     # "UD_ENGLISH" => MLDatasets.UD_English(),
     "DARCY_FLOW" => h5open("PDE_data/darcy_32/darcy_train_32.h5")["y"],
 )
@@ -30,6 +35,7 @@ function get_vision_dataset(
     num_generated_samples::Int;
     img_resize::Union{Nothing,Tuple{Int,Int}} = nothing,
     cnn::Bool = false,
+    batch_size::Int = 100,
 )
     """
     Load a vision dataset and resize it if necessary.
@@ -47,13 +53,38 @@ function get_vision_dataset(
         The shape of the images.
         The dataset to save.
     """
-    dataset =
-        (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") ?
-        dataset_mapping[dataset_name][:, :, 1:(N_train+N_test)] :
-        dataset_mapping[dataset_name][1:(N_train+N_test)].features
-    dataset =
-        (dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW") ?
-        (dataset .- minimum(dataset)) ./ (maximum(dataset) - minimum(dataset)) : dataset
+    dataset = begin
+        if dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW"
+            data = dataset_mapping[dataset_name][:, :, 1:(N_train+N_test)]
+            (data .- minimum(data)) ./ (maximum(data) - minimum(data))
+        elseif dataset_name == "CELEBA" || dataset_name == "CELEBAPANG"
+            celeba = dataset_mapping[dataset_name]
+
+            # Huggingface datasets loading is lazy, so batch load
+            function batch_process(subset)
+                subdata = reduce(
+                    (x, y) -> cat(x, y, dims = 4),
+                    map(x -> channelview(x), subset),
+                )
+                return permutedims(subdata, (2, 3, 1, 4)) ./ 255
+            end
+
+            num_iters = fld(N_train+N_test, batch_size)
+            data = zeros(Float32, 178, 218, 3, N_train+N_test)
+            for i = 1:num_iters
+                start_idx = (i - 1) * batch_size + 1
+                end_idx = min(i * batch_size, N_train+N_test)
+                data[:, :, :, start_idx:end_idx] =
+                    batch_process(celeba[start_idx:end_idx]["image"])
+            end
+
+            data
+        else
+            dataset_mapping[dataset_name][1:(N_train+N_test)].features
+        end
+    end
+
+
     dataset = isnothing(img_resize) ? dataset : imresize(dataset, img_resize)
     dataset = dataset .|> full_quant
     img_shape = size(dataset)[1:(end-1)]
@@ -63,14 +94,18 @@ function get_vision_dataset(
             dataset_name == "CIFAR10" ||
             dataset_name == "SVHN" ||
             dataset_name == "CIFAR10PANG" ||
-            dataset_name == "SVHNPANG"
+            dataset_name == "SVHNPANG" ||
+            dataset_name == "CELEBA" ||
+            dataset_name == "CELEBAPANG"
         ) ? img_shape : (img_shape..., 1)
     dataset =
         (
             dataset_name == "CIFAR10" ||
             dataset_name == "SVHN" ||
             dataset_name == "CIFAR10PANG" ||
-            dataset_name == "SVHNPANG"
+            dataset_name == "SVHNPANG" ||
+            dataset_name == "CELEBA" ||
+            dataset_name == "CELEBAPANG"
         ) ? dataset : reshape(dataset, img_shape..., :)
     save_dataset = dataset[:, :, :, 1:min(num_generated_samples, size(dataset)[end])]
 

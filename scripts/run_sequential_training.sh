@@ -98,7 +98,7 @@ load_config() {
         
         # Checks
         case "$dataset" in
-            MNIST|FMNIST|CIFAR10|SVHN|CIFAR10PANG|SVHNPANG|PTB|SMS_SPAM|DARCY_PERM|DARCY_FLOW)
+            MNIST|FMNIST|CIFAR10|SVHN|CIFAR10PANG|SVHNPANG|PTB|SMS_SPAM|DARCY_PERM|DARCY_FLOW|CELEBA|CELEBAPANG)
                 ;;
             *)
                 print_warning "Unknown dataset '$dataset' on line $line_num (skipping)"

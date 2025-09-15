@@ -9,6 +9,8 @@ conf = Dict(
     "SVHN" => ConfParse("config/svhn_config.ini"),
     "CIFAR10PANG" => ConfParse("config/cifar_pang_config.ini"),
     "SVHNPANG" => ConfParse("config/svhn_pang_config.ini"),
+    "CELEBA" => ConfParse("config/celeba_config.ini"),
+    "CELEBAPANG" => ConfParse("config/celeba_pang_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
@@ -29,5 +31,6 @@ using .trainer
 rng = Random.MersenneTwister(1)
 
 # Thermodynamic
-t = init_trainer(rng, conf, dataset)
+im_resize = dataset == "CELEBA" || dataset == "CELEBAPANG" ? (64, 64) : (32, 32)
+t = init_trainer(rng, conf, dataset; img_resize = im_resize)
 train!(t)

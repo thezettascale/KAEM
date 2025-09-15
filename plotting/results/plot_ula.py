@@ -24,14 +24,14 @@ plt.rcParams.update(
 
 DATASETS = {
     "SVHN": {"grid_size": 10, "cmap": None},
-    "CIFAR10": {"grid_size": 10, "cmap": None},
+    # "CIFAR10": {"grid_size": 10, "cmap": None},
 }
 
 METHOD_CONFIGS = {
     "vanilla_ula_mixture": {
         "method_type": "Vanilla",
-        "sampler": "ULA", 
-        "model_type": "mixture"
+        "sampler": "ULA",
+        "model_type": "mixture",
     }
 }
 
@@ -43,43 +43,41 @@ def select_best_samples_fast(generated_images, num_samples):
     """Select the best samples based on bootstrap metrics."""
     if generated_images.shape[0] <= num_samples:
         return np.arange(generated_images.shape[0])
-    
+
     quality_scores = []
-    
+
     for i in range(generated_images.shape[0]):
         img = np.transpose(generated_images[i, :, :, :], (1, 2, 0))
-        
+
         if img.max() > 1.0:
             img = img / 255.0
         img = np.clip(img, 0, 1)
-        
+
         # Grayscale
         if img.shape[2] == 3:
-            gray = 0.299 * img[:,:,0] + 0.587 * img[:,:,1] + 0.114 * img[:,:,2]
+            gray = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
         else:
-            gray = img[:,:,0]
-        
+            gray = img[:, :, 0]
+
         # 1. High variance better
         variance = np.var(gray)
-        
+
         # 2. Edge content by Sobel filter (higher is better)
         sobel_x = ndimage.sobel(gray, axis=0)
         sobel_y = ndimage.sobel(gray, axis=1)
         edge_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
         edge_content = np.mean(edge_magnitude)
-        
+
         # 3. Avoid images with too little dynamic range
         dynamic_range = np.max(gray) - np.min(gray)
-        
-        quality_score = (
-            variance * 0.3 + 
-            edge_content * 0.4 + 
-            dynamic_range * 0.1
-        )
-        
+
+        quality_score = variance * 0.3 + edge_content * 0.0 + dynamic_range * 0.9
+
         quality_scores.append(quality_score)
-    
-    best_indices = np.argsort(quality_scores)[-num_samples:][::-1]  # Reverse to get highest first
+
+    best_indices = np.argsort(quality_scores)[-num_samples:][
+        ::-1
+    ]  # Reverse to get highest first
     return best_indices
 
 
@@ -105,8 +103,10 @@ def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
             ax = axes[row, col]
 
             if i < len(best_indices):
-                img = np.transpose(generated_images[best_indices[i], :, :, :], (1, 2, 0))
-                
+                img = np.transpose(
+                    generated_images[best_indices[i], :, :, :], (1, 2, 0)
+                )
+
                 if cmap is None:
                     if img.max() > 1.0:
                         img = img / 255.0
@@ -161,7 +161,7 @@ def plot_real_images_reference(dataset, grid_size, cmap):
 
                 if i < real_images.shape[0]:
                     img = np.transpose(real_images[i, :, :, :], (1, 2, 0))
-                    
+
                     if cmap is None:
                         if img.max() > 1.0:
                             img = img / 255.0

@@ -81,7 +81,7 @@ function (sampler::ULA_sampler)(
     z_hq = begin
         if model.prior.ula && sampler.prior_sampling_bool
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
-            z = pu(z)
+            pu(z)
         else
             z, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
 

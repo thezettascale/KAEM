@@ -46,7 +46,9 @@ function setup_model(N_t)
 end
 
 function benchmark_prior(model, params, st_kan, st_lux)
-    first(model.sample_prior(model, model.grid_updates_samples, params, st_kan, st_lux, rng))
+    first(
+        model.sample_prior(model, model.grid_updates_samples, params, st_kan, st_lux, rng),
+    )
 end
 
 results = DataFrame(

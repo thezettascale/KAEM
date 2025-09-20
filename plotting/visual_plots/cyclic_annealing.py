@@ -17,15 +17,15 @@ plt.rcParams.update(
     }
 )
 
-num_param_updates = 8000  # Example value
+num_param_updates = 16000  # Example value
 num_cycles = 0  # Example value
-initial_p = 6  # Example value
-end_p = 4  # Example value
+initial_p = 10  # Example value
+end_p = 1  # Example value
 
 x = np.linspace(0, 2 * np.pi * (num_cycles + 0.5), num_param_updates + 1)
 p = initial_p + (end_p - initial_p) * 0.5 * (1 - np.cos(x))
 
-plt.figure(figsize=(5, 5))
+plt.figure(figsize=(10, 4))
 plt.plot(x, p)
 plt.xlabel("Parameter updates", fontsize=14)
 plt.ylabel("p", fontsize=14)

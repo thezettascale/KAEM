@@ -24,7 +24,7 @@ plt.rcParams.update(
 
 DATASETS = {
     "SVHN": {"grid_size": 10, "cmap": None},
-    # "CIFAR10": {"grid_size": 10, "cmap": None},
+    "CIFAR10": {"grid_size": 10, "cmap": None},
 }
 
 METHOD_CONFIGS = {
@@ -71,7 +71,7 @@ def select_best_samples_fast(generated_images, num_samples):
         # 3. Avoid images with too little dynamic range
         dynamic_range = np.max(gray) - np.min(gray)
 
-        quality_score = variance * 0.3 + edge_content * 0.0 + dynamic_range * 0.9
+        quality_score = variance * 0.0 + edge_content * 0.0 + dynamic_range * 0.0
 
         quality_scores.append(quality_score)
 

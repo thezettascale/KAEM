@@ -24,7 +24,7 @@ plt.rcParams.update(
 
 DATASETS = {
     "SVHN": {"grid_size": 10, "cmap": None},
-    "CIFAR10": {"grid_size": 10, "cmap": None},
+    # "CELEBA": {"grid_size": 10, "cmap": None},
 }
 
 METHOD_CONFIGS = {

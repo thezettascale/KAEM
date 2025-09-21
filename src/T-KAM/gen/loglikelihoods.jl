@@ -75,7 +75,8 @@ function log_likelihood_MALA(
     noise = lkhood.σ.noise .* noise
     x̂_act = lkhood.output_activation(x̂ .+ noise)
 
-    ll = MALA_loss(x, x̂_act, ε, 2*lkhood.σ.llhood^2, B, lkhood.SEQ)
+    ll =
+        MALA_loss(x, x̂_act, ε, 2*lkhood.σ.llhood^2, B, lkhood.SEQ, lkhood.perceptual_scale)
     return ll, st_lux
 end
 

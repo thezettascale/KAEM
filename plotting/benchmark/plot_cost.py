@@ -95,16 +95,16 @@ def add_text_annotations(ax, round=False, elevation=0.45):
 
 
 for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
-    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
 
     colors = sns.color_palette(colours[idx], n_colors=len(df))
 
-    sns.barplot(x=keys[idx], y="Time (s)", data=df, ax=axs[0, 0], color=colors[0])
-    add_text_annotations(axs[0, 0], round=False, elevation=elevations[idx])
+    sns.barplot(x=keys[idx], y="Time (s)", data=df, ax=axs[0], color=colors[0])
+    add_text_annotations(axs[0], round=False, elevation=elevations[idx])
 
     if ref is not None:
         if idx == 1:  # MALA steps plot
-            axs[0, 0].axhline(
+            axs[0].axhline(
                 y=ref["Time (s)"],
                 color="red",
                 linestyle="--",
@@ -115,30 +115,30 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 ),
             )
         else:
-            axs[0, 0].axhline(
+            axs[0].axhline(
                 y=ref["Time (s)"],
                 color="red",
                 linestyle="--",
                 label=("Reference ITS\n" + "with Mixture Prior"),
             )
-        axs[0, 0].legend()
+        axs[0].legend()
 
-    axs[0, 0].set_xlabel(keys[idx], fontsize=12)
-    axs[0, 0].set_ylabel("Time (s)", fontsize=12)
-    axs[0, 0].set_title(f"{title} - Time", fontsize=14)
+    axs[0].set_xlabel(keys[idx], fontsize=12)
+    axs[0].set_ylabel("Time (s)", fontsize=12)
+    axs[0].set_title(f"{title} - Time", fontsize=14)
 
     sns.barplot(
         x=keys[idx],
         y="Memory Estimate (GiB)",
         data=df,
-        ax=axs[0, 1],
+        ax=axs[1],
         color=colors[1] if len(colors) > 1 else colors[0],
     )
-    add_text_annotations(axs[0, 1], round=False, elevation=elevations[idx])
+    add_text_annotations(axs[1], round=False, elevation=elevations[idx])
 
     if ref is not None:
         if idx == 1:  # MALA steps plot
-            axs[0, 1].axhline(
+            axs[1].axhline(
                 y=ref["Memory Estimate (GiB)"],
                 color="red",
                 linestyle="--",
@@ -149,30 +149,30 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 ),
             )
         else:
-            axs[0, 1].axhline(
+            axs[1].axhline(
                 y=ref["Memory Estimate (GiB)"],
                 color="red",
                 linestyle="--",
                 label=("Reference ITS\n" + "with Mixture Prior"),
             )
-        axs[0, 1].legend()
+        axs[1].legend()
 
-    axs[0, 1].set_xlabel(keys[idx], fontsize=14)
-    axs[0, 1].set_ylabel("Memory Estimate (GiB)", fontsize=14)
-    axs[0, 1].set_title(f"{title} - Memory", fontsize=14)
+    axs[1].set_xlabel(keys[idx], fontsize=14)
+    axs[1].set_ylabel("Memory Estimate (GiB)", fontsize=14)
+    axs[1].set_title(f"{title} - Memory", fontsize=14)
 
     sns.barplot(
         x=keys[idx],
         y="Garbage Collection (%)",
         data=df,
-        ax=axs[1, 0],
+        ax=axs[2],
         color=colors[2] if len(colors) > 2 else colors[0],
     )
-    add_text_annotations(axs[1, 0], round=False, elevation=elevations[idx])
+    add_text_annotations(axs[2], round=False, elevation=elevations[idx])
 
     if ref is not None:
         if idx == 1:  # MALA steps plot
-            axs[1, 0].axhline(
+            axs[2].axhline(
                 y=ref["Garbage Collection (%)"],
                 color="red",
                 linestyle="--",
@@ -183,46 +183,46 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 ),
             )
         else:
-            axs[1, 0].axhline(
+            axs[2].axhline(
                 y=ref["Garbage Collection (%)"],
                 color="red",
                 linestyle="--",
                 label=("Reference ITS\n" + "with Mixture Prior"),
             )
-        axs[1, 0].legend()
+        axs[2].legend()
 
-    axs[1, 0].set_xlabel(keys[idx], fontsize=14)
-    axs[1, 0].set_ylabel(r"Garbage Collection (\%)", fontsize=14)
-    axs[1, 0].set_title(f"{title} - GC", fontsize=14)
+    axs[2].set_xlabel(keys[idx], fontsize=14)
+    axs[2].set_ylabel(r"Garbage Collection (\%)", fontsize=14)
+    axs[2].set_title(f"{title} - GC", fontsize=14)
 
     sns.barplot(
         x=keys[idx],
         y="Allocations",
         data=df,
-        ax=axs[1, 1],
+        ax=axs[3],
         color=colors[3] if len(colors) > 3 else colors[0],
     )
 
     if ref is not None:
         if idx == 1:  # MALA steps plot
-            axs[1, 1].axhline(
+            axs[3].axhline(
                 y=ref["Allocations"],
                 color="red",
                 linestyle="--",
                 label=("Reference ITS\n" + "with Mixture Prior"),
             )
         else:
-            axs[1, 1].axhline(
+            axs[3].axhline(
                 y=ref["Allocations"],
                 color="red",
                 linestyle="--",
                 label=("Reference ITS\n" + "with Mixture Prior"),
             )
-        axs[1, 1].legend()
+        axs[3].legend()
 
-    axs[1, 1].set_xlabel(keys[idx], fontsize=14)
-    axs[1, 1].set_ylabel("Allocations", fontsize=14)
-    axs[1, 1].set_title(f"{title} - Allocations", fontsize=14)
+    axs[3].set_xlabel(keys[idx], fontsize=14)
+    axs[3].set_ylabel("Allocations", fontsize=14)
+    axs[3].set_title(f"{title} - Allocations", fontsize=14)
 
     plt.tight_layout()
     plt.savefig(

@@ -37,8 +37,8 @@ GIF_CONFIGS = {
         "samples_per_frame": 5,
         "filename": "svhn_vanilla_ula_mixture_evolution.gif",
     },
-    # "CIFAR10_vanilla_mixture": {
-    #     "dataset": "CIFAR10",
+    # "CELEBA_vanilla_mixture": {
+    #     "dataset": "CELEBA",
     #     "method_type": "Vanilla",
     #     "sampler": "ULA",
     #     "model_type": "mixture",
@@ -46,7 +46,7 @@ GIF_CONFIGS = {
     #     "cmap": None,
     #     "epochs": list(range(1, 11)),
     #     "samples_per_frame": 6,
-    #     "filename": "cifar10_vanilla_ula_mixture_evolution.gif",
+    #     "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
     # },
 }
 

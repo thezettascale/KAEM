@@ -96,12 +96,12 @@ file_paths = [
         "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
     ),
     (
-        "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
-        "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
+        "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
+        "logs/Vanilla/CELEBA/ULA/mixture/real_images.h5",
     ),
     (
-        "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
-        "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
+        "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
+        "logs/Thermodynamic/CELEBA/ULA/mixture/real_images.h5",
     ),
 ]
 

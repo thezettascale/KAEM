@@ -6,7 +6,7 @@ export get_vision_dataset, get_text_dataset
 include("../utils.jl")
 using .Utils: pu, full_quant
 
-using MLDatasets, Embeddings, Images, ImageTransformations, HDF5
+using MLDatasets, Embeddings, Images, ImageTransformations, HDF5, Statistics
 using Flux: onehotbatch
 using HuggingFaceDatasets: load_dataset
 
@@ -73,7 +73,10 @@ function get_vision_dataset(
                 start_idx = (i - 1) * batch_size + 1
                 end_idx = min(i * batch_size, N_train+N_test)
                 data[:, :, :, start_idx:end_idx] =
-                    batch_process(celeba[start_idx:end_idx]["image"]; img_resize=img_resize) .|> full_quant
+                    batch_process(
+                        celeba[start_idx:end_idx]["image"];
+                        img_resize = img_resize,
+                    ) .|> full_quant
 
                 if i % 10 == 0
                     GC.gc()

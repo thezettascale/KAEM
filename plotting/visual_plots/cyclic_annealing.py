@@ -26,7 +26,7 @@ x = np.linspace(0, 2 * np.pi * (num_cycles + 0.5), num_param_updates + 1)
 p = initial_p + (end_p - initial_p) * 0.5 * (1 - np.cos(x))
 
 plt.figure(figsize=(10, 4))
-plt.plot(x, p)
+plt.plot(p)
 plt.xlabel("Parameter updates", fontsize=14)
 plt.ylabel("p", fontsize=14)
 plt.title("Cyclic p schedule", fontsize=14)

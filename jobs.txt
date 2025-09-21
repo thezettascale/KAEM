@@ -8,8 +8,8 @@
 # FMNIST vanilla
 # DARCY_FLOW vanilla
 CELEBA vanilla
-SVHN vanilla
-SVHN thermo
+# SVHN vanilla
+# SVHN thermo
 CELEBA thermo
 CIFAR10 vanilla
 CIFAR10 thermo

@@ -5,6 +5,7 @@ export IS_loss, MALA_loss
 using ..Utils
 
 using CUDA, KernelAbstractions, Tullio
+using NNlib: conv, meanpool
 
 perceptual_loss = parse(Bool, get(ENV, "PERCEPTUAL", "true"))
 feature_extractor = nothing
@@ -95,6 +96,54 @@ function l2_MALA(
     return ll ./ scale
 end
 
+## SSIM ##
+window_size = 11
+σ = half_quant(1.5)
+channels = 3
+C1 = half_quant(0.01^2)
+C2 = half_quant(0.03^2)
+
+radius = (window_size - 1) ÷ 2
+ax = collect((-radius):radius)
+g = exp.(-(ax .^ 2) ./ (2 * σ^2))
+g ./= sum(g)
+window = g * g' .|> half_quant
+window ./= sum(window)
+pad = (window_size - 1) ÷ 2
+
+kernel = reshape(window, window_size, window_size, 1, 1)
+kernel = repeat(kernel, 1, 1, channels, 1) |> pu
+
+function ssim(
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,4},
+)::AbstractArray{T,1} where {T<:half_quant}
+    H, W, C, B = size(x)
+    μ_x = conv(x, kernel; pad = pad)
+    μ_y = conv(x̂, kernel; pad = pad)
+    μ_x2, μ_y2, μ_xy = μ_x .^ 2, μ_y .^ 2, μ_x .* μ_y
+
+    σ_x2 = conv(x .^ 2, kernel; pad = pad) .- μ_x2
+    σ_y2 = conv(x̂ .^ 2, kernel; pad = pad) .- μ_y2
+    σ_xy = conv(x .* x̂, kernel; pad = pad) .- μ_xy
+
+    num = (2 .* μ_xy .+ C1) .* (2 .* σ_xy .+ C2)
+    den = (μ_x2 .+ μ_y2 .+ C1) .* (σ_x2 .+ σ_y2 .+ C2)
+    @tullio ll[b] := num[w, h, c, b] / den[w, h, c, b]
+    return ll ./ (H * W * C)
+end
+
+
+function ssim_MALA(
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,4},
+    ε::T,
+    scale::T,
+    perceptual_scale::T,
+)::AbstractArray{T,1} where {T<:half_quant}
+    return exp.(ssim(x, x̂) ./ scale)
+end
+
 function gramm_loss(
     x::AbstractArray{T,4},
     x̂::AbstractArray{T,4},
@@ -146,7 +195,7 @@ function MALA_loss(
 )::AbstractArray{T,1} where {T<:half_quant}
     loss_fcn = (
         SEQ ? cross_entropy_MALA :
-        (ndims(x) == 2 ? l2_PCA : (perceptual_loss ? feature_loss : l2_MALA))
+        (ndims(x) == 2 ? l2_PCA : (perceptual_loss ? feature_loss : ssim_MALA))
     )
     return loss_fcn(x, x̂, ε, scale, perceptual_scale)
 end

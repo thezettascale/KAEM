@@ -37,7 +37,7 @@ GIF_CONFIGS = {
         "samples_per_frame": 1,
         "filename": "svhn_vanilla_ula_mixture_evolution.gif",
     },
-        "SVHN_thermo_mixture": {
+    "SVHN_thermo_mixture": {
         "dataset": "SVHN",
         "method_type": "Thermodynamic",
         "sampler": "ULA",

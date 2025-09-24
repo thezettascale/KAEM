@@ -73,12 +73,18 @@ Fast and unbiased sampling can be feasible with:
   <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
 </p>
 
-When importance sampling fails, the unadjusted Langevin algorithm (ULA) can be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. When ULA and maximum likelihood fail, T-KAM can also be trained with a strategy based on Thermodynamic Integration:
+When importance sampling fails, the unadjusted Langevin algorithm (ULA) can be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. When ULA and maximum likelihood fail, T-KAM can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
 
 <p align="center">
 <img src="figures/results/individual_plots/svhn_real_reference.png" width="32%" />
   <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="32%" />
   <img src="figures/results/individual_plots/svhn_thermodynamic_ula_mixture.png" width="32%" />
+</p>
+
+<p align="center">
+<img src="figures/results/individual_plots/celeba_real_reference.png" width="32%" />
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="32%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="32%" />
 </p>
 
 ## Julia flow:

@@ -88,14 +88,14 @@ def add_text_annotations(ax, round=False, elevation=0.45):
             text,
             ha="center",
             va="bottom",
-            color="red",
+            color="lime",
             rotation=45,
-            fontsize=14,
+            fontsize=16,
         )
 
 
 for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
-    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+    fig, axs = plt.subplots(1, 4, figsize=(14, 4))
 
     colors = sns.color_palette(colours[idx], n_colors=len(df))
 
@@ -123,9 +123,9 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
             )
         axs[0].legend()
 
-    axs[0].set_xlabel(keys[idx], fontsize=12)
-    axs[0].set_ylabel("Time (s)", fontsize=12)
-    axs[0].set_title(f"{title} - Time", fontsize=14)
+    axs[0].set_xlabel(keys[idx], fontsize=16)
+    axs[0].set_ylabel("Time (s)", fontsize=16)
+    axs[0].set_title(f"{title} - Time", fontsize=16)
 
     sns.barplot(
         x=keys[idx],
@@ -157,9 +157,9 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
             )
         axs[1].legend()
 
-    axs[1].set_xlabel(keys[idx], fontsize=14)
-    axs[1].set_ylabel("Memory Estimate (GiB)", fontsize=14)
-    axs[1].set_title(f"{title} - Memory", fontsize=14)
+    axs[1].set_xlabel(keys[idx], fontsize=16)
+    axs[1].set_ylabel("Memory Estimate (GiB)", fontsize=16)
+    axs[1].set_title(f"{title} - Memory", fontsize=16)
 
     sns.barplot(
         x=keys[idx],
@@ -191,9 +191,9 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
             )
         axs[2].legend()
 
-    axs[2].set_xlabel(keys[idx], fontsize=14)
-    axs[2].set_ylabel(r"Garbage Collection (\%)", fontsize=14)
-    axs[2].set_title(f"{title} - GC", fontsize=14)
+    axs[2].set_xlabel(keys[idx], fontsize=16)
+    axs[2].set_ylabel(r"Garbage Collection (\%)", fontsize=16)
+    axs[2].set_title(f"{title} - GC", fontsize=16)
 
     sns.barplot(
         x=keys[idx],
@@ -220,9 +220,9 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
             )
         axs[3].legend()
 
-    axs[3].set_xlabel(keys[idx], fontsize=14)
-    axs[3].set_ylabel("Allocations", fontsize=14)
-    axs[3].set_title(f"{title} - Allocations", fontsize=14)
+    axs[3].set_xlabel(keys[idx], fontsize=16)
+    axs[3].set_ylabel("Allocations", fontsize=16)
+    axs[3].set_title(f"{title} - Allocations", fontsize=16)
 
     plt.tight_layout()
     plt.savefig(

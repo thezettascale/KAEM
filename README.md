@@ -68,23 +68,23 @@ Fast and unbiased sampling can be feasible with:
 - **Importance sampling** for the posterior (training)
 
 <p align="center">
-  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
-  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
-  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
+  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="25%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="25%" />
+  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="25%" />
 </p>
 
 When importance sampling fails, the unadjusted Langevin algorithm (ULA) can be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. When ULA and maximum likelihood fail, T-KAM can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
 
 <p align="center">
-<img src="figures/results/individual_plots/svhn_real_reference.png" width="32%" />
-  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="32%" />
-  <img src="figures/results/individual_plots/svhn_thermodynamic_ula_mixture.png" width="32%" />
+<img src="figures/results/individual_plots/svhn_real_reference.png" width="25%" />
+  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="25%" />
+  <img src="figures/results/individual_plots/svhn_thermodynamic_ula_mixture.png" width="25%" />
 </p>
 
 <p align="center">
-<img src="figures/results/individual_plots/celeba_real_reference.png" width="32%" />
-  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="32%" />
-  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="32%" />
+<img src="figures/results/individual_plots/celeba_real_reference.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
 </p>
 
 ## Julia flow:

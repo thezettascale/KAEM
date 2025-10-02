@@ -121,7 +121,7 @@ function init_trainer(
 
     if length(parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))) > 2
         model_type = model_type * "/deep"
-    elseif parse(Bool, retrieve(conf, "EbmModel", "mixture_model"))
+    elseif parse(Bool, retrieve(conf, "MixtureModel", "use_mixture_prior"))
         model_type = model_type * "/mixture"
     else
         model_type = model_type * "/univariate"

@@ -85,7 +85,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 
         type = autoMALA_bool ? "Thermo autoMALA" : "Thermo ULA"
         println("Posterior sampler: $type")
-    elseif model.MALA || model.prior.ula
+    elseif model.MALA || model.prior.bool_config.ula
         @reset model.loss_fcn = LangevinLoss()
         type = autoMALA_bool ? "autoMALA" : "ULA"
         println("Posterior sampler: $type")
@@ -94,7 +94,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
         println("Posterior sampler: IS")
     end
 
-    if model.prior.ula
+    if model.prior.bool_config.ula
         num_steps_prior = parse(Int, retrieve(conf, "PRIOR_LANGEVIN", "iters"))
         step_size_prior = parse(full_quant, retrieve(conf, "PRIOR_LANGEVIN", "step_size"))
 
@@ -111,7 +111,7 @@ function setup_training(model::T_KAM{T,U}) where {T<:half_quant,U<:full_quant}
 
         @reset model.log_prior = LogPriorULA(model.ε)
         println("Prior sampler: ULA")
-    elseif model.prior.mixture_model
+    elseif model.prior.bool_config.mixture_model
         @reset model.sample_prior =
             (m, n, p, sk, sl, r) ->
                 sample_mixture(m.prior, n, p.ebm, sk.ebm, sl.ebm; rng = r)

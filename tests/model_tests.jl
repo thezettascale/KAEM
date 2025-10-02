@@ -3,7 +3,7 @@ using MultivariateStats: reconstruct
 
 ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../src/utils.jl")
 using .Utils

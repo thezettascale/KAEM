@@ -66,7 +66,7 @@ function update_model_grid(
                 :,
                 end,
             ]
-        elseif model.prior.ula || model.MALA
+        elseif model.prior.bool_config.ula || model.MALA
             z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
                 :,
                 :,
@@ -87,7 +87,7 @@ function update_model_grid(
         end
 
         # Must update domain for inverse transform sampling
-        if (model.MALA || model.N_t > 1 || model.prior.ula)
+        if (model.MALA || model.N_t > 1 || model.prior.bool_config.ula)
             min_z, max_z = minimum(z), maximum(z)
             new_domain = (min_z*T(0.9), max_z*T(1.1))
             @reset model.prior.fcns_qp[1].grid_range = new_domain
@@ -98,8 +98,8 @@ function update_model_grid(
             model.prior.fcns_qp[1].spline_string == "Cheby"
         )
             Q, P = (
-                (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
-                size(z)[1:2]
+                (model.prior.bool_config.ula || model.prior.bool_config.mixture_model) ?
+                reverse(size(z)[1:2]) : size(z)[1:2]
             )
             z = reshape(z, P, Q, :)
             B = size(z, 3)
@@ -158,7 +158,7 @@ function update_model_grid(
             :,
             end,
         ]
-    elseif model.prior.ula || model.MALA
+    elseif model.prior.bool_config.ula || model.MALA
         z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
             :,
             :,

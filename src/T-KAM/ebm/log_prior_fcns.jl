@@ -24,9 +24,7 @@ function log_mix_pdf(
     S::Int,
 )::AbstractArray{T,1} where {T<:half_quant}
     @tullio lp[q, s] := exp(f[q, p, s]) * π_0[q, 1, s] * α[q, p] / Z[q, p]
-    lp = lp .+ ε
-    @tullio out[s] := log(lp[q, s])
-    return out
+    return log.(dropdims(prod(lp; dims = 1) .+ ε; dims = 1))
 end
 
 struct LogPriorULA{T<:half_quant} <: AbstractLogPrior
@@ -102,6 +100,16 @@ function (lp::LogPriorUnivariate)(
     return log_p, st_lyrnorm
 end
 
+function dotprod_attn(
+    Q::AbstractArray{T,2},
+    K::AbstractArray{T,2},
+    z::AbstractArray{T,3},
+)::AbstractArray{T,2} where {T<:half_quant}
+    scale = sqrt(T(size(z)[end]))
+    @tullio QK[q, p] := (Q[q, p] * z[q, 1, b]) * (K[q, p] * z[q, 1, b])
+    return QK ./ scale
+end
+
 function (lp::LogPriorMix)(
     z::AbstractArray{T,3},
     ebm::EbmModel{T},
@@ -127,7 +135,12 @@ function (lp::LogPriorMix)(
         The unnormalized log-probability of the mixture ebm-prior.
         The updated states of the mixture ebm-prior.
     """
-    alpha = softmax(ps.dist.α; dims = 2)
+
+    alpha =
+        ebm.bool_config.use_attention_kernel ?
+        dotprod_attn(ps.attention.Q, ps.attention.K, z) : ps.dist.α
+
+    alpha = softmax(alpha; dims = 2)
     Q, P, S = size(alpha)..., size(z)[end]
     π_0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = false)
 

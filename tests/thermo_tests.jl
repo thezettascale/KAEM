@@ -24,8 +24,8 @@ out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
 
 function test_posterior_sampling()
     Random.seed!(42)
-    dataset = randn(full_quant, 32, 32, 1, 50)
-    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    dataset = randn(full_quant, 32, 32, 3, 50)
+    model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
@@ -40,7 +40,7 @@ function test_posterior_sampling()
         rng = Random.default_rng(),
     )
 
-    if model.prior.mixture_model || model.prior.ula
+    if model.prior.bool_config.mixture_model || model.prior.bool_config.ula
         @test size(z_posterior) == (10, 1, 10, 4)
     else
         @test size(z_posterior) == (10, 5, 10, 4)

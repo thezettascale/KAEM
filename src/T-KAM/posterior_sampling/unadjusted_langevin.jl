@@ -79,7 +79,7 @@ function (sampler::ULA_sampler)(
     """
     # Initialize from prior
     z_hq = begin
-        if model.prior.ula && sampler.prior_sampling_bool
+        if model.prior.bool_config.ula && sampler.prior_sampling_bool
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
             pu(z)
         else
@@ -117,7 +117,7 @@ function (sampler::ULA_sampler)(
 
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
+    log_u_swap = log.(rand(rng, U, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
     swap_replica_idxs = num_temps > 1 ? rand(rng, 1:(num_temps-1), sampler.N) : nothing
 

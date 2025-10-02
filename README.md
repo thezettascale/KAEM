@@ -37,7 +37,7 @@ make help
 Edit the config files:
 
 ```bash
-vim config/nist_config.ini
+neovim config/nist_config.ini
 ```
 
 For individual experiments run:

@@ -70,10 +70,11 @@ function select_step_size(
     geq_bool = U.(log_r .>= log_b)
 
     while !isempty(active_chains)
-
         η_init[active_chains] = η_init[active_chains] .* (Δη .^ δ[active_chains])
-
-        x_active = model.lkhood.SEQ ? x[:, :, active_chains] : x[:, :, :, active_chains]
+        x_active = (
+            model.lkhood.SEQ ? x[:, :, active_chains] :
+            (model.use_pca ? x[:, active_chains] : x[:, :, :, active_chains])
+        )
         ẑ_active, logpos_ẑ_active, ∇ẑ_active, p̂_active, log_r_active, st_lux = leapfrog(
             z[:, :, active_chains],
             ∇z[:, :, active_chains],
@@ -134,7 +135,6 @@ function autoMALA_step(
     Δη::U,
     η_min::U,
     η_max::U,
-    ε::U,
 )::Tuple{
     AbstractArray{U,3},
     AbstractArray{U,1},
@@ -185,7 +185,7 @@ function autoMALA_step(
         η_max = η_max,
     )
 
-    reversible = check_reversibility(z_before, z_rev, η_before, η_prime; tol = ε)
+    reversible = check_reversibility(z_before, z_rev, η_before, η_prime; tol = U(model.ε))
     return ẑ, η, η_prime, reversible, log_r, st_lux
 end
 

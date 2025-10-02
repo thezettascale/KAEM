@@ -94,7 +94,7 @@ function init_SEQ_Generator(
     )
 end
 
-function scaled_dot_product_attention(
+function scaled_dotprod_attn(
     Q::AbstractArray{T,3},
     K::AbstractArray{T,3},
     V::AbstractArray{T,3},
@@ -147,7 +147,7 @@ function (gen::SEQ_Generator)(
         V, st_new = Lux.apply(gen.attention[3], z, ps.attention[:V], st_lux.attention[:V])
         @ignore_derivatives @reset st_lux.attention[:V] = st_new
 
-        attn = scaled_dot_product_attention(Q, K, V, gen.d_model)
+        attn = scaled_dotprod_attn(Q, K, V, gen.d_model)
         z = z + attn
 
         # Feed forward

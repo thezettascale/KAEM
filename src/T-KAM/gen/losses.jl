@@ -4,15 +4,16 @@ export IS_loss, MALA_loss
 
 using ..Utils
 
-using CUDA, KernelAbstractions, Tullio
+using CUDA, KernelAbstractions, Tullio, Statistics
+using NNlib: conv
 
-perceptual_loss = parse(Bool, get(ENV, "PERCEPTUAL", "true"))
+perceptual_loss = parse(Bool, get(ENV, "PERCEPTUAL", "false"))
 feature_extractor = nothing
 style_lyrs = [2, 5, 9, 12]
 content_lyrs = [9]
 if perceptual_loss
     using Metalhead: VGG
-    feature_extractor = VGG(16; pretrain = true).layers[1][1:12] |> pu # Conv layers only, (rest is classifier)
+    feature_extractor = VGG(16; pretrain = true).layers[1][1:12] |> hq |> pu # Conv layers only, (rest is classifier)
 end
 
 
@@ -93,6 +94,45 @@ function l2_MALA(
 )::AbstractArray{T,1} where {T<:half_quant}
     @tullio ll[b] := - (x[w, h, c, b] - x̂[w, h, c, b]) ^ 2
     return ll ./ scale
+end
+
+# Gaussian SSIM kernel
+const SSIM_KERNEL =
+    [
+        0.00102838008447911,
+        0.007598758135239185,
+        0.03600077212843083,
+        0.10936068950970002,
+        0.2130055377112537,
+        0.26601172486179436,
+        0.2130055377112537,
+        0.10936068950970002,
+        0.03600077212843083,
+        0.007598758135239185,
+        0.00102838008447911,
+    ] .|> half_quant
+const C₁ = 0.01 ^ 2 |> half_quant
+const C₂ = 0.03 ^ 2 |> half_quant
+const kernel = repeat(reshape(SSIM_KERNEL*SSIM_KERNEL', 11, 11, 1, 1), 1, 1, 3, 1) |> pu
+
+function ssim_MALA(
+    x::AbstractArray{T,4},
+    x̂::AbstractArray{T,4},
+    ε::T,
+    scale::T,
+    perceptual_scale::T,
+)::AbstractArray{T,1} where {T<:half_quant}
+    μx = conv(x, kernel)
+    μy = conv(x̂, kernel)
+    μx² = μx .^ 2
+    μy² = μy .^ 2
+    μxy = μx .* μy
+    σx² = conv(x .^ 2, kernel) .- μx²
+    σy² = conv(x̂ .^ 2, kernel) .- μy²
+    σxy = conv(x .* x̂, kernel) .- μxy
+
+    ssim_map = @. (2μxy + C₁)*(2σxy + C₂)/((μx² + μy² + C₁)*(σx² + σy² + C₂))
+    return dropdims(mean(ssim_map, dims = (1, 2, 3)), dims = (1, 2, 3)) ./ perceptual_scale
 end
 
 function gramm_loss(

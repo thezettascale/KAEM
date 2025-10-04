@@ -16,7 +16,7 @@ using .T_KAM_model
 include("../src/T-KAM/model_setup.jl")
 using .ModelSetup
 
-conf = ConfParse("config/svhn_config.ini")
+conf = ConfParse("config/celeba_config.ini")
 parse_conf!(conf)
 
 rng = Random.MersenneTwister(1)
@@ -27,10 +27,11 @@ commit!(conf, "TRAINING", "verbose", "false")
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 
 dataset, img_size = get_vision_dataset(
-    "SVHN",
+    "CELEBA",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
+    img_resize = (64, 64),
     cnn = true,
 )[1:2]
 

@@ -16,7 +16,7 @@ using .T_KAM_model
 include("../src/T-KAM/model_setup.jl")
 using .ModelSetup
 
-conf = ConfParse("config/svhn_pang_config.ini")
+conf = ConfParse("config/celeba_pang_config.ini")
 parse_conf!(conf)
 
 rng = Random.MersenneTwister(1)
@@ -28,11 +28,12 @@ commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 
 dataset, img_size = get_vision_dataset(
-    "SVHN",
+    "CELEBAPANG",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
     cnn = true,
+    img_resize = (64, 64),
 )[1:2]
 
 function setup_model(N_l)

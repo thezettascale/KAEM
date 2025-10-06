@@ -21,9 +21,9 @@ plt.rcParams.update(
 )
 
 DATASETS = {
-    "DARCY_FLOW": {"grid_size": 20, "cmap": "viridis"},
-    "MNIST": {"grid_size": 20, "cmap": "gray"},
-    "FMNIST": {"grid_size": 20, "cmap": "gray"},
+    "DARCY_FLOW": {"grid_size": 12, "cmap": "viridis"},
+    "MNIST": {"grid_size": 12, "cmap": "gray"},
+    "FMNIST": {"grid_size": 12, "cmap": "gray"},
 }
 
 PRIORS = ["uniform", "lognormal", "gaussian", "ebm"]

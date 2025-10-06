@@ -59,6 +59,17 @@ GIF_CONFIGS = {
         "samples_per_frame": 1,
         "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
     },
+        "CELEBA_thermo_mixture": {
+        "dataset": "CELEBA",
+        "method_type": "Thermodynamic",
+        "sampler": "ULA",
+        "model_type": "mixture",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(0, 41, 2)),
+        "samples_per_frame": 1,
+        "filename": "CELEBA_thermo_ula_mixture_evolution.gif",
+    },
 }
 
 output_dir = "figures/results/gif_evolution"

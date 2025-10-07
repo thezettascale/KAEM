@@ -7,10 +7,10 @@
 # MNIST vanilla
 # FMNIST vanilla
 # DARCY_FLOW vanilla
-SVHN vanilla
+# SVHN vanilla
 # CELEBA vanilla
-SVHN thermo
-CELEBA thermo
+# SVHN thermo
+# CELEBA thermo
 CIFAR10 vanilla
 CIFAR10 thermo
 # SVHNPANG vanilla

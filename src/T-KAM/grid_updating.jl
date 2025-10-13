@@ -74,16 +74,22 @@ function update_model_grid(
                 1,
             ]
         else
-            z = first(
-                model.sample_prior(
-                    model,
-                    model.grid_updates_samples,
-                    ps,
-                    st_kan,
-                    st_lux,
-                    rng,
-                ),
-            )
+            # z = first(
+            #     model.sample_prior(
+            #         model,
+            #         model.grid_updates_samples,
+            #         ps,
+            #         st_kan,
+            #         st_lux,
+            #         rng,
+            #     ),
+            # )
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+                :,
+                :,
+                :,
+                1,
+            ] # For domain updating: use ULA to explore beyond prior init domain.
         end
 
         # Must update domain for inverse transform sampling
@@ -166,9 +172,15 @@ function update_model_grid(
             1,
         ]
     else
-        z = first(
-            model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng),
-        )
+        # z = first(
+        #     model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng),
+        # )
+        z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+            :,
+            :,
+            :,
+            1,
+        ] # For domain updating: use ULA to explore beyond prior init domain.
     end
 
     z = dropdims(sum(z; dims = 2); dims = 2)

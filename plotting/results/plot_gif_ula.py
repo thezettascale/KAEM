@@ -59,7 +59,7 @@ GIF_CONFIGS = {
     #     "samples_per_frame": 1,
     #     "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
     # },
-        "CELEBA_thermo_mixture": {
+    "CELEBA_thermo_mixture": {
         "dataset": "CELEBA",
         "method_type": "Thermodynamic",
         "sampler": "ULA",

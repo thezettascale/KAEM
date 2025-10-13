@@ -4,7 +4,7 @@ T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.1416
 
 ## Brief:
 
-The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator; which can be swapped out or combined to generate different data modalities. 
+The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator; which can be swapped/combined to generate different data modalities. 
 
 It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on conditions).
 
@@ -28,7 +28,7 @@ And when ULA and maximum likelihood fail, it can also be trained with a variance
   <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
 </p>
 
-Unlike diffusion and score-based models, annealing is more interpretable, entirely parallelizable, and only used for posterior expectations, (thus preserving inference speed). The trade-off is expressivity and diversity.
+Unlike diffusion and score-based models, annealing is more interpretable, fully parallelizable, and only applied to posterior expectations, (thus preserving inference speed). The main trade-off is expressivity, though this may improve with scaling. And unlike denoising, which scales sequentially, annealing can scale by adding more temperatures in parallel.
 
 ## Setup:
 

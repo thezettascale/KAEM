@@ -62,6 +62,7 @@ function (lp::LogPriorUnivariate)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lyrnorm::NamedTuple;
+    ula::Bool = false,
 )::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the ebm-prior.
@@ -88,7 +89,7 @@ function (lp::LogPriorUnivariate)(
     # Pre-allocate
     log_p = zeros(T, S) |> pu
     log_π0 =
-        lp.normalize ?
+        lp.normalize && !ula ?
         log_π0 .- log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) : log_π0
 
     @inbounds @simd for q = 1:Q
@@ -115,7 +116,8 @@ function (lp::LogPriorMix)(
     ebm::EbmModel{T},
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
-    st_lyrnorm::NamedTuple,
+    st_lyrnorm::NamedTuple;
+    ula::Bool = false,
 )::Tuple{AbstractArray{T,1},NamedTuple} where {T<:half_quant}
     """
     The log-probability of the mixture ebm-prior.
@@ -147,7 +149,7 @@ function (lp::LogPriorMix)(
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     Z =
-        lp.normalize ?
+        lp.normalize && !ula ?
         dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), dims = 3), dims = 3) :
         ones(T, Q, P) |> pu
 

@@ -13,7 +13,7 @@ Fast and unbiased sampling can be feasible with:
 - **Importance sampling** for the posterior (training)
 
 <p align="center">
-  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
+  <img src="figures/results/individual_plots/mnist_ebm_rbf.png" width="32%" />
   <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
   <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
 </p>

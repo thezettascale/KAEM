@@ -13,9 +13,9 @@ Fast and unbiased sampling can be feasible with:
 - **Importance sampling** for the posterior (training)
 
 <p align="center">
-  <img src="figures/results/individual_plots/mnist_ebm_rbf.png" width="32%" />
-  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
-  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
+  <img src="figures/results/individual_plots/mnist_ebm_rbf.png" width="25%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="25%" />
+  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="25%" />
 </p>
 
 When importance sampling fails (WIP), the unadjusted Langevin algorithm (ULA) may be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. 
@@ -23,9 +23,9 @@ When importance sampling fails (WIP), the unadjusted Langevin algorithm (ULA) ma
 And when ULA and maximum likelihood fail, it can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
 
 <p align="center">
-<img src="figures/results/individual_plots/celeba_real_reference.png" width="32%" />
-  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="32%" />
-  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="32%" />
+<img src="figures/results/individual_plots/celeba_real_reference.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
 </p>
 
 Unlike diffusion and score-based models, annealing is more interpretable, entirely parallelizable, and only used for posterior expectations, (thus preserving inference speed). The trade-off is expressivity and diversity.

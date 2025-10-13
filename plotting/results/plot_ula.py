@@ -76,7 +76,7 @@ def select_best_samples_fast(generated_images, num_samples):
         # 3. Avoid images with too little dynamic range
         dynamic_range = np.max(gray) - np.min(gray)
 
-        quality_score = variance * 0.2 + edge_content * 0.0 + dynamic_range * 0.7
+        quality_score = variance * 0.0 + edge_content * 0.0 + dynamic_range * 0.0
         quality_scores.append(quality_score)
 
     best_indices = np.argsort(quality_scores)[-num_samples:][

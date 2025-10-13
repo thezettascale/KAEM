@@ -2,6 +2,34 @@
 
 T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
 
+## Brief:
+
+The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator; which can be swapped out or combined to generate different data modalities. 
+
+It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on conditions).
+
+Fast and unbiased sampling can be feasible with:
+- **Inverse transform sampling** from the prior (inference)
+- **Importance sampling** for the posterior (training)
+
+<p align="center">
+  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="32%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="32%" />
+  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="32%" />
+</p>
+
+When importance sampling fails (WIP), the unadjusted Langevin algorithm (ULA) may be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. 
+
+And when ULA and maximum likelihood fail, it can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
+
+<p align="center">
+<img src="figures/results/individual_plots/celeba_real_reference.png" width="32%" />
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="32%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="32%" />
+</p>
+
+Unlike diffusion and score-based models, annealing is more interpretable, entirely parallelizable, and only used for posterior expectations, (thus preserving inference speed). The trade-off is expressivity and diversity.
+
 ## Setup:
 
 Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup). Choose your favourite installer and run: 
@@ -37,7 +65,7 @@ make help
 Edit the config files:
 
 ```bash
-neovim config/nist_config.ini
+nvim config/nist_config.ini
 ```
 
 For individual experiments run:
@@ -49,7 +77,7 @@ make train-thermo DATASET=SVHN
 
 To automatically run experiments one after the other:
 ```bash
-vim jobs.txt # Schedule jobs
+nvim jobs.txt # Schedule jobs
 make train-sequential CONFIG=jobs.txt
 ```
 
@@ -58,34 +86,6 @@ For benchmarking run:
 ```bash
 make bench
 ```
-
-## How to sample
-
-T-KAM is uniquely structured to be able to work without an encoder, score-based approximations, and even MCMC (depending on conditions).
-
-Fast and unbiased sampling can be feasible with:
-- **Inverse transform sampling** from the prior (inference)
-- **Importance sampling** for the posterior (training)
-
-<p align="center">
-  <img src="figures/results/individual_plots/mnist_ebm_fft.png" width="25%" />
-  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="25%" />
-  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="25%" />
-</p>
-
-When importance sampling fails, the unadjusted Langevin algorithm (ULA) can be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. When ULA and maximum likelihood fail, T-KAM can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
-
-<p align="center">
-<img src="figures/results/individual_plots/svhn_real_reference.png" width="25%" />
-  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="25%" />
-  <img src="figures/results/individual_plots/svhn_thermodynamic_ula_mixture.png" width="25%" />
-</p>
-
-<p align="center">
-<img src="figures/results/individual_plots/celeba_real_reference.png" width="25%" />
-  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="25%" />
-  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
-</p>
 
 ## Julia flow:
 
@@ -101,7 +101,7 @@ t = init_trainer(
       rng, 
       conf, # See config directory for examples
       dataset_name; 
-      img_resize = (16,16), # Downsize for prototyping
+      img_resize = (16,16), # Resize for prototyping
       file_loc = loc
 )
 train!(t)
@@ -130,6 +130,7 @@ model = init_T_KAM(
 # Parse config to setup sampling and training criterions
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
+
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
 ps_hq = half_quant.(ps) # Mixed precision will return NaN train loss, but grads will be defined
 

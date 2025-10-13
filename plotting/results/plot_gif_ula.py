@@ -26,39 +26,39 @@ plt.rcParams.update(
 )
 
 GIF_CONFIGS = {
-    "SVHN_vanilla_mixture": {
-        "dataset": "SVHN",
-        "method_type": "Vanilla",
-        "sampler": "ULA",
-        "model_type": "mixture",
-        "grid_size": 10,
-        "cmap": None,
-        "epochs": list(range(0, 41, 2)),
-        "samples_per_frame": 1,
-        "filename": "svhn_vanilla_ula_mixture_evolution.gif",
-    },
-    "SVHN_thermo_mixture": {
-        "dataset": "SVHN",
-        "method_type": "Thermodynamic",
-        "sampler": "ULA",
-        "model_type": "mixture",
-        "grid_size": 10,
-        "cmap": None,
-        "epochs": list(range(0, 41, 2)),
-        "samples_per_frame": 1,
-        "filename": "svhn_thermo_ula_mixture_evolution.gif",
-    },
-    "CELEBA_vanilla_mixture": {
-        "dataset": "CELEBA",
-        "method_type": "Vanilla",
-        "sampler": "ULA",
-        "model_type": "mixture",
-        "grid_size": 10,
-        "cmap": None,
-        "epochs": list(range(0, 41, 2)),
-        "samples_per_frame": 1,
-        "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
-    },
+    # "SVHN_vanilla_mixture": {
+    #     "dataset": "SVHN",
+    #     "method_type": "Vanilla",
+    #     "sampler": "ULA",
+    #     "model_type": "mixture",
+    #     "grid_size": 10,
+    #     "cmap": None,
+    #     "epochs": list(range(0, 41, 2)),
+    #     "samples_per_frame": 1,
+    #     "filename": "svhn_vanilla_ula_mixture_evolution.gif",
+    # },
+    # "SVHN_thermo_mixture": {
+    #     "dataset": "SVHN",
+    #     "method_type": "Thermodynamic",
+    #     "sampler": "ULA",
+    #     "model_type": "mixture",
+    #     "grid_size": 10,
+    #     "cmap": None,
+    #     "epochs": list(range(0, 41, 2)),
+    #     "samples_per_frame": 1,
+    #     "filename": "svhn_thermo_ula_mixture_evolution.gif",
+    # },
+    # "CELEBA_vanilla_mixture": {
+    #     "dataset": "CELEBA",
+    #     "method_type": "Vanilla",
+    #     "sampler": "ULA",
+    #     "model_type": "mixture",
+    #     "grid_size": 10,
+    #     "cmap": None,
+    #     "epochs": list(range(0, 41, 2)),
+    #     "samples_per_frame": 1,
+    #     "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
+    # },
         "CELEBA_thermo_mixture": {
         "dataset": "CELEBA",
         "method_type": "Thermodynamic",
@@ -185,7 +185,7 @@ def create_evolution_gif(config):
     imageio.mimsave(
         output_path,
         frames,
-        duration=150,
+        duration=300,
     )
 
     total_frames = len(frames)

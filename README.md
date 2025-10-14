@@ -4,11 +4,11 @@ T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.1416
 
 ## Brief:
 
-The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator; which can be swapped/combined to generate different data modalities. 
+The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. 
 
-It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on conditions).
+It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on the dataset).
 
-Fast and unbiased sampling can be feasible with:
+Fast (single forward pass) and unbiased sampling can be feasible with:
 - **Inverse transform sampling** from the prior (inference)
 - **Importance sampling** for the posterior (training)
 
@@ -18,7 +18,7 @@ Fast and unbiased sampling can be feasible with:
   <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="25%" />
 </p>
 
-When importance sampling fails (WIP), the unadjusted Langevin algorithm (ULA) may be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. 
+When importance sampling fails, the unadjusted Langevin algorithm (ULA) may be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. 
 
 And when ULA and maximum likelihood fail, it can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
 

@@ -1,6 +1,34 @@
 # T-KAM 
 
-T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167) to be explained at a later date.
+T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
+
+## Brief:
+
+The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. 
+
+It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on the dataset).
+
+Fast (single forward pass) and unbiased sampling can be feasible with:
+- **Inverse transform sampling** from the prior (inference)
+- **Importance sampling** for the posterior (training)
+
+<p align="center">
+  <img src="figures/results/individual_plots/mnist_ebm_rbf.png" width="25%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="25%" />
+  <img src="figures/results/individual_plots/darcy_flow_gaussian_fft.png" width="25%" />
+</p>
+
+When importance sampling fails, the unadjusted Langevin algorithm (ULA) may be used for posterior sampling instead. Prior sampling can still proceed by inverse transform to preserve fast inference post-training. 
+
+And when ULA and maximum likelihood fail, it can also be trained with a variance-reduction strategy based on Thermodynamic Integration:
+
+<p align="center">
+<img src="figures/results/individual_plots/celeba_real_reference.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="25%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
+</p>
+
+Unlike diffusion and score-based models, annealing is more interpretable, fully parallelizable, and only applied to posterior expectations, (thus preserving inference speed). The main trade-off is expressivity, though this may improve with scaling. And unlike denoising, which scales sequentially, annealing can scale by adding more temperatures in parallel.
 
 ## Setup:
 
@@ -37,7 +65,7 @@ make help
 Edit the config files:
 
 ```bash
-vim config/nist_config.ini
+nvim config/nist_config.ini
 ```
 
 For individual experiments run:
@@ -49,7 +77,7 @@ make train-thermo DATASET=SVHN
 
 To automatically run experiments one after the other:
 ```bash
-vim jobs.txt # Schedule jobs
+nvim jobs.txt # Schedule jobs
 make train-sequential CONFIG=jobs.txt
 ```
 
@@ -58,14 +86,6 @@ For benchmarking run:
 ```bash
 make bench
 ```
-
-## Performance tuning and dev preferences
-
-| Stack                                                                    | Reason                                                                                                                                                                                                                                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                    |
-|--------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Julia/Lux.jl](https://github.com/LuxDL/Lux.jl)                                                             | Adopted instead of PyTorch or JAX due to ‧₊˚✩♡ [substantial personal inclination](https://www.linkedin.com/posts/prithvi-raj-eng_i-moved-from-pytorch-to-jax-to-julia-a-activity-7330842135534919681-9XJF?utm_source=share&utm_medium=member_desktop&rcm=ACoAADUTwcMBFnTsuwtIbYGuiSVLmSAnTVDeOQQ) ₊˚✩♡ | Explicitly parameterised, and all functions are strongly typed.                                                                                                                                                                                                                                                                                                                                              |
-| [Enzyme.jl](https://enzyme.mit.edu/julia/stable/) for CPU                  | Switched from [Zygote.jl](https://github.com/FluxML/Zygote.jl). Enzyme provides much more efficient reverse autodiff of statically analyzable LLVM.                                                                                                                                                    | The next step is [Reactant.jl](https://github.com/EnzymeAD/Reactant.jl) for GPU support, which first compiles into MLIR. Autodiff on GPU is currently still reliant on Zygote, since Enzyme isn't fully workable with native CUDA yet.                                                                                                                                                                                                                                                                                                                   |
-| [ParallelStencils.jl](https://github.com/omlins/ParallelStencil.jl) | In place of broadcasts, Threads, and CUDA, this enables extraordinarily optimised stencil computations, agnostic to the device in use.                                                                                                                                                                           | Any files involved in autodiff have two counterparts; either using stencil loops for CPU parallelization or [Tullio.jl](https://github.com/mcabbott/Tullio.jl) for GPU kernels. CPU parallelization can actually outperform GPU kernels for the smaller experiments involving B-splines, inverse transform sampling, or resampling, since search and recursion can cause thread divergence on the GPU. |
 
 ## Julia flow:
 
@@ -81,7 +101,7 @@ t = init_trainer(
       rng, 
       conf, # See config directory for examples
       dataset_name; 
-      img_resize = (16,16), 
+      img_resize = (16,16), # Resize for prototyping
       file_loc = loc
 )
 train!(t)
@@ -110,8 +130,9 @@ model = init_T_KAM(
 # Parse config to setup sampling and training criterions
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
+
 model, ps, st_kan, st_lux = prep_model(model, x; rng = rng) 
-ps_hq = half_quant.(ps) #Mixed precision will return NaN train loss, but grads will be defined
+ps_hq = half_quant.(ps) # Mixed precision will return NaN train loss, but grads will be defined
 
 grads = Enzyme.make_zero(ps_hq) # or zero(ps_hq)
 loss, grads, st_ebm, st_gen = model.loss_fcn(

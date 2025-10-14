@@ -24,6 +24,9 @@ using .Quadrature
 struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     contrastive_div::Bool
+    ula::Bool
+    mixture_model::Bool
+    use_attention_kernel::Bool
 end
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
@@ -40,8 +43,6 @@ struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
     nodes::AbstractArray{T}
     weights::AbstractArray{T}
     quad_type::AbstractString
-    ula::Bool
-    mixture_model::Bool
     λ::T
     prior_domain::Tuple{T,T}
 end
@@ -69,13 +70,13 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     τ_trainable = parse(Bool, retrieve(conf, "EbmModel", "τ_trainable"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     τ_trainable = spline_function == "B-spline" ? false : τ_trainable
-    reg = parse(half_quant, retrieve(conf, "EbmModel", "λ_reg"))
+    reg = parse(half_quant, retrieve(conf, "MixtureModel", "λ_reg"))
 
     P, Q = first(widths), last(widths)
 
     grid_range = parse.(half_quant, retrieve(conf, "EbmModel", "grid_range"))
     prior_type = retrieve(conf, "EbmModel", "π_0")
-    mixture_model = parse(Bool, retrieve(conf, "EbmModel", "mixture_model"))
+    mixture_model = parse(Bool, retrieve(conf, "MixtureModel", "use_mixture_prior"))
     widths = mixture_model ? reverse(widths) : widths
 
     prior_domain = Dict(
@@ -139,11 +140,19 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     weights = half_quant.(weights')
 
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
+    use_attention_kernel =
+        parse(Bool, retrieve(conf, "MixtureModel", "use_attention_kernel"))
 
     return EbmModel(
         functions,
         layernorms,
-        BoolConfig(layernorm_bool, contrastive_div),
+        BoolConfig(
+            layernorm_bool,
+            contrastive_div,
+            ula,
+            mixture_model,
+            use_attention_kernel,
+        ),
         length(widths)-1,
         prior_type,
         ref_initializer(eps),
@@ -154,8 +163,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         nodes,
         weights,
         quad_type,
-        ula,
-        mixture_model,
         reg,
         Tuple(prior_domain),
     )
@@ -181,7 +188,7 @@ function (ebm::EbmModel{T,U})(
         st: The updated states of the ebm-prior.
     """
 
-    mid_size = !ebm.mixture_model ? ebm.p_size : ebm.q_size
+    mid_size = !ebm.bool_config.mixture_model ? ebm.p_size : ebm.q_size
 
     for i = 1:ebm.depth
         z, st_lyrnorm_new =
@@ -198,11 +205,11 @@ function (ebm::EbmModel{T,U})(
 
         z = Lux.apply(ebm.fcns_qp[i], z, ps.fcn[symbol_map[i]], st_kan[symbol_map[i]])
         z =
-            (i == 1 && !ebm.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
+            (i == 1 && !ebm.bool_config.ula) ? reshape(z, size(z, 2), mid_size*size(z, 3)) :
             dropdims(sum(z, dims = 1); dims = 1)
     end
 
-    z = ebm.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
+    z = ebm.bool_config.ula ? z : reshape(z, ebm.q_size, ebm.p_size, :)
     return z, st_lyrnorm
 end
 
@@ -226,11 +233,26 @@ function Lux.initialparameters(
               zeros(half_quant, prior.p_size) : [zero(T)],
         π_σ = prior.prior_type == "learnable_gaussian" ?
               ones(half_quant, prior.p_size) : [zero(T)],
-        α = prior.mixture_model ? glorot_uniform(rng, U, prior.q_size, prior.p_size) :
-            [zero(T)],
+        α = !prior.bool_config.mixture_model ? [zero(T)] :
+            (
+            !prior.bool_config.use_attention_kernel ?
+            glorot_uniform(rng, U, prior.q_size, prior.p_size) : [zero(T)]
+        ),
     )
 
-    return (fcn = fcn_ps, dist = prior_ps, layernorm = layernorm_ps)
+    attention_ps = (
+        Q = prior.bool_config.use_attention_kernel ?
+            glorot_normal(rng, U, prior.q_size, prior.p_size) : [zero(T)],
+        K = prior.bool_config.use_attention_kernel ?
+            glorot_normal(rng, U, prior.q_size, prior.p_size) : [zero(T)],
+    )
+
+    return (
+        fcn = fcn_ps,
+        dist = prior_ps,
+        layernorm = layernorm_ps,
+        attention = attention_ps,
+    )
 end
 
 function Lux.initialstates(

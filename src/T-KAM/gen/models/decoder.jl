@@ -5,16 +5,9 @@ export SEQ_Generator, init_SEQ_Generator
 using CUDA, Lux, LuxCUDA, ComponentArrays, Accessors, Random, ConfParser
 using NNlib: softmax, gelu
 using ChainRules.ChainRulesCore: @ignore_derivatives
+using KernelAbstractions, Tullio
 
 using ..Utils
-
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("attention_gpu.jl")
-    using .Attention
-else
-    include("attention.jl")
-    using .Attention
-end
 
 struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
@@ -101,6 +94,22 @@ function init_SEQ_Generator(
     )
 end
 
+function scaled_dotprod_attn(
+    Q::AbstractArray{T,3},
+    K::AbstractArray{T,3},
+    V::AbstractArray{T,3},
+    d_model::Int,
+)::AbstractArray{T,3} where {T<:half_quant}
+    D, L, B = size(Q)
+    I = size(K, 2)
+    scale = sqrt(T(d_model))
+
+    @tullio QK[t, i, b] := Q[d, t, b] * K[d, i, b]
+    QK = softmax(QK, dims = 2)
+    @tullio attn[d, t, b] := QK[t, i, b] * V[d, i, b]
+    return attn
+end
+
 function (gen::SEQ_Generator)(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
@@ -138,7 +147,7 @@ function (gen::SEQ_Generator)(
         V, st_new = Lux.apply(gen.attention[3], z, ps.attention[:V], st_lux.attention[:V])
         @ignore_derivatives @reset st_lux.attention[:V] = st_new
 
-        attn = scaled_dot_product_attention(Q, K, V, gen.d_model)
+        attn = scaled_dotprod_attn(Q, K, V, gen.d_model)
         z = z + attn
 
         # Feed forward

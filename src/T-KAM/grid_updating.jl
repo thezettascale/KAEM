@@ -18,7 +18,7 @@ function update_model_grid(
     ps::ComponentArray{T},
     st_kan::ComponentArray{T},
     st_lux::NamedTuple;
-    temps::AbstractArray{T} = [one(T)],
+    train_idx::Int = 1,
     rng::AbstractRNG = Random.default_rng(),
 )::Tuple{
     Any,
@@ -49,6 +49,7 @@ function update_model_grid(
     if model.update_prior_grid
 
         if model.N_t > 1
+            temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     model,
@@ -56,7 +57,7 @@ function update_model_grid(
                     st_kan,
                     st_lux,
                     x;
-                    temps = temps[2:end],
+                    temps = temps,
                     rng = rng,
                 ),
             )[
@@ -65,7 +66,7 @@ function update_model_grid(
                 :,
                 end,
             ]
-        elseif model.prior.ula || model.MALA
+        elseif model.prior.bool_config.ula || model.MALA
             z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
                 :,
                 :,
@@ -73,20 +74,26 @@ function update_model_grid(
                 1,
             ]
         else
-            z = first(
-                model.sample_prior(
-                    model,
-                    model.grid_updates_samples,
-                    ps,
-                    st_kan,
-                    st_lux,
-                    rng,
-                ),
-            )
+            # z = first(
+            #     model.sample_prior(
+            #         model,
+            #         model.grid_updates_samples,
+            #         ps,
+            #         st_kan,
+            #         st_lux,
+            #         rng,
+            #     ),
+            # )
+            z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+                :,
+                :,
+                :,
+                1,
+            ] # For domain updating: use ULA to explore beyond prior init domain.
         end
 
         # Must update domain for inverse transform sampling
-        if (model.MALA || model.N_t > 1 || model.prior.ula)
+        if (model.MALA || model.N_t > 1 || model.prior.bool_config.ula)
             min_z, max_z = minimum(z), maximum(z)
             new_domain = (min_z*T(0.9), max_z*T(1.1))
             @reset model.prior.fcns_qp[1].grid_range = new_domain
@@ -97,8 +104,8 @@ function update_model_grid(
             model.prior.fcns_qp[1].spline_string == "Cheby"
         )
             Q, P = (
-                (model.prior.ula || model.prior.mixture_model) ? reverse(size(z)[1:2]) :
-                size(z)[1:2]
+                (model.prior.bool_config.ula || model.prior.bool_config.mixture_model) ?
+                reverse(size(z)[1:2]) : size(z)[1:2]
             )
             z = reshape(z, P, Q, :)
             B = size(z, 3)
@@ -148,23 +155,16 @@ function update_model_grid(
         return model, T.(ps), st_kan, st_lux
 
     if model.N_t > 1
+        temps = collect(T, [(k / model.N_t)^model.p[train_idx] for k = 1:model.N_t])
         z = first(
-            model.posterior_sampler(
-                model,
-                ps,
-                st_kan,
-                st_lux,
-                x;
-                temps = temps[2:end],
-                rng = rng,
-            ),
+            model.posterior_sampler(model, ps, st_kan, st_lux, x; temps = temps, rng = rng),
         )[
             :,
             :,
             :,
             end,
         ]
-    elseif model.prior.ula || model.MALA
+    elseif model.prior.bool_config.ula || model.MALA
         z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
             :,
             :,
@@ -172,9 +172,15 @@ function update_model_grid(
             1,
         ]
     else
-        z = first(
-            model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng),
-        )
+        # z = first(
+        #     model.sample_prior(model, model.grid_updates_samples, ps, st_kan, st_lux, rng),
+        # )
+        z = first(model.posterior_sampler(model, ps, st_kan, st_lux, x; rng = rng))[
+            :,
+            :,
+            :,
+            1,
+        ] # For domain updating: use ULA to explore beyond prior init domain.
     end
 
     z = dropdims(sum(z; dims = 2); dims = 2)

@@ -10,6 +10,7 @@ using ..Utils
 struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     batchnorm::Bool
+    skip_bool::Bool
 end
 
 struct CNN_Generator <: Lux.AbstractLuxLayer
@@ -17,6 +18,86 @@ struct CNN_Generator <: Lux.AbstractLuxLayer
     Φ_fcns::Vector{Lux.ConvTranspose}
     batchnorms::Vector{Lux.BatchNorm}
     bool_config::BoolConfig
+end
+
+function upsample_to_match(
+    input_tensor::AbstractArray{T,4},
+    target_tensor::AbstractArray{T,4},
+)::AbstractArray{T,4} where {T<:half_quant}
+    input_h, input_w = size(input_tensor, 1), size(input_tensor, 2)
+    target_h, target_w = size(target_tensor, 1), size(target_tensor, 2)
+    h_factor = div(target_h, input_h)
+    w_factor = div(target_w, input_w)
+    upsampled = repeat(input_tensor, h_factor, w_factor, 1, 1)
+    return upsampled
+end
+
+function forward_with_latent_concat(
+    gen::CNN_Generator,
+    z::AbstractArray{T,4},
+    ps::ComponentArray{T},
+    st_lux::NamedTuple,
+)::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
+
+    original_z = z
+    current_z = z .* one(T)
+
+    for i = 1:(gen.depth)
+        if i > 1
+            upsampled_z = upsample_to_match(original_z .* one(T), current_z .* one(T))
+            current_z = cat(current_z, upsampled_z, dims = 3)
+        end
+
+        current_z, st_new = Lux.apply(
+            gen.Φ_fcns[i],
+            current_z,
+            ps.fcn[symbol_map[i]],
+            st_lux.fcn[symbol_map[i]],
+        )
+        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
+
+        current_z, st_new =
+            (gen.bool_config.batchnorm && i < gen.depth) ?
+            Lux.apply(
+                gen.batchnorms[i],
+                current_z,
+                ps.batchnorm[symbol_map[i]],
+                st_lux.batchnorm[symbol_map[i]],
+            ) : (current_z, nothing)
+        (gen.bool_config.batchnorm && i < gen.depth) &&
+            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
+    end
+
+    return current_z, st_lux
+end
+
+function forward(
+    gen::CNN_Generator,
+    z::AbstractArray{T,4},
+    ps::ComponentArray{T},
+    st_lux::NamedTuple,
+    current_layer::Int = 1,
+    skip_input::Union{AbstractArray{T,4},Nothing} = nothing,
+)::Tuple{AbstractArray{T,4},NamedTuple} where {T<:half_quant}
+    for i = 1:(gen.depth)
+        z, st_new =
+            Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
+        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
+
+        z, st_new =
+            (gen.bool_config.batchnorm && i < gen.depth) ?
+            Lux.apply(
+                gen.batchnorms[i],
+                z,
+                ps.batchnorm[symbol_map[i]],
+                st_lux.batchnorm[symbol_map[i]],
+            ) : (z, nothing)
+        (gen.bool_config.batchnorm && i < gen.depth) &&
+            (gen.bool_config.batchnorm && i < gen.depth) &&
+            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
+    end
+
+    return z, st_lux
 end
 
 function init_CNN_Generator(
@@ -60,6 +141,7 @@ function init_CNN_Generator(
     paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
     act = activation_mapping[retrieve(conf, "CNN", "activation")]
     batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
+    skip_bool = parse(Bool, retrieve(conf, "CNN", "latent_concat")) # Residual connection
 
     Φ_functions = Vector{Lux.ConvTranspose}(undef, 0)
     batchnorms = Vector{Lux.BatchNorm}(undef, 0)
@@ -71,26 +153,30 @@ function init_CNN_Generator(
     length(paddings) != length(hidden_c) &&
         (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
+    prev_c = 0
     for i in eachindex(hidden_c[1:(end-1)])
         push!(
             Φ_functions,
             Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
-                hidden_c[i] => hidden_c[i+1],
+                hidden_c[i] + prev_c => hidden_c[i+1],
                 identity;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
+
         if batchnorm_bool
             push!(batchnorms_temp, Lux.BatchNorm(hidden_c[i+1], act))
         end
+
+        prev_c = (i == 1 && skip_bool) ? hidden_c[1] : prev_c
     end
     push!(
         Φ_functions,
         Lux.ConvTranspose(
             (k_size[end], k_size[end]),
-            hidden_c[end] => last(x_shape),
+            hidden_c[end] + prev_c => last(x_shape),
             identity;
             stride = strides[end],
             pad = paddings[end],
@@ -99,7 +185,12 @@ function init_CNN_Generator(
 
     depth = length(Φ_functions)
 
-    return CNN_Generator(depth, Φ_functions, batchnorms, BoolConfig(false, batchnorm_bool))
+    return CNN_Generator(
+        depth,
+        Φ_functions,
+        batchnorms,
+        BoolConfig(false, batchnorm_bool, skip_bool),
+    )
 end
 
 function (gen::CNN_Generator)(
@@ -122,26 +213,9 @@ function (gen::CNN_Generator)(
         The generated data.
     """
     z = reshape(sum(z, dims = 2), 1, 1, first(size(z)), last(size(z)))
-
-    for i = 1:(gen.depth)
-        z, st_new =
-            Lux.apply(gen.Φ_fcns[i], z, ps.fcn[symbol_map[i]], st_lux.fcn[symbol_map[i]])
-        @ignore_derivatives @reset st_lux.fcn[symbol_map[i]] = st_new
-
-        z, st_new =
-            (gen.bool_config.batchnorm && i < gen.depth) ?
-            Lux.apply(
-                gen.batchnorms[i],
-                z,
-                ps.batchnorm[symbol_map[i]],
-                st_lux.batchnorm[symbol_map[i]],
-            ) : (z, nothing)
-        (gen.bool_config.batchnorm && i < gen.depth) &&
-            (gen.bool_config.batchnorm && i < gen.depth) &&
-            @ignore_derivatives @reset st_lux.batchnorm[symbol_map[i]] = st_new
-    end
-
-    return z, st_lux
+    gen.bool_config.skip_bool && return forward_with_latent_concat(gen, z, ps, st_lux)
+    return forward(gen, z, ps, st_lux)
 end
+
 
 end

@@ -12,18 +12,20 @@ using JLD2,
 
 ENV["GPU"] = "true"
 
-include("src/T-KAM/T-KAM.jl")
-include("src/pipeline/trainer.jl")
-include("src/T-KAM/ebm/ebm_model.jl")
 include("src/utils.jl")
+using .Utils
+
+include("src/T-KAM/T-KAM.jl")
 using .T_KAM_model
+
+include("src/pipeline/trainer.jl")
 using .trainer
-using .Utils: pu, half_quant, hq
+
 
 for fcn_type in ["RBF", "FFT"]
-    for prior_type in ["gaussian", "lognormal", "uniform"]
+    for prior_type in ["gaussian", "lognormal", "uniform", "ebm"]
         for dataset_name in ["DARCY_FLOW", "MNIST", "FMNIST"]
-            file = "logs/$(prior_type)_$(fcn_type)/$(dataset_name)_1/saved_model.jld2"
+            file = "logs/Vanilla/$(dataset_name)/importance/$(prior_type)_$(fcn_type)/univariate/saved_model.jld2"
 
             conf_loc = Dict(
                 "DARCY_FLOW" => "config/darcy_flow_config.ini",
@@ -46,32 +48,34 @@ for fcn_type in ["RBF", "FFT"]
             saved_data = load(file)
 
             ps = saved_data["params"] .|> half_quant |> pu
-            st = saved_data["state"] |> hq |> pu
+            st_kan = saved_data["kan_state"] |> hq |> pu
+            st_lux = saved_data["lux_state"] |> hq |> pu
 
             rng = Random.MersenneTwister(1)
-            t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/", rng = rng)
+            t = init_trainer(rng, conf, dataset_name; file_loc = "garbage/")
             prior = t.model.prior
 
             ps = ps.ebm
-            st = st.ebm
+            st_kan = st_kan.ebm
+            st_lux = st_lux.ebm
             t = nothing
+            a, b = minimum(st_kan[:a].grid; dims = 2), maximum(st_kan[:a].grid; dims = 2)
 
-            grid_range =
-                Dict("uniform" => (0, 1), "lognormal" => (0, 3), "gaussian" => (-3, 3))[prior_type]
+            no_grid = (
+                prior.fcns_qp[1].spline_string == "FFT" ||
+                prior.fcns_qp[1].spline_string == "Cheby"
+            )
 
-            a, b = minimum(st.fcn[1].grid; dims = 2), maximum(st.fcn[1].grid; dims = 2)
-            if fcn_type == "FFT"
-                a = fill(half_quant(first(grid_range)), size(a)) |> pu
-                b = fill(half_quant(last(grid_range)), size(b)) |> pu
+            if no_grid
+                a = fill(half_quant(first(prior.prior_domain)), size(a)) |> pu
+                b = fill(half_quant(last(prior.prior_domain)), size(b)) |> pu
             end
 
             z = (a + b) ./ 2 .+ (b - a) ./ 2 .* pu(prior.nodes)
-            π_0 =
-                prior.prior_type == "lognormal" ? prior.π_pdf(z, Float32(0.0001)) :
-                prior.π_pdf(z)
+            π_0 = prior.π_pdf(z[:, :, :], ps.dist.π_μ, ps.dist.π_σ)
 
-            f, st = prior(ps, st, z)
-            f = exp.(f) .* permutedims(π_0[:, :, :], (3, 1, 2))
+            f, _ = prior(ps, st_kan, st_lux, z)
+            f = exp.(f) .* permutedims(π_0, (3, 1, 2))
             z, f, π_0 = z |> cpu_device(),
             softmax(f; dims = 3) |> cpu_device(),
             softmax(π_0; dims = 2) |> cpu_device()
@@ -80,13 +84,13 @@ for fcn_type in ["RBF", "FFT"]
             plot_components = [(1, 1), (1, 2), (1, 3)]
             colours = [:red, :blue, :green]
 
-            mkpath("figures/results/priors")
+            mkpath("figures/results/priors/$(dataset_name)")
 
             for (i, (q, p)) in enumerate(plot_components)
                 fig = Makie.Figure(
-                    size = (1000, 1000),
+                    size = (800, 800),
                     ffont = "Computer Modern",
-                    fontsize = 50,
+                    fontsize = 20,
                     backgroundcolor = :white,
                     show_axis = false,
                     show_grid = false,
@@ -112,18 +116,18 @@ for fcn_type in ["RBF", "FFT"]
                     ax,
                     z[p, :],
                     0 .* f[q, p, :],
-                    π_0[p, :],
+                    π_0[p, :, 1],
                     color = (:gray, 0.2),
                     label = L"\pi_0(z)",
                 )
-                lines!(ax, z[p, :], π_0[p, :], color = (:gray, 0.8))
+                lines!(ax, z[p, :], π_0[p, :, 1], color = (:gray, 0.8))
                 y_min = minimum([minimum(f[q, p, :]), minimum(π_0[p, :])])
                 ylims!(ax, y_min, nothing)
                 axislegend(ax)
                 hidedecorations!(ax)
                 hidespines!(ax)
                 save(
-                    "figures/results/priors/$(dataset_name)_$(prior_type)_$(fcn_type)_$(q)_$(p).png",
+                    "figures/results/priors/$(dataset_name)/$(prior_type)_$(fcn_type)_$(q)_$(p).png",
                     fig,
                 )
             end

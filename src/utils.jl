@@ -13,17 +13,7 @@ export pu,
     AbstractQuadrature,
     AbstractBoolConfig
 
-using Lux,
-    LinearAlgebra,
-    Statistics,
-    Random,
-    Accessors,
-    BFloat16s,
-    CUDA,
-    LuxCUDA,
-    Enzyme,
-    Enzyme.EnzymeRules,
-    NNlib
+using Lux, LinearAlgebra, Statistics, Random, Accessors, BFloat16s, CUDA, LuxCUDA, NNlib
 
 const pu =
     (CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))) ? gpu_device() : cpu_device()

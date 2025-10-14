@@ -1,6 +1,6 @@
 module LogPosteriors
 
-using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Enzyme, Zygote
+using CUDA, ComponentArrays, Statistics, Lux, LuxCUDA, LinearAlgebra, Random, Zygote
 
 using ..Utils
 using ..T_KAM_model
@@ -20,7 +20,9 @@ function unadjusted_logpos(
     prior_sampling_bool::Bool,
     zero_vector::AbstractArray{T},
 )::T where {T<:half_quant,U<:full_quant}
-    lp = sum(first(model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)))
+    lp = sum(
+        first(model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm; ula = true)),
+    )
     ll = first(
         log_likelihood_MALA(
             z,
@@ -51,40 +53,20 @@ function unadjusted_logpos_grad(
 
     zero_vector = zeros(T, model.lkhood.x_shape..., size(z)[end]) |> pu
 
-    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f =
-            z_i -> unadjusted_logpos(
-                z_i,
-                x,
-                temps,
-                model,
-                ps,
-                st_kan,
-                st_lux,
-                prior_sampling_bool,
-                zero_vector,
-            )
-        ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
-    else
-        Enzyme.autodiff_deferred(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            Enzyme.Const(unadjusted_logpos),
-            Enzyme.Active,
-            Enzyme.Duplicated(z, ∇z),
-            Enzyme.Const(x),
-            Enzyme.Const(temps),
-            Enzyme.Const(model),
-            Enzyme.Const(ps),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux),
-            Enzyme.Const(prior_sampling_bool),
-            Enzyme.Const(zero_vector),
+    f =
+        z_i -> unadjusted_logpos(
+            z_i,
+            x,
+            temps,
+            model,
+            ps,
+            st_kan,
+            st_lux,
+            prior_sampling_bool,
+            zero_vector,
         )
-    end
 
-    all(iszero, ∇z) && error("All zero ULA grad")
-    any(isnan, ∇z) && error("NaN ULA grad")
-    return ∇z
+    return CUDA.@fastmath first(Zygote.gradient(f, z))
 end
 
 ### autoMALA ###
@@ -99,7 +81,7 @@ function autoMALA_logpos(
     zero_vector::AbstractArray{T},
 )::Tuple{AbstractArray{T,1},NamedTuple,NamedTuple} where {T<:half_quant,U<:full_quant}
     st_ebm, st_gen = st_kan.ebm, st_lux.gen
-    lp, st_ebm = model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
+    lp, st_ebm = model.log_prior(z, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm; ula = true)
     ll, st_gen = log_likelihood_MALA(
         z,
         x,
@@ -144,24 +126,8 @@ function autoMALA_value_and_grad(
 
     zero_vector = zeros(T, model.lkhood.x_shape..., size(z)[end]) |> pu
 
-    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
-        ∇z = CUDA.@fastmath first(Zygote.gradient(f, z))
-    else
-        Enzyme.autodiff_deferred(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            Enzyme.Const(closure),
-            Enzyme.Active,
-            Enzyme.Duplicated(z, ∇z),
-            Enzyme.Const(x),
-            Enzyme.Const(temps),
-            Enzyme.Const(model),
-            Enzyme.Const(ps),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux),
-            Enzyme.Const(zero_vector),
-        )
-    end
+    f = z_i -> closure(z_i, x, temps, model, ps, st_kan, st_lux, zero_vector)
+    ∇z .= CUDA.@fastmath first(Zygote.gradient(f, z))
 
     logpos, st_ebm, st_gen =
         CUDA.@fastmath autoMALA_logpos(z, x, temps, model, ps, st_kan, st_lux, zero_vector)

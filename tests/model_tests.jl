@@ -1,8 +1,9 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, Enzyme, ComponentArrays
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays
+using MultivariateStats: reconstruct
 
-ENV["GPU"] = false
+ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
-ENV["HALF_QUANT"] = "FP32"
+ENV["HALF_QUANT"] = "FP16"
 
 include("../src/utils.jl")
 using .Utils
@@ -28,7 +29,7 @@ function test_ps_derivative()
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = zero(half_quant) .* ps
 
     loss, ∇, st_ebm, st_gen =
         model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
@@ -53,6 +54,22 @@ function test_grid_update()
     @test !any(isnan, ps)
 end
 
+function test_pca()
+    Random.seed!(42)
+    dataset = randn(full_quant, 32, 32, 1, 50)
+    commit!(conf, "PCA", "use_pca", "true")
+    commit!(conf, "PCA", "pca_components", "10")
+    model = init_T_KAM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+
+    @test size(x_test, 1) == 9
+
+    x_recon = reconstruct(model.PCA_model, cpu_device()(x_test))
+    x_recon = reshape(x_recon, model.original_data_size..., :)
+    @test all(size(x_recon)[1:3] .== size(dataset)[1:3])
+end
+
 function test_mala_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 1, 50)
@@ -61,7 +78,7 @@ function test_mala_loss()
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = zero(half_quant) .* ps
 
     loss, ∇, st_ebm, st_gen =
         model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
@@ -73,11 +90,30 @@ function test_cnn_loss()
     Random.seed!(42)
     dataset = randn(full_quant, 32, 32, 3, 50)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    commit!(conf, "CNN", "latent_concat", "false")
     model = init_T_KAM(dataset, conf, (32, 32, 3))
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = zero(half_quant) .* ps
+
+    loss, ∇, st_ebm, st_gen =
+        model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
+    @test norm(∇) != 0
+    @test !any(isnan, ∇)
+    commit!(conf, "CNN", "use_cnn_lkhood", "false")
+end
+
+function test_cnn_residual_loss()
+    Random.seed!(42)
+    dataset = randn(full_quant, 32, 32, 3, 50)
+    commit!(conf, "CNN", "use_cnn_lkhood", "true")
+    commit!(conf, "CNN", "latent_concat", "true")
+    model = init_T_KAM(dataset, conf, (32, 32, 3))
+    x_test = first(model.train_loader) |> pu
+    model, ps, st_kan, st_lux = prep_model(model, x_test)
+    ps = half_quant.(ps)
+    ∇ = zero(half_quant) .* ps
 
     loss, ∇, st_ebm, st_gen =
         model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
@@ -95,7 +131,7 @@ function test_seq_loss()
     x_test = first(model.train_loader) |> pu
     model, ps, st_kan, st_lux = prep_model(model, x_test)
     ps = half_quant.(ps)
-    ∇ = Enzyme.make_zero(ps)
+    ∇ = zero(half_quant) .* ps
 
     loss, ∇, st_ebm, st_gen =
         model.loss_fcn(ps, ∇, st_kan, st_lux, model, x_test; rng = Random.default_rng())
@@ -106,7 +142,9 @@ end
 @testset "T-KAM Tests" begin
     test_ps_derivative()
     test_grid_update()
+    test_pca()
     test_mala_loss()
     test_cnn_loss()
+    test_cnn_residual_loss()
     test_seq_loss()
 end

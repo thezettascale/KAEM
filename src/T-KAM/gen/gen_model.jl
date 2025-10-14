@@ -47,6 +47,7 @@ struct GenModel{T<:half_quant} <: Lux.AbstractLuxLayer
     resample_z::Function
     CNN::Bool
     SEQ::Bool
+    perceptual_scale::T
 end
 
 function init_GenModel(
@@ -90,6 +91,8 @@ function init_GenModel(
 
     generator_initializer = get(gen_model_map, gen_type, init_KAN_Generator)
     generator = generator_initializer(conf, x_shape, rng)
+    perceptual_scale =
+        parse(half_quant, retrieve(conf, "GeneratorModel", "perceptual_scale"))
 
     return GenModel(
         generator,
@@ -99,6 +102,7 @@ function init_GenModel(
         resample_fcn,
         CNN,
         sequence_length > 1,
+        perceptual_scale,
     )
 end
 

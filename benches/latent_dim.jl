@@ -4,12 +4,17 @@ ENV["GPU"] = true
 ENV["FULL_QUANT"] = "FP32"
 ENV["HALF_QUANT"] = "FP32"
 
-include("../src/T-KAM/T-KAM.jl")
 include("../src/pipeline/data_utils.jl")
-include("../src/utils.jl")
-using .T_KAM_model
 using .DataUtils: get_vision_dataset
-using .Utils: pu, half_quant
+
+include("../src/utils.jl")
+using .Utils
+
+include("../src/T-KAM/T-KAM.jl")
+using .T_KAM_model
+
+include("../src/T-KAM/model_setup.jl")
+using .ModelSetup
 
 conf = ConfParse("config/nist_config.ini")
 parse_conf!(conf)
@@ -36,10 +41,10 @@ function setup_model(n_z)
     model = init_T_KAM(dataset, conf, img_size; rng = rng)
     x_test, loader_state = iterate(model.train_loader)
     x_test = pu(x_test)
-    model, ps, st = prep_model(model, x_test)
-    ∇ = zero(half_quant.(ps))
+    model, params, st_kan, st_lux = prep_model(model, x_test; rng = rng)
+    ∇ = zero(half_quant.(params))
 
-    return model, half_quant.(ps), ∇, st, x_test
+    return model, half_quant.(params), ∇, st_kan, st_lux, x_test
 end
 
 results = DataFrame(
@@ -51,15 +56,19 @@ results = DataFrame(
     gc_percent = Float64[],
 )
 
+function benchmark_latent_dim(params, ∇, st_kan, st_lux, model, x_test)
+    model.loss_fcn(params, ∇, st_kan, st_lux, model, x_test)
+end
+
 for n_z in [10, 20, 30, 40, 50]
     println("Benchmarking n_z = $n_z...")
 
-    model, ps, ∇, st, x_test = setup_model(n_z)
+    model, params, ∇, st_kan, st_lux, x_test = setup_model(n_z)
 
     CUDA.reclaim()
     GC.gc()
 
-    b = @benchmark model.loss_fcn($ps, $∇, $st, $model, $x_test)
+    b = @benchmark benchmark_latent_dim($params, $∇, $st_kan, $st_lux, $model, $x_test)
 
     push!(
         results,

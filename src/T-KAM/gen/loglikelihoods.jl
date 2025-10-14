@@ -8,13 +8,8 @@ using NNlib: softmax, sigmoid
 using ..Utils
 using ..T_KAM_model: GenModel
 
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("losses_gpu.jl")
-    using .Losses
-else
-    include("losses.jl")
-    using .Losses
-end
+include("losses.jl")
+using .Losses
 
 ## Log-likelihood functions ##
 function log_likelihood_IS(
@@ -80,7 +75,8 @@ function log_likelihood_MALA(
     noise = lkhood.σ.noise .* noise
     x̂_act = lkhood.output_activation(x̂ .+ noise)
 
-    ll = MALA_loss(x, x̂_act, ε, 2*lkhood.σ.llhood^2, B, lkhood.SEQ)
+    ll =
+        MALA_loss(x, x̂_act, ε, 2*lkhood.σ.llhood^2, B, lkhood.SEQ, lkhood.perceptual_scale)
     return ll, st_lux
 end
 

@@ -19,6 +19,7 @@ dependencies = [
     "torch_fidelity",
     "scikit-learn",
     "pillow",
+    "imageio",
 ]
 
 [project.optional-dependencies]

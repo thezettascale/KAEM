@@ -1,6 +1,6 @@
 module ImportanceSampling
 
-using CUDA, Enzyme, ComponentArrays, Random, Zygote
+using CUDA, ComponentArrays, Random, Zygote
 using Statistics, Lux, LuxCUDA
 using NNlib: softmax
 
@@ -12,12 +12,34 @@ using ..T_KAM_model
 include("../gen/loglikelihoods.jl")
 using .LogLikelihoods: log_likelihood_IS
 
-if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    include("is_kernel_gpu.jl")
-    using .IS_Kernel
-else
-    include("is_kernel.jl")
-    using .IS_Kernel
+function accumulator(
+    weights::AbstractArray{T,1},
+    logprior::AbstractArray{T,1},
+    logllhood::AbstractArray{T,1},
+)::T where {T<:half_quant}
+    return weights' * (logprior + logllhood)
+end
+
+function loss_accum(
+    weights_resampled::AbstractArray{T,2},
+    logprior::AbstractArray{T,1},
+    logllhood::AbstractArray{T,2},
+    resampled_idxs::AbstractArray{Int,2},
+    B::Int,
+    S::Int,
+)::T where {T<:half_quant}
+
+    loss = zero(T)
+    for b = 1:B
+        loss =
+            loss + accumulator(
+                weights_resampled[b, :],
+                logprior[resampled_idxs[b, :]],
+                logllhood[b, resampled_idxs[b, :]],
+            )
+    end
+
+    return loss / B
 end
 
 function sample_importance(
@@ -141,7 +163,6 @@ end
 
 function grad_importance_llhood(
     ps::ComponentArray{T},
-    ∇::ComponentArray{T},
     z_posterior::AbstractArray{T,3},
     z_prior::AbstractArray{T,3},
     x::AbstractArray{T},
@@ -154,42 +175,22 @@ function grad_importance_llhood(
     noise::AbstractArray{T},
 )::AbstractArray{T} where {T<:half_quant}
 
-    if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-        f =
-            p -> closure(
-                p,
-                z_posterior,
-                z_prior,
-                x,
-                weights_resampled,
-                resampled_idxs,
-                model,
-                st_kan,
-                st_lux_ebm,
-                st_lux_gen,
-                noise,
-            )
-        ∇ = CUDA.@fastmath first(Zygote.gradient(f, ps))
-    else
-        Enzyme.autodiff_deferred(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            Enzyme.Const(closure),
-            Enzyme.Active,
-            Enzyme.Duplicated(ps, ∇),
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(weights_resampled),
-            Enzyme.Const(resampled_idxs),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
+    f =
+        p -> closure(
+            p,
+            z_posterior,
+            z_prior,
+            x,
+            weights_resampled,
+            resampled_idxs,
+            model,
+            st_kan,
+            st_lux_ebm,
+            st_lux_gen,
+            noise,
         )
-    end
 
-    return ∇
+    return CUDA.@fastmath first(Zygote.gradient(f, ps))
 end
 
 struct ImportanceLoss end
@@ -208,9 +209,8 @@ function (l::ImportanceLoss)(
     z_posterior, z_prior, st_lux_ebm, st_lux_gen, weights_resampled, resampled_idxs, noise =
         sample_importance(ps, st_kan, Lux.testmode(st_lux), model, x; rng = rng)
 
-    ∇ = grad_importance_llhood(
+    ∇ .= grad_importance_llhood(
         ps,
-        ∇,
         z_posterior,
         z_prior,
         x,
@@ -222,6 +222,9 @@ function (l::ImportanceLoss)(
         Lux.trainmode(st_lux_gen),
         noise,
     )
+
+    all(iszero.(∇)) && error("All zero importance grad")
+    any(isnan.(∇)) && error("NaN in importance grad")
 
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
         ps,

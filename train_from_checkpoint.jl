@@ -13,6 +13,8 @@ conf = Dict(
     "FMNIST" => ConfParse("config/nist_config.ini"),
     "CIFAR10" => ConfParse("config/cifar_config.ini"),
     "SVHN" => ConfParse("config/svhn_config.ini"),
+    "CIFAR10PANG" => ConfParse("config/cifar_pang_config.ini"),
+    "SVHNPANG" => ConfParse("config/svhn_pang_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
@@ -22,6 +24,7 @@ parse_conf!(conf)
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
+ENV["PERCEPTUAL"] = retrieve(conf, "TRAINING", "use_perceptual_loss")
 
 # EDIT:
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")

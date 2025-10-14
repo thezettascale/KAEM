@@ -2,15 +2,9 @@ module Quadrature
 
 export TrapeziumQuadrature, GaussLegendreQuadrature
 
-using CUDA, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, ParallelStencil
+using CUDA, KernelAbstractions, LinearAlgebra, Random, Lux, LuxCUDA, ComponentArrays, Tullio
 
 using ..Utils
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, half_quant, 3)
-else
-    @init_parallel_stencil(Threads, half_quant, 3)
-end
 
 negative_one = - ones(half_quant, 1, 1, 1) |> pu
 
@@ -18,51 +12,39 @@ struct TrapeziumQuadrature <: AbstractQuadrature end
 
 struct GaussLegendreQuadrature <: AbstractQuadrature end
 
-@parallel_indices (q, p, g) function qfirst_exp_kernel!(
-    exp_fg::AbstractArray{T,3},
+function qfirst_exp_kernel(
     f::AbstractArray{T,3},
     π0::AbstractArray{T,2},
-)::Nothing where {T<:half_quant}
-    exp_fg[q, p, g] = exp(f[q, p, g]) * π0[q, g]
-    return nothing
+)::AbstractArray{T,3} where {T<:half_quant}
+    return @tullio exp_fg[q, p, g] := exp(f[q, p, g]) * π0[q, g]
 end
 
-@parallel_indices (q, p, g) function pfirst_exp_kernel!(
-    exp_fg::AbstractArray{T,3},
+function pfirst_exp_kernel(
     f::AbstractArray{T,3},
     π0::AbstractArray{T,2},
-)::Nothing where {T<:half_quant}
-    exp_fg[q, p, g] = exp(f[q, p, g]) * π0[p, g]
-    return nothing
+)::AbstractArray{T,3} where {T<:half_quant}
+    return @tullio exp_fg[q, p, g] := exp(f[q, p, g]) * π0[p, g]
 end
 
-@parallel_indices (q, b, g) function apply_mask!(
-    trapz::AbstractArray{T,3},
+function apply_mask(
     exp_fg::AbstractArray{T,3},
     component_mask::AbstractArray{T,3},
-)::Nothing where {T<:half_quant}
-    acc = zero(T)
-    for p = 1:size(component_mask, 2)
-        acc += exp_fg[q, p, g] * component_mask[q, p, b]
-    end
-    trapz[q, b, g] = acc
-    return nothing
+)::AbstractArray{T,3} where {T<:half_quant}
+    return @tullio trapz[q, b, g] := exp_fg[q, p, g] * component_mask[q, p, b]
 end
 
-@parallel_indices (q, p, g) function weight_kernel!(
+function weight_kernel(
     trapz::AbstractArray{T,3},
     weight::AbstractArray{T,2},
-)::Nothing where {T<:half_quant}
-    trapz[q, p, g] = weight[p, g] * trapz[q, p, g]
-    return nothing
+)::AbstractArray{T,3} where {T<:half_quant}
+    return @tullio trapz_weighted[q, p, g] := weight[p, g] * trapz[q, p, g]
 end
 
-@parallel_indices (q, b, g) function gauss_kernel!(
+function gauss_kernel(
     trapz::AbstractArray{T,3},
     weight::AbstractArray{T,2},
-)::Nothing where {T<:half_quant}
-    trapz[q, b, g] = weight[q, g] * trapz[q, b, g]
-    return nothing
+)::AbstractArray{T,3} where {T<:half_quant}
+    return @tullio trapz_weighted[q, b, g] := weight[q, g] * trapz[q, b, g]
 end
 
 function (tq::TrapeziumQuadrature)(
@@ -89,22 +71,18 @@ function (tq::TrapeziumQuadrature)(
     Q, P, G = size(f_grid)
 
     # Choose component if mixture model else use all
-    exp_fg = @zeros(Q, P, G)
     if !any(component_mask .< zero(T))
         B = size(component_mask, 3)
-        trapz = @zeros(Q, B, G)
-        @parallel (1:Q, 1:P, 1:G) qfirst_exp_kernel!(exp_fg, f_grid, π_grid)
-        @parallel (1:Q, 1:B, 1:G) apply_mask!(trapz, exp_fg, component_mask)
+        exp_fg = qfirst_exp_kernel(f_grid, π_grid)
+        trapz = apply_mask(exp_fg, component_mask)
         trapz = trapz[:, :, 2:end] + trapz[:, :, 1:(end-1)]
-        @parallel (1:Q, 1:B, 1:(G-1)) weight_kernel!(trapz, Δg)
-        @. trapz = trapz / 2
-        return trapz, st_kan[:a].grid, st_lyrnorm_new
+        trapz = weight_kernel(trapz, Δg)
+        return trapz ./ 2, st_kan[:a].grid, st_lyrnorm_new
     else
-        @parallel (1:Q, 1:P, 1:G) pfirst_exp_kernel!(exp_fg, f_grid, π_grid)
+        exp_fg = pfirst_exp_kernel(f_grid, π_grid)
         trapz = exp_fg[:, :, 2:end] + exp_fg[:, :, 1:(end-1)]
-        @parallel (1:Q, 1:P, 1:(G-1)) weight_kernel!(trapz, Δg)
-        @. trapz = trapz / 2
-        return trapz, st_kan[:a].grid, st_lyrnorm_new
+        trapz = weight_kernel(trapz, Δg)
+        return trapz ./ 2, st_kan[:a].grid, st_lyrnorm_new
     end
 end
 
@@ -126,8 +104,7 @@ function get_gausslegendre(
     end
 
     nodes, weights = pu(ebm.nodes), pu(ebm.weights)
-    @. nodes = (a + b) / 2 + (b - a) / 2 * nodes
-    return nodes, (b - a) ./ 2 .* weights
+    return ((a + b) / 2 + (b - a) / 2) .* nodes, (b - a) ./ 2 .* weights
 end
 
 function (gq::GaussLegendreQuadrature)(
@@ -153,17 +130,15 @@ function (gq::GaussLegendreQuadrature)(
     Q, P, G = size(nodes)
 
     # Choose component if mixture model else use all
-    exp_fg = @zeros(Q, P, G)
     if !any(component_mask .< zero(T))
         B = size(component_mask, 3)
-        trapz = @zeros(Q, B, G)
-        @parallel (1:Q, 1:P, 1:G) qfirst_exp_kernel!(exp_fg, nodes, π_nodes)
-        @parallel (1:Q, 1:B, 1:G) apply_mask!(trapz, exp_fg, component_mask)
-        @parallel (1:Q, 1:B, 1:G) gauss_kernel!(trapz, weights)
+        exp_fg = qfirst_exp_kernel(nodes, π_nodes)
+        trapz = apply_mask(exp_fg, component_mask)
+        trapz = gauss_kernel(trapz, weights)
         return trapz, grid, st_lyrnorm_new
     else
-        @parallel (1:Q, 1:P, 1:G) pfirst_exp_kernel!(exp_fg, nodes, π_nodes)
-        @parallel (1:Q, 1:P, 1:G) weight_kernel!(exp_fg, weights)
+        exp_fg = qfirst_exp_kernel(nodes, π_nodes)
+        exp_fg = gauss_kernel(exp_fg, weights)
         return exp_fg, grid, st_lyrnorm_new
     end
 end

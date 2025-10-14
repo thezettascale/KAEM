@@ -10,7 +10,6 @@ using CUDA,
     Distributions,
     Accessors,
     Statistics,
-    Enzyme,
     ComponentArrays,
     ParallelStencil
 
@@ -20,29 +19,15 @@ using ..T_KAM_model
 include("log_posteriors.jl")
 using .LogPosteriors: unadjusted_logpos_grad, log_likelihood_MALA
 
+include("updates.jl")
+using .LangevinUpdates
+
 π_dist = Dict(
     "uniform" => (p, b, rng) -> rand(rng, p, 1, b),
     "gaussian" => (p, b, rng) -> randn(rng, p, 1, b),
     "lognormal" => (p, b, rng) -> rand(rng, LogNormal(0, 1), p, 1, b),
     "ebm" => (p, b, rng) -> randn(rng, p, 1, b),
 )
-
-@static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))
-    @init_parallel_stencil(CUDA, full_quant, 3)
-else
-    @init_parallel_stencil(Threads, full_quant, 3)
-end
-
-@parallel_indices (q, p, s) function update_z!(
-    z::AbstractArray{U,3},
-    ∇z::AbstractArray{U,3},
-    η::U,
-    ξ::AbstractArray{U,3},
-    sqrt_2η::U,
-)::Nothing where {U<:full_quant}
-    z[q, p, s] += η * ∇z[q, p, s] + sqrt_2η * ξ[q, p, s]
-    return nothing
-end
 
 struct ULA_sampler{U<:full_quant}
     prior_sampling_bool::Bool
@@ -94,18 +79,17 @@ function (sampler::ULA_sampler)(
     """
     # Initialize from prior
     z_hq = begin
-        if model.prior.ula && sampler.prior_sampling_bool
+        if model.prior.bool_config.ula && sampler.prior_sampling_bool
             z = π_dist[model.prior.prior_type](model.prior.p_size, size(x)[end], rng)
-            z = pu(z)
+            pu(z)
         else
-            z, st_ebm = model.sample_prior(
-                model,
-                size(x)[end]*length(temps),
-                ps,
-                st_kan,
-                st_lux,
-                rng,
-            )
+            z, st_ebm = model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+
+            for i = 1:(length(temps)-1)
+                z_i, st_ebm =
+                    model.sample_prior(model, size(x)[end], ps, st_kan, st_lux, rng)
+                z = cat(z, z_i, dims = 3)
+            end
             @reset st_lux.ebm = st_ebm
             z
         end
@@ -122,16 +106,20 @@ function (sampler::ULA_sampler)(
 
     # Pre-allocate for both precisions
     z_fq = U.(reshape(z_hq, Q, P, S*num_temps))
-    ∇z_fq = Enzyme.make_zero(z_fq)
+    ∇z_fq = zero(U) .* z_fq
     z_copy = similar(z_hq[:, :, :, 1]) |> pu
     z_t, z_t1 = z_copy, z_copy
 
-    x_t = model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) : repeat(x, 1, 1, 1, num_temps)
+    x_t = (
+        model.lkhood.SEQ ? repeat(x, 1, 1, num_temps) :
+        (model.use_pca ? repeat(x, 1, num_temps) : repeat(x, 1, 1, 1, num_temps))
+    )
 
     # Pre-allocate noise
     noise = randn(rng, U, Q, P, S*num_temps, sampler.N)
-    log_u_swap = log.(rand(rng, num_temps-1, sampler.N))
+    log_u_swap = log.(rand(rng, U, num_temps-1, sampler.N))
     ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, sampler.N) |> pu
+    swap_replica_idxs = num_temps > 1 ? rand(rng, 1:(num_temps-1), sampler.N) : nothing
 
     for i = 1:sampler.N
         ξ = pu(noise[:, :, :, i])
@@ -139,7 +127,7 @@ function (sampler::ULA_sampler)(
             U.(
                 unadjusted_logpos_grad(
                     T.(z_fq),
-                    Enzyme.make_zero(T.(z_fq)),
+                    zero(T) .* T.(z_fq),
                     x_t,
                     temps_gpu,
                     model,
@@ -150,48 +138,52 @@ function (sampler::ULA_sampler)(
                 ),
             ) ./ model.loss_scaling.full
 
-        @parallel (1:Q, 1:P, 1:S) update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η)
+        all(iszero.(∇z_fq)) && error("All zero ULA grad")
+        any(isnan.(∇z_fq)) && error("NaN in ULA grad")
+
+        update_z!(z_fq, ∇z_fq, η, ξ, sqrt_2η, Q, P, S)
         z_hq .= T.(reshape(z_fq, Q, P, S, num_temps))
 
         if i % sampler.RE_frequency == 0 && num_temps > 1 && !sampler.prior_sampling_bool
-            for t = 1:(num_temps-1)
+            t = swap_replica_idxs[i] # Randomly pick two adjacent temperatures to swap
+            z_t = copy(z_hq[:, :, :, t])
+            z_t1 = copy(z_hq[:, :, :, t+1])
 
-                z_t = copy(z_hq[:, :, :, t])
-                z_t1 = copy(z_hq[:, :, :, t+1])
-                
-                noise_1 = model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] : ll_noise[:, :, :, :, 1, t, i]
-                noise_2 = model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] : ll_noise[:, :, :, :, 2, t, i]
+            noise_1 =
+                model.lkhood.SEQ ? ll_noise[:, :, :, 1, t, i] :
+                ll_noise[:, :, :, :, 1, t, i]
+            noise_2 =
+                model.lkhood.SEQ ? ll_noise[:, :, :, 2, t, i] :
+                ll_noise[:, :, :, :, 2, t, i]
 
-                ll_t, st_gen = log_likelihood_MALA(
-                    z_t,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_kan.gen,
-                    st_lux.gen,
-                    noise_1;
-                    ε = model.ε,
-                )
-                ll_t1, st_gen = log_likelihood_MALA(
-                    z_t1,
-                    x,
-                    model.lkhood,
-                    ps.gen,
-                    st_kan.gen,
-                    st_lux.gen,
-                    noise_2;
-                    ε = model.ε,
-                )
+            ll_t, st_gen = log_likelihood_MALA(
+                z_t,
+                x,
+                model.lkhood,
+                ps.gen,
+                st_kan.gen,
+                st_lux.gen,
+                noise_1;
+                ε = model.ε,
+            )
+            ll_t1, st_gen = log_likelihood_MALA(
+                z_t1,
+                x,
+                model.lkhood,
+                ps.gen,
+                st_kan.gen,
+                st_lux.gen,
+                noise_2;
+                ε = model.ε,
+            )
 
-                log_swap_ratio = mean((temps[t+1] - temps[t]) .* (ll_t - ll_t1))
-                swap = T(log_u_swap[t, i] < log_swap_ratio)
-                @reset st_lux.gen = st_gen
+            log_swap_ratio = (temps[t+1] - temps[t]) .* (sum(ll_t) - sum(ll_t1))
+            swap = T(log_u_swap[t, i] < log_swap_ratio)
+            @reset st_lux.gen = st_gen
 
-                # Swap population if likelihood of population in new temperature is higher on average
-                z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
-                z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
-                z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
-            end
+            z_hq[:, :, :, t] .= swap .* z_t1 .+ (1 - swap) .* z_t
+            z_hq[:, :, :, t+1] .= (1 - swap) .* z_t1 .+ swap .* z_t
+            z_fq .= U.(reshape(z_hq, Q, P, S*num_temps))
         end
     end
 

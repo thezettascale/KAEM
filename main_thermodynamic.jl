@@ -7,16 +7,24 @@ conf = Dict(
     "FMNIST" => ConfParse("config/nist_config.ini"),
     "CIFAR10" => ConfParse("config/cifar_config.ini"),
     "SVHN" => ConfParse("config/svhn_config.ini"),
+    "CIFAR10PANG" => ConfParse("config/cifar_pang_config.ini"),
+    "SVHNPANG" => ConfParse("config/svhn_pang_config.ini"),
+    "CELEBA" => ConfParse("config/celeba_config.ini"),
+    "CELEBAPANG" => ConfParse("config/celeba_pang_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
 )[dataset]
 parse_conf!(conf)
 
+ENV["THERMO"] =
+    parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps")) > 1 ? "true" :
+    "false"
 ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
 ENV["FULL_QUANT"] = retrieve(conf, "MIXED_PRECISION", "full_precision")
 ENV["HALF_QUANT"] = retrieve(conf, "MIXED_PRECISION", "reduced_precision")
 ENV["autoMALA"] = retrieve(conf, "POST_LANGEVIN", "use_autoMALA")
+ENV["PERCEPTUAL"] = retrieve(conf, "TRAINING", "use_perceptual_loss")
 
 include("src/pipeline/trainer.jl")
 using .trainer
@@ -24,5 +32,6 @@ using .trainer
 rng = Random.MersenneTwister(1)
 
 # Thermodynamic
-t = init_trainer(rng, conf, dataset)
+im_resize = dataset == "CELEBA" || dataset == "CELEBAPANG" ? (64, 64) : (32, 32)
+t = init_trainer(rng, conf, dataset; img_resize = im_resize)
 train!(t)

@@ -133,6 +133,20 @@ end
     return nothing
 end
 
+@parallel_indices (q, p, b) function dotprod_attn_kernel!(
+    QK::AbstractArray{U,2},
+    Q::AbstractArray{U,2},
+    K::AbstractArray{U,2},
+    z::AbstractArray{U,2},
+    scale::U,
+    min_z::U,
+    max_z::U,
+)::Nothing where {U<:full_quant}
+    z_mapped = z[q, b] * (max_z - min_z) + min_z
+    QK[q, p] = ((Q[q, p] * z_mapped) * (K[q, p] * z_mapped)) / scale
+    return nothing
+end
+
 function sample_mixture(
     ebm::Lux.AbstractLuxLayer,
     num_samples::Int,
@@ -154,9 +168,25 @@ function sample_mixture(
     Returns:
         z: The samples from the ebm-prior, (num_samples, q). 
     """
-    mask = choose_component(ps.dist.α, num_samples, ebm.q_size, ebm.p_size; rng = rng)
-
-    cdf, grid, st_lyrnorm_new = ebm.quad(ebm, ps, st_kan, st_lyrnorm; component_mask = mask)
+    alpha = full_quant.(ps.dist.α)
+    if ebm.bool_config.use_attention_kernel
+        z = @rand(ebm.q_size, num_samples)
+        alpha = @zeros(ebm.q_size, ebm.p_size)
+        scale = sqrt(full_quant(num_samples))
+        min_z, max_z = full_quant.(ebm.prior_domain)
+        @parallel (1:ebm.q_size, 1:ebm.p_size, 1:num_samples) dotprod_attn_kernel!(
+            alpha,
+            full_quant.(ps.attention.Q),
+            full_quant.(ps.attention.K),
+            z,
+            scale,
+            min_z,
+            max_z,
+        )
+    end
+    mask = choose_component(alpha, num_samples, ebm.q_size, ebm.p_size; rng = rng)
+    cdf, grid, st_lyrnorm_new =
+        ebm.quad(ebm, ps, st_kan, st_lyrnorm; component_mask = T.(mask))
     grid_size = size(grid, 2)
 
     cdf = cat(

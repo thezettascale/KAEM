@@ -137,8 +137,8 @@ function (gq::GaussLegendreQuadrature)(
         trapz = gauss_kernel(trapz, weights)
         return trapz, grid, st_lyrnorm_new
     else
-        exp_fg = qfirst_exp_kernel(nodes, π_nodes)
-        exp_fg = gauss_kernel(exp_fg, weights)
+        exp_fg = pfirst_exp_kernel(nodes, π_nodes)
+        exp_fg = weight_kernel(exp_fg, weights)
         return exp_fg, grid, st_lyrnorm_new
     end
 end

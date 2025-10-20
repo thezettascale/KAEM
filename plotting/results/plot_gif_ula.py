@@ -26,50 +26,50 @@ plt.rcParams.update(
 )
 
 GIF_CONFIGS = {
-    # "SVHN_vanilla_mixture": {
-    #     "dataset": "SVHN",
-    #     "method_type": "Vanilla",
-    #     "sampler": "ULA",
-    #     "model_type": "mixture",
-    #     "grid_size": 10,
-    #     "cmap": None,
-    #     "epochs": list(range(0, 41, 2)),
-    #     "samples_per_frame": 1,
-    #     "filename": "svhn_vanilla_ula_mixture_evolution.gif",
-    # },
-    "SVHN_thermo_mixture": {
+    "SVHN_vanilla_mixture": {
         "dataset": "SVHN",
-        "method_type": "Thermodynamic",
+        "method_type": "Vanilla",
         "sampler": "ULA",
         "model_type": "mixture",
         "grid_size": 10,
         "cmap": None,
-        "epochs": list(range(0, 41, 2)),
+        "epochs": list(range(0, 21, 1)),
         "samples_per_frame": 1,
-        "filename": "svhn_thermo_ula_mixture_evolution.gif",
+        "filename": "svhn_vanilla_ula_mixture_evolution.gif",
     },
-    # "CELEBA_vanilla_mixture": {
-    #     "dataset": "CELEBA",
-    #     "method_type": "Vanilla",
+    # "SVHN_thermo_mixture": {
+    #     "dataset": "SVHN",
+    #     "method_type": "Thermodynamic",
     #     "sampler": "ULA",
     #     "model_type": "mixture",
     #     "grid_size": 10,
     #     "cmap": None,
     #     "epochs": list(range(0, 41, 2)),
     #     "samples_per_frame": 1,
-    #     "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
+    #     "filename": "svhn_thermo_ula_mixture_evolution.gif",
     # },
-    "CELEBA_thermo_mixture": {
+    "CELEBA_vanilla_mixture": {
         "dataset": "CELEBA",
-        "method_type": "Thermodynamic",
+        "method_type": "Vanilla",
         "sampler": "ULA",
         "model_type": "mixture",
         "grid_size": 10,
         "cmap": None,
-        "epochs": list(range(0, 41, 2)),
+        "epochs": list(range(0, 21, 1)),
         "samples_per_frame": 1,
-        "filename": "CELEBA_thermo_ula_mixture_evolution.gif",
+        "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
     },
+    # "CELEBA_thermo_mixture": {
+    #     "dataset": "CELEBA",
+    #     "method_type": "Thermodynamic",
+    #     "sampler": "ULA",
+    #     "model_type": "mixture",
+    #     "grid_size": 10,
+    #     "cmap": None,
+    #     "epochs": list(range(0, 41, 2)),
+    #     "samples_per_frame": 1,
+    #     "filename": "CELEBA_thermo_ula_mixture_evolution.gif",
+    # },
 }
 
 output_dir = "figures/results/gif_evolution"

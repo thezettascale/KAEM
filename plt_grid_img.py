@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # File path to your HDF5 file
-file_path = 'logs/Thermodynamic/SVHN/ULA/mixture/generated_images_epoch_1.h5'
+file_path = 'logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5'
 
 with h5py.File(file_path, 'r') as h5_file:
     image_data = h5_file['samples'][()] 
 
 # Define grid dimensions
-grid_size = (15, 15) 
+grid_size = (12, 12) 
 fig, axes = plt.subplots(grid_size[0], grid_size[1], figsize=(12, 12))
 
 for i in range(grid_size[0] * grid_size[1]):

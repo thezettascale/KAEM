@@ -27,6 +27,7 @@ struct BoolConfig <: AbstractBoolConfig
     ula::Bool
     mixture_model::Bool
     use_attention_kernel::Bool
+    train_props::Bool
 end
 
 struct EbmModel{T<:half_quant,U<:full_quant} <: Lux.AbstractLuxLayer
@@ -142,6 +143,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     ref_initializer = get(prior_map, prior_type, prior_map["uniform"])
     use_attention_kernel =
         parse(Bool, retrieve(conf, "MixtureModel", "use_attention_kernel"))
+    train_props = parse(Bool, retrieve(conf, "MixtureModel", "train_proportions"))
 
     return EbmModel(
         functions,
@@ -152,6 +154,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             ula,
             mixture_model,
             use_attention_kernel,
+            train_props,
         ),
         length(widths)-1,
         prior_type,
@@ -239,6 +242,11 @@ function Lux.initialparameters(
             glorot_uniform(rng, U, prior.q_size, prior.p_size) : [zero(T)]
         ),
     )
+
+    if !prior.bool_config.train_props && !prior.bool_config.use_attention_kernel
+        @reset prior_ps.α = U.((prior_ps.α .* 0 .+ 1) ./ prior.p_size)
+    end
+
 
     attention_ps = (
         Q = prior.bool_config.use_attention_kernel ?

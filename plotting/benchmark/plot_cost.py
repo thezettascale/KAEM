@@ -209,7 +209,11 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
                 y=ref["Allocations"],
                 color="red",
                 linestyle="--",
-                label=("Reference ITS\n" + "with Mixture Prior"),
+                label=(
+                    "Reference MLE criterion\n"
+                    + "with single posterior\n"
+                    + "ULA sampling"
+                ),
             )
         else:
             axs[3].axhline(

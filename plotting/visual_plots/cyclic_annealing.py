@@ -20,7 +20,7 @@ plt.rcParams.update(
 num_param_updates = 16000
 num_cycles = 0
 initial_p = 1
-end_p = 7
+end_p = 8
 
 x = np.linspace(0, 2 * np.pi * (num_cycles + 0.5), num_param_updates + 1)
 p = initial_p + (end_p - initial_p) * 0.5 * (1 - np.cos(x))

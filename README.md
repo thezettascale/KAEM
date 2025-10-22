@@ -28,6 +28,8 @@ And when ULA and maximum likelihood fail, it can also be trained with a variance
   <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="25%" />
 </p>
 
+*This images are after training on a budget with 5,000 parameter updates.
+
 Unlike diffusion and score-based models, annealing is more interpretable, fully parallelizable, and only applied to posterior expectations, (thus preserving inference speed). The main trade-off is expressivity, though this may improve with scaling. And unlike denoising, which scales sequentially, annealing can scale by adding more temperatures in parallel.
 
 ## Setup:

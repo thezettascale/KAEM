@@ -69,7 +69,7 @@ prior_steps_ref = {
 
 keys = [r"$n_z$", r"$N_{t}$", r"$N_{prior}$"]
 colours = ["viridis", "cividis", "plasma"]
-elevations = [0.3, 0.18, 0.4]
+elevations = [0.3, 0.14, 0.4]
 datasets = [latent_dim, mala_steps, prior_steps]
 references = [None, mala_steps_ref, prior_steps_ref]
 titles = [r"Latent Dimension", r"Power Posteriors", "Prior ULA Steps"]

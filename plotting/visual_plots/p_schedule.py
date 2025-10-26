@@ -20,7 +20,7 @@ plt.rcParams.update(
 p_list = [0.1, 0.25, 0.5, 1, 2, 4, 10]
 temp_cmap = plt.get_cmap("coolwarm")
 temp_colors = [temp_cmap(i) for i in np.linspace(0, 1, len(p_list))]
-num_temps = 100
+num_temps = 50
 
 plt.figure(figsize=(7, 5))
 for p in p_list:

@@ -10,7 +10,7 @@
 # SVHN vanilla
 # CELEBA vanilla
 # SVHN thermo
-CELEBA thermo
+# CELEBA thermo
 CIFAR10 vanilla
 CIFAR10 thermo
 # SVHNPANG vanilla

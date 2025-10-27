@@ -15,7 +15,7 @@ ENV["GPU"] = "true"
 include("src/utils.jl")
 using .Utils
 
-include("src/T-KAM/T-KAM.jl")
+include("src/KAEM/KAEM.jl")
 using .T_KAM_model
 
 include("src/pipeline/trainer.jl")

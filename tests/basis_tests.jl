@@ -7,7 +7,7 @@ ENV["HALF_QUANT"] = "FP32"
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/kan/spline_bases.jl")
+include("../src/KAEM/kan/spline_bases.jl")
 using .spline_functions
 
 b, i, g, o, degree, σ = 5, 8, 7, 2, 2, pu([one(half_quant)])

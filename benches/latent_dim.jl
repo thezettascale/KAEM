@@ -10,10 +10,10 @@ using .DataUtils: get_vision_dataset
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/T-KAM.jl")
+include("../src/KAEM/KAEM.jl")
 using .T_KAM_model
 
-include("../src/T-KAM/model_setup.jl")
+include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
 conf = ConfParse("config/nist_config.ini")

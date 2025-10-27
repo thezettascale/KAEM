@@ -1,10 +1,10 @@
-# T-KAM 
+# KAEM 
 
-T-KAM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
+KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
 
 ## Brief:
 
-The Thermodynamic Kolmogorov-Arnold Model (T-KAM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. 
+The Kolmogorov-Arnold Energy Model (KAEM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. 
 
 It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on the dataset).
 
@@ -114,8 +114,8 @@ Without trainer:
 ```julia
 using Random, Lux, Enzyme, ComponentArrays, Accessors
 
-include("src/T-KAM/T-KAM.jl")
-include("src/T-KAM/model_setup.jl")
+include("src/KAEM/KAEM.jl")
+include("src/KAEM/model_setup.jl")
 include("src/utils.jl")
 using .T_KAM_model
 using .ModelSetup

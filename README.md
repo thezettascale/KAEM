@@ -4,7 +4,7 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 
 ## Brief:
 
-The Kolmogorov-Arnold Energy Model (KAEM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. 
+The Kolmogorov-Arnold Energy Model (KAEM) is a latent variable model that pairs univariate, energy-based priors with a flexible generator for different data modalities. It's defined entirely with respect to the Kolmogorov-Arnold representation theorem, thus bridging deterministic representation and probabilistic modeling.
 
 It's been designed to prioritise training stability, inference speed, and interpretability. It can work without an encoder, score-based approximations, and even MCMC (depending on the dataset).
 

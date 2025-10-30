@@ -155,11 +155,9 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The MIT license open-sources the code. The paper is licensed separately with CC license - also open with citation:
-
 ```bibtex
-@misc{raj2025structuredgenerativemodelingthermodynamic,
-      title={Structured Generative Modeling with the Thermodynamic Kolmogorov-Arnold Model}, 
+@misc{raj2025kolmogorovarnoldenergymodelsfast,
+      title={Kolmogorov-Arnold Energy Models: Fast and Interpretable Generative Modeling}, 
       author={Prithvi Raj},
       year={2025},
       eprint={2506.14167},

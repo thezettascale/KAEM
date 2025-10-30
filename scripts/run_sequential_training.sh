@@ -3,7 +3,7 @@
 set -e  # Exit on any error
 
 CONFIG_FILE="${1:-jobs.txt}"
-SESSION_NAME="tkam_sequential"
+SESSION_NAME="kaem_sequential"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,7 +35,7 @@ session_exists() {
 wait_for_training_completion() {
     print_status "Waiting for current training session to complete..."
     
-    while session_exists "tkam_train"; do
+    while session_exists "kaem_train"; do
         sleep 10
     done
     
@@ -54,9 +54,9 @@ run_training_job() {
     echo "============================================================"
     
     # Kill existing sessions
-    if session_exists "tkam_train"; then
+    if session_exists "kaem_train"; then
         print_warning "Killing existing training session."
-        tmux kill-session -t tkam_train 2>/dev/null || true
+        tmux kill-session -t kaem_train 2>/dev/null || true
         sleep 2
     fi
     
@@ -144,7 +144,7 @@ main() {
     print_status "Found $total_jobs training jobs to run sequentially"
     
     # Signal handler
-    trap 'print_warning "Interrupted by user. Stopping training sequence."; tmux kill-session -t tkam_train 2>/dev/null || true; exit 0' INT TERM
+    trap 'print_warning "Interrupted by user. Stopping training sequence."; tmux kill-session -t kaem_train 2>/dev/null || true; exit 0' INT TERM
     
     for i in "${!jobs[@]}"; do
         local job_num=$((i + 1))

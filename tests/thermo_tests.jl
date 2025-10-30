@@ -8,13 +8,13 @@ ENV["HALF_QUANT"] = "FP16"
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/T-KAM.jl")
+include("../src/KAEM/KAEM.jl")
 using .T_KAM_model
 
-include("../src/T-KAM/model_setup.jl")
+include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
-include("../src/T-KAM/loss_fcns/thermodynamic.jl")
+include("../src/KAEM/loss_fcns/thermodynamic.jl")
 using .ThermodynamicIntegration: sample_thermo
 
 conf = ConfParse("tests/test_conf.ini")

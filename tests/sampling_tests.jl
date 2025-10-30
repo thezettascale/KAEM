@@ -8,13 +8,13 @@ ENV["HALF_QUANT"] = "FP32"
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/T-KAM.jl")
+include("../src/KAEM/KAEM.jl")
 using .T_KAM_model
 
-include("../src/T-KAM/model_setup.jl")
+include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
-include("../src/T-KAM/ebm/inverse_transform.jl")
+include("../src/KAEM/ebm/inverse_transform.jl")
 using .InverseTransformSampling: interp_kernel!, interp_kernel_mixture!
 
 @static if CUDA.has_cuda() && parse(Bool, get(ENV, "GPU", "false"))

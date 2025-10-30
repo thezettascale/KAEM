@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Running T-KAM plotting scripts..."
+echo "Running KAEM plotting scripts..."
 
 PLOT_FILES=$(find plotting/ -name "*.py" -type f | sort)
 

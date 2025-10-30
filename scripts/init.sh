@@ -7,7 +7,7 @@ NC='\033[0m'
 
 set -e
 
-echo -e "${GREEN}Setting up T-KAM development environment...${NC}"
+echo -e "${GREEN}Setting up KAEM development environment...${NC}"
 
 if ! command -v conda &> /dev/null; then
     echo -e "${RED}Error: conda is not installed or not in PATH${NC}"
@@ -35,7 +35,7 @@ else
     echo -e "${YELLOW}Warning: Could not determine conda type, proceeding anyway${NC}"
 fi
 
-ENV_NAME="T-KAM"
+ENV_NAME="KAEM"
 
 if conda env list | grep -q "$ENV_NAME"; then
     echo -e "${YELLOW}Environment '$ENV_NAME' already exists. Do you want to remove it and recreate? (y/N)${NC}"

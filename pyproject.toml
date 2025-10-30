@@ -3,10 +3,10 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tkam"
+name = "kaem"
 version = "0.1.0"
-description = "T-KAM: Thermodynamic Kernel Annealing Method"
-authors = [{name = "T-KAM Team"}]
+description = "KAEM: Thermodynamic Kernel Annealing Method"
+authors = [{name = "KAEM Team"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Running T-KAM Julia benchmarks..."
+echo "Running KAEM Julia benchmarks..."
 
 BENCH_FILES=$(find benches/ -name "*.jl" -type f | sort)
 

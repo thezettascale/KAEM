@@ -8,13 +8,13 @@ ENV["HALF_QUANT"] = "FP16"
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/T-KAM.jl")
+include("../src/KAEM/KAEM.jl")
 using .T_KAM_model
 
-include("../src/T-KAM/model_setup.jl")
+include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
-include("../src/T-KAM/grid_updating.jl")
+include("../src/KAEM/grid_updating.jl")
 using .ModelGridUpdating
 
 conf = ConfParse("tests/test_conf.ini")
@@ -139,7 +139,7 @@ function test_seq_loss()
     @test !any(isnan, ∇)
 end
 
-@testset "T-KAM Tests" begin
+@testset "KAEM Tests" begin
     test_ps_derivative()
     test_grid_update()
     test_pca()

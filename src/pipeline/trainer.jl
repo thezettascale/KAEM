@@ -10,13 +10,13 @@ using MultivariateStats: reconstruct
 include("../utils.jl")
 using .Utils
 
-include("../T-KAM/T-KAM.jl")
+include("../KAEM/KAEM.jl")
 using .T_KAM_model
 
-include("../T-KAM/model_setup.jl")
+include("../KAEM/model_setup.jl")
 using .ModelSetup
 
-include("../T-KAM/grid_updating.jl")
+include("../KAEM/grid_updating.jl")
 using .ModelGridUpdating
 
 include("optimizer.jl")

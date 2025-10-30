@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Running T-KAM tests..."
+echo "Running KAEM tests..."
 
 TEST_FILES=$(find tests/ -name "*.jl" -type f | sort)
 

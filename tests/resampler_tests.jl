@@ -8,7 +8,7 @@ ENV["HALF_QUANT"] = "FP32"
 include("../src/utils.jl")
 using .Utils
 
-include("../src/T-KAM/gen/resamplers.jl")
+include("../src/KAEM/gen/resamplers.jl")
 using .WeightResamplers
 
 function test_systematic_resampler()

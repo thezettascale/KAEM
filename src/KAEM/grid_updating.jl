@@ -18,6 +18,7 @@ struct GridUpdater
     update_decay
     update_prior_grid
     update_llhood_grid
+    nogrid_prior
 end
 
 function GridUpdater(model, conf::ConfParse)
@@ -27,12 +28,20 @@ function GridUpdater(model, conf::ConfParse)
         parse(Float32, retrieve(conf, "GRID_UPDATING", "grid_update_decay"))
     update_prior_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_prior_grid"))
     update_llhood_grid = parse(Bool, retrieve(conf, "GRID_UPDATING", "update_llhood_grid"))
+
+    prior_func = retrieve(conf, "EbmModel", "spline_function")
+    gen_func = retrieve(conf, "GeneratorModel", "spline_function")
+
+    nogrid_prior = prior_func == "FFT" || prior_func == "Cheby"
+    nogrid_gen = gen_func == "FFT" || gen_func == "Cheby"
+
     return GridUpdater(
         model,
         grid_update_frequency,
         grid_update_decay,
         update_prior_grid,
-        update_llhood_grid && !model.lkhood.CNN && !model.lkhood.SEQ
+        update_llhood_grid && !model.lkhood.CNN && !model.lkhood.SEQ && !nogrid_gen,
+        nogrid_prior,
     )
 end
 
@@ -115,10 +124,7 @@ function (gu::GridUpdater)(
             @reset st_kan.ebm[:a].max = zero(st_kan.ebm[:a].max) .+ 1.1f0 .* max_z
         end
 
-        if !(
-                model.prior.fcns_qp[1].spline_string == "FFT" ||
-                    model.prior.fcns_qp[1].spline_string == "Cheby"
-            )
+        if !gu.nogrid_prior
             prior_copy = model.prior
             Q, P, B = prior_copy.q_size, prior_copy.p_size, model.batch_size
 

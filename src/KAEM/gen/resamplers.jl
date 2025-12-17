@@ -181,9 +181,21 @@ function (r::StratifiedResampler)(
     return systematic_kernel(ESS_bool, cdf, u, B, N)
 end
 
+struct NoResampler <: AbstractResampler
+end
+
+function (r::NoResampler)(
+        weights,
+        st_rng
+    )
+    B, N = size(weights)
+    return repeat((1:N)', B, 1)
+end
+
 const resampler_map::Dict{String, Function} = Dict(
     "residual" => (ESS_threshold, verbose) -> ResidualResampler(ESS_threshold, verbose),
     "systematic" => (ESS_threshold, verbose) -> SystematicResampler(ESS_threshold, verbose),
-    "stratified" => (ESS_threshold, verbose) -> StratifiedResampler(ESS_threshold, verbose)
+    "stratified" => (ESS_threshold, verbose) -> StratifiedResampler(ESS_threshold, verbose),
+    "none" => (ESS_threshold, verbose) -> NoResampler(),
 )
 end

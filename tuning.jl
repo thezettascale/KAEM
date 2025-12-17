@@ -91,7 +91,7 @@ space = Scenario(
         "tanh",
     ],
     max_trials = num_trials,
-    pruner = MedianPruner(),
+    # pruner = MedianPruner(),
     sampler = sampler()
 )
 
@@ -122,15 +122,15 @@ commit!(conf, "CNN", "activation ", cnn_act)
 if dataset == "MNIST"
     save!(conf, "config/nist_tuning_config.ini")
     conf = ConfParse("config/nist_config.ini")
-    parse!(conf)
+    parse_conf!(conf)
 elseif dataset == "SVHN"
     save!(conf, "config/svhn_tuning_config.ini")
     conf = ConfParse("config/svhn_config.ini")
-    parse!(conf)
+    parse_conf!(conf)
 else
     save!(conf, "config/celeba_tuning_config.ini")
     conf = ConfParse("config/celeba_config.ini")
-    parse!(conf)
+    parse_conf!(conf)
 end
 
 commit!(conf, "OPTIMIZER", "learning_rate", string(learning_rate))

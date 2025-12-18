@@ -359,7 +359,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             ssim /= length(t.model.test_loader)
 
             println("Epoch: ", epoch, " MS-SSIM: ", ssim)
-            report_value!(trial, ssim)
+            report_value!(trial, Float64(mse(real_ssim_x, gen_ssim_x)) + ssim)
             if should_prune(trial)
                 train_idx = Inf
             end
@@ -533,6 +533,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         end
         ssim = (1.0f0 - assess_msssim(real_ssim_x, gen_ssim_x)) |> Float64
         ssim /= length(t.model.test_loader)
+        ssim += Float64(mse(real_ssim_x, gen_ssim_x))
     end
 
     return ssim

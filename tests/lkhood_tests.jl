@@ -29,7 +29,7 @@ optimizer = create_opt(conf)
 function test_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "false")
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
     model, _, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; MLIR = false, rng = rng)
@@ -44,7 +44,7 @@ end
 
 function test_logllhood()
     Random.seed!(42)
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
     model, _, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; MLIR = false, rng = rng)

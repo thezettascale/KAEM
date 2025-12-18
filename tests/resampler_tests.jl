@@ -19,8 +19,12 @@ function test_systematic_resampler()
 
     idxs = r(softmax(weights; dims = 2), st_rng)
     println(idxs)
+
     @test size(idxs) == (4, 6)
-    return @test !any(isnan, idxs)
+    @test !any(isnan, idxs)
+
+    @test all(idxs .>= 1)
+    return @test all(idxs .<= 6)
 end
 
 function test_stratified_resampler()

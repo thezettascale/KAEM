@@ -28,7 +28,7 @@ optimizer = create_opt(conf)
 rng = Random.MersenneTwister(1)
 
 function test_ps_derivative()
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
     model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng)
@@ -43,7 +43,7 @@ function test_ps_derivative()
 end
 
 function test_grid_update()
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
     model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng)
@@ -88,14 +88,14 @@ function test_grid_update()
 end
 
 function test_pca()
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     commit!(conf, "PCA", "use_pca", "true")
     commit!(conf, "PCA", "pca_components", "10")
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader)
     model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng)
 
-    @test size(x_test, 1) == 9
+    @test size(x_test, 1) == 10
 
     x_recon = reconstruct(model.PCA_model, cpu_device()(x_test))
     x_recon = reshape(x_recon, model.original_data_size..., :)
@@ -104,7 +104,7 @@ function test_pca()
 end
 
 function test_mala_loss()
-    dataset = randn(rng, Float32, 32, 32, 1, 50)
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
     commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
@@ -120,7 +120,7 @@ function test_mala_loss()
 end
 
 function test_cnn_loss()
-    dataset = randn(rng, Float32, 32, 32, 3, 50)
+    dataset = randn(rng, Float32, 32, 32, 3, 500)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     commit!(conf, "CNN", "latent_concat", "false")
     commit!(conf, "PCA", "use_pca", "false")
@@ -139,7 +139,7 @@ function test_cnn_loss()
 end
 
 function test_cnn_residual_loss()
-    dataset = randn(rng, Float32, 32, 32, 3, 50)
+    dataset = randn(rng, Float32, 32, 32, 3, 500)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
     commit!(conf, "CNN", "latent_concat", "true")
     model = init_KAEM(dataset, conf, (32, 32, 3))
@@ -157,7 +157,7 @@ function test_cnn_residual_loss()
 end
 
 function test_seq_loss()
-    dataset = randn(rng, Float32, 50, 10, 100)
+    dataset = randn(rng, Float32, 50, 10, 500)
     commit!(conf, "SEQ", "sequence_length", "10")
     commit!(conf, "SEQ", "vocab_size", "50")
     model = init_KAEM(dataset, conf, (50, 10))

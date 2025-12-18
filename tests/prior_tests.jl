@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Reactant
+using Test, Random, LinearAlgebra, Statistics, Lux, ConfParser, ComponentArrays, Reactant
 
 ENV["GPU"] = true
 
@@ -68,7 +68,15 @@ function test_gaussian_prior()
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)
-    return @test !any(isnan, Array(log_p))
+    @test !any(isnan, Array(log_p))
+
+    z_array = Array(z_test)
+    z_flat = reshape(z_array, :)
+
+    @test abs(mean(z_flat)) < 2.0f0  # Roughly centered
+    @test std(z_flat) > 1.0f-2  # Not degenerate
+    @test all(Array(log_p) .> -1.0f6)  # Not extreme
+    return @test all(Array(log_p) .< 1.0f6)
 end
 
 function test_lognormal_prior()
@@ -129,6 +137,7 @@ function test_ebm_prior()
 end
 
 @testset "Mixture Prior Tests" begin
+    test_shapes()
     test_uniform_prior()
     test_gaussian_prior()
     test_lognormal_prior()

@@ -48,8 +48,8 @@ function residual_kernel(
     # Fill remaining with multinomial sampling
     residual_part = dropdims(
         sum(
-            1 .+ (cdf .< u); dims = 2
-        ); dims = 2
+            cdf .< u; dims = 2
+        ) .+ 1; dims = 2
     )
     residual_part = ifelse.(residual_part .> N, N, residual_part)
 
@@ -119,8 +119,8 @@ function systematic_kernel(
     early_return = (1 .- ESS_bool) .* (1:N)'
     indices = dropdims(
         sum(
-            1 .+ (cdf .< PermutedDimsArray(u, (1, 3, 2))); dims = 2
-        ); dims = 2
+            cdf .< PermutedDimsArray(u, (1, 3, 2)); dims = 2
+        ) .+ 1; dims = 2
     )
     indices = ifelse.(indices .> N, N, indices)
     return early_return .+ ESS_bool .* indices

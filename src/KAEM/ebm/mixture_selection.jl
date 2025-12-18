@@ -14,7 +14,7 @@ function mask_kernel(
         P
     )
     """One-hot mask for chosen index"""
-    indices = sum(1 .+ (α .< rand_vals); dims = 2)
+    indices = sum(α .< rand_vals; dims = 2) .+ 1
     p_range = reshape(1:P, 1, P, 1)
     mask = indices .== p_range |> Lux.f32
     return mask

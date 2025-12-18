@@ -19,7 +19,7 @@ function interpolate_kernel(cdf, grid, rand_vals, G; mix_bool = false)
             rand_vals :
             PermutedDimsArray(view(rand_vals, :, :, :, :), (1, 2, 4, 3))
     )
-    indices = sum(1 .+ (cdf .< rv); dims = 3)
+    indices = sum(cdf .< rv; dims = 3) .+ 1
     first_bool = indices .== 1 |> Lux.f32
     mask2 = indices .== grid_idxs |> Lux.f32
     mask1 = mask2 .- 1.0f0

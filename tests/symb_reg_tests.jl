@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Statistics, ComponentArrays
+using Test, Random, LinearAlgebra, Statistics, ComponentArrays, ConfParser, Lux
 
 ENV["GPU"] = false # Don't change
 
@@ -17,7 +17,12 @@ using .KAEM_model
 include("../src/KAEM/symbolic/reg.jl")
 using .Reg
 
+include("../src/KAEM/kan/univariate_functions.jl")
+using .UnivariateFunctions
+
 Random.seed!(42)
+conf = ConfParse("tests/test_conf.ini")
+parse_conf!(conf)
 
 function test_symbolic_functions()
     x = rand(Float32, 10)
@@ -148,9 +153,38 @@ function test_fit_symbolic()
     return @test true
 end
 
+function test_reg()
+    Random.seed!(42)
+    I, O = 5, 3
+    f = init_function(I, O; sample_size = 10)
+
+    Random.seed!(42)
+    ps, st_kan = Lux.setup(Random.GLOBAL_RNG, f)
+    st_lux = NamedTuple()
+
+    test_symb_lib = Dict(
+        "x" => SYMB_LIB["x"],
+        "x^2" => SYMB_LIB["x^2"],
+        "sin" => SYMB_LIB["sin"],
+        "exp" => SYMB_LIB["exp"]
+    )
+
+    sf = FitSymbolic.SymFitter(
+        conf = conf,
+        symbolic_lib = test_symb_lib,
+    )
+
+    fit, st_lux_out = sf(ps, st_kan, st_lux, f)
+
+    @test isa(fit, Dict)
+    @test length(fit) == I * O
+    return @test !isempty(st_lux_out)
+end
+
 @testset "Symbolic Regression Tests" begin
     test_symbolic_functions()
     test_ols_wb()
     test_fit_affine()
     test_fit_symbolic()
+    test_reg()
 end

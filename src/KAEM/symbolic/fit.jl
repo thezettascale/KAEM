@@ -151,14 +151,15 @@ function (sf::SymFitter)(
         ps,
         st_kan,
         st_lux,
-        kan_func
+        kan_func,
+        rng = Random.MersenneTwister(1),
     )
     """Finds best symbolic functions for each input and output dim"""
-    in_min, in_max = st.grid[:, 1], st.grid[:, end]
+    in_min, in_max = st_kan.grid[:, 1], st_kan.grid[:, end]
     I, O = kan_func.in_dim, kan_func.out_dim
 
     z = range(
-        in_max,
+        in_min,
         in_max,
         length = sf.num_points
     ) |> collect
@@ -175,7 +176,7 @@ function (sf::SymFitter)(
         R2, a, b, w, b = fit_symbolic(
             z,
             y,
-            sym,
+            sym[1],
             I,
             O;
             rng = rng,
@@ -189,11 +190,12 @@ function (sf::SymFitter)(
 
     fit = Dict()
     for i in 1:I, o in 1:O
-        sorted_R2s = sortperm(R2s[i, o, :], rev = true)
+        sorted_R2s = sortperm(R2_list[i, o, :], rev = true)
         best = sorted_R2s[1]
 
-        best_name, best_func = collect(symbolic_lib)[best]
-        best_R2 = R2s[best]
+        best_name, best_func_tuple = collect(sf.lib)[best]
+        best_func = best_func_tuple[1]  # Extract the function from the tuple
+        best_R2 = R2_list[i, o, best]
 
         @reset st_lux[Symbol("i=$i,o=$o")] = best_func
         fit = merge(fit, Dict("i=$i,o=$o" => (best_name, best_R2)))

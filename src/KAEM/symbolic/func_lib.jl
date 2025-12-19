@@ -2,7 +2,7 @@ module SymbolicLibrary
 
 export SYMB_LIB
 
-using LinearAlgebra, SymPy
+using LinearAlgebra, SymPyPythonCall
 
 nan_to_num = function (x)
     x = ifelse.(isnan.(x), zero(x), x)

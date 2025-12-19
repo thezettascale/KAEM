@@ -8,7 +8,10 @@ using Statistics,
     ComponentArrays,
     Optimization,
     Accessors,
-    NLopt
+    NLopt,
+    Random,
+    ConfParser,
+    LinearRegression
 
 include("func_lib.jl")
 using .SymbolicLibrary
@@ -69,26 +72,17 @@ function fit_affine(
 end
 
 function ols_wb(
-        z::AbstractVector{T, 2},
-        y::AbstractVector{T, 2}
+        z::AbstractArray{T, 2},
+        y::AbstractArray{T, 2}
     )::Tuple{
         AbstractVector{T},
         AbstractVector{T},
     } where {T <: Float32}
-    ȳ = mean(y)
-    z̄ = mean(z)
-
-    z0 = z .- z̄
-    y0 = y .- ȳ
-
-    denom = dot(z0, z0)
-    if iszero(denom)
-        return 0.0f0, ȳ
-    end
-
-    w = dot(z0, y0) / denom
-    b = ȳ .- w .* z̄
-    return w, b
+    lr = linregress(z, y)
+    return (
+        LinearRegression.slope(lr),
+        LinearRegression.bias(lr),
+    )
 end
 
 function fit_symbolic(

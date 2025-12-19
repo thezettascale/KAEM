@@ -2,7 +2,7 @@
 
 julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "809c5445d8c67c6caa1306e22a0802babc78c006"
+project_hash = "f3a3dda1a2db38fd96cbbf8b0431b43d96e02af6"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "8b2b045b22740e4be20654175cc38291d48539db"
@@ -680,9 +680,9 @@ version = "1.15.1"
 
 [[deps.DifferentiationInterface]]
 deps = ["ADTypes", "LinearAlgebra"]
-git-tree-sha1 = "80bd15222b3e8d0bc70d921d2201aa0084810ce5"
+git-tree-sha1 = "1d5a93ce22dfa78d202b3bd6ad8afa3d69fcd129"
 uuid = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
-version = "0.7.12"
+version = "0.7.13"
 
     [deps.DifferentiationInterface.extensions]
     DifferentiationInterfaceChainRulesCoreExt = "ChainRulesCore"
@@ -800,9 +800,9 @@ version = "1.0.5"
 
 [[deps.Enzyme]]
 deps = ["CEnum", "EnzymeCore", "Enzyme_jll", "GPUCompiler", "InteractiveUtils", "LLVM", "Libdl", "LinearAlgebra", "ObjectFile", "PrecompileTools", "Preferences", "Printf", "Random", "SparseArrays"]
-git-tree-sha1 = "73e9cb6bb34e537b0ef3bb5e51b1174160dcc5ec"
+git-tree-sha1 = "f6ca16e7662a90b12c9e47bbb4ff2f3617402ff5"
 uuid = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-version = "0.13.109"
+version = "0.13.110"
 weakdeps = ["ADTypes", "BFloat16s", "ChainRulesCore", "GPUArraysCore", "LogExpFunctions", "SpecialFunctions", "StaticArrays"]
 
     [deps.Enzyme.extensions]
@@ -824,9 +824,9 @@ weakdeps = ["Adapt"]
 
 [[deps.Enzyme_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "b7a8c737c8ca2f5ca313e012f212effa1adcbf3a"
+git-tree-sha1 = "b4243939041dcffdae0b80623575daad2a282050"
 uuid = "7cc45869-7501-5eee-bdea-0790c847d4ef"
-version = "0.0.229+0"
+version = "0.0.230+0"
 
 [[deps.EpollShim_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1831,6 +1831,12 @@ deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 version = "1.11.0"
 
+[[deps.LinearRegression]]
+deps = ["LinearAlgebra", "StatsAPI"]
+git-tree-sha1 = "aa2b3594174096780c87f131f5258f8700dfc369"
+uuid = "92481ed7-9fb7-40fd-80f2-46fd0f076581"
+version = "0.2.1"
+
 [[deps.LittleCMS_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll"]
 git-tree-sha1 = "8e6a74641caf3b84800f2ccd55dc7ab83893c10b"
@@ -2834,9 +2840,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "LinearAlgebra", "RecipesBase", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "66da00edb64d4b50ed9de10bc3284b2cb817dcb0"
+git-tree-sha1 = "d7c53a81b0ab7f62842ff79d9e74e34562d5834e"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.41.0"
+version = "3.42.0"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"

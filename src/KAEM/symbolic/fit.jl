@@ -8,10 +8,11 @@ using Statistics,
     ComponentArrays,
     Optimization,
     Accessors,
+    OptimizationNLopt,
     NLopt,
     Random,
     ConfParser,
-    LinearRegression
+    Lux
 
 include("func_lib.jl")
 using .SymbolicLibrary
@@ -34,41 +35,43 @@ function fit_affine(
         AbstractArray{T},
         AbstractArray{T},
     } where {T <: Float32}
+    I, O = size(y, 1), size(y, 2)
     α_init = glorot_normal(
         rng,
         Float32,
-        size(y)[1:2]...
+        I * O
     )
 
     β_init = glorot_normal(
         rng,
         Float32,
-        size(y)[1:2]...
+        I * O
     )
 
-    params = (α = α_init, β_init) |> ComponentArray
+    params = vcat(α_init, β_init)
 
     function R2_cost(u, p; final = false)
-        α, β = u.α, u.β
+        α, β = reshape(u[1:(I * O)], I, O), reshape(u[(I * O + 1):end], I, O)
 
         ŷ = func.(α .* x .+ β)
         μ_y = mean(y; dims = 3)
 
         RSS = sum((y - ŷ) .^ 2; dims = 3)
-        TSS = sum((y - μ_ŷ) .^ 2; dims = 3)
+        TSS = sum((y .- μ_y) .^ 2; dims = 3)
         R2 = 1.0f0 .- (RSS ./ TSS)
 
-        R2 = final ? R2 : sum(R2)
+        R2 = final ? R2 : -sum(R2)
         return R2
     end
 
-    optf = Optimization.OptimizationFunction(R2_cost, Optimization.AutoEnzyme())
+    optf = Optimization.OptimizationFunction(R2_cost)
     prob = OptimizationProblem(optf, params)
     sol = solve(prob, NLopt.GN_ORIG_DIRECT_L(); maxiters = max_iters)
-    params = sol.minimizer
+    u = sol.minimizer
+    α, β = reshape(u[1:(I * O)], I, O), reshape(u[(I * O + 1):end], I, O)
 
-    R2 = R2_cost(params, nothing; final = true)
-    return R2, params.α, params.β
+    R2 = R2_cost(u, nothing; final = true)
+    return dropdims(R2; dims = 3), α, β
 end
 
 function ols_wb(
@@ -78,11 +81,20 @@ function ols_wb(
         AbstractVector{T},
         AbstractVector{T},
     } where {T <: Float32}
-    lr = linregress(z, y)
-    return (
-        LinearRegression.slope(lr),
-        LinearRegression.bias(lr),
+    z_mean = mean(z; dims = 1)
+    y_mean = mean(y; dims = 1)
+    z_centered = z .- z_mean
+    y_centered = y .- y_mean
+
+    num = sum(z_centered .* y_centered; dims = 1)
+    den = sum(z_centered .^ 2; dims = 1)
+    w = ifelse.(
+        iszero.(den),
+        zero(T),
+        num ./ den
     )
+    b = y_mean .- w .* z_mean
+    return vec(w), vec(b)
 end
 
 function fit_symbolic(

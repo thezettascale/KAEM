@@ -48,23 +48,23 @@ end
 
 function test_ols_wb()
     Random.seed!(42)
-    n = 100
+    n, f = 100, 200
     w_true = 2.0f0
     b_true = 1.0f0
-    z = randn(Float32, n)
-    y = w_true .* z .+ b_true .+ 0.1f0 .* randn(Float32, n)
+    z = randn(Float32, n, f)
+    y = w_true .* z .+ b_true .+ 0.1f0 .* randn(Float32, n, f)
 
     w, b = FitSymbolic.ols_wb(z, y)
 
-    @test abs(w - w_true) < 0.5f0
-    @test abs(b - b_true) < 0.5f0
-    @test !isnan(w)
-    @test !isnan(b)
+    @test all(abs.(w .- w_true) .< 0.5f0)
+    @test all(abs.(b .- b_true) .< 0.5f0)
+    @test !any(isnan.(w))
+    @test !any(isnan.(b))
 
-    z_zero = zeros(Float32, n)
+    z_zero = zeros(Float32, n, f)
     w_zero, b_zero = FitSymbolic.ols_wb(z_zero, y)
-    @test w_zero == 0.0f0
-    @test !isnan(b_zero)
+    @test all(w_zero .≈ 0.0f0)
+    @test !any(isnan.(b_zero))
     return @test true
 end
 

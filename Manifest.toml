@@ -2,7 +2,7 @@
 
 julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "f3a3dda1a2db38fd96cbbf8b0431b43d96e02af6"
+project_hash = "b01c068f219987446b37e4926145966761ea7b25"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "8b2b045b22740e4be20654175cc38291d48539db"
@@ -1831,12 +1831,6 @@ deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 version = "1.11.0"
 
-[[deps.LinearRegression]]
-deps = ["LinearAlgebra", "StatsAPI"]
-git-tree-sha1 = "aa2b3594174096780c87f131f5258f8700dfc369"
-uuid = "92481ed7-9fb7-40fd-80f2-46fd0f076581"
-version = "0.2.1"
-
 [[deps.LittleCMS_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll"]
 git-tree-sha1 = "8e6a74641caf3b84800f2ccd55dc7ab83893c10b"
@@ -2428,6 +2422,12 @@ version = "4.0.2"
     ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
     SymbolicAnalysis = "4297ee4d-0239-47d8-ba5d-195ecdf594fe"
     Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[[deps.OptimizationNLopt]]
+deps = ["NLopt", "OptimizationBase", "Random", "Reexport", "SciMLBase"]
+git-tree-sha1 = "8354392af1d62b7c3ac28a33094b1e8338364843"
+uuid = "4e6fcdb7-1186-4e1f-a706-475e75c168bb"
+version = "0.3.8"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]

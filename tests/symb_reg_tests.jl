@@ -90,7 +90,14 @@ function test_fit_affine()
 
     func_sq = x -> x .^ 2
     y_sq = func_sq.(α_true .* x .+ β_true)
-    R2_sq, α_sq, β_sq = FitSymbolic.fit_affine(x, y_sq, func_sq, I, O; max_iters = 50)
+    R2_sq, α_sq, β_sq = FitSymbolic.fit_affine(
+        x,
+        y_sq,
+        func_sq,
+        I,
+        O;
+        max_iters = 50
+    )
 
     @test size(R2_sq) == (I, O)
     @test !any(isnan.(R2_sq))
@@ -104,7 +111,14 @@ function test_fit_symbolic()
     x = randn(Float32, I, O, N)
 
     func = x -> x
-    R2, α, β, w, b = FitSymbolic.fit_symbolic(x, x, func, I, O; max_iters = 30)
+    R2, α, β, w, b = FitSymbolic.fit_symbolic(
+        x,
+        x,
+        func,
+        I,
+        O;
+        max_iters = 30
+    )
 
     @test size(R2) == (I, O)
     @test size(α) == (I, O)
@@ -119,7 +133,14 @@ function test_fit_symbolic()
 
     func_sq = x -> x .^ 2
     y_sq = func_sq.(x)
-    R2_sq, α_sq, β_sq, w_sq, b_sq = FitSymbolic.fit_symbolic(x, y_sq, func_sq, I, O; max_iters = 30)
+    R2_sq, α_sq, β_sq, w_sq, b_sq = FitSymbolic.fit_symbolic(
+        x,
+        y_sq,
+        func_sq,
+        I,
+        O;
+        max_iters = 30
+    )
 
     @test size(R2_sq) == (I, O)
     @test !any(isnan.(R2_sq))

@@ -21,21 +21,26 @@ struct SymFitter
     lib
     num_points::Int
     max_iters::Int
+    lb::Float32
+    ub::Float32
 end
 
 
 function fit_affine(
         x::AbstractArray{T, 3},
         y::AbstractArray{T, 3},
-        func::Function;
+        func::Function,
+        I::Int,
+        O::Int;
         rng::AbstractRNG = Random.MersenneTwister(1),
+        param_lower_bound::T = -10.0f0,
+        param_upper_bound::T = 10.0f0,
         max_iters::Int = 100
     )::Tuple{
         AbstractArray{T},
         AbstractArray{T},
         AbstractArray{T},
     } where {T <: Float32}
-    I, O = size(y, 1), size(y, 2)
     α_init = glorot_normal(
         rng,
         Float32,
@@ -64,8 +69,11 @@ function fit_affine(
         return R2
     end
 
+    lb = fill(param_lower_bound, length(params))
+    ub = fill(param_upper_bound, length(params))
+
     optf = Optimization.OptimizationFunction(R2_cost)
-    prob = OptimizationProblem(optf, params)
+    prob = OptimizationProblem(optf, params; lb = lb, ub = ub)
     sol = solve(prob, NLopt.GN_ORIG_DIRECT_L(); maxiters = max_iters)
     u = sol.minimizer
     α, β = reshape(u[1:(I * O)], I, O), reshape(u[(I * O + 1):end], I, O)
@@ -104,6 +112,8 @@ function fit_symbolic(
         I::Int,
         O::Int;
         rng::AbstractRNG = Random.MersenneTwister(1),
+        param_lower_bound::T = -10.0f0,
+        param_upper_bound::T = 10.0f0,
         max_iters::Int = 100
     )::Tuple{
         AbstractArray{T},
@@ -112,7 +122,7 @@ function fit_symbolic(
         AbstractArray{T},
         AbstractArray{T},
     } where {T <: Float32}
-    R2, α, β = fit_affine(x, y, func; rng = rng, max_iters = max_iters)
+    R2, α, β = fit_affine(x, y, func, I, O; rng = rng, max_iters = max_iters)
     z = func.(α .* x .+ β)
     z, y = PermutedDimsArray(z, (3, 1, 2)), PermutedDimsArray(y, (3, 1, 2))
     w, b = ols_wb(reshape(z, :, I * O), reshape(y, :, I * O))
@@ -126,10 +136,14 @@ function SymFitter(
     )
     num_points = parse(Int, retrieve(conf, "SYMBOLIC_REG", "num_points_fitting"))
     max_iters = parse(Int, retrieve(conf, "SYMBOLIC_REG", "max_iters"))
+    lb = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "fit_lower_bound"))
+    ub = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "fit_upper_bound"))
     return SymFitter(
         symbolic_lib,
         num_points,
-        max_iters
+        max_iters,
+        lb,
+        ub
     )
 end
 
@@ -158,7 +172,17 @@ function (sf::SymFitter)(
     R2_list = zeros(Float32, I, O, length(sf.lib))
     i = 1
     for (name, sym) in sf.lib
-        R2, a, b, w, b = fit_affine(z, y, sym)
+        R2, a, b, w, b = fit_symbolic(
+            z,
+            y,
+            sym,
+            I,
+            O;
+            rng = rng,
+            param_lower_bound = sf.lb,
+            param_upper_bound = sf.ub,
+            max_iters = sf.max_iters
+        )
         R2_list[:, :, i] .= R2
         i += 1
     end

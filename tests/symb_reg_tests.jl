@@ -181,9 +181,13 @@ function test_reg()
 
     fit, st_lux_out = sf(ps, st_kan, st_lux, compiled_f)
 
+    x = randn(Float32, 2, 2)
+    y = st_lux_out[Symbol("i=1,o=1")](x)
+
     @test isa(fit, Dict)
     @test length(fit) == I * O
-    return @test !isempty(st_lux_out)
+    @test !isempty(st_lux_out)
+    return @test !any(isnan.(y))
 end
 
 @testset "Symbolic Regression Tests" begin

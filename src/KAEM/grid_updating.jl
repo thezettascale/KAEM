@@ -118,10 +118,11 @@ function (gu::GridUpdater)(
         end
 
         # Must update domain for inverse transform sampling
-        if (model.MALA || model.N_t > 1 || model.prior.bool_config.ula)
-            min_z, max_z = minimum(z), maximum(z)
-            @reset st_kan.ebm[:a].min = zero(st_kan.ebm[:a].min) .+ 0.9f0 .* min_z
-            @reset st_kan.ebm[:a].max = zero(st_kan.ebm[:a].max) .+ 1.1f0 .* max_z
+        if (model.MALA || model.N_t > 1 || model.prior.bool_config.ula || gu.nogrid_prior)
+            red_dim = model.prior.bool_config.mixture_model ? (2, 3) : (1, 3)
+            min_z, max_z = minimum(z; dims = red_dim), maximum(z; dims = red_dim)
+            @reset st_kan.ebm[:a].min = 0.95f0 .* dropdims(min_z; dims = red_dim)
+            @reset st_kan.ebm[:a].max = 1.05f0 .* dropdims(max_z; dims = red_dim)
         end
 
         if !gu.nogrid_prior

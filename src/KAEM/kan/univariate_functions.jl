@@ -153,8 +153,8 @@ function Lux.initialstates(
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1) |> Lux.f32
 
     # Domain
-    min_z = [first(l.grid_range)]
-    max_z = [last(l.grid_range)]
+    min_z = repeat([first(l.grid_range)], l.in_dim)
+    max_z = repeat([last(l.grid_range)], l.in_dim)
 
     return (
         grid = grid,

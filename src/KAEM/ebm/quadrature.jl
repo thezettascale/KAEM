@@ -51,8 +51,8 @@ function get_gausslegendre(
     a, b = st_kan[:a].grid[:, 1], st_kan[:a].grid[:, end]
 
     if ebm.bool_config.no_grid
-        a = zero(a) .+ st_kan[:a].min
-        b = zero(b) .+ st_kan[:a].max
+        a = st_kan[:a].min
+        b = st_kan[:a].max
     end
 
     nodes, weights = ebm.init_nodes, ebm.init_weights

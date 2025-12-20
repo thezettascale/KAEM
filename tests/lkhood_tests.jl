@@ -62,7 +62,7 @@ end
 function test_cnn_generate()
     Random.seed!(42)
     commit!(conf, "CNN", "use_cnn_lkhood", "true")
-    dataset = randn(rng, Float32, 32, 32, out_dim, 50)
+    dataset = randn(rng, Float32, 32, 32, out_dim, 500)
     model = init_KAEM(dataset, conf, (32, 32, out_dim))
     x_test = first(model.train_loader) |> pu
     model, _, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; MLIR = false, rng = rng)

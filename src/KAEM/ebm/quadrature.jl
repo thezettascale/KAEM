@@ -49,10 +49,8 @@ function get_gausslegendre(
     )
     """Get Gauss-Legendre nodes and weights for prior's domain"""
     a, b = st_kan[:a].grid[:, 1], st_kan[:a].grid[:, end]
-    no_grid =
-        (ebm.fcns_qp[1].spline_string == "FFT" || ebm.fcns_qp[1].spline_string == "Cheby")
 
-    if no_grid
+    if ebm.bool_config.no_grid
         a = zero(a) .+ st_kan[:a].min
         b = zero(b) .+ st_kan[:a].max
     end

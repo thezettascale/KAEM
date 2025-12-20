@@ -17,6 +17,8 @@ using Statistics,
 include("func_lib.jl")
 using .SymbolicLibrary
 
+using ..Utils
+
 struct SymFitter
     lib
     num_points::Int
@@ -156,19 +158,17 @@ function (sf::SymFitter)(
     )
     """Finds best symbolic functions for each input and output dim"""
     in_min, in_max = st_kan.grid[:, 1], st_kan.grid[:, end]
-    I, O = kan_func.in_dim, kan_func.out_dim
+    I = length(in_min)
+    O = ndims(ps.coef) > 3 ? size(ps.coef, 3) : size(ps.coef, 2)
 
-    z = range(
-        in_min,
-        in_max,
-        length = sf.num_points
-    ) |> collect
+    z = zeros(Float32, I, 1, sf.num_points)
+    for i in 1:I
+        in_min, in_max = st_kan.grid[i, 1], st_kan.grid[i, end]
+        z[i, 1, :] = range(in_min, in_max, length = sf.num_points) |> collect
+    end
 
-    z = repeat(
-        reshape(z, 1, 1, sf.num_points),
-        I, O, 1
-    )
-    y = kan_func(z[:, 1, :], ps, st_kan)
+    y = kan_func(pu(z[:, 1, :]), ps, st_kan) |> Array
+    z = repeat(z, 1, O, 1)
 
     R2_list = zeros(Float32, I, O, length(sf.lib))
     i = 1

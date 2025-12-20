@@ -80,7 +80,7 @@ function test_seq_generate()
     Random.seed!(42)
     commit!(conf, "SEQ", "sequence_length", "8")
 
-    dataset = randn(rng, Float32, out_dim, 8, 50)
+    dataset = randn(rng, Float32, out_dim, 8, 500)
     model = init_KAEM(dataset, conf, (out_dim, 8))
     x_test = first(model.train_loader) |> pu
     model, _, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; MLIR = false, rng = rng)

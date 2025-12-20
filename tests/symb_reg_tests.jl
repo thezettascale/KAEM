@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Statistics, ComponentArrays, ConfParser, Lux
+using Test, Random, LinearAlgebra, Statistics, ComponentArrays, ConfParser, Lux, Reactant
 
 ENV["GPU"] = false # Don't change
 
@@ -23,6 +23,8 @@ using .UnivariateFunctions
 Random.seed!(42)
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
+
+b_size = parse(Int, retrieve(conf, "SYMBOLIC_REG", "num_points_fitting"))
 
 function test_symbolic_functions()
     x = rand(Float32, 10)
@@ -156,10 +158,13 @@ end
 function test_reg()
     Random.seed!(42)
     I, O = 5, 3
-    f = init_function(I, O; sample_size = 10)
+    f = init_function(I, O; sample_size = b_size)
 
     Random.seed!(42)
     ps, st_kan = Lux.setup(Random.GLOBAL_RNG, f)
+
+    x = randn(Float32, I, b_size) |> pu
+    compiled_f = Reactant.@compile f(x, ps, st_kan)
     st_lux = NamedTuple()
 
     test_symb_lib = Dict(
@@ -170,11 +175,11 @@ function test_reg()
     )
 
     sf = FitSymbolic.SymFitter(
-        conf = conf,
+        conf,
         symbolic_lib = test_symb_lib,
     )
 
-    fit, st_lux_out = sf(ps, st_kan, st_lux, f)
+    fit, st_lux_out = sf(ps, st_kan, st_lux, compiled_f)
 
     @test isa(fit, Dict)
     @test length(fit) == I * O

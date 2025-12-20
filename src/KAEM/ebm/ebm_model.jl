@@ -26,6 +26,7 @@ struct BoolConfig <: AbstractBoolConfig
     mixture_model::Bool
     use_attention_kernel::Bool
     train_props::Bool
+    no_grid::Bool
 end
 
 struct EbmModel{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
@@ -147,6 +148,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     A = length(functions) > 0 ? typeof(functions[1].base_activation) : AbstractActivation
 
     init_nodes, init_weights = gausslegendre(N_quad)
+    no_grid = spline_function == "FFT" || spline_function == "Cheby"
 
     return EbmModel{Float32, A}(
         Tuple(functions),
@@ -158,6 +160,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             mixture_model,
             use_attention_kernel,
             train_props,
+            no_grid
         ),
         length(widths) - 1,
         prior_type,

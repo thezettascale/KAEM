@@ -188,7 +188,7 @@ function (b::RBF_basis)(
         init::Bool = false,
     )
     x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
-    return @. exp(-((x_3d - grid) / (scale * σ))^2 / 2)
+    return exp.(-((x_3d .- grid) ./ (scale .* σ)) .^ 2 ./ 2)
 end
 
 function (b::RSWAF_basis)(
@@ -199,8 +199,8 @@ function (b::RSWAF_basis)(
         init::Bool = false,
     )
     x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
-    diff = @. tanh((x_3d - grid) / σ)
-    return @. 1.0f0 - diff^2
+    diff = tanh.((x_3d .- grid) ./ σ)
+    return 1.0f0 .- diff .^ 2
 end
 
 function (b::Cheby_basis)(
@@ -211,8 +211,8 @@ function (b::Cheby_basis)(
         init::Bool = false,
     )
     x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
-    x_3d = @. acos(tanh(x_3d) / σ)
-    return @. cos(x_3d * b.lin)
+    x_3d = acos.(tanh.(x_3d) ./ σ)
+    return cos.(x_3d .* b.lin)
 end
 
 function coef2curve_Spline(
@@ -326,7 +326,7 @@ function (b::FFT_basis)(
     I, G, S = b.I, b.G, b.S
 
     x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
-    freq = @. x_3d * grid * Float32(2π) * σ
+    freq = x_3d .* grid .* Float32(2π) .* σ
     return cos.(freq), sin.(freq)
 end
 
@@ -344,10 +344,11 @@ function coef2curve_FFT(
     odd = PermutedDimsArray(view(odd, :, :, :, :), (1, 4, 3, 2))
     even_coef = PermutedDimsArray(view(coef, 1:1, :, :, :), (2, 3, 1, 4))
     odd_coef = PermutedDimsArray(view(coef, 2:2, :, :, :), (2, 3, 1, 4))
-
-    y_even = sum(even .* even_coef; dims = 4)
-    y_odd = sum(odd .* odd_coef; dims = 4)
-    return dropdims(y_even + y_odd; dims = 4)
+    return dropdims(
+        sum(
+            even .* even_coef .+ odd .* odd_coef; dims = 4
+        ); dims = 4
+    )
 end
 
 end

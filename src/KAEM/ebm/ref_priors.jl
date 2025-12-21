@@ -43,7 +43,7 @@ function (prior::GaussianPrior)(
         log_bool = false,
     )
     scale = Float32(1 / sqrt(2π))
-    z = @. scale * exp(-z^2 / 2)
+    z = scale .* exp.(-z .^ 2 ./ 2)
     z = log_bool ? stable_log(z, prior.ε) : z
     return z
 end
@@ -55,7 +55,7 @@ function (prior::LogNormalPrior)(
         log_bool = false,
     )
     sqrt_2π = Float32(sqrt(2π))
-    z = @. exp(-((log(z + prior.ε))) / 2) / (z * sqrt_2π * prior.ε)
+    z = exp.(-((log.(z .+ prior.ε))) ./ 2) ./ (z .* sqrt_2π .* prior.ε)
     z = log_bool ? stable_log(z, prior.ε) : z
     return z
 end
@@ -66,9 +66,9 @@ function (prior::LearnableGaussianPrior)(
         π_σ;
         log_bool = false,
     )
-    π_eps = @. π_σ * Float32(sqrt(2π)) + prior.ε
-    denom_eps = @. 2 * π_σ^2 + prior.ε
-    z = @. (1 / abs(π_eps)) * exp(-((z - π_μ)^2) / denom_eps)
+    π_eps = π_σ .* Float32(sqrt(2π)) .+ prior.ε
+    denom_eps = 2 .* π_σ .^ 2 .+ prior.ε
+    z = (1 / abs(π_eps)) .* exp.(-((z .- π_μ) .^ 2) ./ denom_eps)
     z = log_bool ? stable_log(z, prior.ε) : z
     return z
 end
@@ -81,7 +81,7 @@ function (prior::EbmPrior)(
     )
     log_pdf = zero(z)
     log_pdf = log_bool ? log_pdf .- 1.0f0 : log_pdf
-    return @. log_pdf + 1.0f0
+    return log_pdf .+ 1.0f0
 end
 
 const prior_map = Dict(

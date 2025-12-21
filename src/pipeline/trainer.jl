@@ -138,7 +138,6 @@ function init_trainer(
 
     model, opt_state, params, st_kan, st_lux, st_rng = prep_model(model, x, optimizer; rng = rng)
 
-
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
     checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))

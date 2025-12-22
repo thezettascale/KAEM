@@ -144,7 +144,7 @@ function swap_P_rows_onehot(P, k, e_p, G)
     """Swaps rows k and p in the first dimension of P using one-hot e_p"""
     e_k = ((1:G) .== k) |> Lux.f32
 
-    row_k = P[k:k, :]
+    row_k = sum(P .* e_k; dims = 1)
     row_p = sum(P .* e_p; dims = 1)
 
     P_new = P .+

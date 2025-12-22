@@ -118,11 +118,24 @@ function (gu::GridUpdater)(
         end
 
         # Must update domain for inverse transform sampling
-        if (model.MALA || model.N_t > 1 || model.prior.bool_config.ula || gu.nogrid_prior)
+        ula_bool = model.prior.bool_config.ula || model.MALA || model.N_t > 1
+        if (ula_bool && gu.nogrid_prior)
             red_dim = model.prior.bool_config.mixture_model ? (2, 3) : (1, 3)
-            min_z, max_z = minimum(z; dims = red_dim), maximum(z; dims = red_dim)
-            @reset st_kan.ebm[:a].min = 0.95f0 .* dropdims(min_z; dims = red_dim)
-            @reset st_kan.ebm[:a].max = 1.05f0 .* dropdims(max_z; dims = red_dim)
+            min_z = dropdims(minimum(z; dims = red_dim); dims=red_dim)
+            max_z = dropdims(maximum(z; dims = red_dim); dims=red_dim)
+
+            # Ensure min_z < max_z
+            order_bool = min_z .< max_z
+            min_z = ifelse.(order_bool, min_z, max_z)
+            max_z = ifelse.(order_bool, max_z, min_z)
+
+            # Expand bounds slightly
+            low, high = zero(min_z) .+ 0.95f0, zero(max_z) .+ 1.05f0
+            lo_bound = ifelse.(min_z .< 0, high, low)
+            hi_bound = ifelse.(max_z .< 0, low, high)
+
+            @reset st_kan.ebm[:a].min = lo_bound .* min_z
+            @reset st_kan.ebm[:a].max = hi_bound .* max_z
         end
 
         if !gu.nogrid_prior

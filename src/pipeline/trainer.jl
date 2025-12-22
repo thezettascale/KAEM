@@ -3,7 +3,6 @@ module trainer
 export KAEM_trainer, init_trainer, train!
 
 using Flux: onecold, mse
-using ImageQualityIndexes: assess_msssim
 using Random, ComponentArrays, CSV, HDF5, JLD2, ConfParser, Reactant
 using Lux, LinearAlgebra, Accessors
 using MultivariateStats: reconstruct
@@ -335,7 +334,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         end
 
         if (t.gen_every > 0) && (epoch % t.gen_every == 0) && epoch_done && t.img_tuning
-            gen_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
+            tuning_loss = 0.0e0
             for x in t.model.test_loader
                 t.st_rng = seed_rand(t.model; rng = t.rng)
                 x_gen, st_ebm, st_gen = gen_compiled(
@@ -347,18 +346,12 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 @reset t.st_lux.ebm = st_ebm
                 @reset t.st_lux.gen = st_gen
 
-                gen_ssim_x = cat(
-                    gen_ssim_x,
-                    Array(x_gen);
-                    dims = length(t.model.lkhood.x_shape) + 1
-                )
+                tuning_loss += test_step(pu(x), x_gen) |> Float64
             end
 
-            ssim = (1.0f0 - assess_msssim(real_ssim_x, gen_ssim_x)) |> Float64
-            ssim /= length(t.model.test_loader)
-
-            println("Epoch: ", epoch, " MS-SSIM: ", ssim)
-            report_value!(trial, Float64(mse(real_ssim_x, gen_ssim_x)) + ssim)
+            tuning_loss /= length(t.model.test_loader)
+            println("Epoch: ", epoch, " Tuning test loss: ", tuning_loss)
+            report_value!(trial, tuning_loss)
             if should_prune(trial)
                 train_idx = Inf
             end
@@ -511,9 +504,8 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         train_idx = train_idx,
     )
 
-    ssim = 0.0e0
+    tuning_loss = 0.0e0
     if t.img_tuning
-        gen_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
         for x in t.model.test_loader
             t.st_rng = seed_rand(t.model; rng = t.rng)
             x_gen, st_ebm, st_gen = gen_compiled(
@@ -524,18 +516,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             )
             @reset t.st_lux.ebm = st_ebm
             @reset t.st_lux.gen = st_gen
-            gen_ssim_x = cat(
-                gen_ssim_x,
-                Array(x_gen);
-                dims = length(t.model.lkhood.x_shape) + 1
-            )
+
+            tuning_loss += test_step(pu(x), x_gen) |> Float64
         end
-        ssim = (1.0f0 - assess_msssim(real_ssim_x, gen_ssim_x)) |> Float64
-        ssim /= length(t.model.test_loader)
-        ssim += Float64(mse(real_ssim_x, gen_ssim_x))
+        tuning_loss /= length(t.model.test_loader)
     end
 
-    return ssim
+    return tuning_loss
 end
 
 end

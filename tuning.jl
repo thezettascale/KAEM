@@ -35,8 +35,10 @@ im_resize = dataset == "SVHN" ? (32, 32) : im_resize
 
 function objective(trial)
     @unpack (
+        opt_type,
         learning_rate,
         decay,
+        opt_decay,
         prior_type,
         langevin_step,
         generator_var,
@@ -45,8 +47,10 @@ function objective(trial)
         cnn_act,
     ) = trial
 
+    commit!(conf, "OPTIMIZER", "type", opt_type)
     commit!(conf, "OPTIMIZER", "learning_rate", string(learning_rate))
     commit!(conf, "LR_SCHEDULE", "decay", string(decay))
+    commit!(conf, "OPTIMIZER", "decay", string(opt_decay))
     commit!(conf, "EbmModel", "π_0", prior_type)
     commit!(conf, "POST_LANGEVIN", "initial_step_size", string(langevin_step))
     commit!(conf, "GeneratorModel", "generator_variance", string(generator_var))
@@ -66,8 +70,10 @@ const sampler = Dict(
 )[sampler_type]
 
 space = Scenario(
+    opt_type = ["adam", "nesterov", "adamw"],
     learning_rate = (1.0e-5 .. 1.0e-2),
-    decay = 0.0e0 .. 0.6e0,
+    decay = 0.0e0 .. 1.0e0,
+    opt_decay = 0.0e0 .. 1.0e0,
     prior_type = ["ebm", "gaussian"],
     langevin_step = 1.0e-3 .. 1.0e-1,
     generator_var = 1.0e-2 .. 1.0e0,
@@ -99,8 +105,10 @@ HyperTuning.optimize(objective, space)
 
 display(top_parameters(space))
 @unpack (
+    opt_type,
     learning_rate,
     decay,
+    opt_decay,
     prior_type,
     langevin_step,
     generator_var,
@@ -109,8 +117,10 @@ display(top_parameters(space))
     cnn_act,
 ) = space
 
+commit!(conf, "OPTIMIZER", "type", opt_type)
 commit!(conf, "OPTIMIZER", "learning_rate", string(learning_rate))
 commit!(conf, "LR_SCHEDULE", "decay", string(decay))
+commit!(conf, "OPTIMIZER", "decay", string(opt_decay))
 commit!(conf, "EbmModel", "π_0", prior_type)
 commit!(conf, "POST_LANGEVIN", "initial_step_size", string(langevin_step))
 commit!(conf, "GeneratorModel", "generator_variance", string(generator_var))
@@ -133,8 +143,10 @@ else
     parse_conf!(conf)
 end
 
+commit!(conf, "OPTIMIZER", "type", opt_type)
 commit!(conf, "OPTIMIZER", "learning_rate", string(learning_rate))
 commit!(conf, "LR_SCHEDULE", "decay", string(decay))
+commit!(conf, "OPTIMIZER", "decay", string(opt_decay))
 commit!(conf, "EbmModel", "π_0", prior_type)
 commit!(conf, "POST_LANGEVIN", "initial_step_size", string(langevin_step))
 commit!(conf, "GeneratorModel", "generator_variance", string(generator_var))

@@ -121,8 +121,8 @@ function (gu::GridUpdater)(
         ula_bool = model.prior.bool_config.ula || model.MALA || model.N_t > 1
         if (ula_bool && gu.nogrid_prior)
             red_dim = model.prior.bool_config.mixture_model ? (2, 3) : (1, 3)
-            min_z = dropdims(minimum(z; dims = red_dim); dims=red_dim)
-            max_z = dropdims(maximum(z; dims = red_dim); dims=red_dim)
+            min_z = dropdims(minimum(z; dims = red_dim); dims = red_dim)
+            max_z = dropdims(maximum(z; dims = red_dim); dims = red_dim)
 
             # Ensure min_z < max_z
             order_bool = min_z .< max_z

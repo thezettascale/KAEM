@@ -4,6 +4,9 @@ export opt, create_opt
 
 using Lux, ConfParser, Optimisers, ParameterSchedulers
 
+include("manual_adam.jl")
+using .AdamOptimizer
+
 struct opt
     rule
     schedule
@@ -29,11 +32,10 @@ function create_opt(conf::ConfParse)
     opt_type = retrieve(conf, "OPTIMIZER", "type")
 
     opt_mapping = Dict(
-        "adam" => () -> Optimisers.Adam(LR, β, ε),
-        "adamw" => () -> Optimisers.AdamW(LR, β, decay, ε),
+        "adam" => () -> ManualAdam(LR, β, 0.0f0, ε),
+        "adamw" => () -> ManualAdam(LR, β, decay, ε),
         "momentum" => () -> Optimisers.Momentum(LR, ρ),
         "nesterov" => () -> Optimisers.Nesterov(LR, ρ),
-        "nadam" => () -> Optimisers.NAdam(LR, β, ε),
         "sgd" => () -> Optimisers.Descent(LR),
         "rmsprop" => () -> Optimisers.RMSProp(LR, ρ, ε)
     )

@@ -235,56 +235,6 @@ function coef2curve_Spline(
     )
 end
 
-function forward_elimination(
-        A,
-        b,
-        basis,
-    )
-    G = basis.G
-    lower_mask_all = Lux.f32(basis.lower_mask) .* 1.0f0
-    upper_mask_all = Lux.f32(basis.upper_mask) .* 1.0f0
-
-    state = (A, b)
-    for k in 1:(G - 1)
-        A_acc, b_acc = state
-        A_new, b_new = eliminator(
-            k,
-            A_acc,
-            b_acc,
-            lower_mask_all,
-            upper_mask_all,
-        )
-        state = (A_new, b_new)
-    end
-
-    return state
-end
-
-function backward_substitution(
-        A,
-        b,
-        basis,
-    )
-    J, O, G = basis.I, basis.O, basis.G
-    k_mask_all = Lux.f32(basis.k_mask) .* 1.0f0
-    upper_mask_all = Lux.f32(basis.lower_mask) .* 1.0f0
-
-    coef = zero(b)
-    for k in G:-1:1
-        coef = backsubber(
-            k,
-            coef,
-            A,
-            b,
-            k_mask_all,
-            upper_mask_all,
-            J, O, G
-        )
-    end
-
-    return coef
-end
-
 function curve2coef(
         b,
         x,
@@ -305,8 +255,8 @@ function curve2coef(
         init = init
     )
 
-    A, b_vec = forward_elimination(A, b_vec, b)
-    coef = dropdims(backward_substitution(A, b_vec, b); dims = 2)
+    A, b_vec, P = forward_elimination(A, b_vec, b; ε = ε)
+    coef = dropdims(backward_substitution(A, b_vec, b, P); dims = 2)
     return PermutedDimsArray(coef, (3, 2, 1)) .* 1.0f0
 end
 

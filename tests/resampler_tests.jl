@@ -27,18 +27,6 @@ function test_systematic_resampler()
     return @test all(idxs .<= 6)
 end
 
-function test_stratified_resampler()
-    Random.seed!(42)
-    weights = randn(Float32, 4, 6) * 3
-    ESS_bool = rand(Bool, 4)
-    r = StratifiedResampler(0.5, true)
-
-    idxs = r(softmax(weights; dims = 2), st_rng)
-    println(idxs)
-    @test size(idxs) == (4, 6)
-    return @test !any(isnan, idxs)
-end
-
 function test_residual_resampler()
     Random.seed!(42)
     weights = randn(Float32, 4, 6) * 3
@@ -53,6 +41,5 @@ end
 
 @testset "Resampler Tests" begin
     test_systematic_resampler()
-    test_stratified_resampler()
     test_residual_resampler()
 end

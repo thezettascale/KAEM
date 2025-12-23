@@ -131,7 +131,9 @@ function (r::SystematicResampler)(
         st_rng
     )
     """
-    Systematic resampling for weight filtering.
+    Systematic/Stratified resampling for weight filtering.
+
+    Threshold functionality set by rv in rng.jl.
 
     Args:
         weights: The weights of the population.
@@ -145,37 +147,7 @@ function (r::SystematicResampler)(
 
     cdf = cumsum(weights, dims = 2)
 
-    # Systematic thresholds
-    rv = st_rng.resample_rv
-    u = (rv .+ (0:(N - 1))') ./ N
-    return systematic_kernel(ESS_bool, cdf, u, B, N)
-end
-
-struct StratifiedResampler <: AbstractResampler
-    ESS_threshold::Float32
-    _phantom::Bool
-end
-
-function (r::StratifiedResampler)(
-        weights,
-        st_rng
-    )
-    """
-    Systematic resampling for weight filtering.
-
-    Args:
-        weights: The weights of the population.
-        ESS_bool: A boolean array indicating if the ESS is above the threshold.
-        rng: Random seed for reproducibility.
-
-    Returns:
-        - The resampled indices.
-    """
-    ESS_bool, B, N = check_ESS(weights; ESS_threshold = r.ESS_threshold)
-
-    cdf = cumsum(weights, dims = 2)
-
-    # Stratified thresholds
+    # Systematic or stratified thresholds dep. on rv
     rv = st_rng.resample_rv
     u = (rv .+ (0:(N - 1))') ./ N
     return systematic_kernel(ESS_bool, cdf, u, B, N)
@@ -195,7 +167,7 @@ end
 const resampler_map::Dict{String, Function} = Dict(
     "residual" => (ESS_threshold, verbose) -> ResidualResampler(ESS_threshold, verbose),
     "systematic" => (ESS_threshold, verbose) -> SystematicResampler(ESS_threshold, verbose),
-    "stratified" => (ESS_threshold, verbose) -> StratifiedResampler(ESS_threshold, verbose),
+    "stratified" => (ESS_threshold, verbose) -> SystematicResampler(ESS_threshold, verbose),
     "none" => (ESS_threshold, verbose) -> NoResampler(),
 )
 end

@@ -34,6 +34,7 @@ struct GenModel{T <: Float32} <: Lux.AbstractLuxLayer
     output_activation::AbstractActivation
     x_shape::Tuple{Vararg{Int}}
     resample_z::AbstractResampler
+    resampler_type::AbstractString
     CNN::Bool
     SEQ::Bool
     perceptual_scale::T
@@ -54,10 +55,10 @@ function init_GenModel(
     output_act = retrieve(conf, "GeneratorModel", "output_activation")
     verbose = parse(Bool, retrieve(conf, "TRAINING", "verbose"))
 
-
+    resampler_type = retrieve(conf, "GeneratorModel", "resampler")
     resample_fcn = get(
         resampler_map,
-        retrieve(conf, "GeneratorModel", "resampler"),
+        resampler_type,
         SystematicResampler(ESS_threshold, verbose)
     )(ESS_threshold, verbose)
     batchnorm_bool = false
@@ -85,6 +86,7 @@ function init_GenModel(
         output_activation,
         x_shape,
         resample_fcn,
+        resampler_type,
         CNN,
         sequence_length > 1,
         perceptual_scale,

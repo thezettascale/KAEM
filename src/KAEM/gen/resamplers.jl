@@ -146,7 +146,7 @@ function (r::SystematicResampler)(
     cdf = cumsum(weights, dims = 2)
 
     # Systematic thresholds
-    rv = PermutedDimsArray(st_rng.resample_rv, (1, 3, 2))
+    rv = st_rng.resample_rv
     u = (rv .+ (0:(N - 1))') ./ N
     return systematic_kernel(ESS_bool, cdf, u, B, N)
 end

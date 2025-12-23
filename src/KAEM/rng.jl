@@ -78,10 +78,15 @@ function seed_rand(
     )
 
     # Resampler uniform noise
+    systematic_bool = model.lkhood.resampler_type == "systematic"
     resample_rv = (
         (num_temps > 1 || model.MALA) ?
             [0.0f0] :
-            rand(rng, T, model.batch_size, model.batch_size, 1)
+            (
+                systematic_bool ?
+                rand(rng, T, model.batch_size, 1, 1) :
+                rand(rng, T, model.batch_size, model.batch_size, 1)
+            )
     )
 
     Q, N, S = model.posterior_sampler.Q, model.posterior_sampler.N, model.batch_size

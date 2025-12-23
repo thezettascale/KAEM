@@ -96,10 +96,10 @@ function (lp::LogPriorUnivariate)(
 
     st_lyrnorm_new = st_lyrnorm
 
-    state = (1, zero(z))
+    state = (1, zero(z[1, 1, :]))
     while first(state) <= Q
-        i, f_diag = state
-        new_f, st_lyrnorm_new = reduce_q(
+        i, log_p = state
+        f_q, st_lyrnorm_new = reduce_q(
             i,
             z,
             ps,
@@ -107,12 +107,11 @@ function (lp::LogPriorUnivariate)(
             st_lyrnorm_new,
             ebm
         )
-        f_diag[i, :, :] = new_f
-        state = (i + 1, f_diag)
+        new_lp = log_p + dropdims(sum(f_q + log_π0[q, :, :]; dims = 1); dims = 1)
+        state = (i + 1, new_lp)
     end
 
-    f_diag = last(state)
-    log_p = dropdims(sum(f_diag .+ log_π0; dims = (1, 2)); dims = (1, 2))
+    log_p = last(state)
     return log_p, st_lyrnorm_new
 end
 

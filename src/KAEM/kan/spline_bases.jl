@@ -211,7 +211,7 @@ function (b::Cheby_basis)(
         init::Bool = false,
     )
     x_3d = PermutedDimsArray(view(tanh.(x) ./ σ, :, :, :), (1, 3, 2))
-    x_3d = atan.(sqrt.(1.0f0  .- x_3d .^ 2))
+    x_3d = atan.(sqrt.(1.0f0 .- x_3d .^ 2))
     return cos.(x_3d .* b.lin)
 end
 

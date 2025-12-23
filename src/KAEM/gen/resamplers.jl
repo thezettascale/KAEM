@@ -48,7 +48,7 @@ function residual_kernel(
     # Fill remaining with multinomial sampling
     residual_part = dropdims(
         sum(
-            cdf .< u; dims = 2
+            cdf .< PermutedDimsArray(u, (1, 3, 2)); dims = 2
         ) .+ 1; dims = 2
     )
     residual_part = ifelse.(residual_part .> N, N, residual_part)

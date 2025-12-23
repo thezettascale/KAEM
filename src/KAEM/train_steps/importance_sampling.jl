@@ -17,12 +17,12 @@ function loss_accum(
         logllhood,
         resampled_mask,
         B,
-        S,
+        N,
     )
-    sel_prior = sum(logprior' .* resampled_mask; dims = 3)
+    sel_prior = sum(reshape(logprior, 1, 1, N) .* resampled_mask; dims = 3)
     is_prior = sum(weights_resampled .* sel_prior; dims = 2)
 
-    sel_ll = sum(logllhood .* resampled_mask; dims = 3)
+    sel_ll = sum(reshape(logllhood, N, 1, N) .* resampled_mask; dims = 3)
     is_ll = sum(weights_resampled .* sel_ll; dims = 2)
 
     return mean(is_prior + is_ll)
@@ -51,11 +51,12 @@ function sample_importance(
     )
 
     # Posterior weights and resampling
+    N = m.batch_size
     weights = softmax(logllhood, dims = 2)
     resampled_indices = m.lkhood.resample_z(weights, st_rng)
-    resampled_mask = resampled_indices .== reshape(1:m.batch_size, 1, 1, m.batch_size) |> Lux.f32
+    resampled_mask = resampled_indices .== reshape(1:N, 1, 1, N) |> Lux.f32
     weights_resampled = softmax(
-        dropdims(sum(weights .* resampled_mask; dims = 3); dims = 3);
+        dropdims(sum(reshape(weights, N, 1, N) .* resampled_mask; dims = 3); dims = 3);
         dims = 2
     )
 
@@ -83,7 +84,7 @@ function marginal_llhood(
         st_lux_gen,
         noise,
     )
-    B, S = m.batch_size, m.batch_size
+    B, N = m.batch_size, m.batch_size
 
     logprior_posterior, st_ebm =
         m.log_prior(z_posterior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
@@ -108,7 +109,7 @@ function marginal_llhood(
         logllhood,
         resampled_mask,
         B,
-        S
+        N
     )
 
     reg, st_ebm, st_gen = m.kan_regularizer(

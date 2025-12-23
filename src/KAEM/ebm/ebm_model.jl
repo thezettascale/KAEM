@@ -82,8 +82,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     prior_domain = Dict(
         "ebm" => grid_range,
         "learnable_gaussian" => grid_range,
-        "lognormal" => [0.0f0, 10.0f0],
-        "gaussian" => [-5.0f0, 5.0f0],
+        "lognormal" => [0.0f0, 6.0f0],
+        "gaussian" => [-2.0f0, 2.0f0],
         "uniform" => [0.0f0, 1.0f0],
     )[prior_type]
 

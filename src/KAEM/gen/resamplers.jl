@@ -91,7 +91,7 @@ function (r::ResidualResampler)(
     )
 
     # CDF and variate for resampling
-    u = st_rng.resample_rv[:, 1:1, :]
+    u = st_rng.resample_rv
     cdf = cumsum(residual_weights, dims = 2)
     return residual_kernel(
         ESS_bool,

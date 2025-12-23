@@ -27,9 +27,14 @@ function Optimisers.apply!(o::ManualAdam, st, x::AbstractArray, g)
     β1, β2 = o.beta
     t = st.t + 1
 
-    # Momentum update
     m = st.m
     v = st.v
+
+    if !o.couple && (o.decay > 0.0f0)
+        g = g .+ o.decay .* x
+    end
+
+    # Momentum update
     @.. m = β1 * m + (1 - β1) * g
     @.. v = β2 * v + (1 - β2) * (g * g)
 
@@ -43,9 +48,8 @@ function Optimisers.apply!(o::ManualAdam, st, x::AbstractArray, g)
     step = o.eta .* mhat ./ (sqrt.(vhat) .+ o.epsilon)
 
     # Weight decay contribution
-    if o.decay > 0.0f0
-        wd = (o.couple ? (o.eta * o.decay) : o.decay)
-        step = step .+ wd .* x
+    if o.couple && (o.decay > 0.0f0)
+        step = step .+ (o.eta * o.decay) .* x
     end
 
     return (m = m, v = v, t = t), step

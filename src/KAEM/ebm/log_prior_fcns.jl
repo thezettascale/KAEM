@@ -107,7 +107,7 @@ function (lp::LogPriorUnivariate)(
             st_lyrnorm_new,
             ebm
         )
-        new_lp = log_p + dropdims(sum(f_q + log_π0[q, :, :]; dims = 1); dims = 1)
+        new_lp = log_p + dropdims(sum(f_q + log_π0[i, :, :]; dims = 1); dims = 1)
         state = (i + 1, new_lp)
     end
 

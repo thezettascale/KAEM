@@ -19,14 +19,13 @@ function loss_accum(
         B,
         S,
     )
+    sel_prior = sum(logprior' .* resampled_mask; dims = 3)
+    is_prior = sum(weights_resampled .* sel_prior; dims = 2)
 
-    loss = sum(
-        weights_resampled .*
-            (
-            sum((logprior' .+ logllhood) .* resampled_mask; dims = 3)
-        )
-    )
-    return loss / B
+    sel_ll = sum(logllhood .* resampled_mask; dims = 3)
+    is_ll = sum(weights_resampled .* sel_ll; dims = 2)
+
+    return mean(is_prior + is_ll)
 end
 
 function sample_importance(

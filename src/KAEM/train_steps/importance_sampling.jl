@@ -98,12 +98,18 @@ function marginal_llhood(
         ε = m.ε,
     )
 
-    marginal_llhood =
-        loss_accum(weights_resampled, logprior_posterior, logllhood, resampled_mask, B, S)
-
     logprior_prior, st_ebm =
         m.log_prior(z_prior, m.prior, ps.ebm, st_kan.ebm, st_ebm)
     ex_prior = m.prior.bool_config.contrastive_div ? mean(logprior_prior) : 0.0f0
+
+    marginal_llhood = loss_accum(
+        weights_resampled,
+        logprior_posterior,
+        logllhood,
+        resampled_mask,
+        B,
+        S
+    )
 
     reg, st_ebm, st_gen = m.kan_regularizer(
         z_posterior,

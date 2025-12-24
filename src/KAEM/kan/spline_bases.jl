@@ -11,6 +11,7 @@ export extend_grid,
     Cheby_basis
 
 using ComponentArrays, LinearAlgebra, Lux, Accessors
+using Flux: tanh_fast
 
 using ..Utils
 
@@ -121,8 +122,8 @@ struct Cheby_basis <: AbstractBasis
 end
 
 function Cheby_basis(degree::Int, I::Int, O::Int, S::Int)
-    lin = collect(Float32, 0:degree)'
     G = degree + 1
+    lin = Lux.f32((0:degree)')
     k_mask = Lux.f32((1:G) .== (1:G)')
     lower_mask = Lux.f32((1:G) .> (1:G)')
     upper_mask = Lux.f32((1:G) .>= (1:G)')
@@ -199,10 +200,11 @@ function (b::RSWAF_basis)(
         init::Bool = false,
     )
     x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
-    diff = tanh.((x_3d .- grid) ./ σ)
+    diff = tanh_fast((x_3d .- grid) ./ σ)
     return 1.0f0 .- diff .^ 2
 end
 
+# Not working
 function (b::Cheby_basis)(
         x,
         grid,
@@ -210,13 +212,9 @@ function (b::Cheby_basis)(
         scale;
         init::Bool = false,
     )
-    x_3d = PermutedDimsArray(
-        view(
-            tanh.(x) ./ σ, :, :, :
-        ), (1, 3, 2)
-    )
-    x_3d = acos.(x_3d)
-    return cos.(x_3d .* b.lin)
+    x_3d = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
+    x_3d = (tanh_fast(x_3d) ./ σ)
+    return cos.(acos.(x_3d) .* b.lin)
 end
 
 function coef2curve_Spline(
@@ -231,12 +229,8 @@ function coef2curve_Spline(
     spl = b(x_eval, grid, σ, scale)
     spl_4d = PermutedDimsArray(view(spl, :, :, :, :), (1, 4, 3, 2))
     coef_4d = PermutedDimsArray(view(coef, :, :, :, :), (1, 2, 4, 3))
-
-    return dropdims(
-        sum(
-            spl_4d .* coef_4d; dims = 4
-        ); dims = 4
-    )
+    curve = spl_4d .* coef_4d
+    return dropdims(sum(curve; dims = 4); dims = 4)
 end
 
 function curve2coef(

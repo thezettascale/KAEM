@@ -4,15 +4,15 @@
 # Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
 # Available modes: thermo, vanilla, tune
 
-MNIST tune
-MNIST vanilla
-FMNIST vanilla
-SVHN tune
+# MNIST tune
+# MNIST vanilla
+# FMNIST vanilla
+# SVHN tune
 SVHN vanilla
-SVHN thermo
-CELEBA tune
+# SVHN thermo
+# CELEBA tune
 CELEBA vanilla
-CELEBA thermo
+# CELEBA thermo
 # DARCY_FLOW vanilla
 # CIFAR10 vanilla
 # CIFAR10 thermo

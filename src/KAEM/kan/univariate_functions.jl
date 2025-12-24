@@ -109,7 +109,7 @@ function Lux.initialparameters(
     if l.spline_string == "FFT"
         grid_norm_factor = collect(T, 1:(l.grid_size)) .^ 2
         coef =
-            glorot_normal(rng, Float32, 2, l.in_dim, l.out_dim, l.grid_size) ./
+            glorot_normal(rng, Float32, l.in_dim, l.out_dim, 2, l.grid_size) ./
             (sqrt(l.in_dim) .* permutedims(grid_norm_factor[:, :, :, :], [2, 3, 4, 1]))
     elseif !(l.spline_string == "Cheby")
         ε =

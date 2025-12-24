@@ -81,7 +81,7 @@ function test_FFT_basis()
     x_eval = rand(Float32, i, b)
     Random.seed!(42)
     grid = rand(Float32, i, g)
-    coef = rand(Float32, 2, i, o, g)
+    coef = rand(Float32, i, o, 2, g)
 
     basis_function = FFT_basis(i, o, g, b)
 

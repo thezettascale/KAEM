@@ -296,8 +296,8 @@ function coef2curve_FFT(
     even, odd = b(x_eval, grid, σ)
     even = PermutedDimsArray(view(even, :, :, :, :), (1, 4, 3, 2))
     odd = PermutedDimsArray(view(odd, :, :, :, :), (1, 4, 3, 2))
-    even_coef = PermutedDimsArray(view(coef, 1:1, :, :, :), (2, 3, 1, 4))
-    odd_coef = PermutedDimsArray(view(coef, 2:2, :, :, :), (2, 3, 1, 4))
+    even_coef = coef[:, :, 1:1, :]
+    odd_coef = coef[:, :, 2:2, :]
     return dropdims(
         sum(
             even .* even_coef .+ odd .* odd_coef; dims = 4

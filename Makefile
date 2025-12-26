@@ -12,6 +12,8 @@ XLA_REACTANT_GPU_PREALLOCATE ?= true
 TF_GPU_ALLOCATOR ?= cuda_malloc_async
 XLA_FLAGS ?=
 
+export DATASET
+export MODE
 export XLA_REACTANT_GPU_MEM_FRACTION
 export XLA_REACTANT_GPU_PREALLOCATE
 export TF_GPU_ALLOCATOR
@@ -91,9 +93,9 @@ train:
 	@tmux kill-session -t kaem_train 2>/dev/null || true
 	@tmux new-session -d -s kaem_train -n training
 ifeq ($(MODE),thermo)
-	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) USE_THERMO=true julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) USE_THERMO=true julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
+	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
 else
-	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) USE_THERMO=false julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) USE_THERMO=false julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
+	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
 endif
 	@echo "Training session started in tmux. Attach with: tmux attach-session -t kaem_train"
 ifeq ($(MODE),thermo)

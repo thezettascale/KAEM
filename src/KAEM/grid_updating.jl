@@ -84,7 +84,6 @@ function (gu::GridUpdater)(
                     x,
                     st_rng;
                     temps = temps,
-                    swap_replica_idxs = swap_replica_idxs
                 ),
             )[
                 :,
@@ -211,7 +210,6 @@ function (gu::GridUpdater)(
                     x,
                     st_rng;
                     temps = temps,
-                    swap_replica_idxs = swap_replica_idxs
                 ),
             )[
                 :,

@@ -15,19 +15,18 @@ plt.rcParams.update(
             r"\usepackage{amsfonts} "
             r"\usepackage{amssymb} "
             r"\usepackage{bm} "
-            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
         ),
     }
 )
 
 DATASETS = {
-    "DARCY_FLOW": {"grid_size": 10, "cmap": "viridis"},
+    # "DARCY_FLOW": {"grid_size": 10, "cmap": "viridis"},
     "MNIST": {"grid_size": 10, "cmap": "gray"},
     "FMNIST": {"grid_size": 10, "cmap": "gray"},
 }
 
 PRIORS = ["uniform", "lognormal", "gaussian", "ebm"]
-FUNCTIONS = ["RBF", "FFT"]
+FUNCTIONS = ["RBF"]
 
 output_dir = "figures/results/individual_plots"
 os.makedirs(output_dir, exist_ok=True)
@@ -62,9 +61,9 @@ def plot_prior_function_grid(dataset, prior, function, grid_size, cmap):
             ax.axis("off")
 
         prior_labels = {
-            "uniform": r"$\mathcal{U}(\bm{z}; \; \bm{0}, \bm{1})$",
-            "lognormal": r"$\text{Lognormal}(\bm{z}; \; \bm{0}, \bm{1})$",
-            "gaussian": r"$\mathcal{N}(\bm{z}; \; \bm{0}, \bm{1})$",
+            "uniform": r"$\mathcal{U}(\bm{0}, \bm{1})$",
+            "lognormal": r"$\text{Lognormal}(\bm{0}, \bm{1})$",
+            "gaussian": r"$\mathcal{N}(\bm{0}, \bm{1})$",
             "ebm": "EBM",
         }
 

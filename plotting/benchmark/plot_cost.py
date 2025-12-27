@@ -13,7 +13,6 @@ plt.rcParams.update(
             r"\usepackage{amsfonts} "
             r"\usepackage{amssymb} "
             r"\usepackage{bm} "
-            r"\newcommand{\probP}{\text{I\kern-0.15em P}}"
         ),
     }
 )

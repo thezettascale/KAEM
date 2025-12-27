@@ -43,9 +43,9 @@ function setup_model(n_z)
     model = init_KAEM(dataset, conf, img_size; rng = rng)
     x_test, loader_state = iterate(model.train_loader)
     x_test = pu(x_test)
-    model, opt_state, params, st_kan, st_lux = prep_model(model, x_test, optimizer; rng = rng, MLIR = false)
+    model, opt_state, params, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng, MLIR = false)
 
-    return model, opt_state, params, st_kan, st_lux, x_test
+    return model, opt_state, params, st_kan, st_lux, st_rng, x_test
 end
 
 results = DataFrame(
@@ -57,7 +57,15 @@ results = DataFrame(
     gc_percent = Float64[],
 )
 
-function benchmark_latent_dim(opt_state, params, st_kan, st_lux, model, x_test)
+function benchmark_latent_dim(
+        opt_state,
+        params,
+        st_kan,
+        st_lux,
+        st_rng,
+        model,
+        x_test
+    )
     return model.loss_fcn(
         opt_state,
         params,
@@ -65,15 +73,14 @@ function benchmark_latent_dim(opt_state, params, st_kan, st_lux, model, x_test)
         st_lux,
         x_test,
         1,
-        rng,
-        nothing
+        st_rng,
     )
 end
 
 for n_z in [10, 20, 30, 40, 50]
     println("Benchmarking n_z = $n_z...")
 
-    model, opt_state, params, st_kan, st_lux, x_test = setup_model(n_z)
+    model, opt_state, params, st_kan, st_lux, st_rng, x_test = setup_model(n_z)
 
     b = @benchmark begin
         result = f(
@@ -81,6 +88,7 @@ for n_z in [10, 20, 30, 40, 50]
             $params,
             $st_kan,
             $st_lux,
+            $st_rng,
             $model,
             $x_test
         )
@@ -91,6 +99,7 @@ for n_z in [10, 20, 30, 40, 50]
             $params,
             $st_kan,
             $st_lux,
+            $st_rng,
             $model,
             $x_test
         )

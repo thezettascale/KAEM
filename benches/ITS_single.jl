@@ -43,14 +43,14 @@ function setup_model(N_t)
     model = init_KAEM(dataset, conf, img_size; rng = rng)
     x, loader_state = iterate(model.train_loader)
     x = pu(x)
-    model, _, params, st_kan, st_lux = prep_model(model, x, optimizer; rng = rng, MLIR = false)
+    model, _, params, st_kan, st_lux, st_rng = prep_model(model, x, optimizer; rng = rng, MLIR = false)
 
-    return model, params, st_kan, st_lux
+    return model, params, st_kan, st_lux, st_rng
 end
 
-function benchmark_prior(model, params, st_kan, st_lux)
+function benchmark_prior(model, params, st_kan, st_lux, st_rng)
     return first(
-        model.sample_prior(model, params, st_kan, st_lux, rng),
+        model.sample_prior(model, params, st_kan, st_lux, st_rng),
     )
 end
 
@@ -66,14 +66,15 @@ results = DataFrame(
 for N_t in [1]
     println("Benchmarking N_t = $N_t...")
 
-    model, params, st_kan, st_lux = setup_model(N_t)
+    model, params, st_kan, st_lux, st_rng = setup_model(N_t)
 
     b = @benchmark begin
         result = f(
             $model,
             $params,
             $st_kan,
-            $st_lux
+            $st_lux,
+            $st_rng,
         )
         Reactant.synchronize(result)
     end setup = (
@@ -81,7 +82,8 @@ for N_t in [1]
             $model,
             $params,
             $st_kan,
-            $st_lux
+            $st_lux,
+            $st_rng
         )
     )
 

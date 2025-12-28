@@ -14,7 +14,7 @@ using .KAEM_model
 include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
-include("optimizer.jl")
+include("../src/pipeline/optimizer.jl")
 using .optimization
 
 conf = ConfParse("config/celeba_config.ini")
@@ -68,7 +68,7 @@ function benchmark_temps(
         x_test,
         swap
     )
-    return model.loss_fcn(
+    return model.train_step(
         opt_state,
         params,
         st_kan,
@@ -79,7 +79,7 @@ function benchmark_temps(
     )
 end
 
-for N_t in [2, 4, 6, 8, 10]
+for N_t in [2, 3, 4, 5, 6, 7]
     println("Benchmarking N_t = $N_t...")
 
     model, opt_state, ps, st_kan, st_lux, st_rng, x_test, swap = setup_model(N_t)

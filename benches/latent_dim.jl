@@ -14,7 +14,7 @@ using .KAEM_model
 include("../src/KAEM/model_setup.jl")
 using .ModelSetup
 
-include("optimizer.jl")
+include("../src/pipeline/optimizer.jl")
 using .optimization
 
 conf = ConfParse("config/nist_config.ini")
@@ -66,7 +66,7 @@ function benchmark_latent_dim(
         model,
         x_test
     )
-    return model.loss_fcn(
+    return model.train_step(
         opt_state,
         params,
         st_kan,

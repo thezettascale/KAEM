@@ -14,7 +14,7 @@
 # include("../src/KAEM/model_setup.jl")
 # using .ModelSetup
 #
-# include("optimizer.jl")
+# include("../src/pipeline/optimizer.jl")
 # using .optimization
 #
 # conf = ConfParse("config/celeba_pang_config.ini")

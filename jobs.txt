@@ -9,7 +9,7 @@
 # FMNIST vanilla
 # SVHN tune
 # SVHN vanilla
-CELEBA thermo
+# CELEBA thermo
 SVHN thermo
 # CELEBA tune
 # CELEBA vanilla

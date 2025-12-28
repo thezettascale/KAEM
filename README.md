@@ -123,6 +123,27 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 ```
 ---
 
+## Samples
+
+<p align="center">
+  <img src="figures/results/individual_plots/mnist_uniform_rbf.png" alt="MNIST with importance sampling" width="20%" />
+  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" alt="FMNIST with importance sampling" width="20%" />
+</p>
+
+<p align="center">
+  <sub>KAEM is a robust probabilistic model. It can even be trained cheaply with importance sampling.</sub>
+</p>
+
+<p align="center">
+  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" alt="CelebA with Vanilla training" width="20%" />
+  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" alt="CelebaA with Thermodynamic training" width="20%" />
+</p>
+
+<p align="center">
+  <sub>We present annealing as an embarassingly parallel alternative to diffusion EBMs to improve mixing in the latent space.</sub>
+</p>
+
+
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ```bibtex

@@ -92,7 +92,7 @@ function (lp::LogPriorUnivariate)(
 
     log_π0 =
         lp.normalize && !ula ?
-        log_π0 .- log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), lp.ε) : log_π0
+        log_π0 .- log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm, st_kan.quad)), lp.ε) : log_π0
 
     st_lyrnorm_new = st_lyrnorm
 
@@ -164,7 +164,7 @@ function (lp::LogPriorMix)(
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     Z =
         lp.normalize && !ula ?
-        dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm)), dims = 3), dims = 3) :
+        dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm, st_kan.quad)), dims = 3), dims = 3) :
         zero(alpha) .+ 1.0f0
 
     reg = (

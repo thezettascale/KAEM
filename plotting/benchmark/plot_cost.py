@@ -68,7 +68,7 @@ prior_steps_ref = {
 
 keys = [r"$n_z$", r"$N_{t}$", r"$N_{prior}$"]
 colours = ["viridis", "cividis", "plasma"]
-elevations = [0.3, 0.14, 0.4]
+elevations = [0.0, 0.0, 0.0, 0.0]
 datasets = [latent_dim, mala_steps, prior_steps]
 references = [None, mala_steps_ref, prior_steps_ref]
 titles = [r"Latent Dimension", r"Power Posteriors", "Prior ULA Steps"]
@@ -77,7 +77,7 @@ titles = [r"Latent Dimension", r"Power Posteriors", "Prior ULA Steps"]
 def add_text_annotations(ax, round=False, elevation=0.45):
     for bar in ax.patches:
         if round:
-            text = f"{bar.get_height():.0f}"
+            text = f"{int(bar.get_height())}"
         else:
             text = f"{bar.get_height():.2f}"
 
@@ -87,9 +87,9 @@ def add_text_annotations(ax, round=False, elevation=0.45):
             text,
             ha="center",
             va="bottom",
-            color="lime",
+            color="red",
             rotation=45,
-            fontsize=16,
+            fontsize=14,
         )
 
 
@@ -192,6 +192,7 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
 
     axs[2].set_xlabel(keys[idx], fontsize=16)
     axs[2].set_ylabel(r"Garbage Collection (\%)", fontsize=16)
+    axs[2].set_ylim(0, 1)
     axs[2].set_title(f"{title} - GC", fontsize=16)
 
     sns.barplot(
@@ -201,6 +202,7 @@ for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
         ax=axs[3],
         color=colors[3] if len(colors) > 3 else colors[0],
     )
+    add_text_annotations(axs[3], round=True, elevation=elevations[idx])
 
     if ref is not None:
         if idx == 1:  # MALA steps plot

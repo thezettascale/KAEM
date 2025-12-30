@@ -103,7 +103,7 @@ function (r::ReplicaXchange)(
     # Global exchange criterion
     temps_t = sum(temps .* mask1)
     temps_t1 = sum(temps .* mask2)
-    log_swap_ratio = (temps_t1 - temps_t) .* (sum(ll_t) - sum(ll_t1))
+    log_swap_ratio = (temps_t - temps_t1) .* (sum(ll_t1) - sum(ll_t))
     swap = sum(log_u_swap[:, i] .* mask1) < log_swap_ratio
 
     z = (

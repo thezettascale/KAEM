@@ -107,12 +107,14 @@ function (r::ReplicaXchange)(
     swap = sum(log_u_swap[:, i] .* mask1) < log_swap_ratio
 
     z = (
-        (swap .* z_t1 .+ (1 .- swap) .* z_t) .+ # Swap or not
-            mask1_expanded .* z # Index of t
+        mask1_expanded .* # Index of t
+            (swap .* z_t1 .+ (1 .- swap) .* z_t) .+ # Swap or not
+            (1 .- mask1_expanded) .* z # Keep the rest
     )
     z = (
-        ((1 .- swap) .* z_t1 .+ swap .* z_t) .+ # Swap or not
-            mask2_expanded .* z # Index of t1
+        mask2_expanded .* # Index of t1
+            ((1 .- swap) .* z_t1 .+ swap .* z_t) .+ # Swap or not
+            (1 .- mask2_expanded) .* z # Keep the rest
     )
 
     return reshape(z, Q, P, S * num_temps)

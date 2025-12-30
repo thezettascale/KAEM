@@ -10,7 +10,7 @@
 # SVHN tune
 # CELEBA thermo
 SVHN thermo
-SVHN vanilla
+# SVHN vanilla
 # CELEBA tune
 # CELEBA vanilla
 # DARCY_FLOW vanilla

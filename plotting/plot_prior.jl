@@ -19,7 +19,7 @@ include("../src/KAEM/symbolic/plot.jl")
 using .PlotKAN
 
 for fcn_type in ["RBF"]
-    for prior_type in ["gaussian", "uniform", "ebm"]
+    for prior_type in ["gaussian"]
         for dataset_name in ["MNIST", "FMNIST"]
             file = "logs/Vanilla/$(dataset_name)/importance/$(prior_type)_$(fcn_type)/univariate/saved_model.jld2"
 
@@ -62,8 +62,8 @@ for fcn_type in ["RBF"]
             t = nothing
 
             # Components to plot (q, p)
-            plot_components = [(1, 1), (1, 2), (1, 3)]
-            colours = [:red, :blue, :green]
+            plot_components = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3)]
+            colours = [:red, :blue, :green, :yellow, :orange, :pink]
 
             plot_ebm!(
                 prior,

@@ -8,8 +8,8 @@
 # MNIST vanilla
 # FMNIST vanilla
 # SVHN tune
-# CELEBA thermo
 SVHN thermo
+CELEBA thermo
 # SVHN vanilla
 # CELEBA tune
 # CELEBA vanilla

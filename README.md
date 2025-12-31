@@ -135,6 +135,15 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 </p>
 
 <p align="center">
+  <img src="figures/results/individual_plots/svhn_real_reference.png" alt="SVHN with Vanilla training" width="30%" />
+  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" alt="SVHN with Vanilla training" width="30%" />
+</p>
+
+<p align="center">
+  <sub>When importance sampling explodes with variance, the unadjusted Langevin algorithms may be used.</sub>
+</p>
+
+<p align="center">
   <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" alt="CelebA with Vanilla training" width="30%" />
   <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" alt="CelebaA with Thermodynamic training" width="30%" />
 </p>

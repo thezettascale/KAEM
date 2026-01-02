@@ -1,23 +1,20 @@
 module FitSymbolic
 
-export symbolic_fit
+export SymFitter
 
 using Statistics,
     LinearAlgebra,
     SymPyPythonCall,
     ComponentArrays,
     Optimization,
-    Accessors,
     OptimizationNLopt,
     NLopt,
     Random,
     ConfParser,
     Lux
 
-include("func_lib.jl")
-using .SymbolicLibrary
-
 using ..Utils
+using ..SymbolicLibrary
 
 struct SymFitter
     lib
@@ -170,10 +167,14 @@ function (sf::SymFitter)(
     y = kan_func(pu(z[:, 1, :]), ps, st_kan) |> Array
     z = repeat(z, 1, O, 1)
 
-    R2_list = zeros(Float32, I, O, length(sf.lib))
     i = 1
+    R2_list = zeros(Float32, I, O, length(sf.lib))
+    α_list = zeros(Float32, I, O, length(sf.lib))
+    β_list = zeros(Float32, I, O, length(sf.lib))
+    w_list = zeros(Float32, I, O, length(sf.lib))
+    b_list = zeros(Float32, I, O, length(sf.lib))
     for (name, sym) in sf.lib
-        R2, a, b, w, b = fit_symbolic(
+        R2, α, β, w, b = fit_symbolic(
             z,
             y,
             sym[1],
@@ -185,23 +186,36 @@ function (sf::SymFitter)(
             max_iters = sf.max_iters
         )
         R2_list[:, :, i] .= R2
+        α_list[:, :, i] .= α
+        β_list[:, :, i] .= β
+        w_list[:, :, i] .= w
+        b_list[:, :, i] .= b
         i += 1
     end
 
     fit = Dict()
+    α, β, w, b = (
+        zero(α_list[:, :, 1]),
+        zero(α_list[:, :, 1]),
+        zero(α_list[:, :, 1]),
+        zero(α_list[:, :, 1]),
+    )
     for i in 1:I, o in 1:O
         sorted_R2s = sortperm(R2_list[i, o, :], rev = true)
         best = sorted_R2s[1]
 
         best_name, best_func_tuple = collect(sf.lib)[best]
-        best_func = best_func_tuple[1]  # Extract the function from the tuple
+        best_func = best_func_tuple[1]
         best_R2 = R2_list[i, o, best]
+        α[i, o] = α_list[i, o, best]
+        β[i, o] = β_list[i, o, best]
+        w[i, o] = w_list[i, o, best]
+        b[i, o] = b_list[i, o, best]
 
-        @reset st_lux[Symbol("i=$i,o=$o")] = best_func
-        fit = merge(fit, Dict("i=$i,o=$o" => (best_name, best_R2)))
+        fit = merge(fit, Dict("i=$i,o=$o" => (best_name, best_R2, best_func)))
     end
 
-    return fit, st_lux
+    return fit, α, β, w, b
 end
 
 end

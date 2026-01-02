@@ -179,14 +179,13 @@ function test_reg()
         symbolic_lib = test_symb_lib,
     )
 
-    fit, st_lux_out = sf(ps, st_kan, st_lux, compiled_f)
+    fit = first(sf(ps, st_kan, st_lux, compiled_f))
 
     x = randn(Float32, 2, 2)
-    y = st_lux_out[Symbol("i=1,o=1")](x)
+    y = last(fit["i=1,o=1"])(x)
 
     @test isa(fit, Dict)
     @test length(fit) == I * O
-    @test !isempty(st_lux_out)
     return @test !any(isnan.(y))
 end
 

@@ -8,11 +8,11 @@
 # MNIST vanilla
 # FMNIST vanilla
 # SVHN tune
+SVHN vanilla
+CELEBA vanilla
 SVHN thermo
 CELEBA thermo
-# SVHN vanilla
 # CELEBA tune
-# CELEBA vanilla
 # DARCY_FLOW vanilla
 # CIFAR10 vanilla
 # CIFAR10 thermo

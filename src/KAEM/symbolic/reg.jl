@@ -22,7 +22,7 @@ struct Regularizer
     reg_gen
 end
 
-function Regularizer(conf::ConfParse, CNN_bool, SEQ_bool)
+function Regularizer(conf::ConfParse, CNN_bool::Bool, SEQ_bool::Bool)
     ε = parse(Float32, retrieve(conf, "TRAINING", "eps"))
     th = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "nonlin_threshold"))
     μ = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "reg_factor"))

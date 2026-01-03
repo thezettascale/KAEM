@@ -20,6 +20,9 @@ using .Reg
 include("../src/KAEM/kan/univariate_functions.jl")
 using .UnivariateFunctions
 
+include("../src/KAEM/symbolic/symbolic_func.jl")
+using .SymbolicFunctions
+
 Random.seed!(42)
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
@@ -189,10 +192,108 @@ function test_reg()
     return @test !any(isnan.(y))
 end
 
+function test_symbolic_forward()
+    Random.seed!(42)
+    I, O, N = 2, 2, 10
+
+    fit_dict = Dict{String, Tuple{String, Float32, Function}}()
+    for i in 1:I, o in 1:O
+        fit_dict["i=$i,o=$o"] = ("x", 0.99f0, x -> x)
+    end
+
+    α = ones(Float32, I, O)
+    β = zeros(Float32, I, O)
+    w = ones(Float32, I, O)
+    b = zeros(Float32, I, O)
+
+    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
+    st = Lux.initialstates(Random.GLOBAL_RNG, sf)
+
+    x = randn(Float32, I, O, N)
+    y = sf(x, ps, st)
+
+    # With identity function and α=1, β=0, w=1, b=0, output should equal input
+    @test size(y) == size(x)
+    @test all(isapprox.(y, x, atol = 1.0f-5))
+
+    α2 = 2.0f0 .* ones(Float32, I, O)
+    β2 = 1.0f0 .* ones(Float32, I, O)
+    w2 = 0.5f0 .* ones(Float32, I, O)
+    b2 = 0.25f0 .* ones(Float32, I, O)
+
+    sf2 = init_symbolic_function(I, O, fit_dict, α2, β2, w2, b2)
+    ps2 = Lux.initialparameters(Random.GLOBAL_RNG, sf2)
+
+    y2 = sf2(x, ps2, st)
+    expected = w2 .* (α2 .* x .+ β2) .+ b2
+    @test all(isapprox.(y2, expected, atol = 1.0f-5))
+    return @test true
+end
+
+function test_get_formula()
+    Random.seed!(42)
+    I, O = 2, 2
+
+    fit_dict = Dict(
+        "i=1,o=1" => ("sin", 0.95f0, x -> sin.(x)),
+        "i=1,o=2" => ("x^2", 0.9f0, x -> x .^ 2),
+    )
+
+    α = [2.0f0 1.0f0; 0.5f0 1.0f0]
+    β = [0.0f0 0.5f0; 0.0f0 0.0f0]
+    w = [1.0f0 2.0f0; 1.0f0 1.0f0]
+    b = [0.0f0 0.1f0; 0.0f0 0.0f0]
+
+    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
+
+    formula_11 = get_formula(sf, ps, 1, 1)
+    @test occursin("sin", formula_11)
+    @test occursin("2.0", formula_11)
+
+    formula_12 = get_formula(sf, ps, 1, 2)
+    @test occursin("x^2", formula_12)
+    @test occursin("2.0", formula_12)
+    @test occursin("0.1", formula_12)
+
+    formula_21 = get_formula(sf, ps, 2, 1)
+    @test isa(formula_21, String)
+    @test length(formula_21) > 0
+
+    return @test true
+end
+
+function test_print_formulas()
+    Random.seed!(42)
+    I, O = 2, 2
+
+    fit_dict = Dict(
+        "i=1,o=1" => ("sin", 0.95f0, x -> sin.(x)),
+    )
+
+    α = ones(Float32, I, O)
+    β = zeros(Float32, I, O)
+    w = ones(Float32, I, O)
+    b = zeros(Float32, I, O)
+
+    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
+
+    print_formulas(sf, ps)
+    return @test true
+end
+
 @testset "Symbolic Regression Tests" begin
     test_symbolic_functions()
     test_ols_wb()
     test_fit_affine()
     test_fit_symbolic()
     test_reg()
+end
+
+@testset "Symbolic Function Layer Tests" begin
+    test_symbolic_forward()
+    test_get_formula()
+    test_print_formulas()
 end

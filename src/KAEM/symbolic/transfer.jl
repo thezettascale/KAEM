@@ -77,6 +77,7 @@ function (t::SymbolicTransfer)(
             )
 
             sym_func = init_symbolic_function(
+                layer.basis_function,
                 I,
                 O,
                 st_kan_layer.grid[:, 1],
@@ -111,6 +112,7 @@ function (t::SymbolicTransfer)(
             )
 
             sym_func = init_symbolic_function(
+                layer.basis_function,
                 I,
                 O,
                 st_kan_layer.grid[:, 1],

@@ -30,8 +30,8 @@ struct BoolConfig <: AbstractBoolConfig
     no_grid::Bool
 end
 
-struct EbmModel{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T, A}}}}
+struct EbmModel{T <: Float32} <: Lux.AbstractLuxLayer
+    fcns_qp::Tuple{Vararg{Any}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     depth::Int
@@ -151,7 +151,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     init_nodes, init_weights = gausslegendre(N_quad)
     no_grid = spline_function == "FFT" || spline_function == "Cheby"
 
-    return EbmModel{Float32, A}(
+    return EbmModel{Float32}(
         Tuple(functions),
         Tuple(layernorms),
         BoolConfig(
@@ -245,7 +245,7 @@ end
 
 function Lux.initialparameters(
         rng::AbstractRNG,
-        prior::EbmModel{T, A},
+        prior::EbmModel{T},
     )::NamedTuple where {T <: Float32, A <: AbstractActivation}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth
@@ -292,7 +292,7 @@ end
 
 function Lux.initialstates(
         rng::AbstractRNG,
-        prior::EbmModel{T, A},
+        prior::EbmModel{T},
     )::Tuple{NamedTuple, NamedTuple} where {T <: Float32, A <: AbstractActivation}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth

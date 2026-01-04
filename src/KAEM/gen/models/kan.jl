@@ -13,9 +13,9 @@ struct BoolConfig <: AbstractBoolConfig
     batchnorm::Bool
 end
 
-struct KAN_Generator{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
+struct KAN_Generator{T <: Float32} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T, A}}}}
+    Φ_fcns::Tuple{Vararg{Any}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     x_shape::Tuple
@@ -116,7 +116,7 @@ function init_KAN_Generator(
 
     A = length(Φ_functions) > 0 ? typeof(Φ_functions[1].base_activation) : AbstractActivation
 
-    return KAN_Generator{Float32, A}(
+    return KAN_Generator{Float32}(
         depth,
         Tuple(Φ_functions),
         Tuple(layernorms),

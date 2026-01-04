@@ -6,7 +6,7 @@ using Lux, Random, LinearAlgebra, Accessors
 
 using ..Utils
 
-struct symbolic_function{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
+struct symbolic_function{T <: Float32} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
     funcs::NamedTuple
@@ -16,10 +16,11 @@ struct symbolic_function{T <: Float32, A <: AbstractActivation} <: Lux.AbstractL
     init_β::AbstractMatrix{T}
     init_w::AbstractMatrix{T}
     init_b::AbstractMatrix{T}
-    _phantom_act::A
+    basis_function::AbstractBasis
 end
 
 function init_symbolic_function(
+        basis::AbstractBasis,
         in_dim::Int,
         out_dim::Int,
         min_grid::AbstractVector{T},
@@ -55,7 +56,7 @@ function init_symbolic_function(
         β,
         w,
         b,
-        activation_mapping["relu"]
+        basis
     )
 end
 

@@ -32,6 +32,9 @@ using .SymbolicFunctions
 include("../src/KAEM/symbolic/transfer.jl")
 using .Transfer
 
+include("../src/KAEM/kan/spline_bases.jl")
+using .spline_functions
+
 Random.seed!(42)
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
@@ -214,7 +217,21 @@ function test_symbolic_forward()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
-    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
+    basis_function = RBF_basis(I, O, 2, N)
+
+    sf = init_symbolic_function(
+        basis_function,
+        I,
+        O,
+        min_grid,
+        max_grid,
+        fit_dict,
+        α,
+        β,
+        w,
+        b
+    )
+
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
     st = Lux.initialstates(Random.GLOBAL_RNG, sf)
 
@@ -233,7 +250,19 @@ function test_symbolic_forward()
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
 
-    sf2 = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α2, β2, w2, b2)
+    sf2 = init_symbolic_function(
+        basis_function,
+        I,
+        O,
+        min_grid,
+        max_grid,
+        fit_dict,
+        α2,
+        β2,
+        w2,
+        b2
+    )
+
     ps2 = Lux.initialparameters(Random.GLOBAL_RNG, sf2)
 
     y2 = sf2(x, ps2, st)
@@ -258,8 +287,21 @@ function test_get_formula()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
+    basis_function = RBF_basis(I, O, 2, 10)
 
-    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
+    sf = init_symbolic_function(
+        basis_function,
+        I,
+        O,
+        min_grid,
+        max_grid,
+        fit_dict,
+        α,
+        β,
+        w,
+        b
+    )
+
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
 
     formula_11 = get_formula(sf, ps, 1, 1)
@@ -293,8 +335,21 @@ function test_print_formulas()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
+    basis_function = RBF_basis(I, O, 2, 10)
 
-    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
+    sf = init_symbolic_function(
+        basis_function,
+        I,
+        O,
+        min_grid,
+        max_grid,
+        fit_dict,
+        α,
+        β,
+        w,
+        b
+    )
+
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
 
     print_formulas(sf, ps)
@@ -327,17 +382,17 @@ function test_symbolic_transfer()
     return @test true
 end
 
-# @testset "Symbolic Regression Tests" begin
-#     test_symbolic_functions()
-#     test_ols_wb()
-#     test_fit_affine()
-#     test_fit_symbolic()
-#     test_reg()
-# end
+@testset "Symbolic Regression Tests" begin
+    test_symbolic_functions()
+    test_ols_wb()
+    test_fit_affine()
+    test_fit_symbolic()
+    test_reg()
+end
 
 @testset "Symbolic Function Layer Tests" begin
-    # test_symbolic_forward()
-    # test_get_formula()
-    # test_print_formulas()
+    test_symbolic_forward()
+    test_get_formula()
+    test_print_formulas()
     test_symbolic_transfer()
 end

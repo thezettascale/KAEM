@@ -217,7 +217,7 @@ function test_symbolic_forward()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
-    basis_function = RBF_basis(I, O, 2, N)
+    basis_function::AbstractBasis = RBF_basis(I, O, 2, N)
 
     sf = init_symbolic_function(
         basis_function,
@@ -287,7 +287,7 @@ function test_get_formula()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
-    basis_function = RBF_basis(I, O, 2, 10)
+    basis_function::AbstractBasis = RBF_basis(I, O, 2, 10)
 
     sf = init_symbolic_function(
         basis_function,
@@ -335,7 +335,7 @@ function test_print_formulas()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
-    basis_function = RBF_basis(I, O, 2, 10)
+    basis_function::AbstractBasis = RBF_basis(I, O, 2, 10)
 
     sf = init_symbolic_function(
         basis_function,
@@ -364,7 +364,7 @@ function test_symbolic_transfer()
     dataset = randn(rng, Float32, 32, 32, 1, 500)
     model = init_KAEM(dataset, conf, (32, 32, 1))
     x_test = first(model.train_loader) |> pu
-    model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng)
+    model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng, MLIR = false)
     st = SymbolicTransfer(
         conf,
         model.lkhood.SEQ,

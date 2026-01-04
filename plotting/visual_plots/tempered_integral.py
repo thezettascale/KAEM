@@ -16,12 +16,12 @@ plt.rcParams.update(
     }
 )
 
-p_list = [0.1, 0.35, 0.5, 1, 2, 4, 6, 10]
+p_list = [0.1, 0.25, 0.5, 1, 2, 4, 6, 10]
 temp_cmap = plt.get_cmap("coolwarm")
 temp_colors = [temp_cmap(i) for i in np.linspace(0, 1, len(p_list))]
 num_temps = 50
 
-reduced_p = [0.35, 1, 4]
+reduced_p = [0.25, 1, 2]
 reduced_temps = [temp_colors[p_list.index(p)] for p in reduced_p]
 num_temps = 30
 
@@ -51,7 +51,7 @@ for p, color in zip(reduced_p, reduced_temps):
     plt.ylim(0, 1)
     plt.tight_layout()
     plt.savefig(
-        "figures/visual/tempered_integral.png",
+        f"figures/visual/tempered_integral_{p}.png",
         dpi=300,
         bbox_inches="tight",
     )

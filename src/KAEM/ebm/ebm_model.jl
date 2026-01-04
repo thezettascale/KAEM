@@ -246,7 +246,7 @@ end
 function Lux.initialparameters(
         rng::AbstractRNG,
         prior::EbmModel{T},
-    )::NamedTuple where {T <: Float32, A <: AbstractActivation}
+    )::NamedTuple where {T <: Float32}
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth
     )
@@ -293,7 +293,7 @@ end
 function Lux.initialstates(
         rng::AbstractRNG,
         prior::EbmModel{T},
-    )::Tuple{NamedTuple, NamedTuple} where {T <: Float32, A <: AbstractActivation}
+    )::Tuple{NamedTuple, NamedTuple} where {T <: Float32}
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth
     )

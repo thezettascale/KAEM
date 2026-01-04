@@ -18,10 +18,10 @@ const SplineBasis_mapping = Dict(
     "Cheby" => (degree, in_dim, out_dim, grid_size, batch_size) -> Cheby_basis(degree, in_dim, out_dim, batch_size),
 )
 
-struct univariate_function{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
+struct univariate_function{T <: Float32} <: Lux.AbstractLuxLayer
     in_dim::Int
     out_dim::Int
-    base_activation::A
+    base_activation::AbstractActivation
     basis_function::AbstractBasis
     spline_string::String
     spline_degree::Int
@@ -77,7 +77,7 @@ function init_function(
 
     basis_function = initializer(spline_degree, in_dim, out_dim, size(grid, 2), sample_size)
 
-    return univariate_function{T, A}(
+    return univariate_function{T}(
         in_dim,
         out_dim,
         base_activation_obj,
@@ -99,8 +99,8 @@ end
 
 function Lux.initialparameters(
         rng::AbstractRNG,
-        l::univariate_function{T, A},
-    )::NamedTuple where {T <: Float32, A <: AbstractActivation}
+        l::univariate_function{T},
+    )::NamedTuple where {T <: Float32}
 
     w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_spline
@@ -147,8 +147,8 @@ end
 
 function Lux.initialstates(
         rng::AbstractRNG,
-        l::univariate_function{T, A},
-    )::NamedTuple where {T <: Float32, A <: AbstractActivation}
+        l::univariate_function{T},
+    )::NamedTuple where {T <: Float32}
     grid = l.init_grid
     scale = (maximum(grid) - minimum(grid)) / (size(grid, 2) - 1) |> Lux.f32
 

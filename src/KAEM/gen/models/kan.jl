@@ -22,6 +22,25 @@ struct KAN_Generator{T <: Float32} <: Lux.AbstractLuxLayer
     s_size::Int
 end
 
+# Outer constructor for Accessors.jl @reset
+function KAN_Generator(
+        depth,
+        Φ_fcns,
+        layernorms,
+        bool_config,
+        x_shape,
+        s_size
+    )
+    return KAN_Generator{Float32}(
+        depth,
+        Φ_fcns,
+        layernorms,
+        bool_config,
+        x_shape,
+        s_size
+    )
+end
+
 function init_KAN_Generator(
         conf::ConfParse,
         x_shape::Tuple,

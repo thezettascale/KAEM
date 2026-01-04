@@ -31,7 +31,7 @@ struct BoolConfig <: AbstractBoolConfig
 end
 
 struct EbmModel{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T}}}}
+    fcns_qp::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T, A}}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     depth::Int

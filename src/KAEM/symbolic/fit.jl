@@ -150,7 +150,6 @@ end
 function (sf::SymFitter)(
         ps,
         st_kan,
-        st_lux,
         kan_func;
         rng = Random.MersenneTwister(1),
     )

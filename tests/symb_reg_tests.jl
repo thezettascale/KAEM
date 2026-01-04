@@ -182,14 +182,13 @@ function test_reg()
     ps, st_kan = Lux.setup(Random.GLOBAL_RNG, f)
 
     x = randn(Float32, I, b_size) |> pu
-    st_lux = NamedTuple()
 
     sf = FitSymbolic.SymFitter(
         conf,
         symbolic_lib = test_symb_lib,
     )
 
-    fit = first(sf(ps, st_kan, st_lux, f))
+    fit = first(sf(ps, st_kan, f))
 
     x = randn(Float32, 2, 2)
     y = last(fit["i=1,o=1"])(x)
@@ -323,7 +322,7 @@ function test_symbolic_transfer()
     @test st.sym_fitter_ebm !== nothing
     @test st.sym_fitter_gen !== nothing
 
-    model_sym = st(model, ps, st_kan, st_lux; rng = rng)
+    model_sym = st(model, ps, st_kan; rng = rng)
     @test model_sym !== nothing
     return @test true
 end

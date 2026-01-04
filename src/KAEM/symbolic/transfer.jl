@@ -3,6 +3,7 @@ module Transfer
 export SymbolicTransfer, transfer_to_symbolic
 
 using Accessors, ConfParser, Lux, Random, Reactant
+using MLDataDevices
 
 using ..Utils
 using ..KAEM_model
@@ -52,8 +53,7 @@ end
 function (t::SymbolicTransfer)(
         model,
         ps,
-        st_kan,
-        st_lux;
+        st_kan;
         rng = Random.MersenneTwister(1)
     )
     model_copy = model
@@ -67,13 +67,11 @@ function (t::SymbolicTransfer)(
 
             ps_layer = ps.ebm.fcn[symbol_map[i]]
             st_kan_layer = st_kan.ebm[symbol_map[i]]
-            st_lux_layer = st_lux.ebm[symbol_map[i]]
             layer = prior_copy.fcns_qp[i]
 
             fit_dict, α, β, w, b = t.sym_fitter_ebm(
                 ps_layer,
                 st_kan_layer,
-                st_lux_layer,
                 layer;
                 rng = rng
             )
@@ -108,7 +106,6 @@ function (t::SymbolicTransfer)(
             fit_dict, α, β, w, b = t.sym_fitter_gen(
                 ps_layer,
                 st_kan_layer,
-                st_lux_layer,
                 layer;
                 rng = rng
             )

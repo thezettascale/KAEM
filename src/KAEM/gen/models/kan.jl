@@ -15,7 +15,7 @@ end
 
 struct KAN_Generator{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T}}}}
+    Φ_fcns::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T, A}}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     x_shape::Tuple

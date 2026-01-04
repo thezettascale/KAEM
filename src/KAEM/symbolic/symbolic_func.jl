@@ -11,7 +11,7 @@ struct symbolic_function{T <: Float32} <: Lux.AbstractLuxLayer
     out_dim::Int
     funcs::NamedTuple
     func_names::NamedTuple
-    grid_range::Tuple{T, T}
+    grid_range::Tuple{Vector{T}, Vector{T}}
     init_α::Matrix{T}
     init_β::Matrix{T}
     init_w::Matrix{T}
@@ -21,12 +21,13 @@ end
 function init_symbolic_function(
         in_dim::Int,
         out_dim::Int,
+        min_grid::AbstractVector{T},
+        max_grid::AbstractVector{T},
         fit_dict::Dict,
         α::AbstractMatrix{T},
         β::AbstractMatrix{T},
         w::AbstractMatrix{T},
-        b::AbstractMatrix{T};
-        grid_range::Tuple{T, T} = (0.0f0, 1.0f0),
+        b::AbstractMatrix{T}
     ) where {T <: Float32}
 
     funcs = NamedTuple()
@@ -48,7 +49,7 @@ function init_symbolic_function(
         out_dim,
         funcs,
         func_names,
-        grid_range,
+        (min_grid, max_grid),
         α,
         β,
         w,
@@ -73,9 +74,7 @@ function Lux.initialstates(
         rng::AbstractRNG,
         l::symbolic_function{T},
     )::NamedTuple where {T <: Float32}
-    min_z = repeat([first(l.grid_range)], l.in_dim)
-    max_z = repeat([last(l.grid_range)], l.in_dim)
-    return (min = min_z, max = max_z)
+    return (min = first(l.grid_range), max = last(l.grid_range))
 end
 
 function (l::symbolic_function{T})(

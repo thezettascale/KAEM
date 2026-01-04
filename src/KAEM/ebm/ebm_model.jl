@@ -14,6 +14,7 @@ using ConfParser,
 
 using ..Utils
 using ..UnivariateFunctions
+using ..SymbolicFunctions
 using ..RefPriors
 
 include("quadrature.jl")
@@ -30,7 +31,7 @@ struct BoolConfig <: AbstractBoolConfig
 end
 
 struct EbmModel{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
-    fcns_qp::Tuple{Vararg{univariate_function{T, A}}}
+    fcns_qp::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T}}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     depth::Int

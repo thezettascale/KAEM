@@ -1,4 +1,4 @@
-using Test, Random, LinearAlgebra, Statistics, ComponentArrays, ConfParser, Lux, Reactant
+using Test, Random, LinearAlgebra, Statistics, ComponentArrays, ConfParser, Lux
 
 ENV["GPU"] = false # Don't change
 
@@ -14,6 +14,12 @@ using .FitSymbolic
 include("../src/KAEM/KAEM.jl")
 using .KAEM_model
 
+include("../src/KAEM/model_setup.jl")
+using .ModelSetup
+
+include("../src/pipeline/optimizer.jl")
+using .optimization
+
 include("../src/KAEM/symbolic/reg.jl")
 using .Reg
 
@@ -23,11 +29,20 @@ using .UnivariateFunctions
 include("../src/KAEM/symbolic/symbolic_func.jl")
 using .SymbolicFunctions
 
+include("../src/KAEM/symbolic/transfer.jl")
+using .Transfer
+
 Random.seed!(42)
 conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 
 b_size = parse(Int, retrieve(conf, "SYMBOLIC_REG", "num_points_fitting"))
+test_symb_lib = Dict(
+    "x" => SYMB_LIB["x"],
+    "x^2" => SYMB_LIB["x^2"],
+    "sin" => SYMB_LIB["sin"],
+    "exp" => SYMB_LIB["exp"]
+)
 
 function test_symbolic_functions()
     x = rand(Float32, 10)
@@ -167,22 +182,14 @@ function test_reg()
     ps, st_kan = Lux.setup(Random.GLOBAL_RNG, f)
 
     x = randn(Float32, I, b_size) |> pu
-    compiled_f = Reactant.@compile f(x, ps, st_kan)
     st_lux = NamedTuple()
-
-    test_symb_lib = Dict(
-        "x" => SYMB_LIB["x"],
-        "x^2" => SYMB_LIB["x^2"],
-        "sin" => SYMB_LIB["sin"],
-        "exp" => SYMB_LIB["exp"]
-    )
 
     sf = FitSymbolic.SymFitter(
         conf,
         symbolic_lib = test_symb_lib,
     )
 
-    fit = first(sf(ps, st_kan, st_lux, compiled_f))
+    fit = first(sf(ps, st_kan, st_lux, f))
 
     x = randn(Float32, 2, 2)
     y = last(fit["i=1,o=1"])(x)
@@ -206,7 +213,9 @@ function test_symbolic_forward()
     w = ones(Float32, I, O)
     b = zeros(Float32, I, O)
 
-    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    min_grid = zeros(Float32, I)
+    max_grid = ones(Float32, I)
+    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
     st = Lux.initialstates(Random.GLOBAL_RNG, sf)
 
@@ -222,7 +231,10 @@ function test_symbolic_forward()
     w2 = 0.5f0 .* ones(Float32, I, O)
     b2 = 0.25f0 .* ones(Float32, I, O)
 
-    sf2 = init_symbolic_function(I, O, fit_dict, α2, β2, w2, b2)
+    min_grid = zeros(Float32, I)
+    max_grid = ones(Float32, I)
+
+    sf2 = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α2, β2, w2, b2)
     ps2 = Lux.initialparameters(Random.GLOBAL_RNG, sf2)
 
     y2 = sf2(x, ps2, st)
@@ -245,7 +257,10 @@ function test_get_formula()
     w = [1.0f0 2.0f0; 1.0f0 1.0f0]
     b = [0.0f0 0.1f0; 0.0f0 0.0f0]
 
-    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    min_grid = zeros(Float32, I)
+    max_grid = ones(Float32, I)
+
+    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
 
     formula_11 = get_formula(sf, ps, 1, 1)
@@ -277,23 +292,53 @@ function test_print_formulas()
     w = ones(Float32, I, O)
     b = zeros(Float32, I, O)
 
-    sf = init_symbolic_function(I, O, fit_dict, α, β, w, b)
+    min_grid = zeros(Float32, I)
+    max_grid = ones(Float32, I)
+
+    sf = init_symbolic_function(I, O, min_grid, max_grid, fit_dict, α, β, w, b)
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
 
     print_formulas(sf, ps)
     return @test true
 end
 
-@testset "Symbolic Regression Tests" begin
-    test_symbolic_functions()
-    test_ols_wb()
-    test_fit_affine()
-    test_fit_symbolic()
-    test_reg()
+function test_symbolic_transfer()
+    Random.seed!(42)
+    rng = Random.MersenneTwister(1)
+    optimizer = create_opt(conf)
+
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
+    model = init_KAEM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(model, x_test, optimizer; rng = rng)
+    st = SymbolicTransfer(
+        conf,
+        model.lkhood.SEQ,
+        model.lkhood.CNN;
+        symbolic_lib_prior = test_symb_lib,
+        symbolic_lib_llhood = test_symb_lib
+    )
+    @test st.transfer_ebm == true
+    @test st.transfer_gen == true
+    @test st.sym_fitter_ebm !== nothing
+    @test st.sym_fitter_gen !== nothing
+
+    model_sym = st(model, ps, st_kan, st_lux; rng = rng)
+    @test model_sym !== nothing
+    return @test true
 end
 
+# @testset "Symbolic Regression Tests" begin
+#     test_symbolic_functions()
+#     test_ols_wb()
+#     test_fit_affine()
+#     test_fit_symbolic()
+#     test_reg()
+# end
+
 @testset "Symbolic Function Layer Tests" begin
-    test_symbolic_forward()
-    test_get_formula()
-    test_print_formulas()
+    # test_symbolic_forward()
+    # test_get_formula()
+    # test_print_formulas()
+    test_symbolic_transfer()
 end

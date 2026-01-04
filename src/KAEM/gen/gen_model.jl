@@ -7,6 +7,7 @@ using ConfParser,
 
 using ..Utils
 using ..UnivariateFunctions
+using ..SymbolicFunctions
 
 include("resamplers.jl")
 include("models/kan.jl")

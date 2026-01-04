@@ -6,6 +6,7 @@ using Lux, ComponentArrays, Accessors, Random, ConfParser
 
 using ..Utils
 using ..UnivariateFunctions
+using ..SymbolicFunctions
 
 struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
@@ -14,7 +15,7 @@ end
 
 struct KAN_Generator{T <: Float32, A <: AbstractActivation} <: Lux.AbstractLuxLayer
     depth::Int
-    Φ_fcns::Tuple{Vararg{univariate_function{T, A}}}
+    Φ_fcns::Tuple{Vararg{Union{univariate_function{T, A}, symbolic_function{T}}}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     x_shape::Tuple

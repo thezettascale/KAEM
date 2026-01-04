@@ -12,6 +12,9 @@ using ..Utils
 include("kan/univariate_functions.jl")
 using .UnivariateFunctions
 
+include("symbolic/symbolic_func.jl")
+using .UnivariateFunctions
+
 include("ebm/inverse_transform.jl")
 using .InverseTransformSampling
 

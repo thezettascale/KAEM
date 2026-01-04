@@ -11,7 +11,8 @@ using Statistics,
     NLopt,
     Random,
     ConfParser,
-    Lux
+    Lux,
+    Reactant
 
 using ..Utils
 using ..SymbolicLibrary
@@ -150,7 +151,7 @@ function (sf::SymFitter)(
         ps,
         st_kan,
         st_lux,
-        kan_func,
+        kan_func;
         rng = Random.MersenneTwister(1),
     )
     """Finds best symbolic functions for each input and output dim"""
@@ -164,7 +165,7 @@ function (sf::SymFitter)(
         z[i, 1, :] = range(in_min, in_max, length = sf.num_points) |> collect
     end
 
-    y = kan_func(pu(z[:, 1, :]), ps, st_kan) |> Array
+    y = Reactant.@jit kan_func(pu(z[:, 1, :]), ps, st_kan) |> Array
     z = repeat(z, 1, O, 1)
 
     i = 1

@@ -13,6 +13,7 @@ using .FitSymbolic
 
 include("../src/KAEM/KAEM.jl")
 using .KAEM_model
+using .KAEM_model: AbstractBasis
 
 include("../src/KAEM/model_setup.jl")
 using .ModelSetup
@@ -24,7 +25,7 @@ include("../src/KAEM/symbolic/reg.jl")
 using .Reg
 
 include("../src/KAEM/kan/univariate_functions.jl")
-using .UnivariateFunctions
+using .UnivariateFunctions: RBF_basis
 
 include("../src/KAEM/symbolic/symbolic_func.jl")
 using .SymbolicFunctions

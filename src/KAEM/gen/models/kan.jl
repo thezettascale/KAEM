@@ -13,32 +13,13 @@ struct BoolConfig <: AbstractBoolConfig
     batchnorm::Bool
 end
 
-struct KAN_Generator{T <: Float32} <: Lux.AbstractLuxLayer
+struct KAN_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Tuple{Vararg{Any}}
     layernorms::Tuple{Vararg{Lux.LayerNorm}}
     bool_config::BoolConfig
     x_shape::Tuple
     s_size::Int
-end
-
-# Outer constructor for Accessors.jl @reset
-function KAN_Generator(
-        depth,
-        Φ_fcns,
-        layernorms,
-        bool_config,
-        x_shape,
-        s_size
-    )
-    return KAN_Generator{Float32}(
-        depth,
-        Φ_fcns,
-        layernorms,
-        bool_config,
-        x_shape,
-        s_size
-    )
 end
 
 function init_KAN_Generator(
@@ -135,7 +116,7 @@ function init_KAN_Generator(
 
     A = length(Φ_functions) > 0 ? typeof(Φ_functions[1].base_activation) : AbstractActivation
 
-    return KAN_Generator{Float32}(
+    return KAN_Generator(
         depth,
         Tuple(Φ_functions),
         Tuple(layernorms),

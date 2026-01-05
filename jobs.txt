@@ -8,14 +8,14 @@
 # MNIST vanilla
 # FMNIST vanilla
 # SVHN tune
-CELEBA thermo
-SVHN thermo
-SVHN vanilla
-CELEBA vanilla
+# CELEBA thermo
+# SVHN thermo
+# SVHN vanilla
+# CELEBA vanilla
 # CELEBA tune
 # DARCY_FLOW vanilla
-# CIFAR10 vanilla
-# CIFAR10 thermo
+CIFAR10 vanilla
+CIFAR10 thermo
 # SVHNPANG vanilla
 # CELEBAPANG vanilla
 # CIFAR10PANG vanilla

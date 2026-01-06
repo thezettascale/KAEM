@@ -28,25 +28,11 @@ function init_KAN_Generator(
         rng::AbstractRNG = Random.default_rng(),
     )
 
-    prior_widths = (
-        try
-            parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
-        end
-    )
-
+    prior_widths = parse_config_array(Int, retrieve(conf, "EbmModel", "layer_widths"))
     q_size = length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
-
-    widths = (
-        try
-            parse.(Int, retrieve(conf, "GeneratorModel", "widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "GeneratorModel", "widths"), ","))
-        end
-    )
-
+    widths = parse_config_array(Int, retrieve(conf, "GeneratorModel", "widths"))
     widths = (widths..., prod(x_shape))
+
     first(widths) !== q_size && (
         error(
             "First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.",

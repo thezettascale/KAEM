@@ -29,8 +29,11 @@ using .GeneratorModel
 include("ebm/log_prior_fcns.jl")
 using .LogPriorFCNs
 
-include("ula/population_xchange.jl")
+include("posterior_sampling/population_xchange.jl")
 using .PopulationXchange
+
+include("posterior_sampling/encoder.jl")
+using .EncoderModel
 
 include("symbolic/reg.jl")
 using .Reg
@@ -38,6 +41,7 @@ using .Reg
 struct KAEM{T <: Float32} <: Lux.AbstractLuxLayer
     prior::EbmModel
     lkhood::GenModel
+    encoder::EncoderWrapper
     train_loader::DataLoader
     test_loader::DataLoader
     batch_size::Int
@@ -54,9 +58,10 @@ struct KAEM{T <: Float32} <: Lux.AbstractLuxLayer
     conf::ConfParse
     log_prior::AbstractLogPrior
     use_pca::Bool
-    PCA_model::Union{PCA, Nothing}
+    PCA_model::Any
     original_data_size::Tuple
     kan_regularizer::Any
+    variational::Bool
 end
 
 function init_KAEM(
@@ -118,6 +123,9 @@ function init_KAEM(
     prior_model = init_EbmModel(conf; rng = rng)
     lkhood_model = init_GenModel(conf, x_shape; rng = rng)
 
+    variational = parse(Bool, retrieve(conf, "VARIATIONAL", "use_variational"))
+    encoder_model = init_encoder(conf, x_shape; rng = rng)
+
     η_init = parse(Float32, retrieve(conf, "POST_LANGEVIN", "initial_step_size"))
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
@@ -147,6 +155,7 @@ function init_KAEM(
     return KAEM(
         prior_model,
         lkhood_model,
+        encoder_model,
         train_loader,
         test_loader,
         batch_size,
@@ -165,7 +174,8 @@ function init_KAEM(
         use_pca,
         M,
         original_data_size,
-        Regularizer(conf, lkhood_model.CNN, lkhood_model.SEQ)
+        Regularizer(conf, lkhood_model.CNN, lkhood_model.SEQ),
+        variational,
     )
 end
 
@@ -186,6 +196,7 @@ function Lux.initialparameters(
     return ComponentArray(
         ebm = Lux.initialparameters(rng, model.prior),
         gen = Lux.initialparameters(rng, model.lkhood),
+        enc = Lux.initialparameters(rng, model.encoder),
     )
 end
 
@@ -198,9 +209,11 @@ function Lux.initialstates(
     gen_kan, gen_lux = Lux.initialstates(rng, model.lkhood)
     n, w = get_gausslegendre(model.prior, ebm_kan)
     st_quad = (nodes = n, weights = w)
+    enc_lux = Lux.initialstates(rng, model.encoder)
+
     return (
         (ebm = ebm_kan, gen = gen_kan, quad = st_quad),
-        (ebm = ebm_lux, gen = gen_lux),
+        (ebm = ebm_lux, gen = gen_lux, enc = enc_lux),
     )
 end
 

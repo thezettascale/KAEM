@@ -48,14 +48,7 @@ struct EbmModel{T <: Float32} <: Lux.AbstractLuxLayer
 end
 
 function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
-    widths = (
-        try
-            parse.(Int, retrieve(conf, "EbmModel", "layer_widths"))
-        catch
-            parse.(Int, split(retrieve(conf, "EbmModel", "layer_widths"), ","))
-        end
-    )
-
+    widths = parse_config_array(Int, retrieve(conf, "EbmModel", "layer_widths"))
     spline_degree = parse(Int, retrieve(conf, "EbmModel", "spline_degree"))
     layernorm_bool = parse(Bool, retrieve(conf, "EbmModel", "layernorm"))
     base_activation = retrieve(conf, "EbmModel", "base_activation")

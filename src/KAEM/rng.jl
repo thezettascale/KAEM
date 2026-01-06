@@ -94,6 +94,13 @@ function seed_rand(
     log_swap = log.(rand(rng, T, num_temps, N))
     xchange_ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, N)
 
+    latent_dim = model.prior.q_size * model.prior.p_size
+    encoder_noise = (
+        model.encoder.bool_config.variational ?
+            randn(rng, T, latent_dim, model.batch_size) :
+            [0.0f0]
+    )
+
     return (
         prior_its = prior_its,
         posterior_its = posterior_its,
@@ -107,6 +114,7 @@ function seed_rand(
         ula_noise = ula_noise,
         log_swap = log_swap,
         xchange_ll_noise = xchange_ll_noise,
+        encoder_noise = encoder_noise,
     ) |> pu
 end
 

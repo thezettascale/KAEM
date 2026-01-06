@@ -13,11 +13,13 @@ using ..KAEM_model.PopulationXchange
 include("train_steps/langevin_mle.jl")
 include("train_steps/importance_sampling.jl")
 include("train_steps/thermodynamic.jl")
-include("ula/unadjusted_langevin.jl")
+include("train_steps/variational.jl")
+include("posterior_sampling/unadjusted_langevin.jl")
 include("rng.jl")
 using .ImportanceSampling
 using .LangevinMLE
 using .ThermodynamicIntegration
+using .VariationalTraining
 using .ULA_sampling
 using .HLOrng
 
@@ -85,7 +87,30 @@ function setup_training(
 
     st_rng = seed_rand(model; rng = rng)
 
-    if model.N_t > 1
+    if model.encoder.bool_config.variational
+
+        β = parse(Float32, retrieve(conf, "VARIATIONAL", "beta"))
+        static_loss = VariationalLoss(model, β)
+
+        @reset model.train_step = begin
+            if MLIR
+                Reactant.@compile static_loss(
+                    opt_state,
+                    ps,
+                    st_kan,
+                    st_lux,
+                    x,
+                    1,
+                    st_rng,
+                )
+            else
+                static_loss
+            end
+        end
+
+        println("Posterior sampler: Variational")
+
+    elseif model.N_t > 1
 
         Q, S = model.prior.q_size, model.batch_size
         P = model.prior.bool_config.mixture_model ? 1 : model.prior.p_size

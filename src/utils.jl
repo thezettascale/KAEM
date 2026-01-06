@@ -11,7 +11,8 @@ export pu,
     AbstractLogPrior,
     AbstractQuadrature,
     AbstractBoolConfig,
-    AbstractResampler
+    AbstractResampler,
+    parse_config_array
 
 using Lux, LinearAlgebra, Statistics, Random, Accessors, NNlib, Reactant
 using MLDataDevices: reactant_device
@@ -138,5 +139,9 @@ abstract type AbstractQuadrature end
 abstract type AbstractBoolConfig end
 
 abstract type AbstractResampler end
+
+function parse_config_array(::Type{T}, raw) where {T}
+    return raw isa Vector ? parse.(T, raw) : parse.(T, split(raw, ","))
+end
 
 end

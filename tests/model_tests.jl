@@ -23,6 +23,7 @@ conf = ConfParse("tests/test_conf.ini")
 parse_conf!(conf)
 out_dim = parse(Int, retrieve(conf, "GeneratorModel", "output_dim"))
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
+commit!(conf, "VARIATIONAL", "use_variational", "false")
 
 optimizer = create_opt(conf)
 rng = Random.MersenneTwister(1)

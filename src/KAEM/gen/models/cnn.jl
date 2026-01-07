@@ -125,18 +125,10 @@ function init_CNN_Generator(
     )
 
     prior_widths = parse_config_array(Int, retrieve(conf, "EbmModel", "layer_widths"))
-    q_size = length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
+    q_size = get_q_size(prior_widths)
     widths = parse_config_array(Int, retrieve(conf, "GeneratorModel", "widths"))
     widths = (widths..., last(x_shape))
-
-    first(widths) !== q_size && (
-        error(
-            "First expert Φ_hidden_widths must be equal to the hidden dimension of the prior.",
-            widths,
-            " != ",
-            q_size,
-        )
-    )
+    validate_generator_widths(widths, q_size)
 
     channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
     hidden_c = (q_size, channels...)

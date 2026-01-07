@@ -69,6 +69,28 @@ GIF_CONFIGS = {
         "samples_per_frame": 1,
         "filename": "CELEBA_thermo_ula_mixture_evolution.gif",
     },
+    "CIFAR10_vanilla_mixture": {
+        "dataset": "CIFAR10",
+        "method_type": "Vanilla",
+        "sampler": "ULA",
+        "model_type": "mixture",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "CIFAR10_vanilla_ula_mixture_evolution.gif",
+    },
+    "CIFAR10_thermo_mixture": {
+        "dataset": "CIFAR10",
+        "method_type": "Thermodynamic",
+        "sampler": "ULA",
+        "model_type": "mixture",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "CIFAR10_thermo_ula_mixture_evolution.gif",
+    },
 }
 
 output_dir = "figures/results/gif_evolution"

@@ -113,7 +113,7 @@ function Lux.initialparameters(rng::AbstractRNG, wrapper::EncoderWrapper)
             logvar = Lux.initialparameters(rng, enc.logvar_head),
         )
     else
-        return (a = [0.0f0], b = [0.0f0])
+        return EMPTY_PARAMS
     end
 end
 
@@ -130,7 +130,7 @@ function Lux.initialstates(rng::AbstractRNG, wrapper::EncoderWrapper)
             logvar = Lux.initialstates(rng, enc.logvar_head) |> Lux.f32,
         )
     else
-        return (a = [0.0f0], b = [0.0f0])
+        return EMPTY_PARAMS
     end
 end
 

@@ -99,30 +99,14 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T})::NamedTupl
         symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.Φ_fcns[i]) for
             i in 1:lkhood.generator.depth
     )
-    layernorm_ps = (a = [0.0f0], b = [0.0f0])
-    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
-        layernorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.layernorms[i])
-                for i in 1:length(lkhood.generator.layernorms)
-        )
-    end
+    layernorm_ps = !lkhood.CNN ? init_optional_params(rng, lkhood.generator.layernorms, lkhood.generator.bool_config.layernorm) : EMPTY_PARAMS
+    batchnorm_ps = lkhood.CNN ? init_optional_params(rng, lkhood.generator.batchnorms, lkhood.generator.bool_config.batchnorm) : EMPTY_PARAMS
 
-    batchnorm_ps = (a = [0.0f0], b = [0.0f0])
-    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
-        batchnorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, lkhood.generator.batchnorms[i])
-                for i in 1:length(lkhood.generator.batchnorms)
-        )
-    end
-
-    attention_ps = (a = [0.0f0], b = [0.0f0])
-    if lkhood.SEQ
-        attention_ps = (
+    attention_ps = lkhood.SEQ ? (
             Q = Lux.initialparameters(rng, lkhood.generator.attention[1]),
             K = Lux.initialparameters(rng, lkhood.generator.attention[2]),
             V = Lux.initialparameters(rng, lkhood.generator.attention[3]),
-        )
-    end
+        ) : EMPTY_PARAMS
 
     return (
         fcn = fcn_ps,
@@ -138,32 +122,14 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T})::Tuple{NamedTu
             i in 1:lkhood.generator.depth
     )
 
-    st_lyrnorm = (a = [0.0f0], b = [0.0f0])
-    if lkhood.generator.bool_config.layernorm && length(lkhood.generator.layernorms) > 0
-        st_lyrnorm = NamedTuple(
-            symbol_map[i] =>
-                Lux.initialstates(rng, lkhood.generator.layernorms[i]) |> Lux.f32 for
-                i in 1:length(lkhood.generator.layernorms)
-        )
-    end
+    st_lyrnorm = !lkhood.CNN ? init_optional_states(rng, lkhood.generator.layernorms, lkhood.generator.bool_config.layernorm) : EMPTY_PARAMS
+    batchnorm_st = lkhood.CNN ? init_optional_states(rng, lkhood.generator.batchnorms, lkhood.generator.bool_config.batchnorm) : EMPTY_PARAMS
 
-    batchnorm_st = (a = [0.0f0], b = [0.0f0])
-    if lkhood.generator.bool_config.batchnorm && length(lkhood.generator.batchnorms) > 0
-        batchnorm_st = NamedTuple(
-            symbol_map[i] =>
-                Lux.initialstates(rng, lkhood.generator.batchnorms[i]) |> Lux.f32 for
-                i in 1:length(lkhood.generator.batchnorms)
-        )
-    end
-
-    attention_st = (a = [0.0f0], b = [0.0f0])
-    if lkhood.SEQ
-        attention_st = (
+    attention_st = lkhood.SEQ ? (
             Q = Lux.initialstates(rng, lkhood.generator.attention[1]) |> Lux.f32,
             K = Lux.initialstates(rng, lkhood.generator.attention[2]) |> Lux.f32,
             V = Lux.initialstates(rng, lkhood.generator.attention[3]) |> Lux.f32,
-        )
-    end
+        ) : EMPTY_PARAMS
 
     if lkhood.CNN || lkhood.SEQ
         return (a = [1.0f0], b = [1.0f0]),

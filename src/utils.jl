@@ -12,7 +12,12 @@ export pu,
     AbstractQuadrature,
     AbstractBoolConfig,
     AbstractResampler,
-    parse_config_array
+    parse_config_array,
+    EMPTY_PARAMS,
+    get_q_size,
+    validate_generator_widths,
+    init_optional_params,
+    init_optional_states
 
 using Lux, LinearAlgebra, Statistics, Random, Accessors, NNlib, Reactant
 using MLDataDevices: reactant_device
@@ -30,7 +35,10 @@ end
 const pu = reactant_device()
 
 # Num layers must be flexible, yet static, so this is used to index into params/state
-const symbol_map = (:a, :b, :c, :d, :e, :f, :g, :h, :i)
+const symbol_map = Tuple(Symbol('a' + i - 1) for i in 1:26)
+
+# Disabled optional components
+const EMPTY_PARAMS = (a = [0.0f0], b = [0.0f0])
 
 abstract type AbstractActivation end
 
@@ -142,6 +150,33 @@ abstract type AbstractResampler end
 
 function parse_config_array(::Type{T}, raw) where {T}
     return raw isa Vector ? parse.(T, raw) : parse.(T, split(raw, ","))
+end
+
+function get_q_size(prior_widths)
+    return length(prior_widths) > 2 ? first(prior_widths) : last(prior_widths)
+end
+
+function validate_generator_widths(widths, q_size)
+    return first(widths) !== q_size && error(
+        "First generator width must equal prior hidden dimension: ",
+        first(widths), " != ", q_size
+    )
+end
+
+function init_optional_params(rng, layers, enabled::Bool)
+    enabled && length(layers) > 0 || return EMPTY_PARAMS
+    return NamedTuple(
+        symbol_map[i] => Lux.initialparameters(rng, layers[i])
+            for i in 1:length(layers)
+    )
+end
+
+function init_optional_states(rng, layers, enabled::Bool)
+    enabled && length(layers) > 0 || return EMPTY_PARAMS
+    return NamedTuple(
+        symbol_map[i] => Lux.initialstates(rng, layers[i]) |> Lux.f32
+            for i in 1:length(layers)
+    )
 end
 
 end

@@ -243,13 +243,7 @@ function Lux.initialparameters(
     fcn_ps = NamedTuple(
         symbol_map[i] => Lux.initialparameters(rng, prior.fcns_qp[i]) for i in 1:prior.depth
     )
-    layernorm_ps = (a = [0.0f0], b = [0.0f0])
-    if prior.bool_config.layernorm && length(prior.layernorms) > 0
-        layernorm_ps = NamedTuple(
-            symbol_map[i] => Lux.initialparameters(rng, prior.layernorms[i]) for
-                i in 1:length(prior.layernorms)
-        )
-    end
+    layernorm_ps = init_optional_params(rng, prior.layernorms, prior.bool_config.layernorm)
 
     prior_ps = (
         π_μ = prior.prior_type == "learnable_gaussian" ?
@@ -290,15 +284,7 @@ function Lux.initialstates(
     fcn_st = NamedTuple(
         symbol_map[i] => Lux.initialstates(rng, prior.fcns_qp[i]) for i in 1:prior.depth
     )
-    st_lyrnorm = (a = [0.0f0], b = [0.0f0])
-    if prior.bool_config.layernorm && length(prior.layernorms) > 0
-        st_lyrnorm = NamedTuple(
-            symbol_map[i] => Lux.initialstates(rng, prior.layernorms[i]) |> Lux.f32 for
-                i in 1:length(prior.layernorms)
-        )
-    end
-
-    # KAN states are meant to be a ComponentArray - return separately
+    st_lyrnorm = init_optional_states(rng, prior.layernorms, prior.bool_config.layernorm)
     return fcn_st, st_lyrnorm
 end
 

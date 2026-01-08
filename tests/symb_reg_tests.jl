@@ -25,7 +25,7 @@ include("../src/KAEM/symbolic/reg.jl")
 using .Reg
 
 include("../src/KAEM/kan/univariate_functions.jl")
-using .UnivariateFunctions: RBF_basis
+using .UnivariateFunctions: RBF_basis, init_function
 
 include("../src/KAEM/symbolic/symbolic_func.jl")
 using .SymbolicFunctions

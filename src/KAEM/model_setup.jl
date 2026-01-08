@@ -87,10 +87,37 @@ function setup_training(
 
     st_rng = seed_rand(model; rng = rng)
 
+    num_param_updates =
+        parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(model.train_loader)
+
     if model.encoder.bool_config.variational
 
-        β = parse(Float32, retrieve(conf, "VARIATIONAL", "beta"))
-        static_loss = VariationalLoss(model, β)
+        # Cyclic beta annealing schedule (Fu et al., 2019)
+        max_kl_weight = parse(Float32, retrieve(conf, "VARIATIONAL", "beta"))
+        beta_num_cycles = parse(Int, retrieve(conf, "VARIATIONAL", "num_cycles"))
+        beta_cycle_length = parse(Int, retrieve(conf, "VARIATIONAL", "cycle_length"))
+        annealing_fraction = parse(Float32, retrieve(conf, "VARIATIONAL", "annealing_fraction"))
+        beta = [max_kl_weight]
+
+        if beta_num_cycles > 0
+            annealing_steps = floor(Int, beta_cycle_length * annealing_fraction)
+            beta = Vector{Float32}(undef, num_param_updates + 1)
+            for step in 1:(num_param_updates + 1)
+                current_cycle = fld(step - 1, beta_cycle_length + 1)
+                if current_cycle >= beta_num_cycles
+                    beta[step] = max_kl_weight
+                else
+                    cycle_position = (step - 1) % (beta_cycle_length + 1)
+                    if cycle_position <= annealing_steps
+                        beta[step] = max_kl_weight * (cycle_position / annealing_steps)
+                    else
+                        beta[step] = max_kl_weight
+                    end
+                end
+            end
+        end
+
+        static_loss = VariationalLoss(model, beta)
 
         @reset model.train_step = begin
             if MLIR
@@ -112,13 +139,22 @@ function setup_training(
 
     elseif model.N_t > 1
 
+        # Thermodynamic p schedule (cosine annealing)
+        initial_p =
+            parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
+        end_p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
+        num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
+
+        t = range(0, stop = 2 * π * (num_cycles + 0.5), length = num_param_updates + 1)
+        p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(t)) .|> Float32
+
         Q, S = model.prior.q_size, model.batch_size
         P = model.prior.bool_config.mixture_model ? 1 : model.prior.p_size
         @reset model.xchange_func = ReplicaXchange(Q, P, S, model.N_t)
 
         @reset model.train_step = begin
 
-            static_loss = ThermoLoss(model)
+            static_loss = ThermoLoss(model, p)
 
             if MLIR
                 Reactant.@compile static_loss(

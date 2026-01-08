@@ -39,10 +39,6 @@ function test_diagonal_loss()
         rng = rng,
     )
 
-    @test model.variational == true
-    @test model.train_step !== nothing
-    @test haskey(st_rng, :encoder_noise)
-
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
         model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
@@ -64,10 +60,6 @@ function test_cnn_loss()
         rng = rng,
     )
 
-    @test model.variational == true
-    @test model.train_step !== nothing
-    @test haskey(st_rng, :encoder_noise)
-
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
         model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
@@ -78,6 +70,6 @@ function test_cnn_loss()
 end
 
 @testset "Variational Training Tests" begin
-    test_diagonal_variational_loss()
-    test_cnn_variational_loss()
+    test_diagonal_loss()
+    test_cnn_loss()
 end

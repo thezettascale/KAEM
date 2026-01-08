@@ -46,7 +46,6 @@ struct KAEM{T <: Float32} <: Lux.AbstractLuxLayer
     test_loader::DataLoader
     batch_size::Int
     verbose::Bool
-    p::AbstractArray{T}
     N_t::Int
     sample_prior::Function
     posterior_sampler::Any
@@ -130,21 +129,8 @@ function init_KAEM(
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
     num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
     MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
-    p = [one(Float32)]
 
     N_t = max(N_t, 1)
-
-    if N_t > 1
-        initial_p =
-            parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
-        end_p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
-        num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
-        num_param_updates =
-            parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(train_loader)
-
-        x = range(0, stop = 2 * π * (num_cycles + 0.5), length = num_param_updates + 1)
-        p = initial_p .+ (end_p - initial_p) .* 0.5 .* (1 .- cos.(x)) .|> Float32
-    end
 
     sample_prior =
         (m, n, p, sk, sl, r) ->
@@ -160,7 +146,6 @@ function init_KAEM(
         test_loader,
         batch_size,
         verbose,
-        p,
         N_t,
         sample_prior,
         nothing,

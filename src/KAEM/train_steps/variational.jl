@@ -126,7 +126,7 @@ end
 
 struct VariationalLoss
     model
-    β::Float32
+    beta::AbstractArray{Float32}
 end
 
 function (l::VariationalLoss)(
@@ -138,6 +138,8 @@ function (l::VariationalLoss)(
         train_idx,
         st_rng,
     )
+    β = l.beta[train_idx]
+
     z_posterior, log_q, st_enc, noise =
         sample_encoder(ps, st_kan, Lux.trainmode(st_lux), l.model, x, st_rng)
     st_lux_ebm, st_lux_gen = Lux.trainmode(st_lux.ebm), Lux.trainmode(st_lux.gen)
@@ -152,7 +154,7 @@ function (l::VariationalLoss)(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        l.β,
+        β,
     )
 
     loss, st_lux_ebm, st_lux_gen = elbo_loss(
@@ -165,7 +167,7 @@ function (l::VariationalLoss)(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        l.β,
+        β,
     )
 
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)

@@ -16,11 +16,11 @@ function sample_thermo(
         st_lux,
         model,
         x,
-        st_rng;
-        train_idx = 1,
+        st_rng,
+        p_value;
         swap_replica_idxs = nothing,
     )
-    temps = collect(Float32, [(k / model.N_t)^model.p[train_idx] for k in 0:model.N_t])
+    temps = collect(Float32, [(k / model.N_t)^p_value for k in 0:model.N_t])
     z, st_lux = model.posterior_sampler(
         ps,
         st_kan,
@@ -178,6 +178,7 @@ end
 
 struct ThermoLoss
     model
+    p::AbstractArray{Float32}
 end
 
 function (l::ThermoLoss)(
@@ -195,8 +196,9 @@ function (l::ThermoLoss)(
         Lux.trainmode(st_lux),
         l.model,
         x,
-        st_rng;
-        train_idx = train_idx,
+        st_rng,
+        l.p[train_idx]
+        ,
     )
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm =

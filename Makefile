@@ -1,4 +1,4 @@
-.PHONY: install uninstall clean test bench train train-thermo train-vanilla tune sequential plot plot-results format lint logs clear-logs julia-setup help
+.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed plot plot-results format lint logs clear-logs julia-setup help
 
 ENV_NAME = KAEM
 CONDA_BASE := $(shell conda info --base 2>/dev/null || echo "")
@@ -21,25 +21,27 @@ export XLA_FLAGS
 
 help:
 	@echo "Available targets:"
-	@echo "  install     - Set up conda environment and install dependencies"
-	@echo "  uninstall   - Remove only the dev environment (Conda env and Julia Manifest.toml)"
-	@echo "  clean       - Remove conda environment"
-	@echo "  test        - Run tests in tmux session with logging"
-	@echo "  bench       - Run benchmarks in tmux session with logging"
-	@echo "  train       - Start training (use: make train DATASET=SVHN MODE=thermo)"
-	@echo "  train-thermo- Start thermodynamic training (use: make train-thermo DATASET=SVHN)"
-	@echo "  train-vanilla- Start vanilla training (use: make train-vanilla DATASET=SVHN)"
-	@echo "  sequential  - Schedule multiple jobs sequentially (use: make sequential CONFIG=jobs.txt)"
-	@echo "  tune        - Run hyperparameter tuning in vanilla mode (use: make tune DATASET=MNIST)"
-	@echo "  plot        - Run all plotting scripts"
-	@echo "  plot-results- Run only results plotting scripts"
-	@echo "  logs        - View latest test log"
-	@echo "  clear-logs  - Remove all log files"
-	@echo "  julia-setup - Install Julia dependencies"
-	@echo "  help        - Show this help"
+	@echo "  install       - Set up conda environment and install dependencies"
+	@echo "  uninstall     - Remove only the dev environment (Conda env and Julia Manifest.toml)"
+	@echo "  clean         - Remove conda environment"
+	@echo "  test          - Run tests in tmux session with logging"
+	@echo "  bench         - Run benchmarks in tmux session with logging"
+	@echo "  train         - Start training (use: make train DATASET=SVHN MODE=thermo)"
+	@echo "  train-thermo  - Start thermodynamic training (use: make train-thermo DATASET=SVHN)"
+	@echo "  train-vanilla - Start vanilla training (use: make train-vanilla DATASET=SVHN)"
+	@echo "  train-variational - Start variational training (use: make train-variational DATASET=MNIST)"
+	@echo "  sequential    - Schedule multiple jobs sequentially (use: make sequential CONFIG=jobs.txt)"
+	@echo "  distributed   - Run distributed training across multiple devices (use: make distributed DATASET=MNIST MODE=thermo)"
+	@echo "  tune          - Run hyperparameter tuning in vanilla mode (use: make tune DATASET=MNIST)"
+	@echo "  plot          - Run all plotting scripts"
+	@echo "  plot-results  - Run only results plotting scripts"
+	@echo "  logs          - View latest test log"
+	@echo "  clear-logs    - Remove all log files"
+	@echo "  julia-setup   - Install Julia dependencies"
+	@echo "  help          - Show this help"
 	@echo ""
 	@echo "Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW"
-	@echo "Available modes: thermo, vanilla, tune"
+	@echo "Available modes: thermo, vanilla, variational, tune"
 
 install:
 	@chmod +x scripts/init.sh
@@ -92,23 +94,18 @@ train:
 	@echo "Starting training for dataset: $(DATASET), mode: $(MODE)"
 	@tmux kill-session -t kaem_train 2>/dev/null || true
 	@tmux new-session -d -s kaem_train -n training
-ifeq ($(MODE),thermo)
-	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
-else
-	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
-endif
+	@tmux send-keys -t kaem_train:training "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) julia --project=. --threads=auto main.jl 2>&1 | tee logs/train_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_train" Enter
 	@echo "Training session started in tmux. Attach with: tmux attach-session -t kaem_train"
-ifeq ($(MODE),thermo)
-	@echo "Log file: logs/train_thermo_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
-else
-	@echo "Log file: logs/train_vanilla_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
-endif
+	@echo "Log file: logs/train_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
 
 train-thermo:
 	@$(MAKE) train DATASET=$(DATASET) MODE=thermo
 
 train-vanilla:
 	@$(MAKE) train DATASET=$(DATASET) MODE=vanilla
+
+train-variational:
+	@$(MAKE) train DATASET=$(DATASET) MODE=variational
 
 tune:
 	@mkdir -p logs
@@ -128,6 +125,16 @@ sequential:
 	@tmux send-keys -t kaem_sequential:sequential "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && ./scripts/run_sequential.sh $(CONFIG) 2>&1 | tee logs/sequential_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && ./scripts/run_sequential.sh $(CONFIG) 2>&1 | tee logs/sequential_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_sequential" Enter
 	@echo "Sequential job session started in tmux. Attach with: tmux attach-session -t kaem_sequential"
 	@echo "Log file: logs/sequential_$(shell date +%Y%m%d_%H%M%S).log"
+
+distributed:
+	@mkdir -p logs
+	@chmod +x scripts/run_distributed.sh
+	@echo "Starting distributed training for dataset: $(DATASET), mode: $(MODE)"
+	@tmux kill-session -t kaem_distributed 2>/dev/null || true
+	@tmux new-session -d -s kaem_distributed -n distributed
+	@tmux send-keys -t kaem_distributed:distributed "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_distributed" Enter
+	@echo "Distributed training session started in tmux. Attach with: tmux attach-session -t kaem_distributed"
+	@echo "Log file: logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
 
 plot:
 	@mkdir -p logs

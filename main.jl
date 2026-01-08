@@ -3,6 +3,7 @@ using ConfParser, Random
 dataset = get(ENV, "DATASET", "MNIST")
 mode = get(ENV, "MODE", "vanilla")
 use_thermo = mode == "thermo"
+use_variational = mode == "variational"
 
 println("Init main.jl training as $dataset $mode")
 
@@ -31,8 +32,10 @@ parse_conf!(conf)
 
 N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
 ENV["THERMO"] = (N_t > 1 && use_thermo) ? "true" : "false"
-ENV["GPU"] = retrieve(conf, "TRAINING", "use_gpu")
+ENV["DEVICE"] = retrieve(conf, "TRAINING", "device")
 ENV["PERCEPTUAL"] = retrieve(conf, "TRAINING", "use_perceptual_loss")
+
+commit!(conf, "VARIATIONAL", "use_variational", string(use_variational))
 
 include("src/pipeline/trainer.jl")
 using .trainer

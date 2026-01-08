@@ -132,7 +132,7 @@ load_config() {
         esac
         
         case "$mode" in
-            thermo|vanilla|tune)
+            thermo|vanilla|variational|tune)
                 ;;
             *)
                 print_warning "Unknown mode '$mode' on line $line_num (skipping)"

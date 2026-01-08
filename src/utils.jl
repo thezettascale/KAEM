@@ -22,17 +22,35 @@ export pu,
 using Lux, LinearAlgebra, Statistics, Random, Accessors, NNlib, Reactant
 using MLDataDevices: reactant_device
 
-Reactant.set_default_backend("cpu")
-if parse(Bool, get(ENV, "GPU", "false"))
-    try
-        Reactant.set_default_backend("gpu")
-    catch e
-        println("GPU init error: $e")
-        Reactant.set_default_backend("cpu")
+# Device: "tpu", "gpu", or "cpu"
+function xdev()
+    device = lowercase(get(ENV, "DEVICE", "cpu"))
+    println("=== Device: $device ===")
+
+    if device == "tpu"
+        try
+            Reactant.set_default_backend("tpu")
+            return reactant_device()
+        catch e
+            println("TPU init failed: $e, falling back...")
+            device = "gpu"
+        end
     end
+
+    if device == "gpu"
+        try
+            Reactant.set_default_backend("gpu")
+            return reactant_device()
+        catch e
+            println("GPU init failed: $e, falling back to CPU...")
+        end
+    end
+
+    Reactant.set_default_backend("cpu")
+    return reactant_device()
 end
 
-const pu = reactant_device()
+const pu = xdev()
 
 # Num layers must be flexible, yet static, so this is used to index into params/state
 const symbol_map = Tuple(Symbol('a' + i - 1) for i in 1:26)

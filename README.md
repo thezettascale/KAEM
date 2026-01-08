@@ -42,17 +42,49 @@ Edit the config files:
 nvim config/nist_config.ini
 ```
 
-For individual experiments run:
+### Training modes
 
+| Command | Description | Defaults |
+|---------|-------------|----------|
+| `make train DATASET=X MODE=Y` | Single job, single device | DATASET=MNIST, MODE=thermo |
+| `make sequential CONFIG=jobs.txt` | Multiple jobs, single device | CONFIG=jobs.txt |
+| `make distributed DATASET=X MODE=Y NUM_DEVICES=N` | Single job, multiple devices | NUM_DEVICES=auto |
+| `make batch CONFIG=jobs.txt NUM_DEVICES=N` | Multiple jobs, multiple devices | NUM_DEVICES=auto |
+
+Available modes: `vanilla`, `thermo`, `variational`
+
+Shorthand targets:
 ```bash
 make train-vanilla DATASET=MNIST
 make train-thermo DATASET=SVHN
+make train-variational DATASET=CIFAR10
 ```
 
-To automatically run experiments one after the other:
+### Sequential jobs
+
+Create a `jobs.txt` file:
+```
+MNIST thermo
+CIFAR10 variational
+SVHN vanilla
+```
+
+Run sequentially on single device:
 ```bash
-nvim jobs.txt # Schedule jobs
-make train-sequential CONFIG=jobs.txt
+make sequential CONFIG=jobs.txt
+```
+
+Run batch with distributed execution (each job uses multiple devices):
+```bash
+make batch CONFIG=jobs.txt NUM_DEVICES=4
+```
+
+### Device configuration
+
+Set device in config files (`config/*.ini`):
+```ini
+[TRAINING]
+device = gpu   # Options: cpu, gpu, tpu
 ```
 
 For benchmarking run:
@@ -125,32 +157,35 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 
 ## Samples
 
-<p align="center">
-  <img src="figures/results/individual_plots/mnist_gaussian_rbf.png" alt="MNIST with importance sampling" width="30%" />
-  <img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" alt="FMNIST with importance sampling" width="30%" />
-</p>
+### Importance Sampling
+> KAEM is a robust probabilistic model. It can even be trained cheaply with importance sampling.
 
-<p align="center">
-  <sub>KAEM is a robust probabilistic model. It can even be trained cheaply with importance sampling.</sub>
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="300"/><br/><b>MNIST</b></td>
+    <td align="center"><img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="300"/><br/><b>Fashion-MNIST</b></td>
+  </tr>
+</table>
 
-<p align="center">
-  <img src="figures/results/individual_plots/svhn_real_reference.png" alt="SVHN with Vanilla training" width="30%" />
-  <img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" alt="SVHN with Vanilla training" width="30%" />
-</p>
+### Langevin Dynamics
+> When importance sampling explodes with variance, unadjusted Langevin algorithm may be used.
 
-<p align="center">
-  <sub>When importance sampling explodes with variance, the unadjusted Langevin algorithms may be used.</sub>
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/svhn_real_reference.png" width="300"/><br/><b>SVHN (real)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="300"/><br/><b>SVHN (generated)</b></td>
+  </tr>
+</table>
 
-<p align="center">
-  <img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" alt="CelebA with Vanilla training" width="30%" />
-  <img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" alt="CelebaA with Thermodynamic training" width="30%" />
-</p>
+### Thermodynamic Integration
+> Annealing as an embarrassingly parallel alternative to diffusion EBMs for improved mixing in latent space.
 
-<p align="center">
-  <sub>We present annealing as an embarassingly parallel alternative to diffusion EBMs to improve mixing in the latent space.</sub>
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="300"/><br/><b>CelebA (vanilla)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="300"/><br/><b>CelebA (thermo)</b></td>
+  </tr>
+</table>
 
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

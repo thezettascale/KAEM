@@ -2,13 +2,19 @@ module PlotKAN
 
 export plot_ebm!
 
-using CairoMakie, LaTeXStrings, Accessors
+using CairoMakie, LaTeXStrings, Accessors, ConfParser
 using NNlib: softmax
+using MLDataDevices: cpu_device
 
 using ..Utils
+using ..FitSymbolic
+using ..SymbolicFunctions
 
 include("../ebm/quadrature.jl")
 using .Quadrature: get_gausslegendre
+
+include("func_lib.jl")
+using .SymbolicLibrary
 
 CairoMakie.activate!(type = "png")
 
@@ -23,6 +29,8 @@ function plot_ebm!(
         file_loc = "figures/results/priors/",
         prior_type = "",
         fcn_type = "",
+        show_formula = false,
+        sym_fitter::Union{SymFitter, Nothing} = nothing,
     )
     mkpath(file_loc)
 
@@ -37,6 +45,29 @@ function plot_ebm!(
     f = first(prior(ps, st_kan, st_lux, z))
     Z = first(prior.quad(prior, ps, st_kan, st_lux, st_quad))
     f = exp.(f) .* PermutedDimsArray(view(π_0, :, :, :), (3, 1, 2)) ./ sum(Z; dims = 3)
+
+    # Fit symbolic functions if requested
+    symbolic_fits = Dict()
+    if show_formula && sym_fitter !== nothing
+        for i in 1:prior.depth
+            layer = prior.fcns_qp[i]
+            ps_layer = cpu_device()(ps.fcn[symbol_map[i]])
+            st_kan_layer = cpu_device()(st_kan[symbol_map[i]])
+            fit_dict, α, β, w, b = sym_fitter(ps_layer, st_kan_layer, layer)
+
+            sym_func = init_symbolic_function(
+                layer.basis_function,
+                layer.in_dim,
+                layer.out_dim,
+                st_kan_layer.grid[:, 1],
+                st_kan_layer.grid[:, end],
+                fit_dict,
+                α, β, w, b
+            )
+            sym_ps = (α = α, β = β, w = w, b = b)
+            symbolic_fits[i] = (sym_func, sym_ps)
+        end
+    end
 
     for (i, (q, p)) in enumerate(plot_components)
         fig = Figure(
@@ -94,6 +125,28 @@ function plot_ebm!(
         )
 
         axislegend(ax, position = :rt, framecolor = :gray, framevisible = true)
+
+        if show_formula && !isempty(symbolic_fits)
+            for layer_idx in 1:prior.depth
+                if haskey(symbolic_fits, layer_idx)
+                    sym_func, sym_ps = symbolic_fits[layer_idx]
+                    if q <= sym_func.in_dim && p <= sym_func.out_dim
+                        f_str = get_formula(sym_func, sym_ps, q, p)
+                        f_latex = replace(f_str, "*" => " \\cdot ")
+                        formula_latex = L"f_{%$q,%$p}(z) = %$f_latex"
+                        text!(
+                            ax,
+                            0.03, 0.97 - 0.06 * (layer_idx - 1),
+                            text = formula_latex,
+                            align = (:left, :top),
+                            space = :relative,
+                            fontsize = 18,
+                            color = :black,
+                        )
+                    end
+                end
+            end
+        end
 
         save(
             file_loc * "/$(prior_type)_$(fcn_type)_$(q)_$(p).png",

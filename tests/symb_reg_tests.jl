@@ -33,6 +33,9 @@ using .SymbolicFunctions
 include("../src/KAEM/symbolic/transfer.jl")
 using .Transfer
 
+include("../src/KAEM/symbolic/plot.jl")
+using .PlotKAN
+
 include("../src/KAEM/kan/spline_bases.jl")
 using .spline_functions
 
@@ -352,7 +355,6 @@ function test_print_formulas()
     )
 
     ps = Lux.initialparameters(Random.GLOBAL_RNG, sf)
-
     print_formulas(sf, ps)
     return @test true
 end
@@ -383,6 +385,39 @@ function test_symbolic_transfer()
     return @test true
 end
 
+function test_plot()
+    Random.seed!(42)
+    rng = Random.MersenneTwister(1)
+    optimizer = create_opt(conf)
+
+    dataset = randn(rng, Float32, 10, 1, 1, 500)
+    model = init_KAEM(dataset, conf, (10, 1, 1))
+    x_test = first(model.train_loader) |> pu
+    model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(
+        model, x_test, optimizer;
+        rng = rng, MLIR = false
+    )
+
+    sf = FitSymbolic.SymFitter(conf; symbolic_lib = test_symb_lib)
+    plot_ebm!(
+        model.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_lux.ebm,
+        st_kan.quad;
+        plot_components = [(1, 1)],
+        component_colours = [:blue],
+        file_loc = "figures/test/",
+        prior_type = "test",
+        fcn_type = "symbolic",
+        show_formula = true,
+        sym_fitter = sf,
+    )
+
+    @test isfile("figures/test/test_symbolic_1_1.png")
+    return @test true
+end
+
 @testset "Symbolic Regression Tests" begin
     test_symbolic_functions()
     test_ols_wb()
@@ -396,4 +431,5 @@ end
     test_get_formula()
     test_print_formulas()
     test_symbolic_transfer()
+    test_plot()
 end

@@ -11,11 +11,13 @@
 # CELEBA thermo
 # SVHN thermo
 # SVHN vanilla
+SVHN variational
 # CELEBA vanilla
 # CELEBA tune
+CELEBA variational
 # DARCY_FLOW vanilla
-CIFAR10 vanilla
-CIFAR10 thermo
+# CIFAR10 vanilla
+# CIFAR10 thermo
 # SVHNPANG vanilla
 # CELEBAPANG vanilla
 # CIFAR10PANG vanilla

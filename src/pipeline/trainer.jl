@@ -77,6 +77,8 @@ function init_trainer(
     commit!(conf, "SEQ", "sequence_length", string(sequence_length)) # Make sure 0 is set if not sequence
     vocab_size = parse(Int, retrieve(conf, "SEQ", "vocab_size"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    variational = parse(Bool, retrieve(conf, "VARIATIONAL", "use_variational"))
+    use_langevin = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
 
     dataset, x_shape, save_dataset = (
         seq ?
@@ -103,19 +105,23 @@ function init_trainer(
 
     # Log against ULA and autoMALA
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
-    mala =
-        parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin")) ? "ULA" :
-        "importance"
+
+    train_type = "importance"
+    if variational
+        train_type = "amortized"
+    elseif use_langevin
+        train_type = "ULA"
+    end
 
     model_type =
-        N_t > 1 ? "Thermodynamic/$(dataset_name)/$(mala)" :
-        "Vanilla/$(dataset_name)/$(mala)"
+        N_t > 1 ? "Thermodynamic/$(dataset_name)/$(train_type)" :
+        "Vanilla/$(dataset_name)/$(train_type)"
 
     prior_spline_fcn =
         retrieve(conf, "EbmModel", "π_0") *
         "_" *
         retrieve(conf, "EbmModel", "spline_function")
-    if mala == "importance"
+    if train_type == "importance"
         model_type = model_type * "/" * prior_spline_fcn
     end
 

@@ -160,14 +160,19 @@ function (sf::SymFitter)(
 
     z = zeros(Float32, I, 1, sf.num_points)
     for i in 1:I
-        in_min, in_max = st_kan.grid[i, 1], st_kan.grid[i, end]
+        in_min, in_max = Float32(st_kan.grid[i, 1]), Float32(st_kan.grid[i, end])
         z[i, 1, :] = range(in_min, in_max, length = sf.num_points) |> collect
     end
 
-    y = Reactant.@jit kan_func(pu(z[:, 1, :]), ps, st_kan) |> Array
-    z = repeat(z, 1, O, 1)
+    if ps.coef isa Reactant.ConcreteRArray
+        z_input = z[:, 1, :] |> pu
+        y = Reactant.@jit(kan_func(z_input, ps, st_kan)) |> Array
+    else
+        y = kan_func(z[:, 1, :], ps, st_kan)
+    end
 
     i = 1
+    z = repeat(z, 1, O, 1)
     R2_list = zeros(Float32, I, O, length(sf.lib))
     α_list = zeros(Float32, I, O, length(sf.lib))
     β_list = zeros(Float32, I, O, length(sf.lib))

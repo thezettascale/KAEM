@@ -32,19 +32,20 @@ function init_symbolic_function(
         b::AbstractMatrix{T}
     ) where {T <: Float32}
 
-    funcs = NamedTuple()
-    func_names = NamedTuple()
-    for i in 1:in_dim, o in 1:out_dim
-        key = "i=$i,o=$o"
-        if haskey(fit_dict, key)
-            name, _, func = fit_dict[key]
-            @reset funcs[Symbol("i=$i,o=$o")] = func
-            @reset func_names[Symbol("i=$i,o=$o")] = name
-        else
-            @reset funcs[Symbol("i=$i,o=$o")] = x -> x
-            @reset func_names[Symbol("i=$i,o=$o")] = "x"
-        end
-    end
+    func_pairs = Tuple(
+        Symbol("i=$i,o=$o") => (
+                haskey(fit_dict, "i=$i,o=$o") ? fit_dict["i=$i,o=$o"][3] : (x -> x)
+            )
+            for i in 1:in_dim for o in 1:out_dim
+    )
+    name_pairs = Tuple(
+        Symbol("i=$i,o=$o") => (
+                haskey(fit_dict, "i=$i,o=$o") ? fit_dict["i=$i,o=$o"][1] : "x"
+            )
+            for i in 1:in_dim for o in 1:out_dim
+    )
+    funcs = NamedTuple{Tuple(first.(func_pairs))}(Tuple(last.(func_pairs)))
+    func_names = NamedTuple{Tuple(first.(name_pairs))}(Tuple(last.(name_pairs)))
 
     return symbolic_function(
         in_dim,

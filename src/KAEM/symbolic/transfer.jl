@@ -3,7 +3,7 @@ module Transfer
 export SymbolicTransfer, transfer_to_symbolic
 
 using Accessors, ConfParser, Lux, Random, Reactant
-using MLDataDevices
+using MLDataDevices: cpu_device
 
 using ..Utils
 using ..KAEM_model
@@ -65,8 +65,8 @@ function (t::SymbolicTransfer)(
             layer = prior_copy.fcns_qp[i]
             I, O = layer.in_dim, layer.out_dim
 
-            ps_layer = ps.ebm.fcn[symbol_map[i]]
-            st_kan_layer = st_kan.ebm[symbol_map[i]]
+            ps_layer = cpu_device()(ps.ebm.fcn[symbol_map[i]])
+            st_kan_layer = cpu_device()(st_kan.ebm[symbol_map[i]])
             layer = prior_copy.fcns_qp[i]
 
             fit_dict, α, β, w, b = t.sym_fitter_ebm(
@@ -100,8 +100,8 @@ function (t::SymbolicTransfer)(
             layer = gen_copy.Φ_fcns[i]
             I, O = layer.in_dim, layer.out_dim
 
-            ps_layer = ps.gen.fcn[symbol_map[i]]
-            st_kan_layer = st_kan.gen[symbol_map[i]]
+            ps_layer = cpu_device()(ps.gen.fcn[symbol_map[i]])
+            st_kan_layer = cpu_device()(st_kan.gen[symbol_map[i]])
             layer = gen_copy.Φ_fcns[i]
 
             fit_dict, α, β, w, b = t.sym_fitter_gen(

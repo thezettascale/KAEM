@@ -16,7 +16,7 @@ struct symbolic_function{T <: Float32} <: Lux.AbstractLuxLayer
     init_β::AbstractMatrix{T}
     init_w::AbstractMatrix{T}
     init_b::AbstractMatrix{T}
-    basis_function::AbstractBasis
+    basis_function
 end
 
 function init_symbolic_function(

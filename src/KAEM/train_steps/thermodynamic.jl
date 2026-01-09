@@ -8,7 +8,9 @@ using ..Utils
 using ..KAEM_model
 
 include("../gen/loglikelihoods.jl")
+include("../ebm/mixture_selection.jl")
 using .LogLikelihoods: log_likelihood_MALA
+using .MixtureChoice: choose_component
 
 function sample_thermo(
         ps,
@@ -33,7 +35,16 @@ function sample_thermo(
     Δt = temps[2:end] - temps[1:(end - 1)]
     tempered_noise = st_rng.tempered_noise
     noise = st_rng.train_noise
-    return z, Δt, st_lux, noise, tempered_noise
+
+    # Get component mask for mixture model normalization
+    Q, P, S = model.prior.q_size, model.prior.p_size, model.batch_size
+    component_mask = (
+        model.prior.bool_config.mixture_model && !model.prior.bool_config.contrastive_div ?
+            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
+            nothing
+    )
+
+    return z, Δt, st_lux, noise, tempered_noise, component_mask
 end
 
 function marginal_llhood(
@@ -47,7 +58,8 @@ function marginal_llhood(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        tempered_noise
+        tempered_noise,
+        component_mask,
     )
 
     # Steppingstone estimator
@@ -58,7 +70,8 @@ function marginal_llhood(
 
         noise_t = (
             model.lkhood.SEQ ? tempered_noise[:, :, :, t] : (
-                    model.use_pca ? tempered_noise[:, :, t] : tempered_noise[:, :, :, :, t]
+                    model.use_pca ? tempered_noise[:, :, t] :
+                    tempered_noise[:, :, :, :, t]
                 )
         )
 
@@ -82,10 +95,19 @@ function marginal_llhood(
         ps.ebm,
         st_kan.ebm,
         st_lux_ebm,
+        st_kan.quad;
+        component_mask = component_mask,
     )
 
-    logprior, st_ebm =
-        model.log_prior(z_prior, model.prior, ps.ebm, st_kan.ebm, st_ebm)
+    logprior, st_ebm = model.log_prior(
+        z_prior,
+        model.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_ebm,
+        st_kan.quad;
+        component_mask = component_mask
+    )
     ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : 0.0f0
 
     logllhood, st_gen = log_likelihood_MALA(
@@ -125,7 +147,8 @@ function closure(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        tempered_noise
+        tempered_noise,
+        component_mask,
     )
     return first(
         marginal_llhood(
@@ -140,6 +163,7 @@ function closure(
             st_lux_gen,
             noise,
             tempered_noise,
+            component_mask,
         ),
     )
 end
@@ -155,7 +179,8 @@ function grad_thermo_llhood(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        tempered_noise
+        tempered_noise,
+        component_mask,
     )
     return first(
         Enzyme.gradient(
@@ -171,7 +196,8 @@ function grad_thermo_llhood(
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
             Enzyme.Const(noise),
-            Enzyme.Const(tempered_noise)
+            Enzyme.Const(tempered_noise),
+            Enzyme.Const(component_mask),
         )
     )
 end
@@ -190,7 +216,7 @@ function (l::ThermoLoss)(
         train_idx,
         st_rng,
     )
-    z_posterior, Δt, st_lux, noise, tempered_noise = sample_thermo(
+    z_posterior, Δt, st_lux, noise, tempered_noise, component_mask = sample_thermo(
         ps,
         st_kan,
         Lux.trainmode(st_lux),
@@ -216,6 +242,7 @@ function (l::ThermoLoss)(
         st_lux_gen,
         noise,
         tempered_noise,
+        component_mask,
     )
 
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
@@ -230,6 +257,7 @@ function (l::ThermoLoss)(
         st_lux_gen,
         noise,
         tempered_noise,
+        component_mask,
     )
 
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)

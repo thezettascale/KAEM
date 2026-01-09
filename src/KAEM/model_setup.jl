@@ -92,6 +92,9 @@ function setup_training(
 
     if model.encoder.bool_config.variational
 
+        # Force normalized log prior for ELBO (need -log Z term)
+        @reset model.log_prior.normalize = true
+
         # Cyclic beta annealing schedule (Fu et al., 2019)
         max_kl_weight = parse(Float32, retrieve(conf, "VARIATIONAL", "beta"))
         beta_num_cycles = parse(Int, retrieve(conf, "VARIATIONAL", "num_cycles"))

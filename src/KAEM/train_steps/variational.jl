@@ -38,7 +38,7 @@ function sample_encoder(
         component_mask = component_mask,
     )
     noise = st_rng.train_noise
-    return z, log_q, st_enc, noise
+    return z, log_q, st_enc, noise, component_mask
 end
 
 function elbo_loss(
@@ -51,7 +51,8 @@ function elbo_loss(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        β
+        β,
+        component_mask,
     )
     log_p, st_ebm =
         model.log_prior(
@@ -59,8 +60,10 @@ function elbo_loss(
         model.prior,
         ps.ebm,
         st_kan.ebm,
-        st_lux_ebm;
-        ula = true
+        st_lux_ebm,
+        st_kan.quad;
+        ula = false,
+        component_mask = component_mask,
     )
     logllhood, st_gen = log_likelihood_MALA(
         z_posterior,
@@ -99,7 +102,8 @@ function closure(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        β
+        β,
+        component_mask,
     )
     return first(
         elbo_loss(
@@ -113,6 +117,7 @@ function closure(
             st_lux_gen,
             noise,
             β,
+            component_mask,
         ),
     )
 end
@@ -127,7 +132,8 @@ function grad_elbo(
         st_lux_ebm,
         st_lux_gen,
         noise,
-        β
+        β,
+        component_mask,
     )
     return first(
         Enzyme.gradient(
@@ -142,7 +148,8 @@ function grad_elbo(
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
             Enzyme.Const(noise),
-            Enzyme.Const(β)
+            Enzyme.Const(β),
+            Enzyme.Const(component_mask),
         )
     )
 end
@@ -163,7 +170,7 @@ function (l::VariationalLoss)(
     )
     β = l.beta[train_idx]
 
-    z_posterior, log_q, st_enc, noise = sample_encoder(
+    z_posterior, log_q, st_enc, noise, component_mask = sample_encoder(
         ps,
         st_kan,
         Lux.trainmode(st_lux),
@@ -184,6 +191,7 @@ function (l::VariationalLoss)(
         st_lux_gen,
         noise,
         β,
+        component_mask,
     )
 
     loss, st_lux_ebm, st_lux_gen = elbo_loss(
@@ -197,6 +205,7 @@ function (l::VariationalLoss)(
         st_lux_gen,
         noise,
         β,
+        component_mask,
     )
 
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)

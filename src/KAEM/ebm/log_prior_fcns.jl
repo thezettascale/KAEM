@@ -66,8 +66,10 @@ function (lp::LogPriorUnivariate)(
         ebm,
         ps,
         st_kan,
-        st_lyrnorm;
+        st_lyrnorm,
+        st_quad;
         ula = false,
+        component_mask = nothing,
     )
     """
     The log-probability of the ebm-prior.
@@ -92,7 +94,17 @@ function (lp::LogPriorUnivariate)(
 
     log_π0 =
         lp.normalize && !ula ?
-        log_π0 .- log_norm(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm, st_kan.quad)), lp.ε) : log_π0
+        log_π0 .- log_norm(
+            first(
+                ebm.quad(
+                    ebm,
+                    ps,
+                    st_kan,
+                    st_lyrnorm,
+                    st_quad
+                )
+            ), lp.ε
+        ) : log_π0
 
     st_lyrnorm_new = st_lyrnorm
 
@@ -107,7 +119,12 @@ function (lp::LogPriorUnivariate)(
             st_lyrnorm_new,
             ebm
         )
-        new_lp = log_p + dropdims(sum(f_q + log_π0[i, :, :]; dims = 1); dims = 1)
+        new_lp = log_p + dropdims(
+            sum(
+                f_q + log_π0[i, :, :];
+                dims = 1
+            ); dims = 1
+        )
         state = (i + 1, new_lp)
     end
 
@@ -130,8 +147,10 @@ function (lp::LogPriorMix)(
         ebm,
         ps,
         st_kan,
-        st_lyrnorm;
+        st_lyrnorm,
+        st_quad;
         ula = false,
+        component_mask = nothing,
     )
     """
     The log-probability of the mixture ebm-prior.
@@ -164,7 +183,21 @@ function (lp::LogPriorMix)(
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     Z =
         lp.normalize && !ula ?
-        dropdims(sum(first(ebm.quad(ebm, ps, st_kan, st_lyrnorm, st_kan.quad)), dims = 3), dims = 3) :
+        dropdims(
+            sum(
+                first(
+                    ebm.quad(
+                        ebm,
+                        ps,
+                        st_kan,
+                        st_lyrnorm,
+                        st_quad;
+                        component_mask = component_mask,
+                        mix_bool = true
+                    )
+                ), dims = 3
+            ), dims = 3
+        ) :
         zero(alpha) .+ 1.0f0
 
     reg = (

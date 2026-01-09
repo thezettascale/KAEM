@@ -9,7 +9,9 @@ using ..Utils
 using ..KAEM_model
 
 include("../gen/loglikelihoods.jl")
+include("../ebm/mixture_selection.jl")
 using .LogLikelihoods: log_likelihood_IS
+using .MixtureChoice: choose_component
 
 function loss_accum(
         logprior,
@@ -58,12 +60,22 @@ function sample_importance(
 
     # Works better with more samples
     z_prior, st_lux_ebm = m.sample_prior(m, ps, st_kan, st_lux, st_rng)
+
+    # Get component mask for mixture model normalization
+    Q, P, S = m.prior.q_size, m.prior.p_size, m.batch_size
+    component_mask = (
+        m.prior.bool_config.mixture_model && !m.prior.bool_config.contrastive_div ?
+            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
+            nothing
+    )
+
     return z_posterior,
         z_prior,
         st_lux_ebm,
         st_lux_gen,
         resampled_mask,
-        noise
+        noise,
+        component_mask
 end
 
 function marginal_llhood(
@@ -77,11 +89,19 @@ function marginal_llhood(
         st_lux_ebm,
         st_lux_gen,
         noise,
+        component_mask,
     )
     B, N = m.batch_size, m.batch_size
 
-    logprior_posterior, st_ebm =
-        m.log_prior(z_posterior, m.prior, ps.ebm, st_kan.ebm, st_lux_ebm)
+    logprior_posterior, st_ebm = m.log_prior(
+        z_posterior,
+        m.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_lux_ebm,
+        st_kan.quad;
+        component_mask = component_mask
+    )
     logllhood, st_gen = log_likelihood_IS(
         z_posterior,
         x,
@@ -93,8 +113,15 @@ function marginal_llhood(
         ε = m.ε,
     )
 
-    logprior_prior, st_ebm =
-        m.log_prior(z_prior, m.prior, ps.ebm, st_kan.ebm, st_ebm)
+    logprior_prior, st_ebm = m.log_prior(
+        z_prior,
+        m.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_ebm,
+        st_kan.quad;
+        component_mask = component_mask
+    )
     ex_prior = m.prior.bool_config.contrastive_div ? mean(logprior_prior) : 0.0f0
 
     marginal_llhood = loss_accum(
@@ -128,6 +155,7 @@ function closure(
         st_lux_ebm,
         st_lux_gen,
         noise,
+        component_mask,
     )
     return first(
         marginal_llhood(
@@ -141,6 +169,7 @@ function closure(
             st_lux_ebm,
             st_lux_gen,
             noise,
+            component_mask,
         ),
     )
 end
@@ -156,6 +185,7 @@ function grad_importance_llhood(
         st_lux_ebm,
         st_lux_gen,
         noise,
+        component_mask,
     )
 
     return first(
@@ -172,6 +202,7 @@ function grad_importance_llhood(
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
             Enzyme.Const(noise),
+            Enzyme.Const(component_mask),
         )
     )
 end
@@ -190,7 +221,7 @@ function (l::ImportanceLoss)(
         st_rng,
     )
 
-    z_posterior, z_prior, st_lux_ebm, st_lux_gen, resampled_mask, noise =
+    z_posterior, z_prior, st_lux_ebm, st_lux_gen, resampled_mask, noise, component_mask =
         sample_importance(ps, st_kan, st_lux, l.model, x, st_rng)
 
     st_ebm = Lux.trainmode(st_lux_ebm)
@@ -207,6 +238,7 @@ function (l::ImportanceLoss)(
         st_ebm,
         st_gen,
         noise,
+        component_mask,
     )
 
     loss, st_lux_ebm, st_lux_gen = marginal_llhood(
@@ -220,6 +252,7 @@ function (l::ImportanceLoss)(
         st_ebm,
         st_gen,
         noise,
+        component_mask,
     )
 
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)

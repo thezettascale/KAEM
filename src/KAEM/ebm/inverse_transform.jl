@@ -122,9 +122,24 @@ function sample_mixture(
             ebm.s_size
         )
     end
-    mask = choose_component(alpha, ebm.s_size, ebm.q_size, ebm.p_size, st_rng; ula_init = ula_init)
-    cdf, grid, st_lyrnorm_new =
-        ebm.quad(ebm, ps, st_kan, st_lyrnorm, st_quad; component_mask = mask, mix_bool = true)
+    mask = choose_component(
+        alpha,
+        ebm.s_size,
+        ebm.q_size,
+        ebm.p_size,
+        st_rng;
+        ula_init = ula_init
+    )
+    cdf, grid, st_lyrnorm_new = ebm.quad(
+        ebm,
+        ps,
+        st_kan,
+        st_lyrnorm,
+        st_quad;
+        component_mask = mask,
+        mix_bool = true
+    )
+
     cdf = cumsum(cdf; dims = 3) # Cumulative trapezium = CDF
     cdf = PermutedDimsArray(view(cdf, :, :, :, :), (1, 4, 3, 2))
     cdf = cat(view(zero(cdf), :, :, 1:1, :), cdf; dims = 3) # Prepend 0

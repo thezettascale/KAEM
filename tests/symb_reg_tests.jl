@@ -255,7 +255,7 @@ function test_symbolic_forward()
     max_grid = ones(Float32, I)
 
     sf2 = init_symbolic_function(
-        basis_function,
+        f.basis_function,
         I,
         O,
         min_grid,

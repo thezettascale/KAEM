@@ -183,7 +183,7 @@ function (lp::LogPriorMix)(
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
     Z =
         lp.normalize && !ula ?
-        dropdims(
+        PermutedDimsArray(
             sum(
                 first(
                     ebm.quad(
@@ -196,7 +196,7 @@ function (lp::LogPriorMix)(
                         mix_bool = true
                     )
                 ), dims = 3
-            ), dims = 3
+            ), (1, 3, 2)
         ) :
         zero(alpha) .+ 1.0f0
 

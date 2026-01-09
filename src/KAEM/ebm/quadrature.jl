@@ -84,7 +84,6 @@ function (gq::GaussLegendreQuadrature)(
         mix_bool::Bool = false,
     )
     """Gauss-Legendre quadrature for numerical integration"""
-
     nodes, weights = st_quad.nodes, st_quad.weights
     I, O = first(ebm.fcns_qp).in_dim, first(ebm.fcns_qp).out_dim
     Q, P, S = ebm.q_size, ebm.p_size, ebm.N_quad

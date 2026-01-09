@@ -12,50 +12,28 @@ include("../ebm/mixture_selection.jl")
 using .LogLikelihoods: log_likelihood_MALA
 using .MixtureChoice: choose_component
 
-function sample_encoder(
-        ps,
-        st_kan,
-        st_lux,
-        model,
-        x,
-        st_rng,
-    )
-    ε = st_rng.encoder_noise
-    Q, P, S = model.prior.q_size, model.prior.p_size, model.batch_size
-
-    # Get component mask for mixture model
-    component_mask = (
-        model.encoder.bool_config.mixture_model ?
-            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
-            nothing
-    )
-
-    z, log_q, μ, logvar, st_enc = model.encoder(
-        ps.enc,
-        st_lux.enc,
-        x,
-        ε;
-        component_mask = component_mask,
-    )
-    noise = st_rng.train_noise
-    return z, log_q, st_enc, noise, component_mask
-end
-
 function elbo_loss(
         ps,
-        z_posterior,
-        log_q,
         x,
+        ε,
         model,
         st_kan,
+        st_lux_enc,
         st_lux_ebm,
         st_lux_gen,
         noise,
         β,
         component_mask,
     )
-    log_p, st_ebm =
-        model.log_prior(
+    z_posterior, log_q, μ, logvar, st_enc = model.encoder(
+        ps.enc,
+        st_lux_enc,
+        x,
+        ε;
+        component_mask = component_mask,
+    )
+
+    log_p, st_ebm = model.log_prior(
         z_posterior,
         model.prior,
         ps.ebm,
@@ -65,6 +43,7 @@ function elbo_loss(
         ula = false,
         component_mask = component_mask,
     )
+
     logllhood, st_gen = log_likelihood_MALA(
         z_posterior,
         x,
@@ -89,16 +68,17 @@ function elbo_loss(
 
     return reg - (mean(logllhood) - β * mean(kl)),
         st_ebm,
-        st_gen
+        st_gen,
+        st_enc
 end
 
 function closure(
         ps,
-        z_posterior,
-        log_q,
         x,
+        ε,
         model,
         st_kan,
+        st_lux_enc,
         st_lux_ebm,
         st_lux_gen,
         noise,
@@ -108,11 +88,11 @@ function closure(
     return first(
         elbo_loss(
             ps,
-            z_posterior,
-            log_q,
             x,
+            ε,
             model,
             st_kan,
+            st_lux_enc,
             st_lux_ebm,
             st_lux_gen,
             noise,
@@ -124,11 +104,11 @@ end
 
 function grad_elbo(
         ps,
-        z_posterior,
-        log_q,
         x,
+        ε,
         model,
         st_kan,
+        st_lux_enc,
         st_lux_ebm,
         st_lux_gen,
         noise,
@@ -140,11 +120,11 @@ function grad_elbo(
             Enzyme.Reverse,
             Enzyme.Const(closure),
             ps,
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(log_q),
             Enzyme.Const(x),
+            Enzyme.Const(ε),
             Enzyme.Const(model),
             Enzyme.Const(st_kan),
+            Enzyme.Const(st_lux_enc),
             Enzyme.Const(st_lux_ebm),
             Enzyme.Const(st_lux_gen),
             Enzyme.Const(noise),
@@ -170,23 +150,27 @@ function (l::VariationalLoss)(
     )
     β = l.beta[train_idx]
 
-    z_posterior, log_q, st_enc, noise, component_mask = sample_encoder(
-        ps,
-        st_kan,
-        Lux.trainmode(st_lux),
-        l.model,
-        x,
-        st_rng
+    ε = st_rng.encoder_noise
+    noise = st_rng.train_noise
+    Q, P, S = l.model.prior.q_size, l.model.prior.p_size, l.model.batch_size
+
+    component_mask = (
+        l.model.encoder.bool_config.mixture_model ?
+            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
+            nothing
     )
-    st_lux_ebm, st_lux_gen = Lux.trainmode(st_lux.ebm), Lux.trainmode(st_lux.gen)
+
+    st_lux_enc = Lux.trainmode(st_lux.enc)
+    st_lux_ebm = Lux.trainmode(st_lux.ebm)
+    st_lux_gen = Lux.trainmode(st_lux.gen)
 
     ∇ = grad_elbo(
         ps,
-        z_posterior,
-        log_q,
         x,
+        ε,
         l.model,
         st_kan,
+        st_lux_enc,
         st_lux_ebm,
         st_lux_gen,
         noise,
@@ -194,13 +178,13 @@ function (l::VariationalLoss)(
         component_mask,
     )
 
-    loss, st_lux_ebm, st_lux_gen = elbo_loss(
+    loss, st_lux_ebm, st_lux_gen, st_lux_enc = elbo_loss(
         ps,
-        z_posterior,
-        log_q,
         x,
+        ε,
         l.model,
         st_kan,
+        st_lux_enc,
         st_lux_ebm,
         st_lux_gen,
         noise,

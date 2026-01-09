@@ -29,7 +29,8 @@ function unadjusted_logpos(
                 model.prior,
                 ps.ebm,
                 st_kan.ebm,
-                st_lux.ebm;
+                st_lux.ebm,
+                st_kan.quad;
                 ula = true
             )
         )
@@ -73,7 +74,8 @@ function unadjusted_logprior(
                 model.prior,
                 ps.ebm,
                 st_kan.ebm,
-                st_lux.ebm;
+                st_lux.ebm,
+                st_kan.quad;
                 ula = true
             )
         )

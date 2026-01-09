@@ -44,8 +44,8 @@ function test_uniform_prior()
         @test size(z_test) == (q_size, p_size, b_size)
     end
 
-    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad)
+    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad))
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)
@@ -63,8 +63,8 @@ function test_gaussian_prior()
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
 
-    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad)
+    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad))
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)
@@ -90,8 +90,8 @@ function test_lognormal_prior()
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
 
-    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad)
+    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad))
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)
@@ -109,8 +109,8 @@ function test_learnable_gaussian_prior()
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
 
-    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad)
+    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad))
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)
@@ -128,8 +128,8 @@ function test_ebm_prior()
         @test all(size(z_test) .== (q_size, p_size, b_size))
     end
 
-    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm)
-    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm))
+    compiled_log_prior = Reactant.@compile model.log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad)
+    log_p = first(compiled_log_prior(z_test, model.prior, ps.ebm, st_kan.ebm, st_lux.ebm, st_kan.quad))
 
     @test !any(isnan, Array(z_test))
     @test size(log_p) == (b_size,)

@@ -207,7 +207,7 @@ function (lp::LogPriorMix)(
     )
 
     log_p = log_mix_pdf(f, alpha, π_0, Z, lp.ε)
-    return log_p .+ reg, st_lyrnorm
+    return log_p .- reg, st_lyrnorm
 end
 
 end

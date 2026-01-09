@@ -13,6 +13,8 @@ struct DiagonalGaussianEncoder <: Lux.AbstractLuxLayer
     logvar_head::Lux.Dense
     latent_dim::Int
     input_dim::Int
+    q_size::Int
+    p_size::Int
     s_size::Int
 end
 
@@ -22,8 +24,8 @@ function init_diagonal_encoder(
         rng::AbstractRNG,
     )
     prior_widths = parse_config_array(Int, retrieve(conf, "EbmModel", "layer_widths"))
-    q_size = first(prior_widths)
-    p_size = last(prior_widths)
+    p_size = first(prior_widths)
+    q_size = last(prior_widths)
     latent_dim = q_size * p_size
 
     encoder_widths = parse_config_array(Int, retrieve(conf, "Encoder", "widths"))
@@ -48,6 +50,8 @@ function init_diagonal_encoder(
         logvar_head,
         latent_dim,
         input_dim,
+        q_size,
+        p_size,
         s_size,
     )
 end
@@ -56,9 +60,11 @@ function (enc::DiagonalGaussianEncoder)(
         ps,
         st_lux,
         x,
-        ε,
+        ε;
+        component_mask = nothing,
     )
-    h = reshape(x, enc.input_dim, enc.s_size)
+    Q, P, S = enc.q_size, enc.p_size, enc.s_size
+    h = reshape(x, enc.input_dim, S)
     st_new = st_lux
 
     for i in 1:enc.depth
@@ -71,10 +77,10 @@ function (enc::DiagonalGaussianEncoder)(
         @reset st_new.layers[symbol_map[i]] = st_layer
     end
 
-    μ, st_mu = Lux.apply(enc.mu_head, h, ps.mu, st_new.mu)
+    μ_flat, st_mu = Lux.apply(enc.mu_head, h, ps.mu, st_new.mu)
     @reset st_new.mu = st_mu
 
-    logvar, st_logvar = Lux.apply(
+    logvar_flat, st_logvar = Lux.apply(
         enc.logvar_head,
         h,
         ps.logvar,
@@ -82,15 +88,37 @@ function (enc::DiagonalGaussianEncoder)(
     )
     @reset st_new.logvar = st_logvar
 
+    μ = reshape(μ_flat, Q, P, S)
+    logvar = reshape(logvar_flat, Q, P, S)
     logvar = clamp.(logvar, -10.0f0, 2.0f0)
-    σ = exp.(0.5f0 .* logvar)
-    z = μ .+ σ .* ε
 
-    log_q = -0.5f0 .* sum(
-        logvar .+ (z .- μ) .^ 2 ./ exp.(logvar) .+ log(2.0f0 * Float32(π));
-        dims = 1
-    )
-    log_q = dropdims(log_q; dims = 1)
+    if !isnothing(component_mask)
+        μ_selected = dropdims(sum(component_mask .* μ; dims = 2); dims = 2)
+        logvar_selected = dropdims(sum(component_mask .* logvar; dims = 2); dims = 2)
+        ε_reshaped = reshape(ε[1:Q, :], Q, S)
+
+        σ = exp.(0.5f0 .* logvar_selected)
+        z = μ_selected .+ σ .* ε_reshaped
+
+        log_q = -0.5f0 .* sum(
+            logvar_selected .+ (z .- μ_selected) .^ 2 ./
+                exp.(logvar_selected) .+ log(2.0f0 * Float32(π));
+            dims = 1
+        )
+        log_q = dropdims(log_q; dims = 1)
+
+        z = reshape(z, Q, 1, S)
+    else
+        ε_reshaped = reshape(ε, Q, P, S)
+        σ = exp.(0.5f0 .* logvar)
+        z = μ .+ σ .* ε_reshaped
+
+        log_q = -0.5f0 .* sum(
+            logvar .+ (z .- μ) .^ 2 ./ exp.(logvar) .+ log(2.0f0 * Float32(π));
+            dims = (1, 2)
+        )
+        log_q = dropdims(log_q; dims = (1, 2))
+    end
 
     return z, log_q, μ, logvar, st_new
 end

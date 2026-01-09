@@ -102,8 +102,6 @@ function init_trainer(
     )
 
     println("Dataset loaded")
-
-    # Log against ULA and autoMALA
     N_t = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_temps"))
 
     train_type = "importance"

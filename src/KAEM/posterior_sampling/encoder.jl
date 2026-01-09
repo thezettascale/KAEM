@@ -15,6 +15,7 @@ using .NoEncoder_Model
 
 struct BoolConfig <: AbstractBoolConfig
     variational::Bool
+    mixture_model::Bool
 end
 
 struct EncoderWrapper{T <: Float32} <: Lux.AbstractLuxLayer
@@ -22,6 +23,8 @@ struct EncoderWrapper{T <: Float32} <: Lux.AbstractLuxLayer
     bool_config::BoolConfig
     latent_dim::Int
     input_dim::Int
+    q_size::Int
+    p_size::Int
     CNN::Bool
 end
 
@@ -37,11 +40,12 @@ function init_encoder(
         rng::AbstractRNG = Random.default_rng(),
     )
     variational = parse(Bool, retrieve(conf, "VARIATIONAL", "use_variational"))
+    mixture_model = parse(Bool, retrieve(conf, "MixtureModel", "use_mixture_prior"))
     encoder_type = variational ? retrieve(conf, "Encoder", "type") : "none"
 
     prior_widths = parse_config_array(Int, retrieve(conf, "EbmModel", "layer_widths"))
-    q_size = first(prior_widths)
-    p_size = last(prior_widths)
+    p_size = first(prior_widths)
+    q_size = last(prior_widths)
     latent_dim = q_size * p_size
     input_dim = prod(x_shape)
 
@@ -50,9 +54,11 @@ function init_encoder(
 
     return EncoderWrapper{Float32}(
         encoder,
-        BoolConfig(variational),
+        BoolConfig(variational, mixture_model),
         latent_dim,
         input_dim,
+        q_size,
+        p_size,
         encoder_type == "cnn",
     )
 end
@@ -133,9 +139,10 @@ function (wrapper::EncoderWrapper)(
         ps,
         st_lux,
         x,
-        ε,
+        ε;
+        component_mask = nothing,
     )
-    return wrapper.encoder(ps, st_lux, x, ε)
+    return wrapper.encoder(ps, st_lux, x, ε; component_mask = component_mask)
 end
 
 end

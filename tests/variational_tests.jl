@@ -69,7 +69,33 @@ function test_cnn_loss()
     return @test !any(isnan, ps_after)
 end
 
+function test_mixture_loss()
+    commit!(conf, "Encoder", "type", "diagonal")
+    commit!(conf, "MixtureModel", "use_mixture_prior", "true")
+    dataset = randn(rng, Float32, 32, 32, 1, 500)
+    model = init_KAEM(dataset, conf, (32, 32, 1))
+    x_test = first(model.train_loader) |> pu
+    model, opt_state, ps, st_kan, st_lux, st_rng = prep_model(
+        model,
+        x_test,
+        optimizer;
+        rng = rng,
+    )
+
+    @test model.prior.bool_config.mixture_model == true
+
+    ps_before = Array(ps)
+    loss, ps, _, st_ebm, st_gen =
+        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+
+    ps_after = Array(ps)
+    @test any(ps_before .!= ps_after)
+    commit!(conf, "MixtureModel", "use_mixture_prior", "false")
+    return @test !any(isnan, ps_after)
+end
+
 @testset "Variational Training Tests" begin
     test_diagonal_loss()
     test_cnn_loss()
+    test_mixture_loss()
 end

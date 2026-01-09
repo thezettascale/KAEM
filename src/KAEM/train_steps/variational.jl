@@ -2,13 +2,15 @@ module VariationalTraining
 
 export VariationalLoss
 
-using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
+using ComponentArrays, Enzyme, Statistics, Lux, Optimisers, NNlib
 
 using ..Utils
 using ..KAEM_model
 
 include("../gen/loglikelihoods.jl")
+include("../ebm/mixture_selection.jl")
 using .LogLikelihoods: log_likelihood_MALA
+using .MixtureChoice: choose_component
 
 function sample_encoder(
         ps,
@@ -19,10 +21,24 @@ function sample_encoder(
         st_rng,
     )
     ε = st_rng.encoder_noise
-    z, log_q, μ, logvar, st_enc = model.encoder(ps.enc, st_lux.enc, x, ε)
-    z_reshaped = reshape(z, model.prior.q_size, model.prior.p_size, :)
+    Q, P, S = model.prior.q_size, model.prior.p_size, model.batch_size
+
+    # Get component mask for mixture model
+    component_mask = (
+        model.encoder.bool_config.mixture_model ?
+            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
+            nothing
+    )
+
+    z, log_q, μ, logvar, st_enc = model.encoder(
+        ps.enc,
+        st_lux.enc,
+        x,
+        ε;
+        component_mask = component_mask,
+    )
     noise = st_rng.train_noise
-    return z_reshaped, log_q, st_enc, noise
+    return z, log_q, st_enc, noise
 end
 
 function elbo_loss(
@@ -38,7 +54,14 @@ function elbo_loss(
         β
     )
     log_p, st_ebm =
-        model.log_prior(z_posterior, model.prior, ps.ebm, st_kan.ebm, st_lux_ebm; ula = true)
+        model.log_prior(
+        z_posterior,
+        model.prior,
+        ps.ebm,
+        st_kan.ebm,
+        st_lux_ebm;
+        ula = true
+    )
     logllhood, st_gen = log_likelihood_MALA(
         z_posterior,
         x,
@@ -140,8 +163,14 @@ function (l::VariationalLoss)(
     )
     β = l.beta[train_idx]
 
-    z_posterior, log_q, st_enc, noise =
-        sample_encoder(ps, st_kan, Lux.trainmode(st_lux), l.model, x, st_rng)
+    z_posterior, log_q, st_enc, noise = sample_encoder(
+        ps,
+        st_kan,
+        Lux.trainmode(st_lux),
+        l.model,
+        x,
+        st_rng
+    )
     st_lux_ebm, st_lux_gen = Lux.trainmode(st_lux.ebm), Lux.trainmode(st_lux.gen)
 
     ∇ = grad_elbo(

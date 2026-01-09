@@ -25,7 +25,7 @@ include("../src/KAEM/symbolic/reg.jl")
 using .Reg
 
 include("../src/KAEM/kan/univariate_functions.jl")
-using .UnivariateFunctions: RBF_basis, init_function
+using .UnivariateFunctions: init_function
 
 include("../src/KAEM/symbolic/symbolic_func.jl")
 using .SymbolicFunctions
@@ -221,10 +221,10 @@ function test_symbolic_forward()
 
     min_grid = zeros(Float32, I)
     max_grid = ones(Float32, I)
-    basis_function::AbstractBasis = RBF_basis(I, O, 2, N)
+    f = init_function(I, O; sample_size = N)
 
     sf = init_symbolic_function(
-        basis_function,
+        f.basis_function,
         I,
         O,
         min_grid,

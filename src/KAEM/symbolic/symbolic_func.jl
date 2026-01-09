@@ -20,7 +20,7 @@ struct symbolic_function{T <: Float32} <: Lux.AbstractLuxLayer
 end
 
 function init_symbolic_function(
-        basis::AbstractBasis,
+        basis,
         in_dim::Int,
         out_dim::Int,
         min_grid::AbstractVector{T},

@@ -1,4 +1,4 @@
-.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results format lint logs clear-logs julia-setup help
+.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results format lint logs clear-logs julia-setup help baseline baseline-vae baseline-gan baseline-ddpm baseline-pang baseline-all
 
 ENV_NAME = KAEM
 CONDA_BASE := $(shell conda info --base 2>/dev/null || echo "")
@@ -7,6 +7,8 @@ CONDA_ACTIVATE := $(shell if [ -f "$(CONDA_BASE)/etc/profile.d/conda.sh" ]; then
 DATASET ?= MNIST
 MODE ?= thermo
 NUM_DEVICES ?= auto
+MODEL ?= vae
+DEVICE ?= 0
 
 XLA_REACTANT_GPU_MEM_FRACTION ?= 0.9
 XLA_REACTANT_GPU_PREALLOCATE ?= true
@@ -16,6 +18,8 @@ XLA_FLAGS ?=
 export DATASET
 export MODE
 export NUM_DEVICES
+export MODEL
+export DEVICE
 export XLA_REACTANT_GPU_MEM_FRACTION
 export XLA_REACTANT_GPU_PREALLOCATE
 export TF_GPU_ALLOCATOR
@@ -32,10 +36,16 @@ help:
 	@echo "  train-thermo  - Start thermodynamic training (use: make train-thermo DATASET=SVHN)"
 	@echo "  train-vanilla - Start vanilla training (use: make train-vanilla DATASET=SVHN)"
 	@echo "  train-variational - Start variational training (use: make train-variational DATASET=MNIST)"
-	@echo "  sequential    - Schedule multiple jobs sequentially (use: make sequential CONFIG=jobs.txt)"
-	@echo "  distributed   - Run distributed training across devices (use: make distributed DATASET=MNIST MODE=thermo NUM_DEVICES=4)"
-	@echo "  batch       - Run jobs from config with distributed execution (use: make batch CONFIG=jobs.txt NUM_DEVICES=4)"
+	@echo "  sequential    - Run multiple jobs sequentially (use: make sequential CONFIG=jobs.txt)"
+	@echo "  distributed   - Run single job on specified device (use: make distributed DATASET=MNIST MODE=thermo DEVICE=0)"
+	@echo "  batch         - Run jobs from config in parallel across GPUs (use: make batch CONFIG=jobs.txt NUM_DEVICES=4)"
 	@echo "  tune          - Run hyperparameter tuning in vanilla mode (use: make tune DATASET=MNIST)"
+	@echo "  baseline      - Train baseline model (use: make baseline MODEL=vae DATASET=CIFAR10)"
+	@echo "  baseline-vae  - Train VAE baseline (use: make baseline-vae DATASET=CIFAR10)"
+	@echo "  baseline-gan  - Train GAN baseline (use: make baseline-gan DATASET=CIFAR10)"
+	@echo "  baseline-ddpm - Train DDPM baseline (use: make baseline-ddpm DATASET=CIFAR10)"
+	@echo "  baseline-pang - Train Pang EBM baseline (use: make baseline-pang DATASET=CIFAR10)"
+	@echo "  baseline-all  - Train all baselines on dataset (use: make baseline-all DATASET=CIFAR10)"
 	@echo "  plot          - Run all plotting scripts"
 	@echo "  plot-results  - Run only results plotting scripts"
 	@echo "  logs          - View latest test log"
@@ -47,14 +57,17 @@ help:
 	@echo ""
 	@echo "  Command                                               What it does"
 	@echo "  ----------------------------------------------------- ------------------------------------"
-	@echo "  make train DATASET=X MODE=Y                           Single job, single device"
-	@echo "  make sequential CONFIG=jobs.txt                       Multiple jobs, single device"
-	@echo "  make distributed DATASET=X MODE=Y NUM_DEVICES=N       Single job, multiple devices"
-	@echo "  make batch CONFIG=jobs.txt NUM_DEVICES=N              Multiple jobs, multiple devices"
+	@echo "  make train DATASET=X MODE=Y                           Single KAEM job (tmux)"
+	@echo "  make baseline MODEL=X DATASET=Y                       Single baseline job (tmux)"
+	@echo "  make baseline-all DATASET=Y                           All baselines sequentially (tmux)"
+	@echo "  make sequential CONFIG=jobs.txt                       Jobs from file, one at a time"
+	@echo "  make distributed DATASET=X MODE=Y DEVICE=N            Single job on specific GPU"
+	@echo "  make batch CONFIG=jobs.txt NUM_DEVICES=N              Jobs from file, parallel across GPUs"
 	@echo ""
-	@echo "Defaults: DATASET=MNIST, MODE=thermo, NUM_DEVICES=auto"
+	@echo "Defaults: DATASET=MNIST, MODE=thermo, MODEL=vae, NUM_DEVICES=auto"
 	@echo "Datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_FLOW"
-	@echo "Modes: thermo, vanilla, variational"
+	@echo "KAEM Modes: thermo, vanilla, variational"
+	@echo "Baseline Modes: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang (use in jobs.txt)"
 
 install:
 	@chmod +x scripts/init.sh
@@ -142,11 +155,11 @@ sequential:
 distributed:
 	@mkdir -p logs
 	@chmod +x scripts/run_distributed.sh
-	@echo "Starting distributed training for dataset: $(DATASET), mode: $(MODE), devices: $(NUM_DEVICES)"
+	@echo "Starting training for dataset: $(DATASET), mode: $(MODE), device: $(DEVICE)"
 	@tmux kill-session -t kaem_distributed 2>/dev/null || true
 	@tmux new-session -d -s kaem_distributed -n distributed
-	@tmux send-keys -t kaem_distributed:distributed "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_distributed" Enter
-	@echo "Distributed training session started in tmux. Attach with: tmux attach-session -t kaem_distributed"
+	@tmux send-keys -t kaem_distributed:distributed "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_distributed" Enter
+	@echo "Training session started in tmux. Attach with: tmux attach-session -t kaem_distributed"
 	@echo "Log file: logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
 
 batch:
@@ -192,4 +205,36 @@ clear-logs:
 		echo "Logs cleared."; \
 	else \
 		echo "No logs directory found."; \
-	fi 
+	fi
+
+baseline:
+	@mkdir -p logs
+	@chmod +x scripts/run_distributed.sh
+	@echo "Starting baseline training: $(MODEL) on $(DATASET)"
+	@tmux kill-session -t kaem_baseline 2>/dev/null || true
+	@tmux new-session -d -s kaem_baseline -n baseline
+	@tmux send-keys -t kaem_baseline:baseline "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && MODE=baseline-$(MODEL) DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && MODE=baseline-$(MODEL) DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_baseline" Enter
+	@echo "Baseline training session started in tmux. Attach with: tmux attach-session -t kaem_baseline"
+	@echo "Log file: logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
+
+baseline-vae:
+	@$(MAKE) baseline MODEL=vae DATASET=$(DATASET)
+
+baseline-gan:
+	@$(MAKE) baseline MODEL=gan DATASET=$(DATASET)
+
+baseline-ddpm:
+	@$(MAKE) baseline MODEL=ddpm DATASET=$(DATASET)
+
+baseline-pang:
+	@$(MAKE) baseline MODEL=pang DATASET=$(DATASET)
+
+baseline-all:
+	@mkdir -p logs
+	@chmod +x scripts/run_distributed.sh
+	@echo "Starting all baseline training on $(DATASET)"
+	@tmux kill-session -t kaem_baseline_all 2>/dev/null || true
+	@tmux new-session -d -s kaem_baseline_all -n baseline_all
+	@tmux send-keys -t kaem_baseline_all:baseline_all "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODE=baseline-$$model DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; else conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODE=baseline-$$model DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; fi && tmux kill-session -t kaem_baseline_all" Enter
+	@echo "All baselines training session started in tmux. Attach with: tmux attach-session -t kaem_baseline_all"
+	@echo "Log file: logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"

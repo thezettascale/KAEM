@@ -163,8 +163,8 @@ function init_baseline_trainer(
         lr_gen = parse(Float32, retrieve(conf, "GAN", "lr_gen"))
         lr_disc = parse(Float32, retrieve(conf, "GAN", "lr_disc"))
 
-        opt_gen = Optimisers.Adam(lr_gen)
-        opt_disc = Optimisers.Adam(lr_disc)
+        opt_gen = ManualAdam(lr_gen)
+        opt_disc = ManualAdam(lr_disc)
 
         model, train_step, opt_state_gen, opt_state_disc, ps, st = prep_gan(
             model, x_sample, opt_gen, opt_disc; rng = rng, MLIR = MLIR, n_critic = n_critic

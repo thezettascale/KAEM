@@ -1,6 +1,6 @@
 module optimization
 
-export opt, create_opt
+export opt, create_opt, ManualAdam
 
 using Lux, ConfParser, Optimisers, ParameterSchedulers
 

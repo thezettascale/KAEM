@@ -26,8 +26,25 @@ print_warning() {
 
 DATASET="${DATASET:-MNIST}"
 MODE="${MODE:-thermo}"
+MODEL="${MODEL:-}"  # For baseline modes: vae, gan, ddpm
 NUM_WORKERS="${NUM_WORKERS:-auto}"
 HOSTFILE="${HOSTFILE:-}"
+
+# Check if this is a baseline job
+is_baseline_mode() {
+    [[ "$MODE" == baseline-* ]] || [[ -n "$MODEL" ]]
+}
+
+# Extract model from baseline-* mode
+get_baseline_model() {
+    if [[ -n "$MODEL" ]]; then
+        echo "$MODEL"
+    elif [[ "$MODE" == baseline-* ]]; then
+        echo "${MODE#baseline-}"
+    else
+        echo ""
+    fi
+}
 
 is_tpu_pod() {
     [[ -n "${TPU_WORKER_HOSTNAMES:-}" ]] || [[ -n "${TPU_CHIPS_PER_HOST_BOUNDS:-}" ]]
@@ -91,33 +108,35 @@ run_tpu_pod() {
     DATASET="$DATASET" MODE="$MODE" julia --project=. --threads=auto main.jl
 }
 
-run_distributed_julia() {
-    local workers=$1
+run_baseline_julia() {
+    local model=$1
+    local device=${2:-0}
 
-    print_status "Starting distributed training with $workers worker(s)"
-    print_status "Dataset: $DATASET, Mode: $MODE"
+    print_status "Starting baseline training: $model on $DATASET (device $device)"
 
     export JULIA_NUM_THREADS=auto
+    export CUDA_VISIBLE_DEVICES="$device"
 
-    if [[ $workers -eq 1 ]]; then
-        print_status "Running single-device training"
-        DATASET="$DATASET" MODE="$MODE" julia --project=. --threads=auto main.jl
-    else
-        print_status "Running multi-device distributed training"
+    MODEL="$model" DATASET="$DATASET" julia --project=. --threads=auto baseline.jl
+}
 
-        if [[ -n "$HOSTFILE" ]] && [[ -f "$HOSTFILE" ]]; then
-            print_status "Using hostfile: $HOSTFILE"
-            DATASET="$DATASET" MODE="$MODE" julia --project=. --threads=auto \
-                -p "$workers" \
-                --machine-file "$HOSTFILE" \
-                distributed_main.jl
-        else
-            print_status "Using local multi-device setup"
-            DATASET="$DATASET" MODE="$MODE" julia --project=. --threads=auto \
-                -p "$workers" \
-                distributed_main.jl
-        fi
+run_distributed_julia() {
+    local device=${1:-0}
+
+    # Check if baseline mode
+    if is_baseline_mode; then
+        local model
+        model=$(get_baseline_model)
+        run_baseline_julia "$model" "$device"
+        return
     fi
+
+    print_status "Starting KAEM training: $DATASET $MODE (device $device)"
+
+    export JULIA_NUM_THREADS=auto
+    export CUDA_VISIBLE_DEVICES="$device"
+
+    DATASET="$DATASET" MODE="$MODE" julia --project=. --threads=auto main.jl
 }
 
 # Run with MPI
@@ -140,7 +159,11 @@ run_mpi() {
 }
 
 main() {
-    print_status "KAEM Distributed Training"
+    if is_baseline_mode; then
+        print_status "Baseline Distributed Training"
+    else
+        print_status "KAEM Distributed Training"
+    fi
     echo "=============================================="
 
     if [[ ! -f "main.jl" ]]; then
@@ -148,8 +171,8 @@ main() {
         exit 1
     fi
 
-    # Check for TPU pod first (special case)
-    if is_tpu_pod; then
+    # Check for TPU pod first (special case) - KAEM only
+    if is_tpu_pod && ! is_baseline_mode; then
         print_status "Configuration:"
         print_status "  Dataset: $DATASET"
         print_status "  Mode: $MODE"
@@ -160,71 +183,59 @@ main() {
         return
     fi
 
-    local workers
-    workers=$(get_num_workers)
+    local device="${DEVICE:-0}"
 
     print_status "Configuration:"
     print_status "  Dataset: $DATASET"
-    print_status "  Mode: $MODE"
-    print_status "  Workers: $workers"
-
-    if [[ ! -f "distributed_main.jl" ]] && [[ $workers -gt 1 ]]; then
-        print_status "Creating distributed_main.jl wrapper..."
-        cat > distributed_main.jl << 'JULIA_EOF'
-using Distributed
-
-if nworkers() == 1 && length(ARGS) > 0
-    addprocs(parse(Int, ARGS[1]))
-end
-
-println("Running with $(nworkers()) worker(s)")
-
-@everywhere begin
-    using Pkg
-    Pkg.activate(".")
-end
-
-@everywhere include("src/pipeline/trainer.jl")
-@everywhere using .trainer
-
-include("main.jl")
-JULIA_EOF
-        print_success "Created distributed_main.jl"
+    if is_baseline_mode; then
+        print_status "  Model: $(get_baseline_model)"
+        print_status "  Type: Baseline"
+    else
+        print_status "  Mode: $MODE"
+        print_status "  Type: KAEM"
     fi
+    print_status "  Device: $device"
 
     echo "=============================================="
 
-    run_distributed_julia "$workers"
-    print_success "Distributed training completed"
+    run_distributed_julia "$device"
+    if is_baseline_mode; then
+        print_success "Baseline training completed"
+    else
+        print_success "KAEM training completed"
+    fi
 }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --workers|-w)
-            NUM_WORKERS="$2"
+        --device|-d)
+            DEVICE="$2"
             shift 2
-            ;;
-        --hostfile|-H)
-            HOSTFILE="$2"
-            shift 2
-            ;;
-        --mpi)
-            USE_MPI=true
-            shift
             ;;
         --help|-h)
             echo "Usage: $0 [options]"
             echo ""
+            echo "Runs a single training job. Use 'make batch' to run multiple jobs in parallel."
+            echo ""
             echo "Options:"
-            echo "  --workers, -w NUM    Number of workers (default: auto-detect)"
-            echo "  --hostfile, -H FILE  Hostfile for cluster execution"
-            echo "  --mpi                Use MPI instead of Julia Distributed"
+            echo "  --device, -d NUM     GPU device index (default: 0)"
             echo "  --help, -h           Show this help"
             echo ""
             echo "Environment variables:"
             echo "  DATASET              Dataset to train on (default: MNIST)"
-            echo "  MODE                 Training mode: thermo, vanilla, variational (default: thermo)"
-            echo "  NUM_WORKERS          Number of workers (overridden by --workers)"
+            echo "  MODE                 Training mode (default: thermo)"
+            echo "                       KAEM: thermo, vanilla, variational"
+            echo "                       Baseline: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang"
+            echo "  MODEL                Baseline model (alternative to MODE=baseline-*)"
+            echo "  DEVICE               GPU device index (default: 0)"
+            echo ""
+            echo "Examples:"
+            echo "  DATASET=CIFAR10 MODE=thermo $0           # KAEM training on device 0"
+            echo "  DATASET=CIFAR10 MODE=baseline-vae $0     # VAE baseline on device 0"
+            echo "  DEVICE=1 MODEL=gan DATASET=MNIST $0      # GAN baseline on device 1"
+            echo ""
+            echo "For parallel execution of multiple jobs, use:"
+            echo "  make batch CONFIG=jobs.txt NUM_DEVICES=4"
             exit 0
             ;;
         *)
@@ -234,10 +245,4 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Handle MPI mode
-if [[ "${USE_MPI:-false}" == "true" ]]; then
-    workers=$(get_num_workers)
-    run_mpi "$workers"
-else
-    main
-fi
+main

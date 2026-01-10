@@ -1,25 +1,50 @@
 # Sequential Jobs Configuration File
-# Format: dataset mode
-# One job per line: DATASET MODE
+# Format: DATASET MODE
+# One job per line
+#
 # Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
-# Available modes: thermo, vanilla, tune
+#
+# KAEM modes: thermo, vanilla, variational, tune
+# Baseline modes: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang
+#
+# Usage: make sequential CONFIG=jobs.txt
 
+# ==================== KAEM Jobs ====================
+# NIST
 # MNIST tune
 # MNIST vanilla
 # FMNIST vanilla
+
+# SVHN
 # SVHN tune
-CELEBA thermo
 SVHN thermo
 SVHN vanilla
+# SVHN variational
+
+# CELEBA
+CELEBA thermo
 CELEBA vanilla
 # CELEBA tune
-# SVHN variational
 # CELEBA variational
-# DARCY_FLOW vanilla
+
+# CIFAR
 CIFAR10 vanilla
 CIFAR10 thermo
-# SVHNPANG vanilla
-# CELEBAPANG vanilla
-# CIFAR10PANG vanilla
-# SVHNPANG thermo
-# CIFAR10PANG thermo
+
+# DARCY_FLOW vanilla
+
+# ==================== Baseline Jobs ====================
+# CIFAR-10 baselines
+CIFAR10 baseline-vae
+CIFAR10 baseline-gan
+CIFAR10 baseline-ddpm
+
+# CelebA baselines
+CELEBA baseline-vae
+CELEBA baseline-gan
+CELEBA baseline-ddpm
+
+# SVHN baselines
+SVHN baseline-vae
+SVHN baseline-gan
+SVHN baseline-ddpm

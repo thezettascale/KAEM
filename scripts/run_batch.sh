@@ -3,6 +3,7 @@
 set -e
 
 CONFIG_FILE="${1:-jobs.txt}"
+NUM_WORKERS="${NUM_WORKERS:-auto}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -14,6 +15,28 @@ print_status() { echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+detect_gpus() {
+    if command -v nvidia-smi &> /dev/null; then
+        nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l || echo 0
+    else
+        echo 0
+    fi
+}
+
+get_num_devices() {
+    if [[ "$NUM_WORKERS" == "auto" ]]; then
+        local num_gpus
+        num_gpus=$(detect_gpus)
+        if [[ $num_gpus -gt 0 ]]; then
+            echo "$num_gpus"
+        else
+            echo 1
+        fi
+    else
+        echo "$NUM_WORKERS"
+    fi
+}
 
 load_config() {
     local config_file="$1"
@@ -42,7 +65,7 @@ load_config() {
         esac
 
         case "$mode" in
-            thermo|vanilla|variational|tune) ;;
+            thermo|vanilla|variational|tune|baseline-vae|baseline-gan|baseline-ddpm|baseline-pang) ;;
             *) print_warning "Unknown mode '$mode' on line $line_num (skipping)"; continue ;;
         esac
 
@@ -50,26 +73,35 @@ load_config() {
     done < "$config_file"
 }
 
-run_distributed_job() {
+run_job_on_device() {
     local dataset="$1"
     local mode="$2"
-    local job_num="$3"
-    local total_jobs="$4"
+    local device="$3"
+    local job_id="$4"
+    local log_file="logs/batch_job_${job_id}_${dataset}_${mode}.log"
 
-    echo
-    echo "============================================================"
-    print_status "Job $job_num/$total_jobs: $dataset - $mode (distributed)"
-    echo "============================================================"
+    print_status "Starting job $job_id: $dataset $mode on device $device"
 
-    DATASET="$dataset" MODE="$mode" ./scripts/run_distributed.sh
+    export CUDA_VISIBLE_DEVICES="$device"
+    export JULIA_NUM_THREADS=auto
 
-    print_success "Job $job_num/$total_jobs completed: $dataset - $mode"
+    if [[ "$mode" == baseline-* ]]; then
+        local model="${mode#baseline-}"
+        MODEL="$model" DATASET="$dataset" julia --project=. --threads=auto baseline.jl > "$log_file" 2>&1
+    else
+        DATASET="$dataset" MODE="$mode" julia --project=. --threads=auto main.jl > "$log_file" 2>&1
+    fi
 }
 
 main() {
-    print_status "Distributed Sequential Runner"
+    print_status "Parallel Batch Runner"
     print_status "Configuration file: $CONFIG_FILE"
-    print_status "NUM_WORKERS: ${NUM_WORKERS:-auto}"
+
+    local num_devices
+    num_devices=$(get_num_devices)
+    print_status "Using $num_devices device(s) for parallel execution"
+
+    mkdir -p logs
 
     local config_output
     config_output=$(load_config "$CONFIG_FILE")
@@ -82,20 +114,56 @@ main() {
         exit 1
     fi
 
-    print_status "Found $total_jobs jobs to run with distributed execution"
+    print_status "Found $total_jobs jobs to distribute across $num_devices device(s)"
+    echo "============================================================"
 
-    trap 'print_warning "Interrupted. Stopping."; exit 0' INT TERM
+    # Track background PIDs
+    declare -a pids=()
+    declare -a job_info=()
+    local job_idx=0
 
-    for i in "${!jobs[@]}"; do
-        local job_num=$((i + 1))
-        read -r dataset mode <<< "${jobs[i]}"
-        run_distributed_job "$dataset" "$mode" "$job_num" "$total_jobs"
-        sleep 5
+    trap 'print_warning "Interrupted. Killing background jobs..."; for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done; exit 1' INT TERM
+
+    while [[ $job_idx -lt $total_jobs ]]; do
+        # Launch jobs up to num_devices in parallel
+        pids=()
+        job_info=()
+
+        for ((device=0; device<num_devices && job_idx<total_jobs; device++, job_idx++)); do
+            read -r dataset mode <<< "${jobs[$job_idx]}"
+            local job_num=$((job_idx + 1))
+
+            run_job_on_device "$dataset" "$mode" "$device" "$job_num" &
+            pids+=($!)
+            job_info+=("$job_num:$dataset:$mode:$device")
+        done
+
+        # Wait for current batch to complete
+        print_status "Waiting for batch of ${#pids[@]} job(s) to complete..."
+
+        local failed=0
+        for i in "${!pids[@]}"; do
+            local pid="${pids[$i]}"
+            local info="${job_info[$i]}"
+            IFS=':' read -r jnum ds md dev <<< "$info"
+
+            if wait "$pid"; then
+                print_success "Job $jnum completed: $ds $md (device $dev)"
+            else
+                print_error "Job $jnum failed: $ds $md (device $dev) - check logs/batch_job_${jnum}_${ds}_${md}.log"
+                failed=$((failed + 1))
+            fi
+        done
+
+        if [[ $failed -gt 0 ]]; then
+            print_warning "$failed job(s) failed in this batch"
+        fi
+
+        echo "------------------------------------------------------------"
     done
 
-    echo
     echo "============================================================"
-    print_success "All $total_jobs distributed jobs completed."
+    print_success "All $total_jobs jobs completed."
     echo "============================================================"
 }
 

@@ -44,12 +44,22 @@ wait_for_training_completion() {
 
 wait_for_tuning_completion() {
     print_status "Waiting for current tuning session to complete..."
-    
+
     while session_exists "kaem_tune"; do
         sleep 10
     done
-    
+
     print_success "Tuning session completed"
+}
+
+wait_for_baseline_completion() {
+    print_status "Waiting for current baseline session to complete..."
+
+    while session_exists "kaem_baseline"; do
+        sleep 10
+    done
+
+    print_success "Baseline session completed"
 }
 
 run_job() {
@@ -57,12 +67,12 @@ run_job() {
     local mode="$2"
     local job_num="$3"
     local total_jobs="$4"
-    
+
     echo
     echo "============================================================"
     print_status "Starting Job $job_num/$total_jobs: $dataset - $mode"
     echo "============================================================"
-    
+
     if [[ "$mode" == "tune" ]]; then
         # Kill existing tuning sessions
         if session_exists "kaem_tune"; then
@@ -70,12 +80,27 @@ run_job() {
             tmux kill-session -t kaem_tune 2>/dev/null || true
             sleep 2
         fi
-        
+
         print_status "Running: make tune DATASET=$dataset"
-        
+
         make tune DATASET="$dataset"
-        
+
         wait_for_tuning_completion
+    elif [[ "$mode" == baseline-* ]]; then
+        # Baseline job (baseline-vae, baseline-gan, baseline-ddpm)
+        local model="${mode#baseline-}"
+
+        if session_exists "kaem_baseline"; then
+            print_warning "Killing existing baseline session."
+            tmux kill-session -t kaem_baseline 2>/dev/null || true
+            sleep 2
+        fi
+
+        print_status "Running: make baseline MODEL=$model DATASET=$dataset"
+
+        make baseline MODEL="$model" DATASET="$dataset"
+
+        wait_for_baseline_completion
     else
         # Kill existing training sessions
         if session_exists "kaem_train"; then
@@ -83,14 +108,14 @@ run_job() {
             tmux kill-session -t kaem_train 2>/dev/null || true
             sleep 2
         fi
-        
+
         print_status "Running: make train DATASET=$dataset MODE=$mode"
-        
+
         make train DATASET="$dataset" MODE="$mode"
-        
+
         wait_for_training_completion
     fi
-    
+
     print_success "Job $job_num/$total_jobs completed: $dataset - $mode"
 }
 
@@ -132,7 +157,7 @@ load_config() {
         esac
         
         case "$mode" in
-            thermo|vanilla|variational|tune)
+            thermo|vanilla|variational|tune|baseline-vae|baseline-gan|baseline-ddpm|baseline-pang)
                 ;;
             *)
                 print_warning "Unknown mode '$mode' on line $line_num (skipping)"

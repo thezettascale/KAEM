@@ -46,12 +46,12 @@ nvim config/nist_config.ini
 
 | Command | Description | Defaults |
 |---------|-------------|----------|
-| `make train DATASET=X MODE=Y` | Single job, single device | DATASET=MNIST, MODE=thermo |
-| `make sequential CONFIG=jobs.txt` | Multiple jobs, single device | CONFIG=jobs.txt |
-| `make distributed DATASET=X MODE=Y NUM_DEVICES=N` | Single job, multiple devices | NUM_DEVICES=auto |
-| `make batch CONFIG=jobs.txt NUM_DEVICES=N` | Multiple jobs, multiple devices | NUM_DEVICES=auto |
+| `make train DATASET=X MODE=Y` | Single KAEM job (tmux) | DATASET=MNIST, MODE=thermo |
+| `make sequential CONFIG=jobs.txt` | Jobs from file, one at a time | CONFIG=jobs.txt |
+| `make distributed DATASET=X MODE=Y DEVICE=N` | Single job on specific GPU | DEVICE=0 |
+| `make batch CONFIG=jobs.txt` | Jobs from file, parallel across GPUs | NUM_DEVICES=auto |
 
-Available modes: `vanilla`, `thermo`, `variational`
+Available KAEM modes: `vanilla`, `thermo`, `variational`
 
 Shorthand targets:
 ```bash
@@ -60,13 +60,34 @@ make train-thermo DATASET=SVHN
 make train-variational DATASET=CIFAR10
 ```
 
-### Sequential jobs
+### Baseline models
 
-Create a `jobs.txt` file:
+Train baseline generative models for comparison:
+
+| Command | Description |
+|---------|-------------|
+| `make baseline MODEL=X DATASET=Y` | Train single baseline (tmux) |
+| `make baseline-vae DATASET=CIFAR10` | Train VAE baseline |
+| `make baseline-gan DATASET=CIFAR10` | Train GAN baseline |
+| `make baseline-ddpm DATASET=CIFAR10` | Train DDPM baseline |
+| `make baseline-pang DATASET=CIFAR10` | Train Pang EBM baseline |
+| `make baseline-all DATASET=CIFAR10` | Train all baselines sequentially |
+
+Available baseline models: `vae`, `gan`, `ddpm`, `pang`
+
+### Job configuration
+
+Create a `jobs.txt` file with KAEM and baseline jobs:
 ```
+# KAEM jobs
 MNIST thermo
-CIFAR10 variational
-SVHN vanilla
+CIFAR10 vanilla
+SVHN variational
+
+# Baseline jobs
+CIFAR10 baseline-vae
+CIFAR10 baseline-gan
+CELEBA baseline-ddpm
 ```
 
 Run sequentially on single device:
@@ -74,7 +95,7 @@ Run sequentially on single device:
 make sequential CONFIG=jobs.txt
 ```
 
-Run batch with distributed execution (each job uses multiple devices):
+Run in parallel across GPUs (one job per GPU):
 ```bash
 make batch CONFIG=jobs.txt NUM_DEVICES=4
 ```
@@ -86,6 +107,8 @@ Set device in config files (`config/*.ini`):
 [TRAINING]
 device = gpu   # Options: cpu, gpu, tpu
 ```
+
+Available datasets: `MNIST`, `FMNIST`, `CIFAR10`, `SVHN`, `CELEBA`, `PTB`, `SMS_SPAM`, `DARCY_FLOW`
 
 For benchmarking run:
 

@@ -35,16 +35,16 @@ CIFAR10 thermo
 
 # ==================== Baseline Jobs ====================
 # CIFAR-10 baselines
-CIFAR10 baseline-vae
-CIFAR10 baseline-gan
-CIFAR10 baseline-ddpm
+# CIFAR10 baseline-vae
+# CIFAR10 baseline-gan
+# CIFAR10 baseline-ddpm
 
 # CelebA baselines
-CELEBA baseline-vae
-CELEBA baseline-gan
-CELEBA baseline-ddpm
+# CELEBA baseline-vae
+# CELEBA baseline-gan
+# CELEBA baseline-ddpm
 
 # SVHN baselines
-SVHN baseline-vae
-SVHN baseline-gan
-SVHN baseline-ddpm
+# SVHN baseline-vae
+# SVHN baseline-gan
+# SVHN baseline-ddpm

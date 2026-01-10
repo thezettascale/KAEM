@@ -99,7 +99,7 @@ function init_baseline_trainer(
     num_generated_samples = parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
     N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
-    checkpoint_every = parse(Int, retrieve(conf, "TRAINING", "checkpoint_every"))
+    checkpoint_every = -1  # Disabled to save storage
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
 
     dataset, x_shape, save_dataset = get_vision_dataset(

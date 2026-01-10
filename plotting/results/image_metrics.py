@@ -73,19 +73,44 @@ def calculate_infinity_metrics(
                 kids.append(metrics["kernel_inception_distance_mean"])
 
         inverse_batch_sizes = 1 / np.array(batch_sizes).reshape(-1, 1)
-        fid_reg = LinearRegression().fit(
-            inverse_batch_sizes, np.array(fids).reshape(-1, 1)
-        )
-        kid_reg = LinearRegression().fit(
-            inverse_batch_sizes, np.array(kids).reshape(-1, 1)
-        )
+        fid_y = np.array(fids).reshape(-1, 1)
+        kid_y = np.array(kids).reshape(-1, 1)
+
+        fid_reg = LinearRegression().fit(inverse_batch_sizes, fid_y)
+        kid_reg = LinearRegression().fit(inverse_batch_sizes, kid_y)
 
         fid_infinity = fid_reg.predict(np.array([[0]]))[0, 0]
         kid_infinity = kid_reg.predict(np.array([[0]]))[0, 0]
 
+        # Compute R² scores
+        fid_r2 = fid_reg.score(inverse_batch_sizes, fid_y)
+        kid_r2 = kid_reg.score(inverse_batch_sizes, kid_y)
+
+        # Compute standard error of intercept for uncertainty estimation
+        n = len(batch_sizes)
+        x = inverse_batch_sizes.flatten()
+        x_mean = np.mean(x)
+        ss_x = np.sum((x - x_mean) ** 2)
+
+        # FID standard error
+        fid_pred = fid_reg.predict(inverse_batch_sizes).flatten()
+        fid_residuals = fid_y.flatten() - fid_pred
+        fid_mse = np.sum(fid_residuals**2) / (n - 2)
+        fid_se_intercept = np.sqrt(fid_mse * (1 / n + x_mean**2 / ss_x))
+
+        # KID standard error
+        kid_pred = kid_reg.predict(inverse_batch_sizes).flatten()
+        kid_residuals = kid_y.flatten() - kid_pred
+        kid_mse = np.sum(kid_residuals**2) / (n - 2)
+        kid_se_intercept = np.sqrt(kid_mse * (1 / n + x_mean**2 / ss_x))
+
         return {
             "fid_infinity": float(fid_infinity),
+            "fid_std_error": float(fid_se_intercept),
+            "fid_r2": float(fid_r2),
             "kid_infinity": float(kid_infinity),
+            "kid_std_error": float(kid_se_intercept),
+            "kid_r2": float(kid_r2),
             "fid_values": [float(f) for f in fids],
             "kid_values": [float(k) for k in kids],
             "batch_sizes": batch_sizes,
@@ -106,9 +131,15 @@ def run_distributed(file_paths, num_workers=None):
 
         for future in as_completed(futures):
             gen_file_path, metrics = future.result()
+            fid = metrics["fid_infinity"]
+            fid_se = metrics["fid_std_error"]
+            fid_r2 = metrics["fid_r2"]
+            kid = metrics["kid_infinity"]
+            kid_se = metrics["kid_std_error"]
+            kid_r2 = metrics["kid_r2"]
             print(f"Processed {gen_file_path}")
-            print(f"FID  : {metrics['fid_infinity']:.2f}")
-            print(f"KID  : {metrics['kid_infinity']:.2f}")
+            print(f"FID  : {fid:.2f} ± {fid_se:.2f} (R²={fid_r2:.3f})")
+            print(f"KID  : {kid:.4f} ± {kid_se:.4f} (R²={kid_r2:.3f})")
             print("---")
 
 
@@ -141,45 +172,45 @@ if __name__ == "__main__":
             "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
             "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
         ),
-        # Baseline - CIFAR10
-        (
-            "logs/Baseline/CIFAR10/VAE/generated_images.h5",
-            "logs/Baseline/CIFAR10/VAE/real_images.h5",
-        ),
-        (
-            "logs/Baseline/CIFAR10/GAN/generated_images.h5",
-            "logs/Baseline/CIFAR10/GAN/real_images.h5",
-        ),
-        (
-            "logs/Baseline/CIFAR10/DDPM/generated_images.h5",
-            "logs/Baseline/CIFAR10/DDPM/real_images.h5",
-        ),
-        # Baseline - CELEBA
-        (
-            "logs/Baseline/CELEBA/VAE/generated_images.h5",
-            "logs/Baseline/CELEBA/VAE/real_images.h5",
-        ),
-        (
-            "logs/Baseline/CELEBA/GAN/generated_images.h5",
-            "logs/Baseline/CELEBA/GAN/real_images.h5",
-        ),
-        (
-            "logs/Baseline/CELEBA/DDPM/generated_images.h5",
-            "logs/Baseline/CELEBA/DDPM/real_images.h5",
-        ),
-        # Baseline - SVHN
-        (
-            "logs/Baseline/SVHN/VAE/generated_images.h5",
-            "logs/Baseline/SVHN/VAE/real_images.h5",
-        ),
-        (
-            "logs/Baseline/SVHN/GAN/generated_images.h5",
-            "logs/Baseline/SVHN/GAN/real_images.h5",
-        ),
-        (
-            "logs/Baseline/SVHN/DDPM/generated_images.h5",
-            "logs/Baseline/SVHN/DDPM/real_images.h5",
-        ),
+        # # Baseline - CIFAR10
+        # (
+        #     "logs/Baseline/CIFAR10/VAE/generated_images.h5",
+        #     "logs/Baseline/CIFAR10/VAE/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/CIFAR10/GAN/generated_images.h5",
+        #     "logs/Baseline/CIFAR10/GAN/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/CIFAR10/DDPM/generated_images.h5",
+        #     "logs/Baseline/CIFAR10/DDPM/real_images.h5",
+        # ),
+        # # Baseline - CELEBA
+        # (
+        #     "logs/Baseline/CELEBA/VAE/generated_images.h5",
+        #     "logs/Baseline/CELEBA/VAE/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/CELEBA/GAN/generated_images.h5",
+        #     "logs/Baseline/CELEBA/GAN/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/CELEBA/DDPM/generated_images.h5",
+        #     "logs/Baseline/CELEBA/DDPM/real_images.h5",
+        # ),
+        # # Baseline - SVHN
+        # (
+        #     "logs/Baseline/SVHN/VAE/generated_images.h5",
+        #     "logs/Baseline/SVHN/VAE/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/SVHN/GAN/generated_images.h5",
+        #     "logs/Baseline/SVHN/GAN/real_images.h5",
+        # ),
+        # (
+        #     "logs/Baseline/SVHN/DDPM/generated_images.h5",
+        #     "logs/Baseline/SVHN/DDPM/real_images.h5",
+        # ),
     ]
 
     run_distributed(file_paths)

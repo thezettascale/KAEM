@@ -40,21 +40,21 @@ METHOD_CONFIGS = {
         "model_type": "mixture",
         "is_baseline": False,
     },
-    "baseline_vae": {
-        "method_type": "Baseline",
-        "model_type": "VAE",
-        "is_baseline": True,
-    },
-    "baseline_gan": {
-        "method_type": "Baseline",
-        "model_type": "GAN",
-        "is_baseline": True,
-    },
-    "baseline_ddpm": {
-        "method_type": "Baseline",
-        "model_type": "DDPM",
-        "is_baseline": True,
-    },
+    # "baseline_vae": {
+    #     "method_type": "Baseline",
+    #     "model_type": "VAE",
+    #     "is_baseline": True,
+    # },
+    # "baseline_gan": {
+    #     "method_type": "Baseline",
+    #     "model_type": "GAN",
+    #     "is_baseline": True,
+    # },
+    # "baseline_ddpm": {
+    #     "method_type": "Baseline",
+    #     "model_type": "DDPM",
+    #     "is_baseline": True,
+    # },
 }
 
 output_dir = "figures/results/individual_plots"

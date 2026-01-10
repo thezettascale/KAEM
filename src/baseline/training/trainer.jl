@@ -119,7 +119,7 @@ function init_baseline_trainer(
             for i in 1:batch_size:N_test
     ]
 
-    file_loc = "logs/Baseline/$(uppercase(string(model_type)))/$(dataset_name)/"
+    file_loc = "logs/Baseline/$(dataset_name)/$(uppercase(string(model_type)))/"
     mkpath(file_loc)
 
     try

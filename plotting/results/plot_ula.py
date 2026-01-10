@@ -32,11 +32,28 @@ METHOD_CONFIGS = {
         "method_type": "Vanilla",
         "sampler": "ULA",
         "model_type": "mixture",
+        "is_baseline": False,
     },
     "thermo_ula_mixture": {
         "method_type": "Thermodynamic",
         "sampler": "ULA",
         "model_type": "mixture",
+        "is_baseline": False,
+    },
+    "baseline_vae": {
+        "method_type": "Baseline",
+        "model_type": "VAE",
+        "is_baseline": True,
+    },
+    "baseline_gan": {
+        "method_type": "Baseline",
+        "model_type": "GAN",
+        "is_baseline": True,
+    },
+    "baseline_ddpm": {
+        "method_type": "Baseline",
+        "model_type": "DDPM",
+        "is_baseline": True,
     },
 }
 
@@ -88,11 +105,22 @@ def select_best_samples_fast(generated_images, num_samples):
 def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
     """Generate and save a single plot for generated images from ULA method."""
 
-    gen_path = (
-        f"logs/{method_config['method_type']}/{dataset}/"
-        f"{method_config['sampler']}/{method_config['model_type']}/"
-        f"generated_images.h5"
-    )
+    if method_config.get("is_baseline", False):
+        gen_path = (
+            f"logs/{method_config['method_type']}/{dataset}/"
+            f"{method_config['model_type']}/generated_images.h5"
+        )
+        method_label = f"{method_config['method_type']} - {method_config['model_type']}"
+    else:
+        gen_path = (
+            f"logs/{method_config['method_type']}/{dataset}/"
+            f"{method_config['sampler']}/{method_config['model_type']}/"
+            f"generated_images.h5"
+        )
+        method_label = (
+            f"{method_config['method_type']} - {method_config['sampler']} - "
+            f"{method_config['model_type']}"
+        )
 
     try:
         with h5py.File(gen_path, "r") as h5_file:
@@ -126,18 +154,20 @@ def plot_generated_images_grid(dataset, method_config, grid_size, cmap):
                     ax.imshow(np.zeros((32, 32)), cmap="gray")
             ax.axis("off")
 
-        method_label = (
-            f"{method_config['method_type']} - {method_config['sampler']} - "
-            f"{method_config['model_type']}"
-        )
         fig.suptitle(f"{dataset} - {method_label}", fontsize=18, y=0.95)
 
         plt.subplots_adjust(wspace=0.1, hspace=0.1)
 
-        filename = (
-            f"{dataset.lower()}_{method_config['method_type'].lower()}_"
-            f"{method_config['sampler'].lower()}_{method_config['model_type']}.png"
-        )
+        if method_config.get("is_baseline", False):
+            filename = (
+                f"{dataset.lower()}_{method_config['method_type'].lower()}_"
+                f"{method_config['model_type'].lower()}.png"
+            )
+        else:
+            filename = (
+                f"{dataset.lower()}_{method_config['method_type'].lower()}_"
+                f"{method_config['sampler'].lower()}_{method_config['model_type']}.png"
+            )
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches="tight")
         plt.close()

@@ -114,6 +114,7 @@ def run_distributed(file_paths, num_workers=None):
 
 if __name__ == "__main__":
     file_paths = [
+        # KAEM - SVHN
         (
             "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
             "logs/Vanilla/SVHN/ULA/mixture/real_images.h5",
@@ -122,6 +123,7 @@ if __name__ == "__main__":
             "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
             "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
         ),
+        # KAEM - CELEBA
         (
             "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
             "logs/Vanilla/CELEBA/ULA/mixture/real_images.h5",
@@ -130,6 +132,7 @@ if __name__ == "__main__":
             "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
             "logs/Thermodynamic/CELEBA/ULA/mixture/real_images.h5",
         ),
+        # KAEM - CIFAR10
         (
             "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
             "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
@@ -137,6 +140,45 @@ if __name__ == "__main__":
         (
             "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
             "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
+        ),
+        # Baseline - CIFAR10
+        (
+            "logs/Baseline/CIFAR10/VAE/generated_images.h5",
+            "logs/Baseline/CIFAR10/VAE/real_images.h5",
+        ),
+        (
+            "logs/Baseline/CIFAR10/GAN/generated_images.h5",
+            "logs/Baseline/CIFAR10/GAN/real_images.h5",
+        ),
+        (
+            "logs/Baseline/CIFAR10/DDPM/generated_images.h5",
+            "logs/Baseline/CIFAR10/DDPM/real_images.h5",
+        ),
+        # Baseline - CELEBA
+        (
+            "logs/Baseline/CELEBA/VAE/generated_images.h5",
+            "logs/Baseline/CELEBA/VAE/real_images.h5",
+        ),
+        (
+            "logs/Baseline/CELEBA/GAN/generated_images.h5",
+            "logs/Baseline/CELEBA/GAN/real_images.h5",
+        ),
+        (
+            "logs/Baseline/CELEBA/DDPM/generated_images.h5",
+            "logs/Baseline/CELEBA/DDPM/real_images.h5",
+        ),
+        # Baseline - SVHN
+        (
+            "logs/Baseline/SVHN/VAE/generated_images.h5",
+            "logs/Baseline/SVHN/VAE/real_images.h5",
+        ),
+        (
+            "logs/Baseline/SVHN/GAN/generated_images.h5",
+            "logs/Baseline/SVHN/GAN/real_images.h5",
+        ),
+        (
+            "logs/Baseline/SVHN/DDPM/generated_images.h5",
+            "logs/Baseline/SVHN/DDPM/real_images.h5",
         ),
     ]
 

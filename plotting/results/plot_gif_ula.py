@@ -25,6 +25,7 @@ plt.rcParams.update(
 )
 
 GIF_CONFIGS = {
+    # KAEM - SVHN
     "SVHN_vanilla_mixture": {
         "dataset": "SVHN",
         "method_type": "Vanilla",
@@ -35,6 +36,7 @@ GIF_CONFIGS = {
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
         "filename": "svhn_vanilla_ula_mixture_evolution.gif",
+        "is_baseline": False,
     },
     "SVHN_thermo_mixture": {
         "dataset": "SVHN",
@@ -46,7 +48,9 @@ GIF_CONFIGS = {
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
         "filename": "svhn_thermo_ula_mixture_evolution.gif",
+        "is_baseline": False,
     },
+    # KAEM - CELEBA
     "CELEBA_vanilla_mixture": {
         "dataset": "CELEBA",
         "method_type": "Vanilla",
@@ -56,7 +60,8 @@ GIF_CONFIGS = {
         "cmap": None,
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
-        "filename": "CELEBA_vanilla_ula_mixture_evolution.gif",
+        "filename": "celeba_vanilla_ula_mixture_evolution.gif",
+        "is_baseline": False,
     },
     "CELEBA_thermo_mixture": {
         "dataset": "CELEBA",
@@ -67,8 +72,10 @@ GIF_CONFIGS = {
         "cmap": None,
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
-        "filename": "CELEBA_thermo_ula_mixture_evolution.gif",
+        "filename": "celeba_thermo_ula_mixture_evolution.gif",
+        "is_baseline": False,
     },
+    # KAEM - CIFAR10
     "CIFAR10_vanilla_mixture": {
         "dataset": "CIFAR10",
         "method_type": "Vanilla",
@@ -78,7 +85,8 @@ GIF_CONFIGS = {
         "cmap": None,
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
-        "filename": "CIFAR10_vanilla_ula_mixture_evolution.gif",
+        "filename": "cifar10_vanilla_ula_mixture_evolution.gif",
+        "is_baseline": False,
     },
     "CIFAR10_thermo_mixture": {
         "dataset": "CIFAR10",
@@ -89,7 +97,110 @@ GIF_CONFIGS = {
         "cmap": None,
         "epochs": list(range(4, 40, 4)),
         "samples_per_frame": 1,
-        "filename": "CIFAR10_thermo_ula_mixture_evolution.gif",
+        "filename": "cifar10_thermo_ula_mixture_evolution.gif",
+        "is_baseline": False,
+    },
+    # Baseline - CIFAR10
+    "CIFAR10_baseline_vae": {
+        "dataset": "CIFAR10",
+        "method_type": "Baseline",
+        "model_type": "VAE",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "cifar10_baseline_vae_evolution.gif",
+        "is_baseline": True,
+    },
+    "CIFAR10_baseline_gan": {
+        "dataset": "CIFAR10",
+        "method_type": "Baseline",
+        "model_type": "GAN",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "cifar10_baseline_gan_evolution.gif",
+        "is_baseline": True,
+    },
+    "CIFAR10_baseline_ddpm": {
+        "dataset": "CIFAR10",
+        "method_type": "Baseline",
+        "model_type": "DDPM",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "cifar10_baseline_ddpm_evolution.gif",
+        "is_baseline": True,
+    },
+    # Baseline - CELEBA
+    "CELEBA_baseline_vae": {
+        "dataset": "CELEBA",
+        "method_type": "Baseline",
+        "model_type": "VAE",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "celeba_baseline_vae_evolution.gif",
+        "is_baseline": True,
+    },
+    "CELEBA_baseline_gan": {
+        "dataset": "CELEBA",
+        "method_type": "Baseline",
+        "model_type": "GAN",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "celeba_baseline_gan_evolution.gif",
+        "is_baseline": True,
+    },
+    "CELEBA_baseline_ddpm": {
+        "dataset": "CELEBA",
+        "method_type": "Baseline",
+        "model_type": "DDPM",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "celeba_baseline_ddpm_evolution.gif",
+        "is_baseline": True,
+    },
+    # Baseline - SVHN
+    "SVHN_baseline_vae": {
+        "dataset": "SVHN",
+        "method_type": "Baseline",
+        "model_type": "VAE",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "svhn_baseline_vae_evolution.gif",
+        "is_baseline": True,
+    },
+    "SVHN_baseline_gan": {
+        "dataset": "SVHN",
+        "method_type": "Baseline",
+        "model_type": "GAN",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "svhn_baseline_gan_evolution.gif",
+        "is_baseline": True,
+    },
+    "SVHN_baseline_ddpm": {
+        "dataset": "SVHN",
+        "method_type": "Baseline",
+        "model_type": "DDPM",
+        "grid_size": 10,
+        "cmap": None,
+        "epochs": list(range(4, 40, 4)),
+        "samples_per_frame": 1,
+        "filename": "svhn_baseline_ddpm_evolution.gif",
+        "is_baseline": True,
     },
 }
 
@@ -134,9 +245,12 @@ def create_sample_subset_frame(
                 ax.imshow(np.zeros((32, 32)), cmap="gray")
         ax.axis("off")
 
-    method_label = (
-        f"{config['method_type']} - {config['sampler']} - {config['model_type']}"
-    )
+    if config.get("is_baseline", False):
+        method_label = f"{config['method_type']} - {config['model_type']}"
+    else:
+        method_label = (
+            f"{config['method_type']} - {config['sampler']} - {config['model_type']}"
+        )
 
     epoch_idx = config["epochs"].index(epoch)
     total_frames = len(config["epochs"]) * config["samples_per_frame"]
@@ -163,22 +277,35 @@ def create_sample_subset_frame(
 
 
 def create_evolution_gif(config):
-    print(
-        f"Creating GIF for {config['dataset']} - "
-        f"{config['method_type']} - {config['sampler']} - "
-        f"{config['model_type']}"
-    )
+    if config.get("is_baseline", False):
+        label = (
+            f"{config['dataset']} - "
+            f"{config['method_type']} - {config['model_type']}"
+        )
+    else:
+        label = (
+            f"{config['dataset']} - "
+            f"{config['method_type']} - {config['sampler']} - "
+            f"{config['model_type']}"
+        )
+    print(f"Creating GIF for {label}")
 
     frames = []
     valid_epochs = []
     samples_per_frame = config["samples_per_frame"]
 
     for epoch in config["epochs"]:
-        file_path = (
-            f"logs/{config['method_type']}/{config['dataset']}/"
-            f"{config['sampler']}/{config['model_type']}/"
-            f"generated_images_epoch_{epoch}.h5"
-        )
+        if config.get("is_baseline", False):
+            file_path = (
+                f"logs/{config['method_type']}/{config['dataset']}/"
+                f"{config['model_type']}/generated_images_epoch_{epoch}.h5"
+            )
+        else:
+            file_path = (
+                f"logs/{config['method_type']}/{config['dataset']}/"
+                f"{config['sampler']}/{config['model_type']}/"
+                f"generated_images_epoch_{epoch}.h5"
+            )
 
         try:
             with h5py.File(file_path, "r") as h5_file:
@@ -203,11 +330,7 @@ def create_evolution_gif(config):
             continue
 
     if not frames:
-        print(
-            f"  No valid frames found for {config['dataset']} - "
-            f"{config['method_type']} - {config['sampler']} - "
-            f"{config['model_type']}"
-        )
+        print(f"  No valid frames found for {label}")
         return
 
     output_path = os.path.join(output_dir, config["filename"])

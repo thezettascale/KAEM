@@ -20,10 +20,7 @@ conf = Dict(
     "FMNIST" => ConfParse("config/nist_config.ini"),
     "CIFAR10" => ConfParse("config/cifar_config.ini"),
     "SVHN" => ConfParse("config/svhn_config.ini"),
-    "CIFAR10PANG" => ConfParse("config/cifar_pang_config.ini"),
     "CELEBA" => ConfParse("config/celeba_config.ini"),
-    "CELEBAPANG" => ConfParse("config/celeba_pang_config.ini"),
-    "SVHNPANG" => ConfParse("config/svhn_pang_config.ini"),
     "PTB" => ConfParse("config/text_config.ini"),
     "SMS_SPAM" => ConfParse("config/text_config.ini"),
     "DARCY_FLOW" => ConfParse("config/darcy_flow_config.ini"),
@@ -52,7 +49,7 @@ acts = Dict(5 => default_act, 6 => "none", 7 => default_act)
 grid_sizes = Dict(5 => "20", 6 => "1", 7 => "50")
 
 rng = Random.MersenneTwister(1)
-im_resize = dataset == "CELEBA" || dataset == "CELEBAPANG" ? (64, 64) : (32, 32)
+im_resize = dataset == "CELEBA" ? (64, 64) : (32, 32)
 
 if use_thermo && N_t > 1
     t = init_trainer(rng, conf, dataset; img_resize = im_resize)
@@ -60,10 +57,7 @@ if use_thermo && N_t > 1
 else
     if dataset == "CIFAR10" ||
             dataset == "SVHN" ||
-            dataset == "CIFAR10PANG" ||
-            dataset == "SVHNPANG" ||
-            dataset == "CELEBA" ||
-            dataset == "CELEBAPANG"
+            dataset == "CELEBA"
         t = init_trainer(rng, conf, dataset; img_resize = im_resize)
         train!(t)
     else

@@ -65,7 +65,7 @@ help:
 	@echo "  make batch CONFIG=jobs.txt NUM_DEVICES=N              Jobs from file, parallel across GPUs"
 	@echo ""
 	@echo "Defaults: DATASET=MNIST, MODE=thermo, MODEL=vae, NUM_DEVICES=auto"
-	@echo "Datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_FLOW"
+	@echo "Datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, PTB, SMS_SPAM, DARCY_FLOW"
 	@echo "KAEM Modes: thermo, vanilla, variational"
 	@echo "Baseline Modes: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang (use in jobs.txt)"
 

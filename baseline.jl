@@ -12,7 +12,7 @@ include("src/baseline/baseline.jl")
 using .Baseline
 
 img_resize = nothing
-if dataset_name == "CELEBA" || dataset_name == "CELEBAPANG"
+if dataset_name == "CELEBA"
     img_resize = (64, 64)
 end
 

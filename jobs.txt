@@ -2,7 +2,7 @@
 # Format: DATASET MODE
 # One job per line
 #
-# Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, CIFAR10PANG, SVHNPANG, CELEBAPANG, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
+# Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
 #
 # KAEM modes: thermo, vanilla, variational, tune
 # Baseline modes: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang

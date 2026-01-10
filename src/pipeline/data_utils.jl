@@ -16,12 +16,8 @@ dataset_mapping = Dict(
     "FMNIST" => MLDatasets.FashionMNIST(),
     "CIFAR10" => MLDatasets.CIFAR10(),
     "SVHN" => MLDatasets.SVHN2(),
-    "CIFAR10PANG" => MLDatasets.CIFAR10(),
-    "SVHNPANG" => MLDatasets.SVHN2(),
     "PTB" => MLDatasets.PTBLM(),
     "CELEBA" =>
-        load_dataset("nielsr/CelebA-faces", split = "train").with_format("julia"),
-    "CELEBAPANG" =>
         load_dataset("nielsr/CelebA-faces", split = "train").with_format("julia"),
 )
 
@@ -66,7 +62,7 @@ function get_vision_dataset(
             data = (data .- minimum(data)) ./ (maximum(data) - minimum(data))
             data = isnothing(img_resize) ? data : imresize(data, img_resize)
             data
-        elseif dataset_name == "CELEBA" || dataset_name == "CELEBAPANG"
+        elseif dataset_name == "CELEBA"
             celeba = dataset_mapping[dataset_name]
             num_iters = fld(N_train + N_test, batch_size)
             data = zeros(Float32, img_resize..., 3, N_train + N_test)
@@ -99,19 +95,13 @@ function get_vision_dataset(
         (
             dataset_name == "CIFAR10" ||
             dataset_name == "SVHN" ||
-            dataset_name == "CIFAR10PANG" ||
-            dataset_name == "SVHNPANG" ||
-            dataset_name == "CELEBA" ||
-            dataset_name == "CELEBAPANG"
+            dataset_name == "CELEBA"
         ) ? img_shape : (img_shape..., 1)
     dataset =
         (
             dataset_name == "CIFAR10" ||
             dataset_name == "SVHN" ||
-            dataset_name == "CIFAR10PANG" ||
-            dataset_name == "SVHNPANG" ||
-            dataset_name == "CELEBA" ||
-            dataset_name == "CELEBAPANG"
+            dataset_name == "CELEBA"
         ) ? dataset : reshape(dataset, img_shape..., :)
     save_dataset = dataset[:, :, :, 1:min(num_generated_samples, size(dataset)[end])]
 

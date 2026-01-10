@@ -17,7 +17,7 @@
 # include("../src/pipeline/optimizer.jl")
 # using .optimization
 #
-# conf = ConfParse("config/celeba_pang_config.ini")
+# conf = ConfParse("config/celeba_config.ini")
 # parse_conf!(conf)
 # optimizer = create_opt(conf)
 #
@@ -30,7 +30,7 @@
 # commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 #
 # dataset, img_size = get_vision_dataset(
-#     "CELEBAPANG",
+#     "CELEBA",
 #     parse(Int, retrieve(conf, "TRAINING", "N_train")),
 #     parse(Int, retrieve(conf, "TRAINING", "N_test")),
 #     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));

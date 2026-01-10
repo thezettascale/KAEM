@@ -60,7 +60,7 @@ load_config() {
         fi
 
         case "$dataset" in
-            MNIST|FMNIST|CIFAR10|SVHN|CIFAR10PANG|SVHNPANG|PTB|SMS_SPAM|DARCY_PERM|DARCY_FLOW|CELEBA|CELEBAPANG) ;;
+            MNIST|FMNIST|CIFAR10|SVHN|PTB|SMS_SPAM|DARCY_PERM|DARCY_FLOW|CELEBA) ;;
             *) print_warning "Unknown dataset '$dataset' on line $line_num (skipping)"; continue ;;
         esac
 

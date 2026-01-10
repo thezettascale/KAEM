@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import h5py
 import numpy as np
@@ -8,6 +9,27 @@ import torch
 from PIL import Image
 from sklearn.linear_model import LinearRegression
 from torch_fidelity import calculate_metrics
+
+
+def get_num_gpus():
+    if not torch.cuda.is_available():
+        return 0
+    return torch.cuda.device_count()
+
+
+def process_on_device(args):
+    gen_file_path, real_file_path, device_id = args
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
+
+    metrics = calculate_infinity_metrics(gen_file_path, real_file_path)
+
+    log_dir = os.path.join(os.path.dirname(gen_file_path), "metrics")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "image_metrics.json")
+    with open(log_file, "w") as f:
+        json.dump(metrics, f, indent=4)
+
+    return gen_file_path, metrics
 
 
 def load_images(file_path):
@@ -70,52 +92,52 @@ def calculate_infinity_metrics(
         }
 
 
-def process_file_pair(gen_file_path, real_file_path):
-    metrics = calculate_infinity_metrics(gen_file_path, real_file_path)
+def run_distributed(file_paths, num_workers=None):
+    num_gpus = get_num_gpus()
+    if num_workers is None:
+        num_workers = max(1, num_gpus)
 
-    # Create log directory if it doesn't exist
-    log_dir = os.path.join(os.path.dirname(gen_file_path), "metrics")
-    os.makedirs(log_dir, exist_ok=True)
+    print(f"Running with {num_workers} worker(s) across {num_gpus} GPU(s)")
 
-    # Save metrics to JSON file
-    log_file = os.path.join(log_dir, "image_metrics.json")
-    with open(log_file, "w") as f:
-        json.dump(metrics, f, indent=4)
+    tasks = [(gen, real, i % num_workers) for i, (gen, real) in enumerate(file_paths)]
 
-    return metrics
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = {executor.submit(process_on_device, task): task for task in tasks}
+
+        for future in as_completed(futures):
+            gen_file_path, metrics = future.result()
+            print(f"Processed {gen_file_path}")
+            print(f"FID  : {metrics['fid_infinity']:.2f}")
+            print(f"KID  : {metrics['kid_infinity']:.2f}")
+            print("---")
 
 
-# Example usage
-file_paths = [
-    (
-        "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
-        "logs/Vanilla/SVHN/ULA/mixture/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
-        "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
-    ),
-    (
-        "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
-        "logs/Vanilla/CELEBA/ULA/mixture/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
-        "logs/Thermodynamic/CELEBA/ULA/mixture/real_images.h5",
-    ),
-    (
-        "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
-        "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
-    ),
-    (
-        "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
-        "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
-    ),
-]
+if __name__ == "__main__":
+    file_paths = [
+        (
+            "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
+            "logs/Vanilla/SVHN/ULA/mixture/real_images.h5",
+        ),
+        (
+            "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
+            "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
+        ),
+        (
+            "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
+            "logs/Vanilla/CELEBA/ULA/mixture/real_images.h5",
+        ),
+        (
+            "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
+            "logs/Thermodynamic/CELEBA/ULA/mixture/real_images.h5",
+        ),
+        (
+            "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
+            "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
+        ),
+        (
+            "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
+            "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
+        ),
+    ]
 
-for gen_file_path, real_file_path in file_paths:
-    metrics = process_file_pair(gen_file_path, real_file_path)
-    print(f"Processed {gen_file_path}")
-    print(f"FID  : {metrics['fid_infinity']:.2f}")
-    print(f"KID  : {metrics['kid_infinity']:.2f}")
-    print("---")
+    run_distributed(file_paths)

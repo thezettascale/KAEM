@@ -90,15 +90,7 @@ function (enc::DiagonalGaussianEncoder)(
 
     μ = reshape(μ_flat, Q, P, S)
     logvar = reshape(logvar_flat, Q, P, S)
-    logvar = ifelse.(
-        logvar .< -10.0f0,
-        -10.0f0,
-        ifelse.(
-            logvar .> 2.0f0,
-            2.0f0,
-            logvar
-        )
-    )
+    logvar = clamp.(logvar, -20.0f0, 2.0f0)
 
     if !isnothing(component_mask)
         μ_selected = dropdims(sum(component_mask .* μ; dims = 2); dims = 2)

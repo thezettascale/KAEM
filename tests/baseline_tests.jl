@@ -1,0 +1,185 @@
+using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Reactant, Optimisers, Statistics
+using MLDataDevices: cpu_device
+
+ENV["GPU"] = true
+
+include("../src/baseline/baseline.jl")
+using .Baseline
+
+conf = ConfParse("tests/baseline_conf.ini")
+parse_conf!(conf)
+
+rng = Random.MersenneTwister(42)
+
+include("../src/utils.jl")
+using .Utils
+
+optimizer = create_opt(conf)
+
+function test_vae()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_VAE(conf, x_shape; rng = rng)
+    x = randn(rng, Float32, x_shape..., batch_size) |> pu
+
+    _, train_step, opt_state, ps, st = prep_vae(model, x, optimizer.rule(); rng = rng)
+
+    ps_before = Array(ps)
+    ε = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, ε)
+
+    @test !isnan(Float32(loss))
+    @test any(Array(ps_new) .!= ps_before)
+    return @test !any(isnan, Array(ps_new))
+end
+
+function test_vae_sample()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_VAE(conf, x_shape; rng = rng)
+    ps = Lux.initialparameters(rng, model) |> ComponentArray |> Lux.f32
+    st = Lux.initialstates(rng, model) |> Lux.f32
+
+    z = randn(rng, Float32, model.latent_dim, batch_size)
+    x_gen, _ = sample(model, ps, st, z)
+
+    @test size(x_gen) == (x_shape..., batch_size)
+    return @test !any(isnan, x_gen)
+end
+
+function test_gan()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_GAN(conf, x_shape; rng = rng)
+    x_real = randn(rng, Float32, x_shape..., batch_size) |> pu
+
+    _, train_step, opt_state_gen, opt_state_disc, ps, st = prep_gan(
+        model, x_real, optimizer.rule(), optimizer.rule(); rng = rng
+    )
+
+    ps_before_gen = Array(ps.gen)
+    ps_before_disc = Array(ps.disc)
+    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    loss, ps_new, _, _, _ = train_step(
+        opt_state_gen, opt_state_disc, ps, st, x_real, z, 1
+    )
+
+    ps_new_cpu = cpu_device()(ps_new)
+    @test !isnan(Float32(loss))
+    @test any(Array(ps_new_cpu.gen) .!= ps_before_gen) || any(Array(ps_new_cpu.disc) .!= ps_before_disc)
+    return @test !any(isnan, Array(ps_new_cpu.gen)) && !any(isnan, Array(ps_new_cpu.disc))
+end
+
+function test_gan_disc()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_GAN(conf, x_shape; rng = rng)
+    ps = Lux.initialparameters(rng, model) |> ComponentArray |> Lux.f32
+    st = Lux.initialstates(rng, model) |> Lux.f32
+
+    x = randn(rng, Float32, x_shape..., batch_size)
+    logits, st_disc = discriminate(model.discriminator, x, ps.disc, st.disc)
+
+    @test size(logits) == (1, batch_size)
+    return @test !any(isnan, logits)
+end
+
+function test_ddpm()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_DDPM(conf, x_shape; rng = rng)
+    x = randn(rng, Float32, x_shape..., batch_size) |> pu
+
+    _, train_step, opt_state, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
+
+    ps_before = Array(ps)
+    t_idx = rand(rng, 1:model.num_timesteps, batch_size)
+    t = Float32.(t_idx) |> pu
+    sqrt_alpha = reshape(model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
+    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
+    noise = randn(rng, Float32, x_shape..., batch_size) |> pu
+    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise)
+
+    @test !isnan(Float32(loss))
+    @test any(Array(ps_new) .!= ps_before)
+    return @test !any(isnan, Array(ps_new))
+end
+
+function test_ddpm_q()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_DDPM(conf, x_shape; rng = rng)
+
+    x_0 = randn(rng, Float32, x_shape..., batch_size)
+    noise = randn(rng, Float32, x_shape..., batch_size)
+    t_idx = rand(rng, 1:model.num_timesteps, batch_size)
+    sqrt_alpha = reshape(model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :)
+    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :)
+
+    x_noisy = q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
+
+    @test size(x_noisy) == size(x_0)
+    @test !any(isnan, x_noisy)
+
+    t_early = fill(1, batch_size)
+    sqrt_alpha_early = reshape(model.sqrt_alphas_cumprod[t_early], 1, 1, 1, :)
+    sqrt_one_minus_alpha_early = reshape(model.sqrt_one_minus_alphas_cumprod[t_early], 1, 1, 1, :)
+    x_noisy_early = q_sample(x_0, sqrt_alpha_early, sqrt_one_minus_alpha_early, noise)
+
+    t_late = fill(model.num_timesteps, batch_size)
+    sqrt_alpha_late = reshape(model.sqrt_alphas_cumprod[t_late], 1, 1, 1, :)
+    sqrt_one_minus_alpha_late = reshape(model.sqrt_one_minus_alphas_cumprod[t_late], 1, 1, 1, :)
+    x_noisy_late = q_sample(x_0, sqrt_alpha_late, sqrt_one_minus_alpha_late, noise)
+
+    signal_early = mean(abs.(x_noisy_early .- noise))
+    signal_late = mean(abs.(x_noisy_late .- noise))
+    return @test signal_early > signal_late
+end
+
+function test_training()
+    x_shape = (32, 32, 3)
+    batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    model = init_VAE(conf, x_shape; rng = rng)
+    x = randn(rng, Float32, x_shape..., batch_size) |> pu
+
+    _, train_step, opt_state, ps, st = prep_vae(model, x, optimizer.rule(); rng = rng)
+
+    losses = Float32[]
+    for i in 1:5
+        ε = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+        loss, ps, opt_state, st = train_step(opt_state, ps, st, x, ε)
+        push!(losses, Float32(loss))
+    end
+
+    @test !any(isnan, losses)
+    @test all(losses .< 1.0e6)
+    return @test losses[end] < losses[1] * 2
+end
+
+@testset "Baseline Tests" begin
+    @testset "VAE" begin
+        test_vae()
+        test_vae_sample()
+    end
+
+    @testset "GAN" begin
+        test_gan()
+        test_gan_disc()
+    end
+
+    @testset "DDPM" begin
+        test_ddpm()
+        test_ddpm_q()
+    end
+
+    @testset "Training" begin
+        test_training()
+    end
+end

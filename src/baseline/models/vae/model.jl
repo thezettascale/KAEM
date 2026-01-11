@@ -16,18 +16,24 @@ function init_VAE(
     latent_dim = parse(Int, retrieve(conf, "VAE", "latent_dim"))
     enc_channels = parse.(Int, retrieve(conf, "VAE", "encoder_channels"))
     dec_channels = parse.(Int, retrieve(conf, "VAE", "decoder_channels"))
-    kernel_size = parse(Int, retrieve(conf, "VAE", "kernel_size"))
+    enc_strides = parse.(Int, retrieve(conf, "VAE", "encoder_strides"))
+    enc_kernels = parse.(Int, retrieve(conf, "VAE", "encoder_kernels"))
+    enc_paddings = parse.(Int, retrieve(conf, "VAE", "encoder_paddings"))
+    dec_strides = parse.(Int, retrieve(conf, "VAE", "decoder_strides"))
+    dec_kernels = parse.(Int, retrieve(conf, "VAE", "decoder_kernels"))
+    dec_paddings = parse.(Int, retrieve(conf, "VAE", "decoder_paddings"))
     batchnorm = parse(Bool, retrieve(conf, "VAE", "batchnorm"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 
     in_channels = last(x_shape)
 
     encoder, spatial, channels = init_encoder(
-        x_shape, enc_channels, latent_dim, kernel_size, batchnorm
+        x_shape, enc_channels, latent_dim, enc_strides, enc_kernels, enc_paddings, batchnorm
     )
 
     decoder = init_decoder(
-        in_channels, dec_channels, latent_dim, kernel_size, batchnorm, spatial, channels
+        in_channels, dec_channels, latent_dim, dec_strides, dec_kernels, dec_paddings,
+        batchnorm, spatial, channels
     )
 
     return VAE{Float32}(encoder, decoder, latent_dim, x_shape, batch_size)

@@ -16,12 +16,21 @@ function init_GAN(
     latent_dim = parse(Int, retrieve(conf, "GAN", "latent_dim"))
     gen_channels = parse.(Int, retrieve(conf, "GAN", "generator_channels"))
     disc_channels = parse.(Int, retrieve(conf, "GAN", "discriminator_channels"))
-    kernel_size = parse(Int, retrieve(conf, "GAN", "kernel_size"))
+    gen_strides = parse.(Int, retrieve(conf, "GAN", "generator_strides"))
+    gen_kernels = parse.(Int, retrieve(conf, "GAN", "generator_kernels"))
+    gen_paddings = parse.(Int, retrieve(conf, "GAN", "generator_paddings"))
+    disc_strides = parse.(Int, retrieve(conf, "GAN", "discriminator_strides"))
+    disc_kernels = parse.(Int, retrieve(conf, "GAN", "discriminator_kernels"))
+    disc_paddings = parse.(Int, retrieve(conf, "GAN", "discriminator_paddings"))
     batchnorm = parse(Bool, retrieve(conf, "GAN", "batchnorm"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 
-    generator = init_generator(x_shape, latent_dim, gen_channels, kernel_size, batchnorm)
-    discriminator = init_discriminator(x_shape, disc_channels, kernel_size, batchnorm)
+    generator = init_generator(
+        x_shape, latent_dim, gen_channels, gen_strides, gen_kernels, gen_paddings, batchnorm
+    )
+    discriminator = init_discriminator(
+        x_shape, disc_channels, disc_strides, disc_kernels, disc_paddings, batchnorm
+    )
 
     return GAN{Float32}(generator, discriminator, latent_dim, x_shape, batch_size)
 end

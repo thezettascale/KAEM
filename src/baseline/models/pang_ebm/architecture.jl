@@ -67,12 +67,15 @@ function init_pang_generator(
         x_shape::Tuple{Vararg{Int}},
         latent_dim::Int,
         gen_channels::Vector{Int},
-        kernel_size::Int,
+        strides::Vector{Int},
+        kernels::Vector{Int},
+        paddings::Vector{Int},
     )
     in_channels = last(x_shape)
     img_size = first(x_shape)
 
-    num_upsample = length(gen_channels)
+    # Calculate init_spatial based on strides (count stride=2 layers)
+    num_upsample = count(s -> s == 2, strides)
     init_spatial = img_size ÷ (2^num_upsample)
     init_channels = first(gen_channels)
 
@@ -88,12 +91,11 @@ function init_pang_generator(
         push!(
             gen_conv_layers,
             Lux.ConvTranspose(
-                (kernel_size, kernel_size),
+                (kernels[i], kernels[i]),
                 prev_c => out_c,
                 act;
-                stride = 2,
-                pad = 1,
-                outpad = 1,
+                stride = strides[i],
+                pad = paddings[i],
             ),
         )
         prev_c = c

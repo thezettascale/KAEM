@@ -5,16 +5,25 @@ dataset_name = get(ENV, "DATASET", "MNIST")
 
 println("Init baseline.jl training: $model_type on $dataset_name")
 
-conf = ConfParse("config/baseline_config.ini")
+conf = Dict(
+    "MNIST" => ConfParse("config/baseline_nist_config.ini"),
+    "FMNIST" => ConfParse("config/baseline_nist_config.ini"),
+    "CIFAR10" => ConfParse("config/baseline_cifar_config.ini"),
+    "SVHN" => ConfParse("config/baseline_svhn_config.ini"),
+    "CELEBA" => ConfParse("config/baseline_celeba_config.ini"),
+)[dataset_name]
 parse_conf!(conf)
 
 include("src/baseline/baseline.jl")
 using .Baseline
 
-img_resize = nothing
-if dataset_name == "CELEBA"
-    img_resize = (64, 64)
-end
+img_resize = Dict(
+    "MNIST" => nothing,
+    "FMNIST" => nothing,
+    "CIFAR10" => (32, 32),
+    "SVHN" => (32, 32),
+    "CELEBA" => (64, 64),
+)[dataset_name]
 
 rng = Random.MersenneTwister(42)
 

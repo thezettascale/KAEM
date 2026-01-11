@@ -21,7 +21,9 @@ function init_encoder(
         x_shape::Tuple{Vararg{Int}},
         enc_channels::Vector{Int},
         latent_dim::Int,
-        kernel_size::Int,
+        strides::Vector{Int},
+        kernels::Vector{Int},
+        paddings::Vector{Int},
         batchnorm::Bool,
     )
     in_channels = last(x_shape)
@@ -32,22 +34,22 @@ function init_encoder(
 
     prev_c = in_channels
     spatial = img_size
-    for c in enc_channels
+    for (i, c) in enumerate(enc_channels)
         push!(
             enc_conv_layers,
             Lux.Conv(
-                (kernel_size, kernel_size),
+                (kernels[i], kernels[i]),
                 prev_c => c,
                 NNlib.leakyrelu;
-                stride = 2,
-                pad = 1,
+                stride = strides[i],
+                pad = paddings[i],
             ),
         )
         if batchnorm
             push!(enc_batchnorms, Lux.BatchNorm(c))
         end
         prev_c = c
-        spatial = div(spatial, 2)
+        spatial = div(spatial - kernels[i] + 2 * paddings[i], strides[i]) + 1
     end
 
     flatten_dim = prev_c * spatial * spatial
@@ -154,7 +156,9 @@ function init_decoder(
         in_channels::Int,
         dec_channels::Vector{Int},
         latent_dim::Int,
-        kernel_size::Int,
+        strides::Vector{Int},
+        kernels::Vector{Int},
+        paddings::Vector{Int},
         batchnorm::Bool,
         init_spatial::Int,
         init_channels::Int,
@@ -172,11 +176,11 @@ function init_decoder(
         push!(
             dec_conv_layers,
             Lux.ConvTranspose(
-                (kernel_size, kernel_size),
+                (kernels[i], kernels[i]),
                 prev_c => out_c,
                 act;
-                stride = 2,
-                pad = 1,
+                stride = strides[i],
+                pad = paddings[i],
             ),
         )
         if batchnorm && !is_last

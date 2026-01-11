@@ -21,13 +21,17 @@ function init_generator(
         x_shape::Tuple{Vararg{Int}},
         latent_dim::Int,
         gen_channels::Vector{Int},
-        kernel_size::Int,
+        strides::Vector{Int},
+        kernels::Vector{Int},
+        paddings::Vector{Int},
         batchnorm::Bool,
     )
     in_channels = last(x_shape)
     img_size = first(x_shape)
 
-    init_spatial = img_size ÷ (2^length(gen_channels))
+    # Calculate init_spatial based on strides (count stride=2 layers)
+    num_upsample = count(s -> s == 2, strides)
+    init_spatial = img_size ÷ (2^num_upsample)
     init_channels = first(gen_channels)
 
     project = Lux.Dense(
@@ -40,55 +44,38 @@ function init_generator(
     gen_batchnorms = Vector{Lux.BatchNorm}()
 
     prev_c = init_channels
-    for (i, c) in enumerate(gen_channels)
-        is_last = i == length(gen_channels)
-        out_c = is_last ? in_channels : c
-        act = is_last ? NNlib.tanh_fast : NNlib.relu
+    num_layers = length(strides)  # strides array includes final layer
 
-        if i > 1
-            push!(
-                gen_conv_layers,
-                Lux.ConvTranspose(
-                    (kernel_size, kernel_size),
-                    prev_c => out_c,
-                    act;
-                    stride = 2,
-                    pad = 1,
-                ),
-            )
-            if batchnorm && !is_last
-                push!(gen_batchnorms, Lux.BatchNorm(out_c))
-            end
-            prev_c = out_c
+    for i in 1:num_layers
+        is_last = i == num_layers
+        # For channel layers, use gen_channels; final layer outputs to in_channels
+        if i <= length(gen_channels)
+            out_c = gen_channels[i]
         else
-            push!(
-                gen_conv_layers,
-                Lux.ConvTranspose(
-                    (kernel_size, kernel_size),
-                    prev_c => c,
-                    NNlib.relu;
-                    stride = 2,
-                    pad = 1,
-                ),
-            )
-            if batchnorm
-                push!(gen_batchnorms, Lux.BatchNorm(c))
-            end
-            prev_c = c
+            out_c = in_channels
         end
-    end
+        if is_last
+            out_c = in_channels
+        end
 
-    # Final layer to get correct output channels, scaled to [0, 1]
-    push!(
-        gen_conv_layers,
-        Lux.ConvTranspose(
-            (kernel_size, kernel_size),
-            prev_c => in_channels,
-            x -> (NNlib.tanh_fast(x) .+ 1.0f0) ./ 2.0f0;
-            stride = 1,
-            pad = 1,
-        ),
-    )
+        act = is_last ? (x -> (NNlib.tanh_fast(x) .+ 1.0f0) ./ 2.0f0) : NNlib.relu
+
+        push!(
+            gen_conv_layers,
+            Lux.ConvTranspose(
+                (kernels[i], kernels[i]),
+                prev_c => out_c,
+                act;
+                stride = strides[i],
+                pad = paddings[i],
+            ),
+        )
+
+        if batchnorm && !is_last
+            push!(gen_batchnorms, Lux.BatchNorm(out_c))
+        end
+        prev_c = out_c
+    end
 
     return Generator(
         length(gen_conv_layers),
@@ -175,7 +162,9 @@ end
 function init_discriminator(
         x_shape::Tuple{Vararg{Int}},
         disc_channels::Vector{Int},
-        kernel_size::Int,
+        strides::Vector{Int},
+        kernels::Vector{Int},
+        paddings::Vector{Int},
         batchnorm::Bool,
     )
     in_channels = last(x_shape)
@@ -190,18 +179,18 @@ function init_discriminator(
         push!(
             disc_conv_layers,
             Lux.Conv(
-                (kernel_size, kernel_size),
+                (kernels[i], kernels[i]),
                 prev_c => c,
                 NNlib.leakyrelu;
-                stride = 2,
-                pad = 1,
+                stride = strides[i],
+                pad = paddings[i],
             ),
         )
         if batchnorm && i > 1  # No batchnorm on first layer
             push!(disc_batchnorms, Lux.BatchNorm(c))
         end
         prev_c = c
-        spatial = div(spatial, 2)
+        spatial = div(spatial - kernels[i] + 2 * paddings[i], strides[i]) + 1
     end
 
     output_dim = prev_c * spatial * spatial

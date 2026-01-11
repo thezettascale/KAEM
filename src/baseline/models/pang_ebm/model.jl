@@ -20,8 +20,10 @@ function init_PangEBM(
     )
     latent_dim = parse(Int, retrieve(conf, "PANG", "latent_dim"))
     gen_channels = parse.(Int, retrieve(conf, "PANG", "generator_channels"))
+    gen_strides = parse.(Int, retrieve(conf, "PANG", "generator_strides"))
+    gen_kernels = parse.(Int, retrieve(conf, "PANG", "generator_kernels"))
+    gen_paddings = parse.(Int, retrieve(conf, "PANG", "generator_paddings"))
     energy_widths = parse.(Int, retrieve(conf, "PANG", "energy_widths"))
-    kernel_size = parse(Int, retrieve(conf, "PANG", "kernel_size"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 
     prior_sgld_steps = parse(Int, retrieve(conf, "PANG", "prior_sgld_steps"))
@@ -30,7 +32,9 @@ function init_PangEBM(
     post_sgld_step_size = parse(Float32, retrieve(conf, "PANG", "post_sgld_step_size"))
     noise_scale = parse(Float32, retrieve(conf, "PANG", "noise_scale"))
 
-    generator = init_pang_generator(x_shape, latent_dim, gen_channels, kernel_size)
+    generator = init_pang_generator(
+        x_shape, latent_dim, gen_channels, gen_strides, gen_kernels, gen_paddings
+    )
     energy_net = init_energy_mlp(latent_dim, energy_widths)
 
     return PangEBM{Float32}(

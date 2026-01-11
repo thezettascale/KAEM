@@ -2,7 +2,7 @@ module GANLoss
 
 export GANTrainStep
 
-using Enzyme, Optimisers, Lux, Statistics, Accessors
+using Enzyme, Optimisers, Lux, Statistics, Accessors, ComponentArrays
 using Flux: logitbinarycrossentropy
 
 using ..GANArchitecture: generate, discriminate
@@ -78,7 +78,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
         ps.disc, x_real, x_fake, disc, Lux.trainmode(st.disc)
     )
     opt_state_disc, ps_disc_new = Optimisers.update(opt_state_disc, ps.disc, ∇_disc)
-    @reset ps.disc = ps_disc_new
+    @views ps[:disc] .= ps_disc_new
     @reset st.disc = st_disc_new
 
     g_loss = 0.0f0
@@ -91,7 +91,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
         )
         opt_state_gen, ps_gen_new = Optimisers.update(opt_state_gen, ps_gen_new, ∇_gen)
     end
-    @reset ps.gen = ps_gen_new
+    @views ps[:gen] .= ps_gen_new
     @reset st.gen = st_gen_new
 
     return d_loss + g_loss, ps, opt_state_gen, opt_state_disc, st

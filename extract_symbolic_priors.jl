@@ -27,7 +27,7 @@ using .ModelUtils
 
 const MODE_TRAIN_TYPE = Dict(
     "thermo" => ("Thermodynamic", "ULA"),
-    "vanilla" => ("Vanilla", "importance"),
+    "vanilla" => ("Vanilla", "ULA"), # Change for importance
     "variational" => ("Vanilla", "amortized"),
 )
 
@@ -86,6 +86,8 @@ function save_symbolic_prior(
         symbolic_params::Dict,
         prior,
         ps_ebm,
+        st_kan_ebm,
+        st_lux_ebm,
         st_quad,
         conf::ConfParse,
         dataset::String,
@@ -98,10 +100,7 @@ function save_symbolic_prior(
     save_path = joinpath(output_dir, "symbolic_prior_$(dataset)_$(mode).jld2")
     mkpath(output_dir)
 
-    # Convert any potential Reactant arrays to regular arrays
-    dist_μ = Array(ps_ebm.dist.π_μ)
-    dist_σ = Array(ps_ebm.dist.π_σ)
-
+    cpu = cpu_device()
     jldsave(
         save_path;
         symbolic_params = symbolic_params,
@@ -112,11 +111,10 @@ function save_symbolic_prior(
             "p_size" => prior.p_size,
             "depth" => prior.depth,
         ),
-        distribution_params = Dict(
-            "π_μ" => dist_μ,
-            "π_σ" => dist_σ,
-        ),
-        st_quad = cpu_device()(st_quad),
+        ps_ebm = cpu(ps_ebm),
+        st_kan_ebm = cpu(st_kan_ebm),
+        st_lux_ebm = cpu(st_lux_ebm),
+        st_quad = cpu(st_quad),
         dataset = dataset,
         mode = mode,
     )
@@ -219,6 +217,8 @@ function main(jobs_file::String = "jobs.txt")
             symbolic_params,
             result.prior,
             result.ps_ebm,
+            result.st_kan_ebm,
+            result.st_lux_ebm,
             result.st_quad,
             conf,
             dataset,

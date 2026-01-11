@@ -1,4 +1,10 @@
+module PangEBMModel
+
 export PangEBM, init_PangEBM, log_likelihood
+
+using Lux, ConfParser, Random
+
+using ..PangEBMArchitecture: PangGenerator, EnergyMLP, generate, init_pang_generator, init_energy_mlp, energy
 
 struct PangEBM{T <: Float32} <: Lux.AbstractLuxLayer
     generator::PangGenerator
@@ -74,4 +80,6 @@ end
 function (model::PangEBM)(ps, st, z)
     x_gen, st_gen = generate(model.generator, z, ps.gen, st.gen)
     return x_gen, (gen = st_gen, ebm = st.ebm)
+end
+
 end

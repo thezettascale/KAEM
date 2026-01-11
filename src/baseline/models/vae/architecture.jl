@@ -1,4 +1,10 @@
+module VAEArchitecture
+
 export VAEEncoder, VAEDecoder, VAEConfig, encode, decode
+
+using Lux, NNlib, Accessors, Random
+
+using ..Utils
 
 struct VAEConfig <: AbstractBoolConfig
     batchnorm::Bool
@@ -256,4 +262,6 @@ function decode(dec::VAEDecoder, z, ps, st)
     end
 
     return h, st_new
+end
+
 end

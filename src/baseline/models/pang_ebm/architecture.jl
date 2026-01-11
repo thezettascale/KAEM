@@ -1,6 +1,12 @@
+module PangEBMArchitecture
+
 export EnergyMLP, PangGenerator
 export init_energy_mlp, init_pang_generator
 export energy, generate
+
+using Lux, NNlib, Accessors, Random
+
+using ..Utils
 
 #= Energy MLP =#
 
@@ -149,4 +155,6 @@ function generate(gen::PangGenerator, z, ps, st)
     end
 
     return h, st_new
+end
+
 end

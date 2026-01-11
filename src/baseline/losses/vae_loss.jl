@@ -1,8 +1,13 @@
+module VAELoss
+
 export VAETrainStep
+
+using Enzyme, Optimisers, Lux, Statistics
+using Flux: mse
 
 function elbo_loss(ps, x, ε, model, st)
     x_recon, μ, logvar, st_new = model(ps, st, x, ε)
-    recon_loss = Flux.mse(x_recon, x)
+    recon_loss = mse(x_recon, x)
 
     # KL divergence (mean instead of sum for scale-invariance to latent dim)
     kl_loss = -0.5f0 * mean(1.0f0 .+ logvar .- μ .^ 2 .- exp.(logvar))
@@ -39,4 +44,6 @@ function (l::VAETrainStep)(opt_state, ps, st, x, ε)
     )
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)
     return loss, ps, opt_state, st_new
+end
+
 end

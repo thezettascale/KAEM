@@ -1,6 +1,12 @@
+module DDPMArchitecture
+
 export TimeEmbedding, DownBlock, UpBlock, UNet, DDPMConfig
 export init_time_embedding, init_down_block, init_up_block
 export apply_down_block, apply_up_block, sinusoidal_embedding
+
+using Lux, NNlib, Accessors, Random
+
+using ..Utils
 
 struct DDPMConfig <: AbstractBoolConfig
     batchnorm::Bool
@@ -361,4 +367,6 @@ function (unet::UNet)(x_noisy, t, ps, st)
     @reset st_new.final_conv = st_fc
 
     return noise_pred, st_new
+end
+
 end

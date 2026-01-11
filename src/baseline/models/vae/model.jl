@@ -1,4 +1,10 @@
+module VAEModel
+
 export VAE, init_VAE, sample, reparameterize
+
+using Lux, ConfParser, Random
+
+using ..VAEArchitecture: VAEEncoder, VAEDecoder, encode, decode, init_encoder, init_decoder
 
 struct VAE{T <: Float32} <: Lux.AbstractLuxLayer
     encoder::VAEEncoder
@@ -68,4 +74,6 @@ end
 function sample(model::VAE, ps, st, z)
     x_gen, st_dec = decode(model.decoder, z, ps.dec, st.dec)
     return x_gen, st_dec
+end
+
 end

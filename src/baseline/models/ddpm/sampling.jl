@@ -1,4 +1,11 @@
+module DDPMSampling
+
 export q_sample, p_sample, sample_loop, seed_ddpm_sample_rng
+
+using Lux, Random
+
+using ..Utils
+using ..DDPMModel: DDPM
 
 function q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
     return sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
@@ -85,4 +92,6 @@ function sample_loop(model::DDPM, ps, st, st_rng)
     end
 
     return clamp.(x, 0.0f0, 1.0f0), st_current
+end
+
 end

@@ -1,4 +1,19 @@
+module TrainingSetup
+
 export prep_vae, prep_gan, prep_ddpm, prep_pang
+
+using Lux, ComponentArrays, Optimisers, Reactant, Random
+
+using ..Utils
+using ..VAEModel: VAE
+using ..GANModel: GAN
+using ..DDPMModel: DDPM
+using ..PangEBMModel: PangEBM
+using ..VAELoss: VAETrainStep
+using ..GANLoss: GANTrainStep
+using ..DDPMLoss: DDPMTrainStep
+using ..PangLoss: PangTrainStep
+using ..PangEBMSampling: seed_pang_rng
 
 function prep_vae(
         model::VAE{T},
@@ -114,4 +129,6 @@ function prep_pang(
     end
 
     return model, compiled_step, opt_state, ps, st
+end
+
 end

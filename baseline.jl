@@ -15,7 +15,7 @@ conf = Dict(
 parse_conf!(conf)
 
 include("src/baseline/baseline.jl")
-using .Baseline
+using .Baseline.BaselineTrainer: init_baseline_trainer, train!
 
 img_resize = Dict(
     "MNIST" => nothing,

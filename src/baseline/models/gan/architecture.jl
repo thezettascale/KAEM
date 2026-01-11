@@ -1,4 +1,10 @@
+module GANArchitecture
+
 export Generator, Discriminator, GANConfig, generate, discriminate
+
+using Lux, NNlib, Accessors, Random
+
+using ..Utils
 
 struct GANConfig <: AbstractBoolConfig
     batchnorm::Bool
@@ -265,4 +271,6 @@ function discriminate(disc::Discriminator, x, ps, st)
     @reset st_new.output = st_out
 
     return logits, st_new
+end
+
 end

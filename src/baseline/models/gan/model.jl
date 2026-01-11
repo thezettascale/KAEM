@@ -1,4 +1,10 @@
+module GANModel
+
 export GAN, init_GAN
+
+using Lux, ConfParser, Random
+
+using ..GANArchitecture: Generator, Discriminator, generate, init_generator, init_discriminator
 
 struct GAN{T <: Float32} <: Lux.AbstractLuxLayer
     generator::Generator
@@ -52,4 +58,6 @@ end
 function (model::GAN)(ps, st, z)
     x_gen, st_gen = generate(model.generator, z, ps.gen, st.gen)
     return x_gen, (gen = st_gen, disc = st.disc)
+end
+
 end

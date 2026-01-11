@@ -1,4 +1,12 @@
+module PangEBMSampling
+
 export seed_pang_rng, langevin_prior, langevin_posterior, generate_pang
+
+using Lux, Random, Enzyme
+
+using ..Utils
+using ..PangEBMModel: PangEBM, log_likelihood
+using ..PangEBMArchitecture: energy
 
 # Pre-generate all RNG
 function seed_pang_rng(
@@ -88,4 +96,6 @@ function generate_pang(model::PangEBM, ps, st, st_rng)
     z = langevin_prior(model, ps, st, st_rng)
     x_gen, st_new = model(ps, st, z)
     return x_gen, st_new
+end
+
 end

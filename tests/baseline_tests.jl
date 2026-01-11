@@ -1,18 +1,24 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Reactant, Optimisers, Statistics
 using MLDataDevices: cpu_device
 
-ENV["GPU"] = true
+ENV["DEVICE"] = "gpu"
 
 include("../src/baseline/baseline.jl")
-using .Baseline
+using .Baseline.VAEModel: VAE, init_VAE, sample
+using .Baseline.GANModel: GAN, init_GAN
+using .Baseline.DDPMModel: DDPM, init_DDPM
+using .Baseline.GANArchitecture: discriminate
+using .Baseline.DDPMSampling: q_sample
+using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
+using .Baseline.Utils: pu
 
 conf = ConfParse("tests/baseline_conf.ini")
 parse_conf!(conf)
 
 rng = Random.MersenneTwister(42)
 
-include("../src/utils.jl")
-using .Utils
+include("../src/pipeline/optimizer.jl")
+using .optimization: create_opt
 
 optimizer = create_opt(conf)
 
@@ -60,17 +66,16 @@ function test_gan()
         model, x_real, optimizer.rule(), optimizer.rule(); rng = rng
     )
 
-    ps_before_gen = Array(ps.gen)
-    ps_before_disc = Array(ps.disc)
+    ps_before = Array(ps)
     z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
     loss, ps_new, _, _, _ = train_step(
         opt_state_gen, opt_state_disc, ps, st, x_real, z, 1
     )
 
-    ps_new_cpu = cpu_device()(ps_new)
+    ps_new_cpu = Array(ps_new)
     @test !isnan(Float32(loss))
-    @test any(Array(ps_new_cpu.gen) .!= ps_before_gen) || any(Array(ps_new_cpu.disc) .!= ps_before_disc)
-    return @test !any(isnan, Array(ps_new_cpu.gen)) && !any(isnan, Array(ps_new_cpu.disc))
+    @test any(ps_new_cpu .!= ps_before)
+    return @test !any(isnan, ps_new_cpu)
 end
 
 function test_gan_disc()

@@ -1,4 +1,10 @@
+module DDPMModel
+
 export DDPM, init_DDPM
+
+using Lux, ConfParser, Random
+
+using ..DDPMArchitecture: UNet, init_unet
 
 struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     unet::UNet
@@ -63,4 +69,6 @@ end
 
 function (model::DDPM)(x_noisy, t, ps, st)
     return model.unet(x_noisy, t, ps, st)
+end
+
 end

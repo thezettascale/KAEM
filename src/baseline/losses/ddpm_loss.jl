@@ -1,4 +1,11 @@
+module DDPMLoss
+
 export DDPMTrainStep
+
+using Enzyme, Optimisers, Lux, Statistics
+using Flux: mse
+
+using ..Utils
 
 function noise_pred_loss(
         ps,
@@ -10,9 +17,9 @@ function noise_pred_loss(
         model,
         st,
     )
-    x_noisy = q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    x_noisy = sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
     noise_pred, st_new = model(x_noisy, t, ps, Lux.trainmode(st))
-    loss = Flux.mse(noise, noise_pred)
+    loss = mse(noise, noise_pred)
     return loss, st_new
 end
 
@@ -102,4 +109,6 @@ function (l::DDPMTrainStep)(
     )
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)
     return loss, ps, opt_state, st_new
+end
+
 end

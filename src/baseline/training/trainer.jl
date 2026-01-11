@@ -1,11 +1,27 @@
+module BaselineTrainer
+
 export VAETrainer, GANTrainer, DDPMTrainer, PangEBMTrainer
 export init_baseline_trainer, train!
+
+using Lux, ComponentArrays, ConfParser, Random, Reactant, Optimisers
+using Statistics, Flux, HDF5, JLD2, MLDataDevices
+using Base: time
 
 include("../../pipeline/data_utils.jl")
 using .DataUtils: get_vision_dataset
 
 include("../../pipeline/optimizer.jl")
 using .optimization
+
+using ..Utils
+using ..VAEModel: VAE, init_VAE, sample
+using ..GANModel: GAN, init_GAN
+using ..DDPMModel: DDPM, init_DDPM
+using ..PangEBMModel: PangEBM, init_PangEBM
+using ..GANArchitecture: generate
+using ..DDPMSampling: sample_loop, seed_ddpm_sample_rng
+using ..PangEBMSampling: generate_pang, seed_pang_rng
+using ..TrainingSetup: prep_vae, prep_gan, prep_ddpm, prep_pang
 
 abstract type AbstractBaselineTrainer end
 
@@ -505,4 +521,6 @@ function generate_and_save_pang(t::PangEBMTrainer, epoch; final::Bool = false)
         rm(t.file_loc * filename)
         h5write(t.file_loc * filename, "samples", gen_data)
     end
+end
+
 end

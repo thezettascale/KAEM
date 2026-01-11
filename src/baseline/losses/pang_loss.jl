@@ -1,4 +1,12 @@
+module PangLoss
+
 export PangTrainStep
+
+using Enzyme, Optimisers, Lux, Statistics
+using Flux: mse
+
+using ..PangEBMArchitecture: energy, generate
+using ..PangEBMSampling: langevin_prior, langevin_posterior
 
 function pang_loss(ps, x, z_prior, z_post, model, st)
     E_post, _ = energy(model.energy_net, z_post, ps.ebm, st.ebm)
@@ -9,7 +17,7 @@ function pang_loss(ps, x, z_prior, z_post, model, st)
 
     # Reconstruction loss from posterior samples
     x_recon, _ = generate(model.generator, z_post, ps.gen, st.gen)
-    recon_loss = Flux.mse(x_recon, x)
+    recon_loss = mse(x_recon, x)
     return recon_loss, cd_loss
 end
 
@@ -54,4 +62,6 @@ function (l::PangTrainStep)(opt_state, ps, st, x, st_rng)
 
     opt_state, ps = Optimisers.update(opt_state, ps, ∇)
     return loss, ps, opt_state, st
+end
+
 end

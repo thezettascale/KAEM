@@ -1,4 +1,4 @@
-.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results format lint logs clear-logs julia-setup help baseline baseline-vae baseline-gan baseline-ddpm baseline-pang baseline-all
+.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results extract-symbolic format lint logs clear-logs julia-setup help baseline baseline-vae baseline-gan baseline-ddpm baseline-pang baseline-all
 
 ENV_NAME = KAEM
 CONDA_BASE := $(shell conda info --base 2>/dev/null || echo "")
@@ -9,6 +9,7 @@ MODE ?= thermo
 NUM_DEVICES ?= auto
 MODEL ?= vae
 DEVICE ?= 0
+CONFIG ?= jobs.txt
 
 XLA_REACTANT_GPU_MEM_FRACTION ?= 0.9
 XLA_REACTANT_GPU_PREALLOCATE ?= true
@@ -48,6 +49,7 @@ help:
 	@echo "  baseline-all  - Train all baselines on dataset (use: make baseline-all DATASET=CIFAR10)"
 	@echo "  plot          - Run all plotting scripts"
 	@echo "  plot-results  - Run only results plotting scripts"
+	@echo "  extract-symbolic - Extract symbolic priors from trained models (use: make extract-symbolic CONFIG=jobs.txt)"
 	@echo "  logs          - View latest test log"
 	@echo "  clear-logs    - Remove all log files"
 	@echo "  julia-setup   - Install Julia dependencies"
@@ -184,6 +186,13 @@ plot-results:
 	@echo "Running results plotting scripts..."
 	@$(call conda_run,find plotting/results/ -name "*.py" -exec python {} \; 2>&1 | tee logs/plotting_results_$(shell date +%Y%m%d_%H%M%S).log)
 	@echo "Results plotting completed! Log file: logs/plotting_results_$(shell date +%Y%m%d_%H%M%S).log"
+
+extract-symbolic:
+	@mkdir -p logs figures/symbolic_priors
+	@echo "Extracting symbolic priors from trained models..."
+	@echo "Reading jobs from: $(CONFIG)"
+	@$(call conda_run,julia --project=. --threads=auto extract_symbolic_priors.jl $(CONFIG) 2>&1 | tee logs/extract_symbolic_$(shell date +%Y%m%d_%H%M%S).log)
+	@echo "Finished, figs in figures/symbolic_priors/"
 
 julia-setup:
 	@echo "Installing Julia dependencies..."

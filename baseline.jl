@@ -3,7 +3,7 @@ using ConfParser, Random
 model_type = Symbol(lowercase(get(ENV, "MODEL", "vae")))
 dataset_name = get(ENV, "DATASET", "MNIST")
 
-println("Init baseline.jl training: $model_type on $dataset_name")
+println("Init baseline training: $model_type on $dataset_name")
 
 conf = Dict(
     "MNIST" => ConfParse("config/baseline_nist_config.ini"),
@@ -14,8 +14,8 @@ conf = Dict(
 )[dataset_name]
 parse_conf!(conf)
 
-include("src/baseline/baseline.jl")
-using .Baseline.BaselineTrainer: init_baseline_trainer, train!
+include("src/baseline/training/trainer.jl")
+using .Baseline: init_trainer, train!
 
 img_resize = Dict(
     "MNIST" => nothing,
@@ -28,7 +28,7 @@ img_resize = Dict(
 rng = Random.MersenneTwister(42)
 
 println("Initializing $model_type trainer for $dataset_name...")
-trainer = init_baseline_trainer(
+trainer = init_trainer(
     model_type,
     conf,
     dataset_name;

@@ -3,7 +3,7 @@ using MLDataDevices: cpu_device
 
 ENV["DEVICE"] = "gpu"
 
-include("../src/baseline/baseline.jl")
+include("../src/baseline/training/trainer.jl")
 using .Baseline.VAEModel: VAE, init_VAE, sample
 using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM

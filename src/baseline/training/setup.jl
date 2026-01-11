@@ -31,12 +31,12 @@ function prep_vae(
 
     ε = randn(rng, T, model.latent_dim, model.batch_size) |> pu
 
-    train_step = VAETrainStep(model, β)
+    static_loss = VAETrainStep(model, β)
 
     compiled_step = if MLIR
-        Reactant.@compile train_step(opt_state, ps, st, x, ε)
+        Reactant.@compile static_loss(opt_state, ps, st, x, ε)
     else
-        train_step
+        static_loss
     end
 
     return model, compiled_step, opt_state, ps, st

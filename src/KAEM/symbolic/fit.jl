@@ -4,7 +4,6 @@ export SymFitter
 
 using Statistics,
     LinearAlgebra,
-    SymPyPythonCall,
     ComponentArrays,
     Optimization,
     OptimizationNLopt,
@@ -13,6 +12,14 @@ using Statistics,
     ConfParser,
     Lux,
     Reactant
+
+# Conditionally load SymPyPythonCall (only needed for symbolic fitting)
+const SYMPY_AVAILABLE = try
+    @eval using SymPyPythonCall
+    true
+catch
+    false
+end
 
 using ..Utils
 using ..SymbolicLibrary

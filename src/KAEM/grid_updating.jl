@@ -75,7 +75,7 @@ function (gu::GridUpdater)(
     if gu.update_prior_grid
 
         if model.N_t > 1
-            temps = collect(Float32, [(k / model.N_t)^model.p[train_idx] for k in 1:model.N_t])
+            temps = collect(Float32, [(k / model.N_t)^model.train_step.p[train_idx] for k in 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     ps,
@@ -201,7 +201,7 @@ function (gu::GridUpdater)(
     # Only update if KAN-type generator requires
     if gu.update_llhood_grid
         if model.N_t > 1
-            temps = collect(Float32, [(k / model.N_t)^model.p[train_idx] for k in 1:model.N_t])
+            temps = collect(Float32, [(k / model.N_t)^model.train_step.p[train_idx] for k in 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     ps,

@@ -2,7 +2,15 @@ module SymbolicLibrary
 
 export SYMB_LIB
 
-using LinearAlgebra, SymPyPythonCall
+using LinearAlgebra
+
+# Conditionally load SymPyPythonCall (not needed for core functionality)
+const SYMPY_AVAILABLE = try
+    @eval using SymPyPythonCall
+    true
+catch
+    false
+end
 
 nan_to_num = function (x)
     x = ifelse.(isnan.(x), zero(x), x)

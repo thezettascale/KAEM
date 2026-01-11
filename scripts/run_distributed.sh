@@ -117,6 +117,9 @@ run_baseline_julia() {
     export JULIA_NUM_THREADS=auto
     export CUDA_VISIBLE_DEVICES="$device"
 
+    # Skip CondaPkg resolution to avoid loading SymPy deps for baseline
+    export JULIA_CONDAPKG_OFFLINE=yes
+
     MODEL="$model" DATASET="$DATASET" julia --project=. --threads=auto baseline.jl
 }
 

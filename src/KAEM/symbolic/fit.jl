@@ -178,21 +178,25 @@ function (sf::SymFitter)(
         y = kan_func(z[:, 1, :], ps, st_kan)
     end
 
-    i = 1
     z = repeat(z, 1, O, 1)
-    R2_list = zeros(Float32, I, O, length(sf.lib))
-    α_list = zeros(Float32, I, O, length(sf.lib))
-    β_list = zeros(Float32, I, O, length(sf.lib))
-    w_list = zeros(Float32, I, O, length(sf.lib))
-    b_list = zeros(Float32, I, O, length(sf.lib))
-    for (name, sym) in sf.lib
+    lib_items = collect(sf.lib)
+    num_funcs = length(lib_items)
+    R2_list = zeros(Float32, I, O, num_funcs)
+    α_list = zeros(Float32, I, O, num_funcs)
+    β_list = zeros(Float32, I, O, num_funcs)
+    w_list = zeros(Float32, I, O, num_funcs)
+    b_list = zeros(Float32, I, O, num_funcs)
+
+    Threads.@threads for i in 1:num_funcs
+        name, sym = lib_items[i]
+        thread_rng = Random.MersenneTwister(i)
         R2, α, β, w, b = fit_symbolic(
             z,
             y,
             sym[1],
             I,
             O;
-            rng = rng,
+            rng = thread_rng,
             param_lower_bound = sf.lb,
             param_upper_bound = sf.ub,
             max_iters = sf.max_iters
@@ -202,7 +206,6 @@ function (sf::SymFitter)(
         β_list[:, :, i] .= β
         w_list[:, :, i] .= w
         b_list[:, :, i] .= b
-        i += 1
     end
 
     fit = Dict()

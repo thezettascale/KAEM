@@ -17,7 +17,8 @@ export pu,
     get_q_size,
     validate_generator_widths,
     init_optional_params,
-    init_optional_states
+    init_optional_states,
+    compute_p
 
 using Lux, LinearAlgebra, Statistics, Random, Accessors, NNlib, Reactant
 using MLDataDevices: reactant_device
@@ -195,6 +196,13 @@ function init_optional_states(rng, layers, enabled::Bool)
         symbol_map[i] => Lux.initialstates(rng, layers[i]) |> Lux.f32
             for i in 1:length(layers)
     )
+end
+
+# Cosine annealing
+function compute_p(model, train_idx::Int)::Float32
+    t_i = 2.0f0 * Float32(π) * (model.p_num_cycles + 0.5f0) *
+        Float32(train_idx - 1) / Float32(model.num_param_updates)
+    return model.p_start + (model.p_end - model.p_start) * 0.5f0 * (1.0f0 - cos(t_i))
 end
 
 end

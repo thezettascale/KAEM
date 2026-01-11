@@ -19,7 +19,6 @@ struct GridUpdater
     update_prior_grid
     update_llhood_grid
     nogrid_prior
-    p
 end
 
 function GridUpdater(model, conf::ConfParse)
@@ -36,19 +35,6 @@ function GridUpdater(model, conf::ConfParse)
     nogrid_prior = prior_func == "FFT" || prior_func == "Cheby"
     nogrid_gen = gen_func == "FFT" || gen_func == "Cheby"
 
-    p = nothing
-    if model.N_t > 1
-        num_param_updates =
-            parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(model.train_loader)
-        initial_p =
-            parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
-        end_p = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
-        num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
-
-        t = range(0, stop = 2 * π * (num_cycles + 0.5), length = num_param_updates + 1)
-        p = initial_p .+ (end_p - initial_p) .* 0.5f0 .* (1.0f0 .- cos.(t)) .|> Float32
-    end
-
     return GridUpdater(
         model,
         grid_update_frequency,
@@ -56,7 +42,6 @@ function GridUpdater(model, conf::ConfParse)
         update_prior_grid,
         update_llhood_grid && !model.lkhood.CNN && !model.lkhood.SEQ && !nogrid_gen,
         nogrid_prior,
-        p,
     )
 end
 
@@ -90,7 +75,7 @@ function (gu::GridUpdater)(
     if gu.update_prior_grid
 
         if model.N_t > 1
-            temps = collect(Float32, [(k / model.N_t)^gu.p[train_idx] for k in 1:model.N_t])
+            temps = collect(Float32, [(k / model.N_t)^compute_p(model, train_idx) for k in 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     ps,
@@ -216,7 +201,7 @@ function (gu::GridUpdater)(
     # Only update if KAN-type generator requires
     if gu.update_llhood_grid
         if model.N_t > 1
-            temps = collect(Float32, [(k / model.N_t)^gu.p[train_idx] for k in 1:model.N_t])
+            temps = collect(Float32, [(k / model.N_t)^compute_p(model, train_idx) for k in 1:model.N_t])
             z = first(
                 model.posterior_sampler(
                     ps,

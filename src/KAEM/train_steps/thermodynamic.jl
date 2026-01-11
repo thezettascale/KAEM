@@ -204,7 +204,6 @@ end
 
 struct ThermoLoss
     model
-    p::AbstractArray{Float32}
 end
 
 function (l::ThermoLoss)(
@@ -223,8 +222,7 @@ function (l::ThermoLoss)(
         l.model,
         x,
         st_rng,
-        l.p[train_idx]
-        ,
+        compute_p(l.model, train_idx),
     )
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm =

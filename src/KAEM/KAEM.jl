@@ -61,6 +61,10 @@ struct KAEM{T <: Float32} <: Lux.AbstractLuxLayer
     original_data_size::Tuple
     kan_regularizer::Any
     variational::Bool
+    p_start::T
+    p_end::T
+    p_num_cycles::Int
+    num_param_updates::Int
 end
 
 function init_KAEM(
@@ -130,13 +134,20 @@ function init_KAEM(
     num_steps = parse(Int, retrieve(conf, "POST_LANGEVIN", "iters"))
     MALA = parse(Bool, retrieve(conf, "POST_LANGEVIN", "use_langevin"))
 
+    # Thermo scheduling
     N_t = max(N_t, 1)
+    N_epochs = parse(Int, retrieve(conf, "TRAINING", "N_epochs"))
+    p_start = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_start"))
+    p_end = parse(Float32, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "p_end"))
+    p_num_cycles = parse(Int, retrieve(conf, "THERMODYNAMIC_INTEGRATION", "num_cycles"))
 
     sample_prior =
         (m, n, p, sk, sl, r) ->
     sample_univariate(m.prior, n, p.ebm, sk.ebm, sl.ebm, sk.quad, r)
 
     verbose && println("Using $(Threads.nthreads()) threads.")
+
+    num_param_updates = N_epochs * length(train_loader)
 
     return KAEM(
         prior_model,
@@ -161,6 +172,10 @@ function init_KAEM(
         original_data_size,
         Regularizer(conf, lkhood_model.CNN, lkhood_model.SEQ),
         variational,
+        p_start,
+        p_end,
+        p_num_cycles,
+        num_param_updates,
     )
 end
 

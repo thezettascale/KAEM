@@ -92,14 +92,12 @@ function init_pang_generator(
 
     for (i, c) in enumerate(gen_channels)
         is_last = i == length(gen_channels)
-        act = is_last ? NNlib.sigmoid : NNlib.leakyrelu
         out_c = is_last ? in_channels : c
         push!(
             gen_conv_layers,
             Lux.ConvTranspose(
                 (kernels[i], kernels[i]),
-                prev_c => out_c,
-                act;
+                prev_c => out_c;
                 stride = strides[i],
                 pad = paddings[i],
             ),
@@ -152,6 +150,13 @@ function generate(gen::PangGenerator, z, ps, st)
             gen.conv_layers[i], h, ps.conv[symbol_map[i]], st.conv[symbol_map[i]]
         )
         @reset st_new.conv[symbol_map[i]] = st_layer
+
+        is_last = i == gen.depth
+        if is_last
+            h = NNlib.sigmoid(h)
+        else
+            h = NNlib.leakyrelu(h)
+        end
     end
 
     return h, st_new

@@ -45,14 +45,13 @@ function init_encoder(
             enc_conv_layers,
             Lux.Conv(
                 (kernels[i], kernels[i]),
-                prev_c => c,
-                NNlib.leakyrelu;
+                prev_c => c;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
         if batchnorm
-            push!(enc_batchnorms, Lux.BatchNorm(c))
+            push!(enc_batchnorms, Lux.BatchNorm(c, NNlib.leakyrelu))
         end
         prev_c = c
         spatial = div(spatial - kernels[i] + 2 * paddings[i], strides[i]) + 1
@@ -130,6 +129,8 @@ function encode(enc::VAEEncoder, x, ps, st)
                 enc.batchnorms[i], h, ps.batchnorm[symbol_map[i]], st.batchnorm[symbol_map[i]]
             )
             @reset st_new.batchnorm[symbol_map[i]] = st_bn
+        else
+            h = NNlib.leakyrelu(h)
         end
     end
 
@@ -177,20 +178,18 @@ function init_decoder(
     prev_c = init_channels
     for (i, c) in enumerate(dec_channels)
         is_last = i == length(dec_channels)
-        act = is_last ? NNlib.sigmoid : NNlib.relu
         out_c = is_last ? in_channels : c
         push!(
             dec_conv_layers,
             Lux.ConvTranspose(
                 (kernels[i], kernels[i]),
-                prev_c => out_c,
-                act;
+                prev_c => out_c;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
         if batchnorm && !is_last
-            push!(dec_batchnorms, Lux.BatchNorm(out_c))
+            push!(dec_batchnorms, Lux.BatchNorm(out_c, NNlib.relu))
         end
         prev_c = c
     end
@@ -253,11 +252,16 @@ function decode(dec::VAEDecoder, z, ps, st)
         )
         @reset st_new.conv[symbol_map[i]] = st_layer
 
-        if dec.bool_config.batchnorm && i < dec.depth
+        is_last = i == dec.depth
+        if dec.bool_config.batchnorm && !is_last
             h, st_bn = Lux.apply(
                 dec.batchnorms[i], h, ps.batchnorm[symbol_map[i]], st.batchnorm[symbol_map[i]]
             )
             @reset st_new.batchnorm[symbol_map[i]] = st_bn
+        elseif !is_last
+            h = NNlib.relu(h)
+        else
+            h = NNlib.sigmoid(h)
         end
     end
 

@@ -71,8 +71,8 @@ end
 
 function init_down_block(in_c::Int, out_c::Int, time_dim::Int, kernel_size::Int)
     return DownBlock(
-        Lux.Conv((kernel_size, kernel_size), in_c => out_c, NNlib.gelu; pad = 1),
-        Lux.Conv((kernel_size, kernel_size), out_c => out_c, NNlib.gelu; pad = 1),
+        Lux.Conv((kernel_size, kernel_size), in_c => out_c; pad = 1),
+        Lux.Conv((kernel_size, kernel_size), out_c => out_c; pad = 1),
         Lux.Dense(time_dim, out_c),
         Lux.GroupNorm(out_c, min(8, out_c)),
         Lux.GroupNorm(out_c, min(8, out_c)),
@@ -86,6 +86,7 @@ function apply_down_block(block::DownBlock, h, t_emb, ps, st)
 
     h, st_c1 = Lux.apply(block.conv1, h, ps.conv1, st.conv1)
     @reset st_new.conv1 = st_c1
+    h = NNlib.gelu(h)
 
     t_proj, st_tp = Lux.apply(block.time_proj, t_emb, ps.time_proj, st.time_proj)
     @reset st_new.time_proj = st_tp
@@ -99,6 +100,7 @@ function apply_down_block(block::DownBlock, h, t_emb, ps, st)
 
     h, st_n2 = Lux.apply(block.norm2, h, ps.norm2, st.norm2)
     @reset st_new.norm2 = st_n2
+    h = NNlib.gelu(h)
 
     h_down, st_ds = Lux.apply(block.downsample, h, ps.downsample, st.downsample)
     @reset st_new.downsample = st_ds
@@ -122,14 +124,12 @@ function init_up_block(in_c::Int, out_c::Int, skip_c::Int, time_dim::Int, kernel
     return UpBlock(
         Lux.Conv(
             (kernel_size, kernel_size),
-            in_c + skip_c => out_c,
-            NNlib.gelu;
+            in_c + skip_c => out_c;
             pad = 1
         ),
         Lux.Conv(
             (kernel_size, kernel_size),
-            out_c => out_c,
-            NNlib.gelu;
+            out_c => out_c;
             pad = 1
         ),
         Lux.Dense(time_dim, out_c),
@@ -155,6 +155,7 @@ function apply_up_block(block::UpBlock, h, skip, t_emb, ps, st)
 
     h, st_c1 = Lux.apply(block.conv1, h, ps.conv1, st.conv1)
     @reset st_new.conv1 = st_c1
+    h = NNlib.gelu(h)
 
     t_proj, st_tp = Lux.apply(block.time_proj, t_emb, ps.time_proj, st.time_proj)
     @reset st_new.time_proj = st_tp
@@ -168,6 +169,7 @@ function apply_up_block(block::UpBlock, h, skip, t_emb, ps, st)
 
     h, st_n2 = Lux.apply(block.norm2, h, ps.norm2, st.norm2)
     @reset st_new.norm2 = st_n2
+    h = NNlib.gelu(h)
 
     return h, st_new
 end
@@ -194,7 +196,7 @@ function init_unet(
         time_dim::Int,
     )
     time_embed = init_time_embedding(time_dim, time_dim * 4)
-    init_conv = Lux.Conv((3, 3), in_channels => first(channels), NNlib.gelu; pad = 1)
+    init_conv = Lux.Conv((3, 3), in_channels => first(channels); pad = 1)
 
     # Down blocks
     down_blocks = Vector{DownBlock}()
@@ -208,14 +210,12 @@ function init_unet(
     mid_c = last(channels)
     mid_conv1 = Lux.Conv(
         (kernel_size, kernel_size),
-        mid_c => mid_c,
-        NNlib.gelu;
+        mid_c => mid_c;
         pad = 1
     )
     mid_conv2 = Lux.Conv(
         (kernel_size, kernel_size),
-        mid_c => mid_c,
-        NNlib.gelu;
+        mid_c => mid_c;
         pad = 1
     )
     mid_norm = Lux.GroupNorm(mid_c, min(8, mid_c))
@@ -332,6 +332,7 @@ function (unet::UNet)(x_noisy, t, ps, st)
     # Initial conv
     h, st_ic = Lux.apply(unet.init_conv, x_noisy, ps.init_conv, st.init_conv)
     @reset st_new.init_conv = st_ic
+    h = NNlib.gelu(h)
 
     # Down path with skip connections
     skips = Vector{typeof(h)}()
@@ -346,12 +347,14 @@ function (unet::UNet)(x_noisy, t, ps, st)
     # Middle
     h, st_mc1 = Lux.apply(unet.mid_conv1, h, ps.mid_conv1, st.mid_conv1)
     @reset st_new.mid_conv1 = st_mc1
+    h = NNlib.gelu(h)
 
     h, st_mn = Lux.apply(unet.mid_norm, h, ps.mid_norm, st.mid_norm)
     @reset st_new.mid_norm = st_mn
 
     h, st_mc2 = Lux.apply(unet.mid_conv2, h, ps.mid_conv2, st.mid_conv2)
     @reset st_new.mid_conv2 = st_mc2
+    h = NNlib.gelu(h)
 
     # Up path
     for i in 1:unet.num_up

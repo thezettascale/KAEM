@@ -64,21 +64,18 @@ function init_generator(
             out_c = in_channels
         end
 
-        act = is_last ? (x -> (NNlib.tanh_fast(x) .+ 1.0f0) ./ 2.0f0) : NNlib.relu
-
         push!(
             gen_conv_layers,
             Lux.ConvTranspose(
                 (kernels[i], kernels[i]),
-                prev_c => out_c,
-                act;
+                prev_c => out_c;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
 
         if batchnorm && !is_last
-            push!(gen_batchnorms, Lux.BatchNorm(out_c))
+            push!(gen_batchnorms, Lux.BatchNorm(out_c, NNlib.relu))
         end
         prev_c = out_c
     end
@@ -142,13 +139,18 @@ function generate(gen::Generator, z, ps, st)
         )
         @reset st_new.conv[symbol_map[i]] = st_layer
 
-        if gen.bool_config.batchnorm && bn_idx <= length(gen.batchnorms) && i < gen.depth
+        is_last = i == gen.depth
+        if gen.bool_config.batchnorm && bn_idx <= length(gen.batchnorms) && !is_last
             h, st_bn = Lux.apply(
                 gen.batchnorms[bn_idx], h,
                 ps.batchnorm[symbol_map[bn_idx]], st.batchnorm[symbol_map[bn_idx]]
             )
             @reset st_new.batchnorm[symbol_map[bn_idx]] = st_bn
             bn_idx += 1
+        elseif !is_last
+            h = NNlib.relu(h)
+        else
+            h = (NNlib.tanh_fast(h) .+ 1.0f0) ./ 2.0f0
         end
     end
 
@@ -186,14 +188,13 @@ function init_discriminator(
             disc_conv_layers,
             Lux.Conv(
                 (kernels[i], kernels[i]),
-                prev_c => c,
-                NNlib.leakyrelu;
+                prev_c => c;
                 stride = strides[i],
                 pad = paddings[i],
             ),
         )
         if batchnorm && i > 1  # No batchnorm on first layer
-            push!(disc_batchnorms, Lux.BatchNorm(c))
+            push!(disc_batchnorms, Lux.BatchNorm(c, NNlib.leakyrelu))
         end
         prev_c = c
         spatial = div(spatial - kernels[i] + 2 * paddings[i], strides[i]) + 1
@@ -263,6 +264,8 @@ function discriminate(disc::Discriminator, x, ps, st)
             )
             @reset st_new.batchnorm[symbol_map[bn_idx]] = st_bn
             bn_idx += 1
+        else
+            h = NNlib.leakyrelu(h)
         end
     end
 

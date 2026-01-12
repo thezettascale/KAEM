@@ -321,14 +321,16 @@ function call_train_step(t::Trainer, batch_args)
     end
 end
 
-function compute_test_loss(t::Trainer, model_compiled)
+image_test_loss(x, x_recon) = Flux.mse(x, x_recon)
+
+function compute_test_loss(t::Trainer, model_compiled, test_step_compiled)
     if typeof(t.model) <: VAE
         test_loss = 0.0f0
         for x in t.test_loader
             x = pu(x)
-            ε = randn(t.rng, Float32, t.model.latent_dim, size(x, 4)) |> pu
-            x_recon, _, _, _ = model_compiled(t.ps, Lux.testmode(t.st), x, ε)
-            test_loss += Flux.mse(x, Array(x_recon))
+            ε = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
+            x_recon = first(model_compiled(t.ps, Lux.testmode(t.st), x, ε))
+            test_loss += test_step_compiled(x, x_recon) |> Float32
         end
         return test_loss / length(t.test_loader)
     else
@@ -439,14 +441,19 @@ function train!(t::Trainer)
 
     if typeof(t.model) <: VAE
         x_sample = first(t.train_loader) |> pu
-        ε_sample = randn(t.rng, Float32, t.model.latent_dim, size(x_sample, 4)) |> pu
+        ε_sample = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
+
         model_compiled = Reactant.@compile t.model(
             t.ps,
             Lux.testmode(t.st),
             x_sample,
             ε_sample
         )
-        compute_test = (t) -> compute_test_loss(t, model_compiled)
+
+        x_recon_sample = first(model_compiled(t.ps, Lux.testmode(t.st), x_sample, ε_sample))
+        test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_recon_sample)
+
+        compute_test = (t) -> compute_test_loss(t, model_compiled, test_step_compiled)
     elseif typeof(t.model) <: GAN
         train_idx_start = 1
     end

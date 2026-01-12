@@ -323,14 +323,13 @@ end
 
 image_test_loss(x, x_recon) = Flux.mse(x, x_recon)
 
-function compute_test_loss(t::Trainer, model_compiled, test_step_compiled)
+function compute_test_loss(t::Trainer, test_step_compiled)
     if typeof(t.model) <: VAE
         test_loss = 0.0f0
         for x in t.test_loader
             x = pu(x)
-            ε = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-            x_recon = first(model_compiled(t.ps, Lux.testmode(t.st), x, ε))
-            test_loss += test_step_compiled(x, x_recon) |> Float32
+            x_gen = generate_batch(t)
+            test_loss += test_step_compiled(x, x_gen) |> Float32
             GC.gc()
         end
         return test_loss / length(t.test_loader)
@@ -342,20 +341,16 @@ end
 function generate_batch(t::Trainer)
     if typeof(t.model) <: VAE
         z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-        x_gen, _ = t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), z)
-        return Array(x_gen)
+        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), z))
     elseif typeof(t.model) <: GAN
         z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-        x_gen, _ = t.gen_compiled(z, t.ps.gen, Lux.testmode(t.st.gen))
-        return Array(x_gen)
+        return first(t.gen_compiled(z, t.ps.gen, Lux.testmode(t.st.gen)))
     elseif typeof(t.model) <: DDPM
         st_rng = seed_ddpm_rng(t.model, t.x_shape, t.batch_size; rng = t.rng)
-        x_gen, _ = t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng)
-        return Array(x_gen)
+        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng))
     elseif typeof(t.model) <: PangEBM
         st_rng = seed_pang_rng(t.model; rng = t.rng, batch_size = t.batch_size)
-        x_gen, _ = t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng)
-        return Array(x_gen)
+        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng))
     else
         error("Unknown model type: $(typeof(t.model))")
     end
@@ -416,13 +411,13 @@ function train_loop!(
             end
 
             if num_batches_gen > 0
-                first_batch = generate_batch(t)
+                first_batch = Array(generate_batch(t))
                 batches_to_cat = Vector{typeof(first_batch)}()
                 sizehint!(batches_to_cat, num_batches_gen)
                 push!(batches_to_cat, first_batch)
 
                 for _ in 2:num_batches_gen
-                    push!(batches_to_cat, generate_batch(t))
+                    push!(batches_to_cat, Array(generate_batch(t)))
                 end
 
                 gen_data = cat(batches_to_cat..., dims = 4)
@@ -443,13 +438,13 @@ function train_loop!(
     end
 
     return if num_batches_gen > 0
-        first_batch = generate_batch(t)
+        first_batch = Array(generate_batch(t))
         batches_to_cat = Vector{typeof(first_batch)}()
         sizehint!(batches_to_cat, num_batches_gen)
         push!(batches_to_cat, first_batch)
 
         for _ in 2:num_batches_gen
-            push!(batches_to_cat, generate_batch(t))
+            push!(batches_to_cat, Array(generate_batch(t)))
             GC.gc()
         end
 
@@ -464,19 +459,10 @@ function train!(t::Trainer)
 
     if typeof(t.model) <: VAE
         x_sample = first(t.train_loader) |> pu
-        ε_sample = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
+        x_gen_sample = generate_batch(t)
+        test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
 
-        model_compiled = Reactant.@compile t.model(
-            t.ps,
-            Lux.testmode(t.st),
-            x_sample,
-            ε_sample
-        )
-
-        x_recon_sample = first(model_compiled(t.ps, Lux.testmode(t.st), x_sample, ε_sample))
-        test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_recon_sample)
-
-        compute_test = (t) -> compute_test_loss(t, model_compiled, test_step_compiled)
+        compute_test = (t) -> compute_test_loss(t, test_step_compiled)
     elseif typeof(t.model) <: GAN
         train_idx_start = 1
     end

@@ -409,14 +409,24 @@ function train_loop!(
         log_loss(loss_file, now_time, epoch, train_loss, test_loss)
 
         if t.gen_every > 0 && epoch % t.gen_every == 0
-            num_batches_gen = t.num_generated_samples ÷ t.batch_size
+            num_batches_gen = (t.num_generated_samples ÷ 10) ÷ t.batch_size
             if typeof(t.model) <: DDPM
                 num_batches_gen = min(num_batches_gen, 10)
             end
 
-            batches = [generate_batch(t) for _ in 1:num_batches_gen]
-            gen_data = cat(batches..., dims = 4)
-            save_generated_images(t, gen_data, epoch)
+            if num_batches_gen > 0
+                first_batch = generate_batch(t)
+                batches_to_cat = Vector{typeof(first_batch)}()
+                sizehint!(batches_to_cat, num_batches_gen)
+                push!(batches_to_cat, first_batch)
+
+                for _ in 2:num_batches_gen
+                    push!(batches_to_cat, generate_batch(t))
+                end
+
+                gen_data = cat(batches_to_cat..., dims = 4)
+                save_generated_images(t, gen_data, epoch)
+            end
         end
 
         if t.checkpoint_every > 0 && epoch % t.checkpoint_every == 0
@@ -430,9 +440,21 @@ function train_loop!(
     if typeof(t.model) <: DDPM
         num_batches_gen = min(num_batches_gen, 10)
     end
-    batches = [generate_batch(t) for _ in 1:num_batches_gen]
-    gen_data = cat(batches..., dims = 4)
-    return save_generated_images(t, gen_data, t.N_epochs; final = true)
+
+    return if num_batches_gen > 0
+        first_batch = generate_batch(t)
+        batches_to_cat = Vector{typeof(first_batch)}()
+        sizehint!(batches_to_cat, num_batches_gen)
+        push!(batches_to_cat, first_batch)
+
+        for _ in 2:num_batches_gen
+            push!(batches_to_cat, generate_batch(t))
+            GC.gc()
+        end
+
+        gen_data = cat(batches_to_cat..., dims = 4)
+        save_generated_images(t, gen_data, t.N_epochs; final = true)
+    end
 end
 
 function train!(t::Trainer)

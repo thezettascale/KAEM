@@ -88,14 +88,8 @@ function init_trainer(
     train_data = dataset[:, :, :, 1:N_train]
     test_data = dataset[:, :, :, (N_train + 1):(N_train + N_test)]
 
-    train_loader = [
-        train_data[:, :, :, i:min(i + batch_size - 1, N_train)]
-            for i in 1:batch_size:N_train
-    ]
-    test_loader = [
-        test_data[:, :, :, i:min(i + batch_size - 1, N_test)]
-            for i in 1:batch_size:N_test
-    ]
+    train_loader = Flux.DataLoader(train_data; batchsize = batch_size, shuffle = true)
+    test_loader = Flux.DataLoader(test_data; batchsize = batch_size, shuffle = false)
 
     file_loc = "logs/Baseline/$(dataset_name)/$(uppercase(string(model_type)))/"
     mkpath(file_loc)

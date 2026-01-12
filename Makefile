@@ -160,7 +160,7 @@ distributed:
 	@echo "Starting training for dataset: $(DATASET), mode: $(MODE), device: $(DEVICE)"
 	@tmux kill-session -t kaem_distributed 2>/dev/null || true
 	@tmux new-session -d -s kaem_distributed -n distributed
-	@tmux send-keys -t kaem_distributed:distributed "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_distributed" Enter
+	@tmux send-keys -t kaem_distributed:distributed "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) MODEL=$(MODEL) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && DATASET=$(DATASET) MODE=$(MODE) MODEL=$(MODEL) DEVICE=$(DEVICE) ./scripts/run_distributed.sh 2>&1 | tee logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_distributed" Enter
 	@echo "Training session started in tmux. Attach with: tmux attach-session -t kaem_distributed"
 	@echo "Log file: logs/distributed_$(MODE)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
 
@@ -222,7 +222,7 @@ baseline:
 	@echo "Starting baseline training: $(MODEL) on $(DATASET)"
 	@tmux kill-session -t kaem_baseline 2>/dev/null || true
 	@tmux new-session -d -s kaem_baseline -n baseline
-	@tmux send-keys -t kaem_baseline:baseline "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && MODE=baseline-$(MODEL) DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && MODE=baseline-$(MODEL) DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_baseline" Enter
+	@tmux send-keys -t kaem_baseline:baseline "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && MODEL=$(MODEL) DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && MODEL=$(MODEL) DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_baseline" Enter
 	@echo "Baseline training session started in tmux. Attach with: tmux attach-session -t kaem_baseline"
 	@echo "Log file: logs/baseline_$(MODEL)_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
 
@@ -244,6 +244,6 @@ baseline-all:
 	@echo "Starting all baseline training on $(DATASET)"
 	@tmux kill-session -t kaem_baseline_all 2>/dev/null || true
 	@tmux new-session -d -s kaem_baseline_all -n baseline_all
-	@tmux send-keys -t kaem_baseline_all:baseline_all "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODE=baseline-$$model DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; else conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODE=baseline-$$model DATASET=$(DATASET) NUM_WORKERS=$(NUM_DEVICES) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; fi && tmux kill-session -t kaem_baseline_all" Enter
+	@tmux send-keys -t kaem_baseline_all:baseline_all "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODEL=$$model DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; else conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODEL=$$model DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; fi && tmux kill-session -t kaem_baseline_all" Enter
 	@echo "All baselines training session started in tmux. Attach with: tmux attach-session -t kaem_baseline_all"
 	@echo "Log file: logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"

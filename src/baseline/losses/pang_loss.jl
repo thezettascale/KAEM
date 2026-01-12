@@ -5,7 +5,6 @@ export PangTrainStep
 using Enzyme, Optimisers, Lux, Statistics
 using Flux: mse
 
-using ..PangEBMArchitecture: energy, generate
 using ..PangEBMSampling: langevin_prior, langevin_posterior
 
 function pang_loss(ps, x, z_prior, z_post, model, st)

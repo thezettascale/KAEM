@@ -2,7 +2,9 @@ module Decoder
 
 export VAEDecoder, init_decoder
 
-using LUx, NNlib, Accessors, Random
+using Lux, NNlib, Accessors, Random
+
+using ..Utils
 
 struct VAEDecoder <: Lux.AbstractLuxLayer
     depth::Int

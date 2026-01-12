@@ -2,7 +2,7 @@ module GANModel
 
 export GAN, init_GAN
 
-using Lux, ConfParser, Random
+using Lux, ConfParser, Random, Accessors
 
 using ..Utils
 

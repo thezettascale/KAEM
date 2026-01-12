@@ -3,10 +3,9 @@ module UNetArchitecture
 export UNet, init_unet
 
 using Lux, NNlib, Accessors, Random
+using ..Utils
 
 include("time_embed.jl")
-
-using ..Utils
 using .TimeEmbed
 
 #= Down Block =#

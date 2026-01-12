@@ -2,7 +2,7 @@ module PangEBMModel
 
 export PangEBM, init_PangEBM, log_likelihood
 
-using Lux, ConfParser, Random
+using Lux, ConfParser, Random, Accessors
 
 include("ebm.jl")
 using .LatentEBM

@@ -5,8 +5,7 @@ export seed_pang_rng, langevin_prior, langevin_posterior, generate_pang
 using Lux, Random, Enzyme
 
 using ..Utils
-using ..PangEBMModel: PangEBM, log_likelihood
-using ..PangEBMArchitecture: energy
+using ..PangEBMModel
 
 # Pre-generate all RNG
 function seed_pang_rng(

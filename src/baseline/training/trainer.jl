@@ -23,7 +23,7 @@ using .DDPMModel
 using .DDPMSampling
 using .DDPMLoss
 
-include("../models/gan/model.jl")
+include("../models/gan/gan.jl")
 include("../losses/gan_loss.jl")
 using .GANModel
 using .GANLoss

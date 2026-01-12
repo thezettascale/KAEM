@@ -5,8 +5,6 @@ export GANTrainStep
 using Enzyme, Optimisers, Lux, Statistics, Accessors, ComponentArrays
 using Flux: logitbinarycrossentropy
 
-using ..GANArchitecture: generate, discriminate
-
 function discriminator_loss(ps_disc, x_real, x_fake, disc, st_disc)
     logits_real, st_disc_new = disc(
         x_real, ps_disc, Lux.trainmode(st_disc)

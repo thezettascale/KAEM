@@ -4,6 +4,8 @@ export Discriminator, init_discriminator
 
 using Lux, Random, Accessors, NNlib
 
+using ..Utils
+
 struct Discriminator <: Lux.AbstractLuxLayer
     depth::Int
     conv_layers::Tuple{Vararg{Lux.Conv}}

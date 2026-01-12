@@ -4,6 +4,8 @@ export DDPM, init_DDPM
 
 using Lux, ConfParser, Random
 
+using ..Utils
+
 include("unet.jl")
 using .UNetArchitecture
 

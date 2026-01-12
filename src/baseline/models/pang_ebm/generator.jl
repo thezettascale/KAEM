@@ -1,5 +1,7 @@
 module Generator
 
+export PangGenerator, init_pang_generator
+
 using Lux, Accessors, NNlib, Random
 
 struct PangGenerator <: Lux.AbstractLuxLayer

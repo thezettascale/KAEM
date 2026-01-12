@@ -4,6 +4,8 @@ export VAE, init_VAE, sample, reparameterize
 
 using Lux, ConfParser, Random, Accessors
 
+using ..Utils
+
 include("encoder.jl")
 using .Encoder
 

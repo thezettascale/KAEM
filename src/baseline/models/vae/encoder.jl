@@ -4,6 +4,8 @@ export VAEEncoder, init_encoder
 
 using Lux, Accessors, NNlib, Random
 
+using ..Utils
+
 struct VAEEncoder <: Lux.AbstractLuxLayer
     depth::Int
     conv_layers::Tuple{Vararg{Lux.Conv}}

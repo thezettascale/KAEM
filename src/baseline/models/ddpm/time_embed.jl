@@ -2,7 +2,7 @@ module TimeEmbed
 
 export TimeEmbedding, sinusoidal_embedding, init_time_embedding
 
-using Lux, Random
+using Lux, Random, NNlib
 
 struct TimeEmbedding <: Lux.AbstractLuxLayer
     dim::Int
@@ -31,7 +31,7 @@ function Lux.initialstates(rng::AbstractRNG, te::TimeEmbedding)
     )
 end
 
-function sinusoidal_embedding(t::AbstractArray{T}, dim::Int) where {T <: Float32}
+function sinusoidal_embedding(t::AbstractArray{T}, dim::Int) where {T}
     half_dim = dim ÷ 2
     emb_scale = log(10000.0f0) / (half_dim - 1)
     emb = exp.(-(0:(half_dim - 1)) .* emb_scale) |> x -> reshape(x, 1, :)

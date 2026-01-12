@@ -4,6 +4,8 @@ export Generator, init_generator
 
 using Lux, Random, Accessors, NNlib
 
+using ..Utils
+
 struct Generator <: Lux.AbstractLuxLayer
     depth::Int
     project::Lux.Dense

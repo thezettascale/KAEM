@@ -331,6 +331,7 @@ function compute_test_loss(t::Trainer, model_compiled, test_step_compiled)
             ε = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
             x_recon = first(model_compiled(t.ps, Lux.testmode(t.st), x, ε))
             test_loss += test_step_compiled(x, x_recon) |> Float32
+            GC.gc()
         end
         return test_loss / length(t.test_loader)
     else

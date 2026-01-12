@@ -7,7 +7,6 @@ include("../src/baseline/training/trainer.jl")
 using .Baseline.VAEModel: VAE, init_VAE, sample
 using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM
-using .Baseline.GANArchitecture: discriminate
 using .Baseline.DDPMSampling: q_sample
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
 using .Baseline.Utils: pu
@@ -87,7 +86,7 @@ function test_gan_disc()
     st = Lux.initialstates(rng, model) |> Lux.f32
 
     x = randn(rng, Float32, x_shape..., batch_size)
-    logits, st_disc = discriminate(model.discriminator, x, ps.disc, st.disc)
+    logits, st_disc = model.discriminator(x, ps.disc, st.disc)
 
     @test size(logits) == (1, batch_size)
     return @test !any(isnan, logits)

@@ -2,7 +2,11 @@ module TrainingSetup
 
 export prep_vae, prep_gan, prep_ddpm, prep_pang
 
-using Lux, ComponentArrays, Optimisers, Reactant, Random
+using Lux,
+    ComponentArrays,
+    Optimisers,
+    Reactant,
+    Random
 
 using ..Utils
 using ..VAEModel: VAE

@@ -4,7 +4,8 @@ export DDPM, init_DDPM
 
 using Lux, ConfParser, Random
 
-using ..DDPMArchitecture: UNet, init_unet
+include("unet.jl")
+using .UNetArchitecture
 
 struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     unet::UNet

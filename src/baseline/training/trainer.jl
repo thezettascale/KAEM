@@ -108,7 +108,7 @@ function init_trainer(
     x_sample = first(train_loader) |> pu
     optimizer = create_opt(conf)
 
-    opt_state, opt_state_gen, opt_state_gen = nothing, nothing, nothing
+    opt_state, opt_state_gen, opt_state_disc = nothing, nothing, nothing
     if model_type == :vae
         model = init_VAE(conf, x_shape; rng = rng)
         β = parse(Float32, retrieve(conf, "VAE", "beta"))

@@ -94,7 +94,13 @@ function prep_ddpm(
     t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
     t = Float32.(t_idx) |> pu
     sqrt_alpha = reshape(model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
+    sqrt_one_minus_alpha = reshape(
+        model.sqrt_one_minus_alphas_cumprod[t_idx],
+        1,
+        1,
+        1,
+        :
+    ) |> pu
     noise = randn(rng, T, model.x_shape..., model.batch_size) |> pu
     train_step = DDPMTrainStep(model)
 

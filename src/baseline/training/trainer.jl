@@ -16,30 +16,32 @@ using .DataUtils: get_vision_dataset
 include("../../pipeline/optimizer.jl")
 using .optimization
 
-include("../models/vae/architecture.jl")
-include("../models/vae/model.jl")
-include("../models/gan/architecture.jl")
-include("../models/gan/model.jl")
-include("../models/ddpm/architecture.jl")
-include("../models/ddpm/model.jl")
+include("../models/ddpm/ddpm.jl")
 include("../models/ddpm/sampling.jl")
-include("../models/pang_ebm/architecture.jl")
-include("../models/pang_ebm/model.jl")
-include("../models/pang_ebm/sampling.jl")
-include("../losses/vae_loss.jl")
-include("../losses/gan_loss.jl")
 include("../losses/ddpm_loss.jl")
-include("../losses/pang_loss.jl")
-include("setup.jl")
+using .DDPMModel
+using .DDPMSampling
+using .DDPMLoss
 
-using .VAEModel: VAE, init_VAE, sample
-using .GANModel: GAN, init_GAN
-using .DDPMModel: DDPM, init_DDPM
-using .PangEBMModel: PangEBM, init_PangEBM
-using .GANArchitecture: generate
-using .DDPMSampling: sample_loop, seed_ddpm_sample_rng
-using .PangEBMSampling: generate_pang, seed_pang_rng
-using .TrainingSetup: prep_vae, prep_gan, prep_ddpm, prep_pang
+include("../models/gan/model.jl")
+include("../losses/gan_loss.jl")
+using .GANModel
+using .GANLoss
+
+include("../models/pang_ebm/pang_ebm.jl")
+include("../models/pang_ebm/sampling.jl")
+include("../losses/pang_loss.jl")
+using .PangEBMModel
+using .PangEBMSampling
+using .PangLoss
+
+include("../models/vae/vae.jl")
+include("../losses/vae_loss.jl")
+using .VAEModel
+using .VAELoss
+
+include("setup.jl")
+using .TrainingSetup
 
 mutable struct Trainer{T <: Float32}
     model::Any
@@ -112,26 +114,30 @@ function init_trainer(
     x_sample = first(train_loader) |> pu
     optimizer = create_opt(conf)
 
+    opt_state, opt_state_gen, opt_state_gen = nothing, nothing, nothing
     if model_type == :vae
         model = init_VAE(conf, x_shape; rng = rng)
         β = parse(Float32, retrieve(conf, "VAE", "beta"))
         model, train_step, opt_state, ps, st = prep_vae(
-            model, x_sample, optimizer.rule(); rng = rng, MLIR = MLIR, β = β
+            model,
+            x_sample,
+            optimizer.rule();
+            rng = rng,
+            MLIR = MLIR,
+            β = β
         )
 
         z_sample = randn(rng, Float32, model.latent_dim, batch_size) |> pu
         gen_compiled = if MLIR
-            Reactant.@compile sample(model, ps, Lux.testmode(st), z_sample)
+            Reactant.@compile sample(
+                model,
+                ps,
+                Lux.testmode(st),
+                z_sample
+            )
         else
             sample
         end
-
-        return Trainer{Float32}(
-            model, train_step, gen_compiled, opt_state, nothing, nothing, ps, st,
-            train_loader, test_loader, x_shape, batch_size,
-            N_epochs, file_loc, num_generated_samples,
-            checkpoint_every, gen_every, rng
-        )
 
     elseif model_type == :gan
         model = init_GAN(conf, x_shape; rng = rng)
@@ -143,66 +149,96 @@ function init_trainer(
         opt_disc = ManualAdam(lr_disc)
 
         model, train_step, opt_state_gen, opt_state_disc, ps, st = prep_gan(
-            model, x_sample, opt_gen, opt_disc; rng = rng, MLIR = MLIR, n_critic = n_critic
+            model,
+            x_sample,
+            opt_gen,
+            opt_disc;
+            rng = rng,
+            MLIR = MLIR,
+            n_critic = n_critic
         )
 
         z_sample = randn(rng, Float32, model.latent_dim, batch_size) |> pu
         gen_compiled = if MLIR
-            Reactant.@compile generate(model.generator, z_sample, ps.gen, Lux.testmode(st.gen))
+            Reactant.@compile model.generator(
+                z_sample,
+                ps.gen,
+                Lux.testmode(st.gen)
+            )
         else
             generate
         end
 
-        return Trainer{Float32}(
-            model, train_step, gen_compiled, nothing, opt_state_gen, opt_state_disc, ps, st,
-            train_loader, test_loader, x_shape, batch_size,
-            N_epochs, file_loc, num_generated_samples,
-            checkpoint_every, gen_every, rng
-        )
-
     elseif model_type == :ddpm
         model = init_DDPM(conf, x_shape; rng = rng)
         model, train_step, opt_state, ps, st = prep_ddpm(
-            model, x_sample, optimizer.rule(); rng = rng, MLIR = MLIR
+            model,
+            x_sample,
+            optimizer.rule();
+            rng = rng,
+            MLIR = MLIR
         )
 
-        st_rng_sample = seed_ddpm_sample_rng(model, x_shape, batch_size; rng = rng)
+        st_rng_sample = seed_ddpm_rng(model, x_shape, batch_size; rng = rng)
         gen_compiled = if MLIR
-            Reactant.@compile sample_loop(model, ps, Lux.testmode(st), st_rng_sample)
+            Reactant.@compile sample_loop(
+                model,
+                ps,
+                Lux.testmode(st),
+                st_rng_sample
+            )
         else
             sample_loop
         end
-
-        return Trainer{Float32}(
-            model, train_step, gen_compiled, opt_state, nothing, nothing, ps, st,
-            train_loader, test_loader, x_shape, batch_size,
-            N_epochs, file_loc, num_generated_samples,
-            checkpoint_every, gen_every, rng
-        )
 
     elseif model_type == :pang
         model = init_PangEBM(conf, x_shape; rng = rng)
         α_cd = parse(Float32, retrieve(conf, "PANG", "alpha_cd"))
         model, train_step, opt_state, ps, st = prep_pang(
-            model, x_sample, optimizer.rule(); rng = rng, MLIR = MLIR, α_cd = α_cd
+            model,
+            x_sample,
+            optimizer.rule();
+            rng = rng,
+            MLIR = MLIR,
+            α_cd = α_cd
         )
 
         st_rng_sample = seed_pang_rng(model; rng = rng, batch_size = batch_size)
         gen_compiled = if MLIR
-            Reactant.@compile generate_pang(model, ps, Lux.testmode(st), st_rng_sample)
+            Reactant.@compile generate_pang(
+                model,
+                ps,
+                Lux.testmode(st),
+                st_rng_sample
+            )
         else
             generate_pang
         end
-
-        return Trainer{Float32}(
-            model, train_step, gen_compiled, opt_state, nothing, nothing, ps, st,
-            train_loader, test_loader, x_shape, batch_size,
-            N_epochs, file_loc, num_generated_samples,
-            checkpoint_every, gen_every, rng
-        )
     else
         error("Unknown model type: $model_type. Use :vae, :gan, :ddpm, or :pang")
     end
+
+    return Trainer{Float32}(
+        model,
+        train_step,
+        gen_compiled,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        train_loader,
+        test_loader,
+        x_shape,
+        batch_size,
+        N_epochs,
+        file_loc,
+        num_generated_samples,
+        checkpoint_every,
+        gen_every,
+        rng
+    )
+
 end
 
 function save_checkpoint(t::Trainer, epoch::Int)
@@ -238,7 +274,13 @@ function prepare_batch(t::Trainer, x, train_idx = nothing)
         t_idx = rand(t.rng, 1:t.model.num_timesteps, batch_size)
         t_batch = Float32.(t_idx) |> pu
         sqrt_alpha = reshape(t.model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
-        sqrt_one_minus_alpha = reshape(t.model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
+        sqrt_one_minus_alpha = reshape(
+            t.model.sqrt_one_minus_alphas_cumprod[t_idx],
+            1,
+            1,
+            1,
+            :
+        ) |> pu
         noise = randn(t.rng, Float32, t.x_shape..., batch_size) |> pu
         return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
     elseif typeof(t.model) <: PangEBM
@@ -256,10 +298,27 @@ function call_train_step(t::Trainer, batch_args)
         return t.train_step(t.opt_state, t.ps, t.st, x, ε)
     elseif typeof(t.model) <: GAN
         x, z, train_idx = batch_args
-        return t.train_step(t.opt_state_gen, t.opt_state_disc, t.ps, t.st, x, z, train_idx)
+        return t.train_step(
+            t.opt_state_gen,
+            t.opt_state_disc,
+            t.ps,
+            t.st,
+            x,
+            z,
+            train_idx
+        )
     elseif typeof(t.model) <: DDPM
         x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise = batch_args
-        return t.train_step(t.opt_state, t.ps, t.st, x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
+        return t.train_step(
+            t.opt_state,
+            t.ps,
+            t.st,
+            x,
+            t_batch,
+            sqrt_alpha,
+            sqrt_one_minus_alpha,
+            noise
+        )
     elseif typeof(t.model) <: PangEBM
         x, st_rng = batch_args
         return t.train_step(t.opt_state, t.ps, t.st, x, st_rng)
@@ -290,10 +349,10 @@ function generate_batch(t::Trainer)
         return Array(x_gen)
     elseif typeof(t.model) <: GAN
         z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-        x_gen, _ = t.gen_compiled(t.model.generator, z, t.ps.gen, Lux.testmode(t.st.gen))
+        x_gen, _ = t.gen_compiled(z, t.ps.gen, Lux.testmode(t.st.gen))
         return Array(x_gen)
     elseif typeof(t.model) <: DDPM
-        st_rng = seed_ddpm_sample_rng(t.model, t.x_shape, t.batch_size; rng = t.rng)
+        st_rng = seed_ddpm_rng(t.model, t.x_shape, t.batch_size; rng = t.rng)
         x_gen, _ = t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng)
         return Array(x_gen)
     elseif typeof(t.model) <: PangEBM
@@ -347,7 +406,10 @@ function train_loop!(
         test_loss = isnothing(compute_test_loss) ? 0.0f0 : compute_test_loss(t)
         now_time = time() - start_time
 
-        println("Epoch: $epoch, Train Loss: $train_loss" * (test_loss > 0 ? ", Test Loss: $test_loss" : ""))
+        println(
+            "Epoch: $epoch, Train Loss: $train_loss" *
+                (test_loss > 0 ? ", Test Loss: $test_loss" : "")
+        )
         log_loss(loss_file, now_time, epoch, train_loss, test_loss)
 
         if t.gen_every > 0 && epoch % t.gen_every == 0
@@ -384,7 +446,12 @@ function train!(t::Trainer)
     if typeof(t.model) <: VAE
         x_sample = first(t.train_loader) |> pu
         ε_sample = randn(t.rng, Float32, t.model.latent_dim, size(x_sample, 4)) |> pu
-        model_compiled = Reactant.@compile t.model(t.ps, Lux.testmode(t.st), x_sample, ε_sample)
+        model_compiled = Reactant.@compile t.model(
+            t.ps,
+            Lux.testmode(t.st),
+            x_sample,
+            ε_sample
+        )
         compute_test = (t) -> compute_test_loss(t, model_compiled)
     elseif typeof(t.model) <: GAN
         train_idx_start = 1

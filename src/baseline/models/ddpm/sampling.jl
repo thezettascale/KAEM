@@ -1,6 +1,6 @@
 module DDPMSampling
 
-export q_sample, p_sample, sample_loop, seed_ddpm_sample_rng
+export sample_loop, seed_ddpm_rng
 
 using Lux, Random
 
@@ -12,7 +12,7 @@ function q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end
 
 function p_sample(
-        model::DDPM,
+        model,
         x_t,
         t_idx,
         t_float,
@@ -35,7 +35,7 @@ function p_sample(
 end
 
 # Pre-generate all RNG (for Reactant compilation)
-function seed_ddpm_sample_rng(
+function seed_ddpm_rng(
         model::DDPM{T},
         x_shape,
         batch_size;
@@ -70,7 +70,7 @@ function seed_ddpm_sample_rng(
     )
 end
 
-function sample_loop(model::DDPM, ps, st, st_rng)
+function sample_loop(model, ps, st, st_rng)
     x = st_rng.x_init
     st_current = st
     num_t = model.num_timesteps

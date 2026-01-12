@@ -4,7 +4,17 @@ export GAN, init_GAN
 
 using Lux, ConfParser, Random
 
-using ..GANArchitecture: Generator, Discriminator, generate, init_generator, init_discriminator
+using ..Utils
+
+include("discriminator.jl")
+using .DiscriminatorGAN
+
+include("generator.jl")
+using .GeneratorGAN
+
+struct GANConfig <: AbstractBoolConfig
+    batchnorm::Bool
+end
 
 struct GAN{T <: Float32} <: Lux.AbstractLuxLayer
     generator::Generator
@@ -31,11 +41,24 @@ function init_GAN(
     batchnorm = parse(Bool, retrieve(conf, "GAN", "batchnorm"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 
+    gan_conf = GANConfig(batchnorm)
+
     generator = init_generator(
-        x_shape, latent_dim, gen_channels, gen_strides, gen_kernels, gen_paddings, batchnorm
+        x_shape,
+        latent_dim,
+        gen_channels,
+        gen_strides,
+        gen_kernels,
+        gen_paddings,
+        gan_conf,
     )
     discriminator = init_discriminator(
-        x_shape, disc_channels, disc_strides, disc_kernels, disc_paddings, batchnorm
+        x_shape,
+        disc_channels,
+        disc_strides,
+        disc_kernels,
+        disc_paddings,
+        gan_conf
     )
 
     return GAN{Float32}(generator, discriminator, latent_dim, x_shape, batch_size)
@@ -56,8 +79,9 @@ function Lux.initialstates(rng::AbstractRNG, model::GAN)
 end
 
 function (model::GAN)(ps, st, z)
-    x_gen, st_gen = generate(model.generator, z, ps.gen, st.gen)
-    return x_gen, (gen = st_gen, disc = st.disc)
+    x_gen, st_gen = model.generator(z, ps.gen, st.gen)
+    @reset st.gen = st_gen
+    return x_gen, st
 end
 
 end

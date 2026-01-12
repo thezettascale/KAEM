@@ -1,65 +1,6 @@
-module PangEBMArchitecture
+module Generator
 
-export EnergyMLP, PangGenerator
-export init_energy_mlp, init_pang_generator
-export energy, generate
-
-using Lux, NNlib, Accessors, Random
-
-using ..Utils
-
-#= Energy MLP =#
-
-struct EnergyMLP <: Lux.AbstractLuxLayer
-    depth::Int
-    layers::Tuple{Vararg{Lux.Dense}}
-    latent_dim::Int
-end
-
-function init_energy_mlp(latent_dim::Int, energy_widths::Vector{Int})
-    energy_layers = Vector{Lux.Dense}()
-    prev_dim = latent_dim
-
-    for (i, w) in enumerate(energy_widths)
-        is_last = i == length(energy_widths)
-        if is_last
-            push!(energy_layers, Lux.Dense(prev_dim, 1))
-        else
-            push!(energy_layers, Lux.Dense(prev_dim, w, NNlib.swish))
-        end
-        prev_dim = w
-    end
-
-    return EnergyMLP(length(energy_layers), Tuple(energy_layers), latent_dim)
-end
-
-function Lux.initialparameters(rng::AbstractRNG, ebm::EnergyMLP)
-    return NamedTuple(
-        symbol_map[i] => Lux.initialparameters(rng, ebm.layers[i])
-            for i in 1:ebm.depth
-    )
-end
-
-function Lux.initialstates(rng::AbstractRNG, ebm::EnergyMLP)
-    return NamedTuple(
-        symbol_map[i] => Lux.initialstates(rng, ebm.layers[i]) |> Lux.f32
-            for i in 1:ebm.depth
-    )
-end
-
-function energy(ebm::EnergyMLP, z, ps, st)
-    h = z
-    st_new = st
-
-    for i in 1:ebm.depth
-        h, st_layer = Lux.apply(ebm.layers[i], h, ps[symbol_map[i]], st[symbol_map[i]])
-        @reset st_new[symbol_map[i]] = st_layer
-    end
-
-    return dropdims(h; dims = 1), st_new
-end
-
-#= Generator =#
+using Lux, Accessors, NNlib, Random
 
 struct PangGenerator <: Lux.AbstractLuxLayer
     depth::Int
@@ -79,13 +20,15 @@ function init_pang_generator(
     )
     in_channels = last(x_shape)
     img_size = first(x_shape)
-
-    # Calculate init_spatial based on strides (count stride=2 layers)
     num_upsample = count(s -> s == 2, strides)
     init_spatial = img_size ÷ (2^num_upsample)
     init_channels = first(gen_channels)
 
-    project = Lux.Dense(latent_dim, init_channels * init_spatial * init_spatial, NNlib.relu)
+    project = Lux.Dense(
+        latent_dim,
+        init_channels * init_spatial * init_spatial,
+        NNlib.relu
+    )
 
     gen_conv_layers = Vector{Lux.ConvTranspose}()
     prev_c = init_channels
@@ -138,7 +81,7 @@ function Lux.initialstates(rng::AbstractRNG, gen::PangGenerator)
     )
 end
 
-function generate(gen::PangGenerator, z, ps, st)
+function (gen::PangGenerator)(z, ps, st)
     h, st_proj = Lux.apply(gen.project, z, ps.project, st.project)
     st_new = st
     @reset st_new.project = st_proj

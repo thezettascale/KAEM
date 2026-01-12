@@ -28,13 +28,13 @@ function seed_pang_rng(
 end
 
 function neg_energy_sum(z, energy_net, ps_ebm, st_ebm)
-    E, _ = energy(energy_net, z, ps_ebm, st_ebm)
+    E, _ = energy_net(z, ps_ebm, st_ebm)
     return -sum(E)  # log p(z) = -E(z)
 end
 
 # log p(z|x) = log p(x|z) + log p(z) = log p(x|z) - E(z)
 function log_posterior_sum(z, x, model, ps, st, σ²)
-    E, _ = energy(model.energy_net, z, ps.ebm, st.ebm)
+    E, _ = model.energy_net(z, ps.ebm, st.ebm)
     ll, _ = log_likelihood(model, x, z, ps, st; σ² = σ²)
     return sum(ll) - sum(E)
 end

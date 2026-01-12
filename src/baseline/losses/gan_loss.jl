@@ -8,10 +8,10 @@ using Flux: logitbinarycrossentropy
 using ..GANArchitecture: generate, discriminate
 
 function discriminator_loss(ps_disc, x_real, x_fake, disc, st_disc)
-    logits_real, st_disc_new = discriminate(
-        disc, x_real, ps_disc, Lux.trainmode(st_disc)
+    logits_real, st_disc_new = disc(
+        x_real, ps_disc, Lux.trainmode(st_disc)
     )
-    logits_fake, st_disc_new = discriminate(disc, x_fake, ps_disc, st_disc_new)
+    logits_fake, st_disc_new = disc(x_fake, ps_disc, st_disc_new)
 
     loss_real = logitbinarycrossentropy(logits_real, one(eltype(logits_real)))
     loss_fake = logitbinarycrossentropy(logits_fake, zero(eltype(logits_fake)))
@@ -19,8 +19,8 @@ function discriminator_loss(ps_disc, x_real, x_fake, disc, st_disc)
 end
 
 function generator_loss(ps_gen, z, gen, disc, ps_disc, st_gen, st_disc)
-    x_fake, st_gen_new = generate(gen, z, ps_gen, Lux.trainmode(st_gen))
-    logits_fake, _ = discriminate(disc, x_fake, ps_disc, Lux.testmode(st_disc))
+    x_fake, st_gen_new = gen(z, ps_gen, Lux.trainmode(st_gen))
+    logits_fake, _ = disc(x_fake, ps_disc, Lux.testmode(st_disc))
     loss = logitbinarycrossentropy(logits_fake, one(eltype(logits_fake)))
     return loss, st_gen_new, x_fake
 end
@@ -71,7 +71,7 @@ end
 function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, train_idx)
     gen = l.model.generator
     disc = l.model.discriminator
-    x_fake, st_gen = generate(gen, z, ps.gen, Lux.testmode(st.gen))
+    x_fake, st_gen = gen(z, ps.gen, Lux.testmode(st.gen))
 
     ∇_disc = grad_disc(ps.disc, x_real, x_fake, disc, st.disc)
     d_loss, st_disc_new = discriminator_loss(

@@ -12,7 +12,7 @@ using .Baseline.DDPMSampling: q_sample
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
 using .Baseline.Utils: pu
 
-conf = ConfParse("tests/baseline_conf.ini")
+conf = ConfParse("tests/test_baseline_conf.ini")
 parse_conf!(conf)
 
 rng = Random.MersenneTwister(42)

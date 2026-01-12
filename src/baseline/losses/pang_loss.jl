@@ -9,14 +9,14 @@ using ..PangEBMArchitecture: energy, generate
 using ..PangEBMSampling: langevin_prior, langevin_posterior
 
 function pang_loss(ps, x, z_prior, z_post, model, st)
-    E_post, _ = energy(model.energy_net, z_post, ps.ebm, st.ebm)
-    E_prior, _ = energy(model.energy_net, z_prior, ps.ebm, st.ebm)
+    E_post, _ = model.energy_net(z_post, ps.ebm, st.ebm)
+    E_prior, _ = model.energy_net(z_prior, ps.ebm, st.ebm)
 
     # Contrastive divergence: E[E(z_post)] - E[E(z_prior)]
     cd_loss = mean(E_post) - mean(E_prior)
 
     # Reconstruction loss from posterior samples
-    x_recon, _ = generate(model.generator, z_post, ps.gen, st.gen)
+    x_recon, _ = model.generator(z_post, ps.gen, st.gen)
     recon_loss = mse(x_recon, x)
     return recon_loss, cd_loss
 end

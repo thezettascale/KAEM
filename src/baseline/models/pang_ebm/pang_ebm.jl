@@ -4,7 +4,11 @@ export PangEBM, init_PangEBM, log_likelihood
 
 using Lux, ConfParser, Random
 
-using ..PangEBMArchitecture: PangGenerator, EnergyMLP, generate, init_pang_generator, init_energy_mlp, energy
+include("ebm.jl")
+using .LatentEBM
+
+include("generator.jl")
+using .Generator
 
 struct PangEBM{T <: Float32} <: Lux.AbstractLuxLayer
     generator::PangGenerator
@@ -72,14 +76,15 @@ function Lux.initialstates(rng::AbstractRNG, model::PangEBM)
 end
 
 function log_likelihood(model::PangEBM, x, z, ps, st; σ²::Float32 = 1.0f0)
-    x_gen, st_gen = generate(model.generator, z, ps.gen, st.gen)
+    x_gen, st_gen = model.generator(z, ps.gen, st.gen)
     ll = -sum((x .- x_gen) .^ 2, dims = (1, 2, 3)) ./ (2.0f0 * σ²)
     return dropdims(ll; dims = (1, 2, 3)), st_gen
 end
 
 function (model::PangEBM)(ps, st, z)
-    x_gen, st_gen = generate(model.generator, z, ps.gen, st.gen)
-    return x_gen, (gen = st_gen, ebm = st.ebm)
+    x_gen, st_gen = model.generator(z, ps.gen, st.gen)
+    @reset st.gen = st_gen
+    return x_gen, st
 end
 
 end

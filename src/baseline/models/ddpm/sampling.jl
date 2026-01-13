@@ -84,7 +84,15 @@ function sample_loop_eager(
         end
 
         x, st_current = step_compiled(
-            model, x, t_float, alpha, alpha_cumprod, beta, noise, ps, st_current
+            model,
+            x,
+            t_float,
+            alpha,
+            alpha_cumprod,
+            beta,
+            noise,
+            ps,
+            st_current
         )
 
         # Force GC
@@ -93,7 +101,15 @@ function sample_loop_eager(
         end
     end
 
-    return clamp.(x, 0.0f0, 1.0f0), st_current
+    return ifelse.(
+            x .> 1.0f0,
+            1.0f0,
+            ifelse.(
+                x .< 0.0f0,
+                0.0f0,
+                x
+            )
+        ), st_current
 end
 
 end

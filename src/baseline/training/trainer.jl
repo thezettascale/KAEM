@@ -4,7 +4,7 @@ export Trainer
 export init_trainer, train!
 
 using Lux, ComponentArrays, ConfParser, Random, Reactant, Optimisers
-using Statistics, Flux, HDF5, JLD2, MLDataDevices
+using Statistics, Flux, HDF5, JLD2, MLDataDevices, Accessors
 using Base: time
 
 include("../../utils.jl")

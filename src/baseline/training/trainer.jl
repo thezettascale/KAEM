@@ -541,7 +541,7 @@ function train!(t::Trainer)
 
     train_idx_start = 1
     x_sample = first(t.train_loader) |> pu
-    x_gen_sample = generate_batch()
+    x_gen_sample, st = generate_batch()
     test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
     compute_test = () -> compute_test_loss(test_step_compiled)
 

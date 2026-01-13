@@ -4,7 +4,8 @@ export Trainer
 export init_trainer, train!
 
 using Lux, ComponentArrays, ConfParser, Random, Reactant, Optimisers
-using Statistics, Flux, HDF5, JLD2, MLDataDevices, Accessors
+using Statistics, Flux, HDF5, JLD2, Accessors
+using MLDataDevices: cpu_device
 using Base: time
 
 include("../../utils.jl")
@@ -240,7 +241,6 @@ mutable struct Trainer{T <: Float32}
     prepare_batch_fn::Any
     call_train_step_fn::Any
     generate_batch_fn::Any
-    limits_gen_batches::Bool
 end
 
 function init_trainer(
@@ -417,17 +417,9 @@ function init_trainer(
         :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
     )
 
-    limits_gen_batches_dict = Dict(
-        :vae => false,
-        :gan => false,
-        :ddpm => true,
-        :pang => false,
-    )
-
     prepare_batch_fn = prepare_batch_fns[model_type]
     call_train_step_fn = call_train_step_fns[model_type]
     generate_batch_fn = generate_batch_fns[model_type]
-    limits_gen_batches = limits_gen_batches_dict[model_type]
 
     return Trainer{Float32}(
         model,
@@ -451,7 +443,6 @@ function init_trainer(
         prepare_batch_fn,
         call_train_step_fn,
         generate_batch_fn,
-        limits_gen_batches
     )
 
 end
@@ -469,7 +460,7 @@ function train!(t::Trainer)
         return jldsave(
             t.file_loc * "ckpt_epoch_$(epoch).jld2";
             params = Array(ps),
-            state = st |> MLDataDevices.cpu_device(),
+            state = st |> cpu_device(),
         )
     end
 
@@ -539,7 +530,6 @@ function train!(t::Trainer)
         for x in t.test_loader
             x_gen, st = generate_batch()
             test_loss += test_step_compiled(pu(x), x_gen) |> Float32
-            GC.gc()
         end
         return test_loss / length(t.test_loader)
     end
@@ -569,14 +559,12 @@ function train!(t::Trainer)
         log_loss(now_time, epoch, train_loss, test_loss)
 
         if t.gen_every > 0 && epoch % t.gen_every == 0
-            num_batches_gen = (t.num_generated_samples ÷ 10) ÷ t.batch_size
-            if t.limits_gen_batches
-                num_batches_gen = min(num_batches_gen, 10)
-            end
+            num_batches_gen = fld(t.num_generated_samples, 10) ÷ t.batch_size # Save 1/10 of the samples to conserve space
 
             if num_batches_gen > 0
                 first_batch, st = generate_batch()
                 first_batch = Array(first_batch)
+                concat_dim = length(size(first_batch))
                 batches_to_cat = Vector{typeof(first_batch)}()
                 sizehint!(batches_to_cat, num_batches_gen)
                 push!(batches_to_cat, first_batch)
@@ -586,7 +574,7 @@ function train!(t::Trainer)
                     push!(batches_to_cat, Array(batch))
                 end
 
-                gen_data = cat(batches_to_cat..., dims = 4)
+                gen_data = cat(batches_to_cat..., dims = concat_dim)
                 save_generated_images(gen_data, epoch)
             end
         end
@@ -605,13 +593,10 @@ function train!(t::Trainer)
     t.opt_state_disc = opt_state_disc
 
     num_batches_gen = t.num_generated_samples ÷ t.batch_size
-    if t.limits_gen_batches
-        num_batches_gen = min(num_batches_gen, 10)
-    end
-
     return if num_batches_gen > 0
         first_batch, st = generate_batch()
         first_batch = Array(first_batch)
+        concat_dim = length(size(first_batch))
         batches_to_cat = Vector{typeof(first_batch)}()
         sizehint!(batches_to_cat, num_batches_gen)
         push!(batches_to_cat, first_batch)
@@ -622,7 +607,7 @@ function train!(t::Trainer)
             GC.gc()
         end
 
-        gen_data = cat(batches_to_cat..., dims = 4)
+        gen_data = cat(batches_to_cat..., dims = concat_dim)
         save_generated_images(gen_data, t.N_epochs; final = true)
     end
 end

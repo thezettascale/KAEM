@@ -4,6 +4,8 @@ export PangEBM, init_PangEBM, log_likelihood
 
 using Lux, ConfParser, Random, Accessors
 
+using ..Utils
+
 include("ebm.jl")
 using .LatentEBM
 

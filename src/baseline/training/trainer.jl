@@ -43,6 +43,180 @@ using .VAELoss
 include("setup.jl")
 using .TrainingSetup
 
+function prepare_batch_vae(model, rng, x_shape, x, train_idx)
+    ε = randn(rng, Float32, model.latent_dim, size(x, 4)) |> pu
+    return (x, ε)
+end
+
+function prepare_batch_gan(model, rng, x_shape, x, train_idx)
+    z = randn(rng, Float32, model.latent_dim, size(x, 4)) |> pu
+    return (x, z, train_idx)
+end
+
+function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
+    batch_size = size(x, 4)
+    t_idx = rand(rng, 1:model.num_timesteps, batch_size)
+    t_batch = Float32.(t_idx) |> pu
+    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
+    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
+    noise = randn(rng, Float32, x_shape..., batch_size) |> pu
+    return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
+end
+
+function prepare_batch_pang(model, rng, x_shape, x, train_idx)
+    batch_size = size(x, 4)
+    st_rng = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+    return (x, st_rng)
+end
+
+function call_train_step_vae(
+        train_step,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        batch_args
+    )
+    x, ε = batch_args
+    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, ε)
+    return (loss, ps, opt_state, opt_state, opt_state, st)
+end
+
+function call_train_step_gan(
+        train_step,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        batch_args
+    )
+    x, z, train_idx = batch_args
+    loss, ps, opt_state_gen, opt_state_disc, st = train_step(
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        x,
+        z,
+        train_idx
+    )
+    return (
+        loss,
+        ps,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        st,
+    )
+end
+
+function call_train_step_ddpm(
+        train_step,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        batch_args
+    )
+    x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise = batch_args
+    loss, ps, opt_state, st = train_step(
+        opt_state,
+        ps,
+        st,
+        x,
+        t_batch,
+        sqrt_alpha,
+        sqrt_one_minus_alpha,
+        noise
+    )
+    return (
+        loss,
+        ps,
+        opt_state,
+        opt_state,
+        opt_state,
+        st,
+    )
+end
+
+function call_train_step_pang(
+        train_step,
+        opt_state,
+        opt_state_gen,
+        opt_state_disc,
+        ps,
+        st,
+        batch_args
+    )
+    x, st_rng = batch_args
+    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
+    return (loss, ps, opt_state, opt_state, opt_state, st)
+end
+
+function generate_batch_vae(
+        model,
+        gen_compiled,
+        ps,
+        st,
+        rng,
+        x_shape,
+        batch_size
+    )
+    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    return first(gen_compiled(model, ps, Lux.testmode(st), z))
+end
+
+function generate_batch_gan(
+        model,
+        gen_compiled,
+        ps,
+        st,
+        rng,
+        x_shape,
+        batch_size
+    )
+    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    return first(gen_compiled(z, ps.gen, Lux.testmode(st.gen)))
+end
+
+function generate_batch_ddpm(
+        model,
+        gen_compiled,
+        ps,
+        st,
+        rng,
+        x_shape,
+        batch_size
+    )
+    return first(
+        sample_loop_eager(
+            model,
+            gen_compiled,
+            ps,
+            Lux.testmode(st),
+            x_shape,
+            batch_size;
+            rng = rng
+        )
+    )
+end
+
+function generate_batch_pang(
+        model,
+        gen_compiled,
+        ps,
+        st,
+        rng,
+        x_shape,
+        batch_size
+    )
+    st_rng = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+    return first(gen_compiled(model, ps, Lux.testmode(st), st_rng))
+end
+
 mutable struct Trainer{T <: Float32}
     model::Any
     train_step::Any
@@ -62,6 +236,10 @@ mutable struct Trainer{T <: Float32}
     checkpoint_every::Int
     gen_every::Int
     rng::AbstractRNG
+    prepare_batch_fn::Any
+    call_train_step_fn::Any
+    generate_batch_fn::Any
+    limits_gen_batches::Bool
 end
 
 function init_trainer(
@@ -217,6 +395,39 @@ function init_trainer(
         error("Unknown model type: $model_type. Use :vae, :gan, :ddpm, or :pang")
     end
 
+    prepare_batch_fns = Dict(
+        :vae => (x, train_idx, rng, x_shape) -> prepare_batch_vae(model, rng, x_shape, x, train_idx),
+        :gan => (x, train_idx, rng, x_shape) -> prepare_batch_gan(model, rng, x_shape, x, train_idx),
+        :ddpm => (x, train_idx, rng, x_shape) -> prepare_batch_ddpm(model, rng, x_shape, x, train_idx),
+        :pang => (x, train_idx, rng, x_shape) -> prepare_batch_pang(model, rng, x_shape, x, train_idx),
+    )
+
+    call_train_step_fns = Dict(
+        :vae => (train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args) -> call_train_step_vae(train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args),
+        :gan => (train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args) -> call_train_step_gan(train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args),
+        :ddpm => (train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args) -> call_train_step_ddpm(train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args),
+        :pang => (train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args) -> call_train_step_pang(train_step, opt_state, opt_state_gen, opt_state_disc, ps, st, batch_args),
+    )
+
+    generate_batch_fns = Dict(
+        :vae => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :gan => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+    )
+
+    limits_gen_batches_dict = Dict(
+        :vae => false,
+        :gan => false,
+        :ddpm => true,
+        :pang => false,
+    )
+
+    prepare_batch_fn = prepare_batch_fns[model_type]
+    call_train_step_fn = call_train_step_fns[model_type]
+    generate_batch_fn = generate_batch_fns[model_type]
+    limits_gen_batches = limits_gen_batches_dict[model_type]
+
     return Trainer{Float32}(
         model,
         train_step,
@@ -235,152 +446,104 @@ function init_trainer(
         num_generated_samples,
         checkpoint_every,
         gen_every,
-        rng
+        rng,
+        prepare_batch_fn,
+        call_train_step_fn,
+        generate_batch_fn,
+        limits_gen_batches
     )
 
-end
-
-function save_checkpoint(t::Trainer, epoch::Int)
-    return jldsave(
-        t.file_loc * "ckpt_epoch_$(epoch).jld2";
-        params = Array(t.ps),
-        state = t.st |> MLDataDevices.cpu_device(),
-    )
-end
-
-function log_loss(
-        loss_file::String,
-        now_time::Float64,
-        epoch::Int,
-        train_loss::Float32,
-        test_loss::Float32 = 0.0f0
-    )
-    return open(loss_file, "a") do file
-        write(file, "$now_time,$epoch,$train_loss,$test_loss\n")
-    end
-end
-
-function prepare_batch(t::Trainer, x, train_idx = nothing)
-    x = pu(x)
-    if typeof(t.model) <: VAE
-        ε = randn(t.rng, Float32, t.model.latent_dim, size(x, 4)) |> pu
-        return (x, ε)
-    elseif typeof(t.model) <: GAN
-        z = randn(t.rng, Float32, t.model.latent_dim, size(x, 4)) |> pu
-        return (x, z, train_idx)
-    elseif typeof(t.model) <: DDPM
-        batch_size = size(x, 4)
-        t_idx = rand(t.rng, 1:t.model.num_timesteps, batch_size)
-        t_batch = Float32.(t_idx) |> pu
-        sqrt_alpha = t.model.sqrt_alphas_cumprod[t_idx]
-        sqrt_one_minus_alpha = t.model.sqrt_one_minus_alphas_cumprod[t_idx]
-        noise = randn(t.rng, Float32, t.x_shape..., batch_size) |> pu
-        return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
-    elseif typeof(t.model) <: PangEBM
-        batch_size = size(x, 4)
-        st_rng = seed_pang_rng(t.model; rng = t.rng, batch_size = batch_size)
-        return (x, st_rng)
-    else
-        error("Unknown model type: $(typeof(t.model))")
-    end
-end
-
-function call_train_step(t::Trainer, batch_args)
-    if typeof(t.model) <: VAE
-        x, ε = batch_args
-        return t.train_step(t.opt_state, t.ps, t.st, x, ε)
-    elseif typeof(t.model) <: GAN
-        x, z, train_idx = batch_args
-        return t.train_step(
-            t.opt_state_gen,
-            t.opt_state_disc,
-            t.ps,
-            t.st,
-            x,
-            z,
-            train_idx
-        )
-    elseif typeof(t.model) <: DDPM
-        x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise = batch_args
-        return t.train_step(
-            t.opt_state,
-            t.ps,
-            t.st,
-            x,
-            t_batch,
-            sqrt_alpha,
-            sqrt_one_minus_alpha,
-            noise
-        )
-    elseif typeof(t.model) <: PangEBM
-        x, st_rng = batch_args
-        return t.train_step(t.opt_state, t.ps, t.st, x, st_rng)
-    else
-        error("Unknown model type: $(typeof(t.model))")
-    end
 end
 
 image_test_loss(x, x_recon) = Flux.mse(x, x_recon)
 
-function compute_test_loss(t::Trainer, test_step_compiled)
-    if typeof(t.model) <: VAE
+function train!(t::Trainer)
+    ps = t.ps
+    st = t.st
+    opt_state = t.opt_state
+    opt_state_gen = t.opt_state_gen
+    opt_state_disc = t.opt_state_disc
+
+    function save_checkpoint(epoch::Int)
+        return jldsave(
+            t.file_loc * "ckpt_epoch_$(epoch).jld2";
+            params = Array(ps),
+            state = st |> MLDataDevices.cpu_device(),
+        )
+    end
+
+    function log_loss(
+            now_time::Float64,
+            epoch::Int,
+            train_loss::Float32,
+            test_loss::Float32 = 0.0f0
+        )
+        loss_file = t.file_loc * "loss.csv"
+        return open(loss_file, "a") do file
+            write(file, "$now_time,$epoch,$train_loss,$test_loss\n")
+        end
+    end
+
+    function prepare_batch(x, train_idx = nothing)
+        return t.prepare_batch_fn(
+            pu(x),
+            train_idx,
+            t.rng,
+            t.x_shape
+        )
+    end
+
+    function call_train_step(batch_args)
+        return t.call_train_step_fn(
+            t.train_step,
+            opt_state,
+            opt_state_gen,
+            opt_state_disc,
+            ps,
+            st,
+            batch_args
+        )
+    end
+
+    function generate_batch()
+        return t.generate_batch_fn(
+            t.gen_compiled,
+            ps,
+            st,
+            t.rng,
+            t.x_shape,
+            t.batch_size
+        )
+    end
+
+    function compute_test_loss(test_step_compiled)
         test_loss = 0.0f0
         for x in t.test_loader
             x = pu(x)
-            x_gen = generate_batch(t)
+            x_gen = generate_batch()
             test_loss += test_step_compiled(x, x_gen) |> Float32
             GC.gc()
         end
         return test_loss / length(t.test_loader)
-    else
-        return 0.0f0
     end
-end
 
-function generate_batch(t::Trainer)
-    if typeof(t.model) <: VAE
-        z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), z))
-    elseif typeof(t.model) <: GAN
-        z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
-        return first(t.gen_compiled(z, t.ps.gen, Lux.testmode(t.st.gen)))
-    elseif typeof(t.model) <: DDPM
-        return first(
-            sample_loop_eager(
-                t.model,
-                t.gen_compiled,
-                t.ps,
-                Lux.testmode(t.st),
-                t.x_shape,
-                t.batch_size;
-                rng = t.rng
-            )
-        )
-    elseif typeof(t.model) <: PangEBM
-        st_rng = seed_pang_rng(t.model; rng = t.rng, batch_size = t.batch_size)
-        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng))
-    else
-        error("Unknown model type: $(typeof(t.model))")
+    function save_generated_images(gen_data, epoch; final::Bool = false)
+        filename = final ? "generated_images.h5" : "generated_images_epoch_$(epoch).h5"
+        return try
+            h5write(t.file_loc * filename, "samples", gen_data)
+        catch
+            rm(t.file_loc * filename)
+            h5write(t.file_loc * filename, "samples", gen_data)
+        end
     end
-end
 
-function save_generated_images(t::Trainer, gen_data, epoch; final::Bool = false)
-    filename = final ? "generated_images.h5" : "generated_images_epoch_$(epoch).h5"
-    return try
-        h5write(t.file_loc * filename, "samples", gen_data)
-    catch
-        rm(t.file_loc * filename)
-        h5write(t.file_loc * filename, "samples", gen_data)
-    end
-end
+    train_idx_start = 1
+    x_sample = first(t.train_loader) |> pu
+    x_gen_sample = generate_batch()
+    test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
+    compute_test = () -> compute_test_loss(test_step_compiled)
 
-function train_loop!(
-        t::Trainer;
-        train_idx_start = 1,
-        compute_test_loss = nothing,
-    )
     num_batches = length(t.train_loader)
-    loss_file = t.file_loc * "loss.csv"
     start_time = time()
     train_idx = train_idx_start
 
@@ -388,98 +551,75 @@ function train_loop!(
         train_loss = 0.0f0
 
         for (batch_idx, x) in enumerate(t.train_loader)
-            batch_args = prepare_batch(t, x, train_idx)
-            result = call_train_step(t, batch_args)
-
-            if !isnothing(t.opt_state_gen)
-                loss, t.ps, t.opt_state_gen, t.opt_state_disc, t.st = result
-            else
-                loss, t.ps, t.opt_state, t.st = result
-            end
-
+            batch_args = prepare_batch(x, train_idx)
+            loss, ps, opt_state, opt_state_gen, opt_state_disc, st = call_train_step(batch_args)
             train_loss += Float32(loss)
             train_idx += 1
         end
 
         train_loss /= num_batches
 
-        test_loss = isnothing(compute_test_loss) ? 0.0f0 : compute_test_loss(t)
+        test_loss = compute_test()
         now_time = time() - start_time
 
         println(
-            "Epoch: $epoch, Train Loss: $train_loss" *
-                (test_loss > 0 ? ", Test Loss: $test_loss" : "")
+            "Epoch: $epoch, Train Loss: $train_loss, Test Loss: $test_loss"
         )
-        log_loss(loss_file, now_time, epoch, train_loss, test_loss)
+        log_loss(now_time, epoch, train_loss, test_loss)
 
         if t.gen_every > 0 && epoch % t.gen_every == 0
             num_batches_gen = (t.num_generated_samples ÷ 10) ÷ t.batch_size
-            if typeof(t.model) <: DDPM
+            if t.limits_gen_batches
                 num_batches_gen = min(num_batches_gen, 10)
             end
 
             if num_batches_gen > 0
-                first_batch = Array(generate_batch(t))
+                first_batch = Array(generate_batch())
                 batches_to_cat = Vector{typeof(first_batch)}()
                 sizehint!(batches_to_cat, num_batches_gen)
                 push!(batches_to_cat, first_batch)
 
                 for _ in 2:num_batches_gen
-                    push!(batches_to_cat, Array(generate_batch(t)))
+                    push!(batches_to_cat, Array(generate_batch()))
                 end
 
                 gen_data = cat(batches_to_cat..., dims = 4)
-                save_generated_images(t, gen_data, epoch)
+                save_generated_images(gen_data, epoch)
             end
         end
 
         if t.checkpoint_every > 0 && epoch % t.checkpoint_every == 0
-            save_checkpoint(t, epoch)
+            save_checkpoint(epoch)
         end
 
         GC.gc()
     end
 
+    t.ps = ps
+    t.st = st
+    t.opt_state = opt_state
+    t.opt_state_gen = opt_state_gen
+    t.opt_state_disc = opt_state_disc
+
     num_batches_gen = t.num_generated_samples ÷ t.batch_size
-    if typeof(t.model) <: DDPM
+    if t.limits_gen_batches
         num_batches_gen = min(num_batches_gen, 10)
     end
 
     return if num_batches_gen > 0
-        first_batch = Array(generate_batch(t))
+        first_batch = Array(generate_batch())
         batches_to_cat = Vector{typeof(first_batch)}()
         sizehint!(batches_to_cat, num_batches_gen)
         push!(batches_to_cat, first_batch)
 
         for _ in 2:num_batches_gen
-            push!(batches_to_cat, Array(generate_batch(t)))
+            push!(batches_to_cat, Array(generate_batch()))
             GC.gc()
         end
 
         gen_data = cat(batches_to_cat..., dims = 4)
-        save_generated_images(t, gen_data, t.N_epochs; final = true)
+        save_generated_images(gen_data, t.N_epochs; final = true)
     end
-end
-
-function train!(t::Trainer)
-    compute_test = nothing
-    train_idx_start = 1
-
-    if typeof(t.model) <: VAE
-        x_sample = first(t.train_loader) |> pu
-        x_gen_sample = generate_batch(t)
-        test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
-
-        compute_test = (t) -> compute_test_loss(t, test_step_compiled)
-    elseif typeof(t.model) <: GAN
-        train_idx_start = 1
-    end
-
-    return train_loop!(
-        t;
-        compute_test_loss = compute_test,
-        train_idx_start = train_idx_start,
-    )
 end
 
 end

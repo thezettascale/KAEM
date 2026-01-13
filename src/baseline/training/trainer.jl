@@ -518,16 +518,6 @@ function train!(t::Trainer)
         return x_gen, st_new
     end
 
-    function compute_test_loss(test_step_compiled)
-        test_loss = 0.0f0
-        for x in t.test_loader
-            x = pu(x)
-            x_gen = generate_batch()
-            test_loss += test_step_compiled(x, x_gen) |> Float32
-            GC.gc()
-        end
-        return test_loss / length(t.test_loader)
-    end
 
     function save_generated_images(gen_data, epoch; final::Bool = false)
         filename = final ? "generated_images.h5" : "generated_images_epoch_$(epoch).h5"
@@ -543,7 +533,17 @@ function train!(t::Trainer)
     x_sample = first(t.train_loader) |> pu
     x_gen_sample, st = generate_batch()
     test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
-    compute_test = () -> compute_test_loss(test_step_compiled)
+
+    function compute_test()
+        test_loss = 0.0f0
+        for x in t.test_loader
+            x = pu(x)
+            x_gen = generate_batch()
+            test_loss += test_step_compiled(x, x_gen) |> Float32
+            GC.gc()
+        end
+        return test_loss / length(t.test_loader)
+    end
 
     num_batches = length(t.train_loader)
     start_time = time()

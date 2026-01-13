@@ -42,9 +42,9 @@ function seed_ddpm_step_rng(
     t_float = fill(Float32(model.num_timesteps), batch_size) |> pu
     noise = randn(rng, T, x_shape..., batch_size) |> pu
 
-    alpha = reshape([model.alphas[1]], 1, 1, 1, 1) |> pu
-    alpha_cumprod = reshape([model.alphas_cumprod[1]], 1, 1, 1, 1) |> pu
-    beta = reshape([model.betas[1]], 1, 1, 1, 1) |> pu
+    alpha = model.alphas[1]
+    alpha_cumprod = model.alphas_cumprod[1]
+    beta = model.betas[1]
 
     return (
         x = x_sample,
@@ -73,9 +73,9 @@ function sample_loop_eager(
     # Denoising: t = T, T-1, ..., 1
     for t_idx in num_t:-1:1
         t_float = fill(Float32(t_idx), batch_size) |> pu
-        alpha = reshape([model.alphas[t_idx]], 1, 1, 1, 1) |> pu
-        alpha_cumprod = reshape([model.alphas_cumprod[t_idx]], 1, 1, 1, 1) |> pu
-        beta = reshape([model.betas[t_idx]], 1, 1, 1, 1) |> pu
+        alpha = model.alphas[t_idx]
+        alpha_cumprod = model.alphas_cumprod[t_idx]
+        beta = model.betas[t_idx]
 
         noise = if t_idx > 1
             randn(rng, T, x_shape..., batch_size) |> pu

@@ -272,14 +272,8 @@ function prepare_batch(t::Trainer, x, train_idx = nothing)
         batch_size = size(x, 4)
         t_idx = rand(t.rng, 1:t.model.num_timesteps, batch_size)
         t_batch = Float32.(t_idx) |> pu
-        sqrt_alpha = reshape(t.model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
-        sqrt_one_minus_alpha = reshape(
-            t.model.sqrt_one_minus_alphas_cumprod[t_idx],
-            1,
-            1,
-            1,
-            :
-        ) |> pu
+        sqrt_alpha = t.model.sqrt_alphas_cumprod[t_idx]
+        sqrt_one_minus_alpha = t.model.sqrt_one_minus_alphas_cumprod[t_idx]
         noise = randn(t.rng, Float32, t.x_shape..., batch_size) |> pu
         return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
     elseif typeof(t.model) <: PangEBM

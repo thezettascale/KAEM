@@ -105,8 +105,8 @@ function test_ddpm()
     ps_before = Array(ps)
     t_idx = rand(rng, 1:model.num_timesteps, batch_size)
     t = Float32.(t_idx) |> pu
-    sqrt_alpha = reshape(model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :) |> pu
+    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
+    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
     noise = randn(rng, Float32, x_shape..., batch_size) |> pu
     loss, ps_new, _, _ = train_step(opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise)
 
@@ -124,8 +124,8 @@ function test_ddpm_q()
     x_0 = randn(rng, Float32, x_shape..., batch_size)
     noise = randn(rng, Float32, x_shape..., batch_size)
     t_idx = rand(rng, 1:model.num_timesteps, batch_size)
-    sqrt_alpha = reshape(model.sqrt_alphas_cumprod[t_idx], 1, 1, 1, :)
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod[t_idx], 1, 1, 1, :)
+    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
+    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
 
     x_noisy = q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
 
@@ -133,13 +133,13 @@ function test_ddpm_q()
     @test !any(isnan, x_noisy)
 
     t_early = fill(1, batch_size)
-    sqrt_alpha_early = reshape(model.sqrt_alphas_cumprod[t_early], 1, 1, 1, :)
-    sqrt_one_minus_alpha_early = reshape(model.sqrt_one_minus_alphas_cumprod[t_early], 1, 1, 1, :)
+    sqrt_alpha_early = model.sqrt_alphas_cumprod[t_early]
+    sqrt_one_minus_alpha_early = model.sqrt_one_minus_alphas_cumprod[t_early]
     x_noisy_early = q_sample(x_0, sqrt_alpha_early, sqrt_one_minus_alpha_early, noise)
 
     t_late = fill(model.num_timesteps, batch_size)
-    sqrt_alpha_late = reshape(model.sqrt_alphas_cumprod[t_late], 1, 1, 1, :)
-    sqrt_one_minus_alpha_late = reshape(model.sqrt_one_minus_alphas_cumprod[t_late], 1, 1, 1, :)
+    sqrt_alpha_late = model.sqrt_alphas_cumprod[t_late]
+    sqrt_one_minus_alpha_late = model.sqrt_one_minus_alphas_cumprod[t_late]
     x_noisy_late = q_sample(x_0, sqrt_alpha_late, sqrt_one_minus_alpha_late, noise)
 
     signal_early = mean(abs.(x_noisy_early .- noise))

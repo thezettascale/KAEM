@@ -164,7 +164,8 @@ function generate_batch_vae(
         batch_size
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
-    return first(gen_compiled(model, ps, Lux.testmode(st), z))
+    x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), z)
+    return x_gen, st_new
 end
 
 function generate_batch_gan(
@@ -177,7 +178,9 @@ function generate_batch_gan(
         batch_size
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
-    return first(gen_compiled(z, ps.gen, Lux.testmode(st.gen)))
+    x_gen, st_gen_new = gen_compiled(z, ps.gen, Lux.testmode(st.gen))
+    @reset st.gen = st_gen_new
+    return x_gen, st
 end
 
 function generate_batch_ddpm(
@@ -189,17 +192,16 @@ function generate_batch_ddpm(
         x_shape,
         batch_size
     )
-    return first(
-        sample_loop_eager(
-            model,
-            gen_compiled,
-            ps,
-            Lux.testmode(st),
-            x_shape,
-            model.batch_size;
-            rng = rng
-        )
+    x_gen, st_new = sample_loop_eager(
+        model,
+        gen_compiled,
+        ps,
+        Lux.testmode(st),
+        x_shape,
+        model.batch_size;
+        rng = rng
     )
+    return x_gen, st_new
 end
 
 function generate_batch_pang(
@@ -212,7 +214,8 @@ function generate_batch_pang(
         batch_size
     )
     st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
-    return first(gen_compiled(model, ps, Lux.testmode(st), st_rng))
+    x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), st_rng)
+    return x_gen, st_new
 end
 
 mutable struct Trainer{T <: Float32}
@@ -504,7 +507,7 @@ function train!(t::Trainer)
     end
 
     function generate_batch()
-        return t.generate_batch_fn(
+        x_gen, st_new = t.generate_batch_fn(
             t.gen_compiled,
             ps,
             st,
@@ -512,6 +515,7 @@ function train!(t::Trainer)
             t.x_shape,
             t.batch_size
         )
+        return x_gen, st_new
     end
 
     function compute_test_loss(test_step_compiled)
@@ -572,13 +576,15 @@ function train!(t::Trainer)
             end
 
             if num_batches_gen > 0
-                first_batch = Array(generate_batch())
+                first_batch, st = generate_batch()
+                first_batch = Array(first_batch)
                 batches_to_cat = Vector{typeof(first_batch)}()
                 sizehint!(batches_to_cat, num_batches_gen)
                 push!(batches_to_cat, first_batch)
 
                 for _ in 2:num_batches_gen
-                    push!(batches_to_cat, Array(generate_batch()))
+                    batch, st = generate_batch()
+                    push!(batches_to_cat, Array(batch))
                 end
 
                 gen_data = cat(batches_to_cat..., dims = 4)
@@ -605,13 +611,15 @@ function train!(t::Trainer)
     end
 
     return if num_batches_gen > 0
-        first_batch = Array(generate_batch())
+        first_batch, st = generate_batch()
+        first_batch = Array(first_batch)
         batches_to_cat = Vector{typeof(first_batch)}()
         sizehint!(batches_to_cat, num_batches_gen)
         push!(batches_to_cat, first_batch)
 
         for _ in 2:num_batches_gen
-            push!(batches_to_cat, Array(generate_batch()))
+            batch, st = generate_batch()
+            push!(batches_to_cat, Array(batch))
             GC.gc()
         end
 

@@ -105,7 +105,8 @@ end
 
 function sample(model::VAE, ps, st, z)
     x_gen, st_dec = model.decoder(z, ps.dec, st.dec)
-    return x_gen, st_dec
+    @reset st.dec = st_dec
+    return x_gen, st
 end
 
 end

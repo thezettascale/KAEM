@@ -69,7 +69,7 @@ end
 function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, train_idx)
     gen = l.model.generator
     disc = l.model.discriminator
-    x_fake, st_gen = gen(z, ps.gen, Lux.testmode(st.gen))
+    x_fake, st_gen = gen(z, ps.gen, Lux.trainmode(st.gen))
 
     ∇_disc = grad_disc(ps.disc, x_real, x_fake, disc, st.disc)
     d_loss, st_disc_new = discriminator_loss(

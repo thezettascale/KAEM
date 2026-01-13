@@ -17,8 +17,8 @@ struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     betas::AbstractVector{T}
     alphas::AbstractVector{T}
     alphas_cumprod::AbstractVector{T}
-    sqrt_alphas_cumprod::AbstractVector{T}
-    sqrt_one_minus_alphas_cumprod::AbstractVector{T}
+    sqrt_alphas_cumprod::AbstractArray{T}
+    sqrt_one_minus_alphas_cumprod::AbstractArray{T}
     x_shape::Tuple{Vararg{Int}}
     batch_size::Int
 end
@@ -42,8 +42,18 @@ function init_DDPM(
     betas = collect(range(beta_start, beta_end, length = num_timesteps))
     alphas = 1.0f0 .- betas
     alphas_cumprod = cumprod(alphas)
-    sqrt_alphas_cumprod = sqrt.(alphas_cumprod)
-    sqrt_one_minus_alphas_cumprod = sqrt.(1.0f0 .- alphas_cumprod)
+    sqrt_alphas_cumprod_vec = sqrt.(alphas_cumprod)
+    sqrt_one_minus_alphas_cumprod_vec = sqrt.(1.0f0 .- alphas_cumprod)
+    sqrt_alphas_cumprod = reshape(
+        sqrt_alphas_cumprod_vec,
+        ones(Int, length(x_shape))...,
+        num_timesteps
+    )
+    sqrt_one_minus_alphas_cumprod = reshape(
+        sqrt_one_minus_alphas_cumprod_vec,
+        ones(Int, length(x_shape))...,
+        num_timesteps
+    )
 
     unet = init_unet(in_channels, channels, kernel_size, time_dim)
 

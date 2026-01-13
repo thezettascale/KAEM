@@ -44,28 +44,26 @@ include("setup.jl")
 using .TrainingSetup
 
 function prepare_batch_vae(model, rng, x_shape, x, train_idx)
-    ε = randn(rng, Float32, model.latent_dim, size(x, 4)) |> pu
+    ε = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     return (x, ε)
 end
 
 function prepare_batch_gan(model, rng, x_shape, x, train_idx)
-    z = randn(rng, Float32, model.latent_dim, size(x, 4)) |> pu
+    z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     return (x, z, train_idx)
 end
 
 function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
-    batch_size = size(x, 4)
-    t_idx = rand(rng, 1:model.num_timesteps, batch_size)
+    t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
     t_batch = Float32.(t_idx) |> pu
-    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
-    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
-    noise = randn(rng, Float32, x_shape..., batch_size) |> pu
+    sqrt_alpha = model.sqrt_alphas_cumprod[ntuple(_ -> :, length(x_shape))..., t_idx] |> pu
+    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[ntuple(_ -> :, length(x_shape))..., t_idx] |> pu
+    noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
     return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end
 
 function prepare_batch_pang(model, rng, x_shape, x, train_idx)
-    batch_size = size(x, 4)
-    st_rng = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+    st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
     return (x, st_rng)
 end
 
@@ -165,7 +163,7 @@ function generate_batch_vae(
         x_shape,
         batch_size
     )
-    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     return first(gen_compiled(model, ps, Lux.testmode(st), z))
 end
 
@@ -178,7 +176,7 @@ function generate_batch_gan(
         x_shape,
         batch_size
     )
-    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     return first(gen_compiled(z, ps.gen, Lux.testmode(st.gen)))
 end
 
@@ -198,7 +196,7 @@ function generate_batch_ddpm(
             ps,
             Lux.testmode(st),
             x_shape,
-            batch_size;
+            model.batch_size;
             rng = rng
         )
     )
@@ -213,7 +211,7 @@ function generate_batch_pang(
         x_shape,
         batch_size
     )
-    st_rng = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+    st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
     return first(gen_compiled(model, ps, Lux.testmode(st), st_rng))
 end
 

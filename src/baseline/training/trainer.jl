@@ -537,9 +537,8 @@ function train!(t::Trainer)
     function compute_test()
         test_loss = 0.0f0
         for x in t.test_loader
-            x = pu(x)
-            x_gen = generate_batch()
-            test_loss += test_step_compiled(x, x_gen) |> Float32
+            x_gen, st = generate_batch()
+            test_loss += test_step_compiled(pu(x), x_gen) |> Float32
             GC.gc()
         end
         return test_loss / length(t.test_loader)

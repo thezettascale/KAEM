@@ -66,27 +66,31 @@ function sample_loop_eager(
         rng::AbstractRNG = Random.MersenneTwister(1),
     ) where {T <: Float32}
     num_t = model.num_timesteps
+
     x = randn(rng, T, x_shape..., batch_size) |> pu
     st_current = st
 
     # Denoising: t = T, T-1, ..., 1
     for t_idx in num_t:-1:1
         t_float = fill(Float32(t_idx), batch_size) |> pu
+        alpha = reshape([model.alphas[t_idx]], 1, 1, 1, 1) |> pu
+        alpha_cumprod = reshape([model.alphas_cumprod[t_idx]], 1, 1, 1, 1) |> pu
+        beta = reshape([model.betas[t_idx]], 1, 1, 1, 1) |> pu
 
-        # Not on final step
         noise = if t_idx > 1
             randn(rng, T, x_shape..., batch_size) |> pu
         else
             zeros(T, x_shape..., batch_size) |> pu
         end
 
-        alpha = reshape([model.alphas[t_idx]], 1, 1, 1, 1) |> pu
-        alpha_cumprod = reshape([model.alphas_cumprod[t_idx]], 1, 1, 1, 1) |> pu
-        beta = reshape([model.betas[t_idx]], 1, 1, 1, 1) |> pu
-
         x, st_current = step_compiled(
             model, x, t_float, alpha, alpha_cumprod, beta, noise, ps, st_current
         )
+
+        # Force GC
+        if t_idx % 100 == 0
+            GC.gc()
+        end
     end
 
     return clamp.(x, 0.0f0, 1.0f0), st_current

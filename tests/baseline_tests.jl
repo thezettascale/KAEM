@@ -7,8 +7,9 @@ include("../src/baseline/training/trainer.jl")
 using .Baseline.VAEModel: VAE, init_VAE, sample
 using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM
-using .Baseline.DDPMSampling: q_sample
+using .Baseline.DDPMSampling: q_sample, denoise_step, sample_loop_eager, seed_ddpm_step_rng
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
+using .Baseline: Trainer, generate_batch, compute_test_loss
 using .Baseline.Utils: pu
 
 conf = ConfParse("tests/test_baseline_conf.ini")
@@ -167,6 +168,89 @@ function test_training()
     return @test losses[end] < losses[1] * 2
 end
 
+function test_denoise_step()
+    x_shape = (32, 32, 3)
+    batch_size = 10
+
+    model = init_DDPM(conf, x_shape; rng = rng)
+    x = randn(rng, Float32, x_shape..., batch_size) |> pu
+    _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
+
+    st_rng = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
+
+    step_compiled = Reactant.@compile denoise_step(
+        model, st_rng.x, st_rng.t_float, st_rng.alpha,
+        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
+    )
+
+    x_prev, st_new = step_compiled(
+        model, st_rng.x, st_rng.t_float, st_rng.alpha,
+        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
+    )
+
+    @test size(Array(x_prev)) == (x_shape..., batch_size)
+    return @test !any(isnan, Array(x_prev))
+end
+
+function test_sample_loop()
+    x_shape = (32, 32, 3)
+    batch_size = 10
+
+    model = init_DDPM(conf, x_shape; rng = rng)
+    x = randn(rng, Float32, x_shape..., batch_size) |> pu
+    _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
+
+    st_rng = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
+    step_compiled = Reactant.@compile denoise_step(
+        model, st_rng.x, st_rng.t_float, st_rng.alpha,
+        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
+    )
+
+    x_gen, st_final = sample_loop_eager(
+        model, step_compiled, ps, Lux.testmode(st),
+        x_shape, batch_size; rng = rng
+    )
+
+    x_gen_cpu = Array(x_gen)
+    @test size(x_gen_cpu) == (x_shape..., batch_size)
+    @test !any(isnan, x_gen_cpu)
+    @test all(x_gen_cpu .>= 0.0f0)  # Should be clamped
+    return @test all(x_gen_cpu .<= 1.0f0)
+end
+
+function test_vae_gen()
+    trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true)
+    x_gen = generate_batch(trainer)
+    x_gen_cpu = Array(x_gen)
+    @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
+    @test !any(isnan, x_gen_cpu)
+    @test all(x_gen_cpu .>= 0.0f0)
+    @test all(x_gen_cpu .<= 1.0f0)
+    return @test true
+end
+
+function test_ddpm_gen()
+    trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true)
+    x_gen = generate_batch(trainer)
+    x_gen_cpu = Array(x_gen)
+    @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
+    @test !any(isnan, x_gen_cpu)
+    @test all(x_gen_cpu .>= 0.0f0)
+    @test all(x_gen_cpu .<= 1.0f0)
+    return @test true
+end
+
+function test_gan_gen()
+    trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true)
+    x_gen = generate_batch(trainer)
+    x_gen_cpu = Array(x_gen)
+    @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
+    @test !any(isnan, x_gen_cpu)
+    @test all(x_gen_cpu .>= 0.0f0)
+    @test all(x_gen_cpu .<= 1.0f0)
+    return @test true
+end
+
 @testset "Baseline Tests" begin
     @testset "VAE" begin
         test_vae()
@@ -185,5 +269,18 @@ end
 
     @testset "Training" begin
         test_training()
+    end
+end
+
+@testset "Single-function Tests" begin
+    @testset "denoise compiled" begin
+        test_denoise_step()
+        test_sample_loop()
+    end
+
+    @testset "Gen compile" begin
+        test_vae_gen()
+        test_ddpm_gen()
+        test_gan_gen()
     end
 end

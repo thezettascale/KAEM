@@ -173,16 +173,21 @@ function init_trainer(
             MLIR = MLIR
         )
 
-        st_rng_sample = seed_ddpm_rng(model, x_shape, batch_size; rng = rng)
+        st_rng_sample = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
         gen_compiled = if MLIR
-            Reactant.@compile sample_loop(
+            Reactant.@compile denoise_step(
                 model,
+                st_rng_sample.x,
+                st_rng_sample.t_float,
+                st_rng_sample.alpha,
+                st_rng_sample.alpha_cumprod,
+                st_rng_sample.beta,
+                st_rng_sample.noise,
                 ps,
-                Lux.testmode(st),
-                st_rng_sample
+                Lux.testmode(st)
             )
         else
-            sample_loop
+            denoise_step
         end
 
     elseif model_type == :pang
@@ -346,8 +351,17 @@ function generate_batch(t::Trainer)
         z = randn(t.rng, Float32, t.model.latent_dim, t.batch_size) |> pu
         return first(t.gen_compiled(z, t.ps.gen, Lux.testmode(t.st.gen)))
     elseif typeof(t.model) <: DDPM
-        st_rng = seed_ddpm_rng(t.model, t.x_shape, t.batch_size; rng = t.rng)
-        return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng))
+        return first(
+            sample_loop_eager(
+                t.model,
+                t.gen_compiled,
+                t.ps,
+                Lux.testmode(t.st),
+                t.x_shape,
+                t.batch_size;
+                rng = t.rng
+            )
+        )
     elseif typeof(t.model) <: PangEBM
         st_rng = seed_pang_rng(t.model; rng = t.rng, batch_size = t.batch_size)
         return first(t.gen_compiled(t.model, t.ps, Lux.testmode(t.st), st_rng))

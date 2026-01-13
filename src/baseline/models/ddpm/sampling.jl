@@ -1,6 +1,6 @@
 module DDPMSampling
 
-export sample_loop, seed_ddpm_rng
+export denoise_step, sample_loop_eager, seed_ddpm_step_rng
 
 using Lux, Random
 
@@ -11,84 +11,82 @@ function q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
     return sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
 end
 
-function p_sample(
+function denoise_step(
         model,
-        x_t,
-        t_idx,
+        x,
         t_float,
         alpha,
         alpha_cumprod,
         beta,
-        ps,
-        st,
         noise,
+        ps,
+        st
     )
-    noise_pred, st_new = model(x_t, t_float, ps, st)
-
+    noise_pred, st_new = model(x, t_float, ps, st)
     coef1 = 1.0f0 ./ sqrt.(alpha)
     coef2 = beta ./ sqrt.(1.0f0 .- alpha_cumprod)
-    mean = coef1 .* (x_t .- coef2 .* noise_pred)
-
+    mean = coef1 .* (x .- coef2 .* noise_pred)
     sigma = sqrt.(beta)
     x_prev = mean .+ sigma .* noise
     return x_prev, st_new
 end
 
-# Pre-generate all RNG (for Reactant compilation)
-function seed_ddpm_rng(
+# Seed RNG for a single step (for compilation tracing)
+function seed_ddpm_step_rng(
         model::DDPM{T},
         x_shape,
         batch_size;
         rng::AbstractRNG = Random.MersenneTwister(1),
     ) where {T <: Float32}
-    num_t = model.num_timesteps
+    x_sample = randn(rng, T, x_shape..., batch_size) |> pu
+    t_float = fill(Float32(model.num_timesteps), batch_size) |> pu
+    noise = randn(rng, T, x_shape..., batch_size) |> pu
 
-    x_init = randn(rng, T, x_shape..., batch_size)
-
-    step_noise = cat(
-        randn(rng, T, x_shape..., batch_size, num_t - 1),
-        zeros(T, x_shape..., batch_size, 1);
-        dims = 5
-    )
-
-    # Timestep floats (reverse order: T, T-1, ..., 1)
-    t_floats = [fill(Float32(t), batch_size) for t in num_t:-1:1]
-    t_floats = cat([reshape(tf, 1, :) for tf in t_floats]...; dims = 1)
-
-    # Coefs for each timestep (reverse order)
-    alphas = reshape(reverse(model.alphas), 1, 1, 1, 1, num_t)
-    alphas_cumprod = reshape(reverse(model.alphas_cumprod), 1, 1, 1, 1, num_t)
-    betas = reshape(reverse(model.betas), 1, 1, 1, 1, num_t)
+    alpha = reshape([model.alphas[1]], 1, 1, 1, 1) |> pu
+    alpha_cumprod = reshape([model.alphas_cumprod[1]], 1, 1, 1, 1) |> pu
+    beta = reshape([model.betas[1]], 1, 1, 1, 1) |> pu
 
     return (
-        x_init = x_init |> pu,
-        step_noise = step_noise |> pu,
-        t_floats = t_floats |> pu,
-        alphas = alphas |> pu,
-        alphas_cumprod = alphas_cumprod |> pu,
-        betas = betas |> pu,
+        x = x_sample,
+        t_float = t_float,
+        alpha = alpha,
+        alpha_cumprod = alpha_cumprod,
+        beta = beta,
+        noise = noise,
     )
 end
 
-function sample_loop(model, ps, st, st_rng)
-    x = st_rng.x_init
-    st_current = st
+function sample_loop_eager(
+        model::DDPM{T},
+        step_compiled,
+        ps,
+        st,
+        x_shape,
+        batch_size;
+        rng::AbstractRNG = Random.MersenneTwister(1),
+    ) where {T <: Float32}
     num_t = model.num_timesteps
+    x = randn(rng, T, x_shape..., batch_size) |> pu
+    st_current = st
 
-    for i in 1:num_t
-        t_float = st_rng.t_floats[i, :]
-        noise = st_rng.step_noise[:, :, :, :, i]
-        alpha = st_rng.alphas[:, :, :, :, i]
-        alpha_cumprod = st_rng.alphas_cumprod[:, :, :, :, i]
-        beta = st_rng.betas[:, :, :, :, i]
+    # Denoising: t = T, T-1, ..., 1
+    for t_idx in num_t:-1:1
+        t_float = fill(Float32(t_idx), batch_size) |> pu
 
-        noise_pred, st_current = model(x, t_float, ps, st_current)
+        # Not on final step
+        noise = if t_idx > 1
+            randn(rng, T, x_shape..., batch_size) |> pu
+        else
+            zeros(T, x_shape..., batch_size) |> pu
+        end
 
-        coef1 = 1.0f0 ./ sqrt.(alpha)
-        coef2 = beta ./ sqrt.(1.0f0 .- alpha_cumprod)
-        mean = coef1 .* (x .- coef2 .* noise_pred)
-        sigma = sqrt.(beta)
-        x = mean .+ sigma .* noise
+        alpha = reshape([model.alphas[t_idx]], 1, 1, 1, 1) |> pu
+        alpha_cumprod = reshape([model.alphas_cumprod[t_idx]], 1, 1, 1, 1) |> pu
+        beta = reshape([model.betas[t_idx]], 1, 1, 1, 1) |> pu
+
+        x, st_current = step_compiled(
+            model, x, t_float, alpha, alpha_cumprod, beta, noise, ps, st_current
+        )
     end
 
     return clamp.(x, 0.0f0, 1.0f0), st_current

@@ -105,8 +105,9 @@ function test_ddpm()
     ps_before = Array(ps)
     t_idx = rand(rng, 1:model.num_timesteps, batch_size)
     t = Float32.(t_idx) |> pu
-    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
-    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
+    broadcast_shape = (ones(Int, length(x_shape))..., batch_size)
+    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
+    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     noise = randn(rng, Float32, x_shape..., batch_size) |> pu
     loss, ps_new, _, _ = train_step(opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise)
 

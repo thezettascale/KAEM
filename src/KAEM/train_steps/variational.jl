@@ -66,72 +66,8 @@ function elbo_loss(
         st_gen
     )
 
-    return reg - (mean(logllhood) - β * mean(kl)),
-        st_ebm,
-        st_gen,
-        st_enc
-end
-
-function closure(
-        ps,
-        x,
-        ε,
-        model,
-        st_kan,
-        st_lux_enc,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        β,
-        component_mask,
-    )
-    return first(
-        elbo_loss(
-            ps,
-            x,
-            ε,
-            model,
-            st_kan,
-            st_lux_enc,
-            st_lux_ebm,
-            st_lux_gen,
-            noise,
-            β,
-            component_mask,
-        ),
-    )
-end
-
-function grad_elbo(
-        ps,
-        x,
-        ε,
-        model,
-        st_kan,
-        st_lux_enc,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        β,
-        component_mask,
-    )
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(closure),
-            ps,
-            Enzyme.Const(x),
-            Enzyme.Const(ε),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_enc),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
-            Enzyme.Const(β),
-            Enzyme.Const(component_mask),
-        )
-    )
+    loss = reg - (mean(logllhood) - β * mean(kl))
+    return (loss, st_ebm, st_gen, st_enc)
 end
 
 struct VariationalLoss
@@ -164,35 +100,25 @@ function (l::VariationalLoss)(
     st_lux_ebm = Lux.trainmode(st_lux.ebm)
     st_lux_gen = Lux.trainmode(st_lux.gen)
 
-    ∇ = grad_elbo(
-        ps,
-        x,
-        ε,
-        l.model,
-        st_kan,
-        st_lux_enc,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        β,
-        component_mask,
+    dps = Enzyme.make_zero(ps)
+    (loss, st_lux_ebm, st_lux_gen, st_lux_enc), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(elbo_loss),
+        (Active, Const, Const, Const),
+        Duplicated(ps, dps),
+        Const(x),
+        Const(ε),
+        Const(l.model),
+        Const(st_kan),
+        Const(st_lux_enc),
+        Const(st_lux_ebm),
+        Const(st_lux_gen),
+        Const(noise),
+        Const(β),
+        Const(component_mask),
     )
 
-    loss, st_lux_ebm, st_lux_gen, st_lux_enc = elbo_loss(
-        ps,
-        x,
-        ε,
-        l.model,
-        st_kan,
-        st_lux_enc,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        β,
-        component_mask,
-    )
-
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
     return loss, ps, opt_state, st_lux_ebm, st_lux_gen
 end
 

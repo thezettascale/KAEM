@@ -131,75 +131,8 @@ function marginal_llhood(
         st_gen
     )
 
-    return reg - (steppingstone_loss + mean(logprior_pos) - ex_prior),
-        st_ebm,
-        st_gen
-end
-
-function closure(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        Δt,
-        model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        tempered_noise,
-        component_mask,
-    )
-    return first(
-        marginal_llhood(
-            ps,
-            z_posterior,
-            z_prior,
-            x,
-            Δt,
-            model,
-            st_kan,
-            st_lux_ebm,
-            st_lux_gen,
-            noise,
-            tempered_noise,
-            component_mask,
-        ),
-    )
-end
-
-function grad_thermo_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        Δt,
-        model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        tempered_noise,
-        component_mask,
-    )
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(closure),
-            ps,
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(Δt),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
-            Enzyme.Const(tempered_noise),
-            Enzyme.Const(component_mask),
-        )
-    )
+    loss = reg - (steppingstone_loss + mean(logprior_pos) - ex_prior)
+    return (loss, st_ebm, st_gen)
 end
 
 struct ThermoLoss
@@ -228,37 +161,26 @@ function (l::ThermoLoss)(
     z_prior, st_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
-    ∇ = grad_thermo_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        Δt,
-        l.model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        tempered_noise,
-        component_mask,
+    dps = Enzyme.make_zero(ps)
+    (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(marginal_llhood),
+        (Active, Const, Const),
+        Duplicated(ps, dps),
+        Const(z_posterior),
+        Const(z_prior),
+        Const(x),
+        Const(Δt),
+        Const(l.model),
+        Const(st_kan),
+        Const(st_lux_ebm),
+        Const(st_lux_gen),
+        Const(noise),
+        Const(tempered_noise),
+        Const(component_mask),
     )
 
-    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        Δt,
-        l.model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        tempered_noise,
-        component_mask,
-    )
-
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
     return loss, ps, opt_state, st_lux_ebm, st_lux_gen
 end
 

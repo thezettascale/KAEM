@@ -124,7 +124,7 @@ function marginal_llhood(
     )
     ex_prior = m.prior.bool_config.contrastive_div ? mean(logprior_prior) : 0.0f0
 
-    marginal_llhood = loss_accum(
+    marginal_llhood_val = loss_accum(
         logprior_posterior,
         logllhood,
         resampled_mask,
@@ -141,70 +141,8 @@ function marginal_llhood(
         st_gen
     )
 
-    return reg - (marginal_llhood - ex_prior), st_ebm, st_gen
-end
-
-function closure(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        resampled_mask,
-        m,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
-    )
-    return first(
-        marginal_llhood(
-            ps,
-            z_posterior,
-            z_prior,
-            x,
-            resampled_mask,
-            m,
-            st_kan,
-            st_lux_ebm,
-            st_lux_gen,
-            noise,
-            component_mask,
-        ),
-    )
-end
-
-function grad_importance_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        resampled_mask,
-        model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
-    )
-
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(closure),
-            ps,
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(resampled_mask),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
-            Enzyme.Const(component_mask),
-        )
-    )
+    loss = reg - (marginal_llhood_val - ex_prior)
+    return (loss, st_ebm, st_gen)
 end
 
 struct ImportanceLoss
@@ -227,35 +165,25 @@ function (l::ImportanceLoss)(
     st_ebm = Lux.trainmode(st_lux_ebm)
     st_gen = Lux.trainmode(st_lux_gen)
 
-    ∇ = grad_importance_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        resampled_mask,
-        l.model,
-        st_kan,
-        st_ebm,
-        st_gen,
-        noise,
-        component_mask,
+    dps = Enzyme.make_zero(ps)
+    (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(marginal_llhood),
+        (Active, Const, Const),
+        Duplicated(ps, dps),
+        Const(z_posterior),
+        Const(z_prior),
+        Const(x),
+        Const(resampled_mask),
+        Const(l.model),
+        Const(st_kan),
+        Const(st_ebm),
+        Const(st_gen),
+        Const(noise),
+        Const(component_mask),
     )
 
-    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        resampled_mask,
-        l.model,
-        st_kan,
-        st_ebm,
-        st_gen,
-        noise,
-        component_mask,
-    )
-
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
     return loss, ps, opt_state, st_lux_ebm, st_lux_gen
 end
 

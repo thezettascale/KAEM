@@ -19,6 +19,8 @@ struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     alphas_cumprod::AbstractVector{T}
     sqrt_alphas_cumprod::AbstractArray{T}
     sqrt_one_minus_alphas_cumprod::AbstractArray{T}
+    sqrt_alphas_cumprod_vec::AbstractVector{T}
+    sqrt_one_minus_alphas_cumprod_vec::AbstractVector{T}
     x_shape::Tuple{Vararg{Int}}
     batch_size::Int
 end
@@ -67,6 +69,8 @@ function init_DDPM(
         alphas_cumprod,
         sqrt_alphas_cumprod,
         sqrt_one_minus_alphas_cumprod,
+        sqrt_alphas_cumprod_vec,
+        sqrt_one_minus_alphas_cumprod_vec,
         x_shape,
         batch_size,
     )

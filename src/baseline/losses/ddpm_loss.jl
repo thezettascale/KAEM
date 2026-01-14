@@ -20,57 +20,7 @@ function noise_pred_loss(
     x_noisy = sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
     noise_pred, st_new = model(x_noisy, t, ps, Lux.trainmode(st))
     loss = mse(noise, noise_pred)
-    return loss, st_new
-end
-
-function ddpm_closure(
-        ps,
-        x_0,
-        t,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise,
-        model,
-        st,
-    )
-    return first(
-        noise_pred_loss(
-            ps,
-            x_0,
-            t,
-            sqrt_alpha,
-            sqrt_one_minus_alpha,
-            noise,
-            model,
-            st
-        )
-    )
-end
-
-function grad_ddpm(
-        ps,
-        x_0,
-        t,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise,
-        model,
-        st,
-    )
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(ddpm_closure),
-            ps,
-            Enzyme.Const(x_0),
-            Enzyme.Const(t),
-            Enzyme.Const(sqrt_alpha),
-            Enzyme.Const(sqrt_one_minus_alpha),
-            Enzyme.Const(noise),
-            Enzyme.Const(model),
-            Enzyme.Const(st),
-        )
-    )
+    return (loss, st_new)
 end
 
 struct DDPMTrainStep
@@ -87,27 +37,23 @@ function (l::DDPMTrainStep)(
         sqrt_one_minus_alpha,
         noise,
     )
-    ∇ = grad_ddpm(
-        ps,
-        x_0,
-        t,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise,
-        l.model,
-        st
+    dps = Enzyme.make_zero(ps)
+
+    (loss, st_new), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(noise_pred_loss),
+        (Active, Const),
+        Duplicated(ps, dps),
+        Const(x_0),
+        Const(t),
+        Const(sqrt_alpha),
+        Const(sqrt_one_minus_alpha),
+        Const(noise),
+        Const(l.model),
+        Const(st),
     )
-    loss, st_new = noise_pred_loss(
-        ps,
-        x_0,
-        t,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise,
-        l.model,
-        Lux.trainmode(st)
-    )
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
+
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
     return loss, ps, opt_state, st_new
 end
 

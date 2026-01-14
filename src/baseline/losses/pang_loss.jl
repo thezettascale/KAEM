@@ -7,7 +7,7 @@ using Flux: mse
 
 using ..PangEBMSampling: langevin_prior, langevin_posterior
 
-function pang_loss(ps, x, z_prior, z_post, model, st)
+function pang_total_loss(ps, x, z_prior, z_post, model, st, α_cd)
     E_post, _ = model.energy_net(z_post, ps.ebm, st.ebm)
     E_prior, _ = model.energy_net(z_prior, ps.ebm, st.ebm)
 
@@ -17,32 +17,8 @@ function pang_loss(ps, x, z_prior, z_post, model, st)
     # Reconstruction loss from posterior samples
     x_recon, _ = model.generator(z_post, ps.gen, st.gen)
     recon_loss = mse(x_recon, x)
-    return recon_loss, cd_loss
-end
-
-function pang_total_loss(ps, x, z_prior, z_post, model, st, α_cd)
-    recon, cd = pang_loss(ps, x, z_prior, z_post, model, st)
-    return recon + α_cd * cd
-end
-
-function pang_closure(ps, x, z_prior, z_post, model, st, α_cd)
-    return pang_total_loss(ps, x, z_prior, z_post, model, st, α_cd)
-end
-
-function grad_pang(ps, x, z_prior, z_post, model, st, α_cd)
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(pang_closure),
-            ps,
-            Enzyme.Const(x),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(z_post),
-            Enzyme.Const(model),
-            Enzyme.Const(st),
-            Enzyme.Const(α_cd),
-        )
-    )
+    loss = recon_loss + α_cd * cd_loss
+    return (loss, st)
 end
 
 struct PangTrainStep
@@ -54,13 +30,22 @@ function (l::PangTrainStep)(opt_state, ps, st, x, st_rng)
     z_prior = langevin_prior(l.model, ps, st, st_rng)
     z_post = langevin_posterior(l.model, x, ps, st, st_rng)
 
-    ∇ = grad_pang(ps, x, z_prior, z_post, l.model, Lux.trainmode(st), l.α_cd)
+    dps = Enzyme.make_zero(ps)
+    (loss, st_new), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(pang_total_loss),
+        (Active, Const),
+        Duplicated(ps, dps),
+        Const(x),
+        Const(z_prior),
+        Const(z_post),
+        Const(l.model),
+        Const(Lux.trainmode(st)),
+        Const(l.α_cd),
+    )
 
-    recon, cd = pang_loss(ps, x, z_prior, z_post, l.model, Lux.trainmode(st))
-    loss = recon + l.α_cd * cd
-
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
-    return loss, ps, opt_state, st
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
+    return loss, ps, opt_state, st_new
 end
 
 end

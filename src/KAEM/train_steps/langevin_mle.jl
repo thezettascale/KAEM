@@ -87,67 +87,8 @@ function marginal_llhood(
         st_gen
     )
 
-    return reg - (mean(logprior_pos) + mean(logllhood) - ex_prior),
-        st_ebm,
-        st_gen
-end
-
-function closure(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
-    )
-    return first(
-        marginal_llhood(
-            ps,
-            z_posterior,
-            z_prior,
-            x,
-            model,
-            st_kan,
-            st_lux_ebm,
-            st_lux_gen,
-            noise,
-            component_mask,
-        ),
-    )
-end
-
-function grad_langevin_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
-    )
-    return first(
-        Enzyme.gradient(
-            Enzyme.Reverse,
-            Enzyme.Const(closure),
-            ps,
-            Enzyme.Const(z_posterior),
-            Enzyme.Const(z_prior),
-            Enzyme.Const(x),
-            Enzyme.Const(model),
-            Enzyme.Const(st_kan),
-            Enzyme.Const(st_lux_ebm),
-            Enzyme.Const(st_lux_gen),
-            Enzyme.Const(noise),
-            Enzyme.Const(component_mask),
-        )
-    )
+    loss = reg - (mean(logprior_pos) + mean(logllhood) - ex_prior)
+    return (loss, st_ebm, st_gen)
 end
 
 struct LangevinLoss
@@ -169,33 +110,24 @@ function (l::LangevinLoss)(
     z_prior, st_lux_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
-    ∇ = grad_langevin_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        l.model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
+    dps = Enzyme.make_zero(ps)
+    (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        Const(marginal_llhood),
+        (Active, Const, Const),
+        Duplicated(ps, dps),
+        Const(z_posterior),
+        Const(z_prior),
+        Const(x),
+        Const(l.model),
+        Const(st_kan),
+        Const(st_lux_ebm),
+        Const(st_lux_gen),
+        Const(noise),
+        Const(component_mask),
     )
 
-    loss, st_lux_ebm, st_lux_gen = marginal_llhood(
-        ps,
-        z_posterior,
-        z_prior,
-        x,
-        l.model,
-        st_kan,
-        st_lux_ebm,
-        st_lux_gen,
-        noise,
-        component_mask,
-    )
-
-    opt_state, ps = Optimisers.update(opt_state, ps, ∇)
+    opt_state, ps = Optimisers.update(opt_state, ps, dps)
     return loss, ps, opt_state, st_lux_ebm, st_lux_gen
 end
 

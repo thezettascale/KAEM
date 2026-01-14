@@ -9,7 +9,7 @@ using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM
 using .Baseline.DDPMSampling: q_sample, denoise_step, sample_loop_eager, seed_ddpm_step_rng
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
-using .Baseline: Trainer, generate_batch, compute_test_loss
+using .Baseline: Trainer
 using .Baseline.Utils: pu
 
 conf = ConfParse("tests/test_baseline_conf.ini")
@@ -223,7 +223,10 @@ end
 
 function test_vae_gen()
     trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true)
-    x_gen = generate_batch(trainer)
+    x_gen, _ = trainer.generate_batch_fn(
+        trainer.gen_compiled, trainer.ps, trainer.st,
+        trainer.rng, trainer.x_shape, trainer.batch_size
+    )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
     @test !any(isnan, x_gen_cpu)
@@ -234,7 +237,10 @@ end
 
 function test_ddpm_gen()
     trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true)
-    x_gen = generate_batch(trainer)
+    x_gen, _ = trainer.generate_batch_fn(
+        trainer.gen_compiled, trainer.ps, trainer.st,
+        trainer.rng, trainer.x_shape, trainer.batch_size
+    )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
     @test !any(isnan, x_gen_cpu)
@@ -245,7 +251,10 @@ end
 
 function test_gan_gen()
     trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true)
-    x_gen = generate_batch(trainer)
+    x_gen, _ = trainer.generate_batch_fn(
+        trainer.gen_compiled, trainer.ps, trainer.st,
+        trainer.rng, trainer.x_shape, trainer.batch_size
+    )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
     @test !any(isnan, x_gen_cpu)

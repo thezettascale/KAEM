@@ -57,8 +57,9 @@ end
 function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
     t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
     t_batch = Float32.(t_idx) |> pu
-    sqrt_alpha = model.sqrt_alphas_cumprod_vec[t_idx] |> pu
-    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod_vec[t_idx] |> pu
+    broadcast_shape = (ones(Int, length(x_shape))..., model.batch_size)
+    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
+    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
     return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end

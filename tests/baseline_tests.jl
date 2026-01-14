@@ -174,20 +174,31 @@ end
 function test_sample_loop()
     x_shape = (32, 32, 3)
     batch_size = 10
-    stride = 10
 
     model = init_DDPM(conf, x_shape; rng = rng)
     x = randn(rng, Float32, x_shape..., batch_size) |> pu
     _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
 
-    st_rng = seed_ddpm_rng(model, x_shape, batch_size, stride; rng = rng)
+    st_rng = seed_ddpm_rng(model; rng = rng)
     loop_compiled = Reactant.@compile sample_loop(
-        model.unet, ps, Lux.testmode(st), st_rng, batch_size
+        model.unet, ps, Lux.testmode(st), st_rng,
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_num_steps
     )
 
-    st_rng_new = seed_ddpm_rng(model, x_shape, batch_size, stride; rng = rng)
+    st_rng_new = seed_ddpm_rng(model; rng = rng)
     x_gen, st_final = loop_compiled(
-        model.unet, ps, Lux.testmode(st), st_rng_new, batch_size
+        model.unet, ps, Lux.testmode(st), st_rng_new,
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_num_steps
     )
 
     x_gen_cpu = Array(x_gen)

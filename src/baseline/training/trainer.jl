@@ -192,23 +192,21 @@ function generate_batch_ddpm(
         st,
         rng,
         x_shape,
-        batch_size;
-        stride::Int = 10
+        batch_size
     )
-    st_rng = seed_ddpm_rng(
-        model,
-        x_shape,
-        model.batch_size,
-        stride;
-        rng = rng
-    )
+    st_rng = seed_ddpm_rng(model; rng = rng)
 
     x_gen, st_new = gen_compiled(
         model.unet,
         ps,
         Lux.testmode(st),
         st_rng,
-        model.batch_size
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_num_steps
     )
     return x_gen, st_new
 end
@@ -361,14 +359,7 @@ function init_trainer(
             MLIR = MLIR
         )
 
-        stride = parse(Int, retrieve(conf, "DDPM", "sampling_stride"))
-        st_rng_sample = seed_ddpm_rng(
-            model,
-            x_shape,
-            batch_size,
-            stride;
-            rng = rng
-        )
+        st_rng_sample = seed_ddpm_rng(model; rng = rng)
 
         gen_compiled = if MLIR
             Reactant.@compile sample_loop(
@@ -376,7 +367,12 @@ function init_trainer(
                 ps,
                 Lux.testmode(st),
                 st_rng_sample,
-                batch_size
+                model.sampling_timesteps |> pu,
+                model.sampling_alphas |> pu,
+                model.sampling_alphas_cumprod |> pu,
+                model.sampling_betas |> pu,
+                model.sampling_noise_masks |> pu,
+                model.sampling_num_steps
             )
         else
             sample_loop

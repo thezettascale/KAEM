@@ -40,22 +40,26 @@ function seed_ddpm_rng(
     num_steps = cld(model.num_timesteps, stride)
 
     # Strided timestep (T, T-stride, T-2*stride, ..., down to 1)
-    timesteps = Int[max(model.num_timesteps - (i - 1) * stride, 1) for i in 1:num_steps]
+    timesteps_idx = Int[max(model.num_timesteps - (i - 1) * stride, 1) for i in 1:num_steps]
 
-    alphas = Float32[model.alphas[t] for t in timesteps]
-    alphas_cumprod = Float32[model.alphas_cumprod[t] for t in timesteps]
-    betas = Float32[model.betas[t] for t in timesteps]
-    t_floats = Float32.(timesteps)
-    noise_masks = Float32[i < num_steps ? 1.0f0 : 0.0f0 for i in 1:num_steps]
+    alphas_vec = Float32[model.alphas[t] for t in timesteps_idx]
+    alphas_cumprod_vec = Float32[model.alphas_cumprod[t] for t in timesteps_idx]
+    betas_vec = Float32[model.betas[t] for t in timesteps_idx]
+    t_floats_vec = Float32.(timesteps_idx)
+    noise_masks_vec = Float32[i < num_steps ? 1.0f0 : 0.0f0 for i in 1:num_steps]
+    timesteps_batched = repeat(reshape(t_floats_vec, 1, num_steps), batch_size, 1)
+
+    ndims_x = length(x_shape) + 1  # 4 dims for (H, W, C, batch)
+    broadcast_shape = (ones(Int, ndims_x)..., num_steps)
 
     return (
         x_init = randn(rng, T, x_shape..., batch_size),
         step_noise = randn(rng, T, x_shape..., batch_size, num_steps),
-        timesteps = t_floats,
-        alphas = alphas,
-        alphas_cumprod = alphas_cumprod,
-        betas = betas,
-        noise_masks = noise_masks,
+        timesteps = timesteps_batched,
+        alphas = reshape(alphas_vec, broadcast_shape...),
+        alphas_cumprod = reshape(alphas_cumprod_vec, broadcast_shape...),
+        betas = reshape(betas_vec, broadcast_shape...),
+        noise_masks = reshape(noise_masks_vec, broadcast_shape...),
         num_steps = num_steps,
     ) |> pu
 end
@@ -70,15 +74,17 @@ function sample_loop(
     num_steps = st_rng.num_steps
 
     function step(i, x, st_curr)
-        t_float_val = st_rng.timesteps[i]
-        t_float = fill(t_float_val, batch_size)
+        mask = ((1:num_steps) .== i) |> Lux.f32
+        t_mask = reshape(mask, 1, num_steps)
+        t_float = dropdims(sum(st_rng.timesteps .* t_mask; dims = 2); dims = 2)
 
-        alpha = st_rng.alphas[i]
-        alpha_cumprod = st_rng.alphas_cumprod[i]
-        beta = st_rng.betas[i]
-        noise_mask = st_rng.noise_masks[i]
-
-        noise = selectdim(st_rng.step_noise, ndims(st_rng.step_noise), i)
+        sched_mask = reshape(mask, 1, 1, 1, 1, num_steps)
+        alpha = dropdims(sum(st_rng.alphas .* sched_mask; dims = 5); dims = 5)
+        alpha_cumprod = dropdims(sum(st_rng.alphas_cumprod .* sched_mask; dims = 5); dims = 5)
+        beta = dropdims(sum(st_rng.betas .* sched_mask; dims = 5); dims = 5)
+        noise_mask = dropdims(sum(st_rng.noise_masks .* sched_mask; dims = 5); dims = 5)
+        noise_mask_5d = reshape(mask, 1, 1, 1, 1, num_steps)
+        noise = dropdims(sum(st_rng.step_noise .* noise_mask_5d; dims = 5); dims = 5)
 
         x_new, st_new = denoise_step(
             x, t_float, alpha, alpha_cumprod, beta, noise, noise_mask,

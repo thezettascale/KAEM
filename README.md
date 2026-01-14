@@ -201,12 +201,21 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 </table>
 
 ### Thermodynamic Integration
-> Annealing as an embarrassingly parallel alternative to diffusion EBMs for improved mixing in latent space.
+> Thermo training is presented as an embarrassingly parallel, interpretable, and structure-preserving alternative to diffusion EBMs for improved mixing in latent space.
 
 <table>
   <tr>
     <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="300"/><br/><b>CelebA (vanilla)</b></td>
     <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="300"/><br/><b>CelebA (thermo)</b></td>
+  </tr>
+</table>
+
+### WIP: Latent Discovery
+> KAEM can be used to discover latent priors and algebraic structure in the latent space.
+
+<table>
+  <tr>
+    <td align="center"><img src="figures/test/test_symbolic_1_1.png" width="300"/><br/><b>Symbolic regression on untrained test prior.</b></td>
   </tr>
 </table>
 

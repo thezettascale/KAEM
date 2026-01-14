@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra
 
-ENV["GPU"] = "cpu" # Don't change
+ENV["DEVICE"] = "cpu" # Don't change
 
 include("../src/utils.jl")
 using .Utils

@@ -1,7 +1,7 @@
 using Test, Random, LinearAlgebra
 using NNlib: softmax
 
-ENV["GPU"] = "cpu"
+ENV["DEVICE"] = "cpu"
 
 include("../src/utils.jl")
 using .Utils

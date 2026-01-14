@@ -1,6 +1,6 @@
 using Test, Random, LinearAlgebra, Statistics, Lux, ConfParser, ComponentArrays, Reactant
 
-ENV["GPU"] = "gpu"
+ENV["DEVICE"] = "gpu"
 
 include("../src/utils.jl")
 using .Utils

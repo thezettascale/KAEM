@@ -23,7 +23,7 @@ end
 function (l::VAETrainStep)(opt_state, ps, st, x, ε)
     dps = Enzyme.make_zero(ps)
 
-    (loss, st_new), _ = Enzyme.autodiff(
+    _, (loss, st_new) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(elbo_loss),
         Active,

@@ -33,7 +33,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
 
     # Discriminator update
     dps_disc = Enzyme.make_zero(ps.disc)
-    (d_loss, st_disc_new), _ = Enzyme.autodiff(
+    _, (d_loss, st_disc_new) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(discriminator_loss),
         Active,
@@ -53,7 +53,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
     st_gen_new = st_gen
     if train_idx % l.n_critic == 0
         dps_gen = Enzyme.make_zero(ps_gen_new)
-        (g_loss, st_gen_new, _), _ = Enzyme.autodiff(
+        _, (g_loss, st_gen_new, _) = Enzyme.autodiff(
             Enzyme.ReverseWithPrimal,
             Const(generator_loss),
             Active,

@@ -101,7 +101,7 @@ function (l::VariationalLoss)(
     st_lux_gen = Lux.trainmode(st_lux.gen)
 
     dps = Enzyme.make_zero(ps)
-    (loss, st_lux_ebm, st_lux_gen, st_lux_enc), _ = Enzyme.autodiff(
+    _, (loss, st_lux_ebm, st_lux_gen, st_lux_enc) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(elbo_loss),
         Active,

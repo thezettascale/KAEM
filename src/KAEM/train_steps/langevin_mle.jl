@@ -111,7 +111,7 @@ function (l::LangevinLoss)(
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
     dps = Enzyme.make_zero(ps)
-    (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
+    _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(marginal_llhood),
         Active,

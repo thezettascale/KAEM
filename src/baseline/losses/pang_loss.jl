@@ -31,7 +31,7 @@ function (l::PangTrainStep)(opt_state, ps, st, x, st_rng)
     z_post = langevin_posterior(l.model, x, ps, st, st_rng)
 
     dps = Enzyme.make_zero(ps)
-    (loss, st_new), _ = Enzyme.autodiff(
+    _, (loss, st_new) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(pang_total_loss),
         Active,

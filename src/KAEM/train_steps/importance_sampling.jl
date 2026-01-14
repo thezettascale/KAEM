@@ -166,7 +166,7 @@ function (l::ImportanceLoss)(
     st_gen = Lux.trainmode(st_lux_gen)
 
     dps = Enzyme.make_zero(ps)
-    (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
+    _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(marginal_llhood),
         Active,

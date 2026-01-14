@@ -124,9 +124,11 @@ function test_ddpm_q()
 
     x_0 = randn(rng, Float32, x_shape..., batch_size)
     noise = randn(rng, Float32, x_shape..., batch_size)
+    broadcast_shape = (ones(Int, length(x_shape))..., batch_size)
+
     t_idx = rand(rng, 1:model.num_timesteps, batch_size)
-    sqrt_alpha = model.sqrt_alphas_cumprod[t_idx]
-    sqrt_one_minus_alpha = model.sqrt_one_minus_alphas_cumprod[t_idx]
+    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape)
+    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape)
 
     x_noisy = q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
 
@@ -134,13 +136,13 @@ function test_ddpm_q()
     @test !any(isnan, x_noisy)
 
     t_early = fill(1, batch_size)
-    sqrt_alpha_early = model.sqrt_alphas_cumprod[t_early]
-    sqrt_one_minus_alpha_early = model.sqrt_one_minus_alphas_cumprod[t_early]
+    sqrt_alpha_early = reshape(model.sqrt_alphas_cumprod_vec[t_early], broadcast_shape)
+    sqrt_one_minus_alpha_early = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_early], broadcast_shape)
     x_noisy_early = q_sample(x_0, sqrt_alpha_early, sqrt_one_minus_alpha_early, noise)
 
     t_late = fill(model.num_timesteps, batch_size)
-    sqrt_alpha_late = model.sqrt_alphas_cumprod[t_late]
-    sqrt_one_minus_alpha_late = model.sqrt_one_minus_alphas_cumprod[t_late]
+    sqrt_alpha_late = reshape(model.sqrt_alphas_cumprod_vec[t_late], broadcast_shape)
+    sqrt_one_minus_alpha_late = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_late], broadcast_shape)
     x_noisy_late = q_sample(x_0, sqrt_alpha_late, sqrt_one_minus_alpha_late, noise)
 
     signal_early = mean(abs.(x_noisy_early .- noise))

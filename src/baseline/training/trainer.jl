@@ -192,16 +192,23 @@ function generate_batch_ddpm(
         st,
         rng,
         x_shape,
-        batch_size
+        batch_size;
+        stride::Int = 10
     )
-    x_gen, st_new = sample_loop_eager(
+    st_rng = seed_ddpm_rng(
         model,
-        gen_compiled,
+        x_shape,
+        model.batch_size,
+        stride;
+        rng = rng
+    )
+
+    x_gen, st_new = gen_compiled(
+        model.unet,
         ps,
         Lux.testmode(st),
-        x_shape,
-        model.batch_size;
-        rng = rng
+        st_rng,
+        model.batch_size
     )
     return x_gen, st_new
 end
@@ -260,6 +267,7 @@ function init_trainer(
     checkpoint_every = -1
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
 
+    stride = 10
     dataset, x_shape, save_dataset = get_vision_dataset(
         dataset_name, N_train, N_test, num_generated_samples;
         img_resize = img_resize, cnn = true,
@@ -353,21 +361,25 @@ function init_trainer(
             MLIR = MLIR
         )
 
-        st_rng_sample = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
+        stride = parse(Int, retrieve(conf, "DDPM", "sampling_stride"))
+        st_rng_sample = seed_ddpm_rng(
+            model,
+            x_shape,
+            batch_size,
+            stride;
+            rng = rng
+        )
+
         gen_compiled = if MLIR
-            Reactant.@compile denoise_step(
-                model,
-                st_rng_sample.x,
-                st_rng_sample.t_float,
-                st_rng_sample.alpha,
-                st_rng_sample.alpha_cumprod,
-                st_rng_sample.beta,
-                st_rng_sample.noise,
+            Reactant.@compile sample_loop(
+                model.unet,
                 ps,
-                Lux.testmode(st)
+                Lux.testmode(st),
+                st_rng_sample,
+                batch_size
             )
         else
-            denoise_step
+            sample_loop
         end
 
     elseif model_type == :pang
@@ -414,7 +426,7 @@ function init_trainer(
     generate_batch_fns = Dict(
         :vae => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape, batch_size),
         :gan => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size; stride = stride),
         :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
     )
 

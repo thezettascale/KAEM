@@ -1,115 +1,103 @@
 module DDPMSampling
 
-export denoise_step, sample_loop_eager, seed_ddpm_step_rng
+export sample_loop, seed_ddpm_rng
 
 using Lux, Random
+using Reactant: @trace
 
 using ..Utils
 using ..DDPMModel: DDPM
 
-function q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
-    return sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
-end
-
 function denoise_step(
-        model,
         x,
         t_float,
         alpha,
         alpha_cumprod,
         beta,
         noise,
+        noise_mask,
+        unet,
         ps,
         st
     )
-    noise_pred, st_new = model(x, t_float, ps, st)
-    coef1 = 1.0f0 ./ sqrt.(alpha)
-    coef2 = beta ./ sqrt.(1.0f0 .- alpha_cumprod)
+    noise_pred, st_new = unet(x, t_float, ps, st)
+    coef1 = 1.0f0 / sqrt(alpha)
+    coef2 = beta / sqrt(1.0f0 - alpha_cumprod)
     mean = coef1 .* (x .- coef2 .* noise_pred)
-    sigma = sqrt.(beta)
-    x_prev = mean .+ sigma .* noise
+    sigma = sqrt(beta)
+    x_prev = mean .+ sigma .* noise .* noise_mask
     return x_prev, st_new
 end
 
-# Seed RNG for a single step (for compilation tracing)
-function seed_ddpm_step_rng(
+function seed_ddpm_rng(
         model::DDPM{T},
         x_shape,
-        batch_size;
+        batch_size,
+        stride::Int;
         rng::AbstractRNG = Random.MersenneTwister(1),
     ) where {T <: Float32}
-    x_sample = randn(rng, T, x_shape..., batch_size) |> pu
-    t_float = fill(Float32(model.num_timesteps), batch_size) |> pu
-    noise = randn(rng, T, x_shape..., batch_size) |> pu
 
-    alpha = model.alphas[1]
-    alpha_cumprod = model.alphas_cumprod[1]
-    beta = model.betas[1]
+    num_steps = cld(model.num_timesteps, stride)
+
+    # Strided timestep (T, T-stride, T-2*stride, ..., down to 1)
+    timesteps = Int[max(model.num_timesteps - (i - 1) * stride, 1) for i in 1:num_steps]
+
+    alphas = Float32[model.alphas[t] for t in timesteps]
+    alphas_cumprod = Float32[model.alphas_cumprod[t] for t in timesteps]
+    betas = Float32[model.betas[t] for t in timesteps]
+    t_floats = Float32.(timesteps)
+    noise_masks = Float32[i < num_steps ? 1.0f0 : 0.0f0 for i in 1:num_steps]
 
     return (
-        x = x_sample,
-        t_float = t_float,
-        alpha = alpha,
-        alpha_cumprod = alpha_cumprod,
-        beta = beta,
-        noise = noise,
-    )
+        x_init = randn(rng, T, x_shape..., batch_size),
+        step_noise = randn(rng, T, x_shape..., batch_size, num_steps),
+        timesteps = t_floats,
+        alphas = alphas,
+        alphas_cumprod = alphas_cumprod,
+        betas = betas,
+        noise_masks = noise_masks,
+        num_steps = num_steps,
+    ) |> pu
 end
 
-function sample_loop_eager(
-        model::DDPM{T},
-        step_compiled,
+function sample_loop(
+        unet,
         ps,
         st,
-        x_shape,
-        batch_size;
-        rng::AbstractRNG = Random.MersenneTwister(1),
-    ) where {T <: Float32}
-    num_t = model.num_timesteps
+        st_rng,
+        batch_size::Int,
+    )
+    num_steps = st_rng.num_steps
 
-    x = randn(rng, T, x_shape..., batch_size) |> pu
-    st_current = st
+    function step(i, x, st_curr)
+        t_float_val = st_rng.timesteps[i]
+        t_float = fill(t_float_val, batch_size)
 
-    # Denoising: t = T, T-1, ..., 1
-    for t_idx in num_t:-1:1
-        t_float = fill(Float32(t_idx), batch_size) |> pu
-        alpha = model.alphas[t_idx]
-        alpha_cumprod = model.alphas_cumprod[t_idx]
-        beta = model.betas[t_idx]
+        alpha = st_rng.alphas[i]
+        alpha_cumprod = st_rng.alphas_cumprod[i]
+        beta = st_rng.betas[i]
+        noise_mask = st_rng.noise_masks[i]
 
-        noise = if t_idx > 1
-            randn(rng, T, x_shape..., batch_size) |> pu
-        else
-            zeros(T, x_shape..., batch_size) |> pu
-        end
+        noise = selectdim(st_rng.step_noise, ndims(st_rng.step_noise), i)
 
-        x, st_current = step_compiled(
-            model,
-            x,
-            t_float,
-            alpha,
-            alpha_cumprod,
-            beta,
-            noise,
-            ps,
-            st_current
+        x_new, st_new = denoise_step(
+            x, t_float, alpha, alpha_cumprod, beta, noise, noise_mask,
+            unet, ps, st_curr
         )
-
-        # Force GC
-        if t_idx % 100 == 0
-            GC.gc()
-        end
+        return x_new, st_new
     end
 
-    return ifelse.(
-            x .> 1.0f0,
-            1.0f0,
-            ifelse.(
-                x .< 0.0f0,
-                0.0f0,
-                x
-            )
-        ), st_current
+    x_init = st_rng.x_init
+    state = (1, x_init, st)
+    @trace while first(state) <= num_steps
+        i, x_curr, st_curr = state
+        x_new, st_new = step(i, x_curr, st_curr)
+        state = (i + 1, x_new, st_new)
+    end
+
+    _, x_final, st_final = state
+    x_clamped = clamp.(x_final, 0.0f0, 1.0f0)
+    return x_clamped, st_final
 end
 
 end

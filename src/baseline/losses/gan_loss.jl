@@ -36,7 +36,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
     (d_loss, st_disc_new), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(discriminator_loss),
-        (Active, Const),
+        Active,
         Duplicated(ps.disc, dps_disc),
         Const(x_real),
         Const(x_fake),
@@ -56,7 +56,7 @@ function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, tra
         (g_loss, st_gen_new, _), _ = Enzyme.autodiff(
             Enzyme.ReverseWithPrimal,
             Const(generator_loss),
-            (Active, Const, Const),
+            Active,
             Duplicated(ps_gen_new, dps_gen),
             Const(z),
             Const(gen),

@@ -104,7 +104,7 @@ function (l::VariationalLoss)(
     (loss, st_lux_ebm, st_lux_gen, st_lux_enc), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(elbo_loss),
-        (Active, Const, Const, Const),
+        Active,
         Duplicated(ps, dps),
         Const(x),
         Const(ε),

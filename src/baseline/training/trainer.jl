@@ -60,8 +60,8 @@ function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
     sqrt_alpha_gathered = model.sqrt_alphas_cumprod_vec[t_idx]
     sqrt_one_minus_alpha_gathered = model.sqrt_one_minus_alphas_cumprod_vec[t_idx]
     broadcast_shape = (ones(Int, length(x_shape))..., model.batch_size)
-    sqrt_alpha = reshape(sqrt_alpha_gathered, broadcast_shape) |> pu
-    sqrt_one_minus_alpha = reshape(sqrt_one_minus_alpha_gathered, broadcast_shape) |> pu
+    sqrt_alpha = collect(reshape(sqrt_alpha_gathered, broadcast_shape)) |> pu
+    sqrt_one_minus_alpha = collect(reshape(sqrt_one_minus_alpha_gathered, broadcast_shape)) |> pu
     noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
     return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end

@@ -42,7 +42,7 @@ function (l::DDPMTrainStep)(
     (loss, st_new), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(noise_pred_loss),
-        (Active, Const),
+        Active,
         Duplicated(ps, dps),
         Const(x_0),
         Const(t),

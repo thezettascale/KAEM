@@ -165,7 +165,7 @@ function (l::ThermoLoss)(
     (loss, st_lux_ebm, st_lux_gen), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(marginal_llhood),
-        (Active, Const, Const),
+        Active,
         Duplicated(ps, dps),
         Const(z_posterior),
         Const(z_prior),

@@ -34,7 +34,7 @@ function (l::PangTrainStep)(opt_state, ps, st, x, st_rng)
     (loss, st_new), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(pang_total_loss),
-        (Active, Const),
+        Active,
         Duplicated(ps, dps),
         Const(x),
         Const(z_prior),

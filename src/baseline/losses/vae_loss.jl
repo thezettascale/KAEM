@@ -26,7 +26,7 @@ function (l::VAETrainStep)(opt_state, ps, st, x, ε)
     (loss, st_new), _ = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(elbo_loss),
-        (Active, Const),
+        Active,
         Duplicated(ps, dps),
         Const(x),
         Const(ε),

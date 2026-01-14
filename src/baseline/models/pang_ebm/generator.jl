@@ -4,6 +4,8 @@ export PangGenerator, init_pang_generator
 
 using Lux, Accessors, NNlib, Random
 
+using ..Utils
+
 struct PangGenerator <: Lux.AbstractLuxLayer
     depth::Int
     project::Lux.Dense

@@ -2,6 +2,8 @@ module LatentEBM
 
 using Lux, Random, Accessors, NNlib
 
+using ..Utils
+
 export EnergyMLP, init_energy_mlp
 
 struct EnergyMLP <: Lux.AbstractLuxLayer

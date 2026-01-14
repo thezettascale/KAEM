@@ -1,7 +1,7 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays
 
 ENV["THERMO"] = "true"
-ENV["GPU"] = true
+ENV["GPU"] = "gpu"
 
 include("../src/utils.jl")
 using .Utils

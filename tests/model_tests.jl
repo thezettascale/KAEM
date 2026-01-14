@@ -2,7 +2,7 @@ using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Reactant
 using MultivariateStats: reconstruct
 using MLDataDevices: cpu_device
 
-ENV["GPU"] = true
+ENV["GPU"] = "gpu"
 
 include("../src/utils.jl")
 using .Utils

@@ -1,8 +1,7 @@
 using Test, Random, LinearAlgebra, Lux, ConfParser, ComponentArrays, Reactant
 using MLDataDevices: cpu_device
 
-ENV["GPU"] = "false"
-ENV["REACTANT_PREFER_CPU"] = "true"
+ENV["GPU"] = "gpu"
 
 include("../src/utils.jl")
 using .Utils

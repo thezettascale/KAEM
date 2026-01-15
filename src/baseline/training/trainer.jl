@@ -290,16 +290,17 @@ function init_trainer(
     end
 
     x_sample = first(train_loader) |> pu
-    optimizer = create_opt(conf)
 
     opt_state, opt_state_gen, opt_state_disc = nothing, nothing, nothing
     if model_type == :vae
         model = init_VAE(conf, x_shape; rng = rng)
         β = parse(Float32, retrieve(conf, "VAE", "beta"))
+        lr_vae = parse(Float32, retrieve(conf, "VAE", "learning_rate"))
+        opt_vae = ManualAdam(lr_vae)
         model, train_step, opt_state, ps, st = prep_vae(
             model,
             x_sample,
-            optimizer.rule();
+            opt_vae;
             rng = rng,
             MLIR = MLIR,
             β = β
@@ -349,10 +350,12 @@ function init_trainer(
 
     elseif model_type == :ddpm
         model = init_DDPM(conf, x_shape; rng = rng)
+        lr_ddpm = parse(Float32, retrieve(conf, "DDPM", "learning_rate"))
+        opt_ddpm = ManualAdam(lr_ddpm)
         model, train_step, opt_state, ps, st = prep_ddpm(
             model,
             x_sample,
-            optimizer.rule();
+            opt_ddpm;
             rng = rng,
             MLIR = MLIR
         )
@@ -380,10 +383,12 @@ function init_trainer(
     elseif model_type == :pang
         model = init_PangEBM(conf, x_shape; rng = rng)
         α_cd = parse(Float32, retrieve(conf, "PANG", "alpha_cd"))
+        lr_pang = parse(Float32, retrieve(conf, "PANG", "learning_rate"))
+        opt_pang = ManualAdam(lr_pang)
         model, train_step, opt_state, ps, st = prep_pang(
             model,
             x_sample,
-            optimizer.rule();
+            opt_pang;
             rng = rng,
             MLIR = MLIR,
             α_cd = α_cd

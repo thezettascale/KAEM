@@ -214,7 +214,7 @@ function test_vae_gen()
     trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
@@ -228,7 +228,7 @@ function test_ddpm_gen()
     trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
@@ -242,7 +242,7 @@ function test_gan_gen()
     trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)

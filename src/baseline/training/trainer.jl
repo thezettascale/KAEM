@@ -163,8 +163,7 @@ function generate_batch_vae(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), z)
@@ -177,8 +176,7 @@ function generate_batch_gan(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     x_gen, st_gen_new = gen_compiled(z, ps.gen, Lux.testmode(st.gen))
@@ -192,8 +190,7 @@ function generate_batch_ddpm(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     st_rng = seed_ddpm_rng(model; rng = rng)
 
@@ -220,8 +217,7 @@ function generate_batch_pang(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
     x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), st_rng)
@@ -423,10 +419,10 @@ function init_trainer(
     )
 
     generate_batch_fns = Dict(
-        :vae => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :gan => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :vae => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape),
+        :gan => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape),
+        :ddpm => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape),
+        :pang => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape),
     )
 
     prepare_batch_fn = prepare_batch_fns[model_type]
@@ -515,8 +511,7 @@ function train!(t::Trainer)
             ps,
             st,
             t.rng,
-            t.x_shape,
-            t.batch_size
+            t.x_shape
         )
         return x_gen, st_new
     end

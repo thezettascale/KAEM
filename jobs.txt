@@ -28,8 +28,8 @@ CELEBA vanilla
 # CELEBA variational
 
 # CIFAR
-CIFAR10 vanilla
 CIFAR10 thermo
+CIFAR10 vanilla
 
 # DARCY_FLOW vanilla
 

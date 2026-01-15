@@ -32,9 +32,9 @@ function neg_energy_sum(z, energy_net, ps_ebm, st_ebm)
 end
 
 # log p(z|x) = log p(x|z) + log p(z) = log p(x|z) - E(z)
-function log_posterior_sum(z, x, model, ps, st, σ²)
+function log_posterior_sum(z, x, model, ps, st)
     E, _ = model.energy_net(z, ps.ebm, st.ebm)
-    ll, _ = log_likelihood(model, x, z, ps, st; σ² = σ²)
+    ll, _ = log_likelihood(model, x, z, ps, st)
     return sum(ll) - sum(E)
 end
 
@@ -69,7 +69,6 @@ end
 
 # ULA for posterior: sample z ~ p(z|x) ∝ p(x|z)p(z)
 function langevin_posterior(model::PangEBM, x, ps, st, st_rng)
-    σ² = model.likelihood_variance
     σ_prior² = model.prior_sigma^2
     z = st_rng.post_init
     η = model.post_sgld_step_size
@@ -86,11 +85,10 @@ function langevin_posterior(model::PangEBM, x, ps, st, st_rng)
                 Enzyme.Const(model),
                 Enzyme.Const(ps),
                 Enzyme.Const(st),
-                Enzyme.Const(σ²),
             )
         )
 
-        # Gaussian ref: ∇ log p_gaussian(z) = -z/σ_prior²
+        # Gaussian prior: ∇ log p_gaussian(z) = -z/σ_prior²
         ∇z_prior = -z ./ σ_prior²
 
         ε = st_rng.post_noise[:, :, step]

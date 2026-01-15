@@ -553,7 +553,9 @@ function train!(t::Trainer)
         for (batch_idx, x) in enumerate(t.train_loader)
             batch_args = prepare_batch(x, train_idx)
             loss, ps, opt_state, opt_state_gen, opt_state_disc, st = call_train_step(batch_args)
-            train_loss += Float32(loss)
+            loss_val = Float32(loss)
+            train_loss += loss_val
+            println("Iter: $train_idx, Loss: $loss_val")
             train_idx += 1
         end
 

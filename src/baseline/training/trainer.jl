@@ -55,13 +55,14 @@ function prepare_batch_gan(model, rng, x_shape, x, train_idx)
 end
 
 function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
+    x_norm = x .* 2.0f0 .- 1.0f0 # IMPORTANT: [0,1] to [-1,1], so DDPM Gaussian works
     t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
     t_batch = Float32.(t_idx) |> pu
     broadcast_shape = (ones(Int, length(x_shape))..., model.batch_size)
     sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
-    return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    return (x_norm, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end
 
 function prepare_batch_pang(model, rng, x_shape, x, train_idx)
@@ -209,7 +210,8 @@ function generate_batch_ddpm(
         model.sampling_step_masks |> pu,
         model.sampling_num_steps
     )
-    return x_gen, st_new
+    x_gen_normalized = (x_gen .+ 1.0f0) ./ 2.0f0
+    return x_gen_normalized, st_new
 end
 
 function generate_batch_pang(

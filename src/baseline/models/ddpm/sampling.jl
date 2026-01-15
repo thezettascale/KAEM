@@ -124,7 +124,7 @@ function sample_loop(
     end
 
     _, x_final, st_final = state
-    x_clamped = clamp.(x_final, 0.0f0, 1.0f0)
+    x_clamped = clamp.(x_final, -1.0f0, 1.0f0)
     return x_clamped, st_final
 end
 

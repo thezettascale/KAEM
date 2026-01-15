@@ -561,16 +561,14 @@ function train!(t::Trainer)
         end
 
         train_loss /= num_batches
-
-        test_loss = compute_test()
         now_time = time() - start_time
 
-        println(
-            "Epoch: $epoch, Train Loss: $train_loss, Test Loss: $test_loss"
-        )
-        log_loss(now_time, epoch, train_loss, test_loss)
-
         if t.gen_every > 0 && epoch % t.gen_every == 0
+            test_loss = compute_test()
+            println(
+                "Epoch: $epoch, Train Loss: $train_loss, Test Loss: $test_loss"
+            )
+            log_loss(now_time, epoch, train_loss, test_loss)
             num_batches_gen = fld(t.num_generated_samples, 10) ÷ t.batch_size # Save 1/10 of the samples to conserve space
 
             if num_batches_gen > 0
@@ -589,6 +587,9 @@ function train!(t::Trainer)
                 gen_data = cat(batches_to_cat..., dims = concat_dim)
                 save_generated_images(gen_data, epoch)
             end
+        else
+            println("Epoch: $epoch, Train Loss: $train_loss")
+            log_loss(now_time, epoch, train_loss)
         end
 
         if t.checkpoint_every > 0 && epoch % t.checkpoint_every == 0

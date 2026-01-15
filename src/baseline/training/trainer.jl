@@ -55,13 +55,14 @@ function prepare_batch_gan(model, rng, x_shape, x, train_idx)
 end
 
 function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
+    x_norm = x .* 2.0f0 .- 1.0f0 # IMPORTANT: [0,1] to [-1,1], so DDPM Gaussian works
     t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
     t_batch = Float32.(t_idx) |> pu
     broadcast_shape = (ones(Int, length(x_shape))..., model.batch_size)
     sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
     noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
-    return (x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    return (x_norm, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
 end
 
 function prepare_batch_pang(model, rng, x_shape, x, train_idx)
@@ -162,8 +163,7 @@ function generate_batch_vae(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), z)
@@ -176,8 +176,7 @@ function generate_batch_gan(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
     x_gen, st_gen_new = gen_compiled(z, ps.gen, Lux.testmode(st.gen))
@@ -191,19 +190,25 @@ function generate_batch_ddpm(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
-    x_gen, st_new = sample_loop_eager(
-        model,
-        gen_compiled,
+    st_rng = seed_ddpm_rng(model; rng = rng)
+
+    x_gen, st_new = gen_compiled(
+        model.unet,
         ps,
         Lux.testmode(st),
-        x_shape,
-        model.batch_size;
-        rng = rng
+        st_rng,
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
+        model.sampling_num_steps
     )
-    return x_gen, st_new
+    x_gen_normalized = (x_gen .+ 1.0f0) ./ 2.0f0
+    return x_gen_normalized, st_new
 end
 
 function generate_batch_pang(
@@ -212,8 +217,7 @@ function generate_batch_pang(
         ps,
         st,
         rng,
-        x_shape,
-        batch_size
+        x_shape
     )
     st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
     x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), st_rng)
@@ -286,16 +290,17 @@ function init_trainer(
     end
 
     x_sample = first(train_loader) |> pu
-    optimizer = create_opt(conf)
 
     opt_state, opt_state_gen, opt_state_disc = nothing, nothing, nothing
     if model_type == :vae
         model = init_VAE(conf, x_shape; rng = rng)
         β = parse(Float32, retrieve(conf, "VAE", "beta"))
+        lr_vae = parse(Float32, retrieve(conf, "VAE", "learning_rate"))
+        opt_vae = ManualAdam(lr_vae)
         model, train_step, opt_state, ps, st = prep_vae(
             model,
             x_sample,
-            optimizer.rule();
+            opt_vae;
             rng = rng,
             MLIR = MLIR,
             β = β
@@ -345,38 +350,45 @@ function init_trainer(
 
     elseif model_type == :ddpm
         model = init_DDPM(conf, x_shape; rng = rng)
+        lr_ddpm = parse(Float32, retrieve(conf, "DDPM", "learning_rate"))
+        opt_ddpm = ManualAdam(lr_ddpm)
         model, train_step, opt_state, ps, st = prep_ddpm(
             model,
             x_sample,
-            optimizer.rule();
+            opt_ddpm;
             rng = rng,
             MLIR = MLIR
         )
 
-        st_rng_sample = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
+        st_rng_sample = seed_ddpm_rng(model; rng = rng)
+
         gen_compiled = if MLIR
-            Reactant.@compile denoise_step(
-                model,
-                st_rng_sample.x,
-                st_rng_sample.t_float,
-                st_rng_sample.alpha,
-                st_rng_sample.alpha_cumprod,
-                st_rng_sample.beta,
-                st_rng_sample.noise,
+            Reactant.@compile sample_loop(
+                model.unet,
                 ps,
-                Lux.testmode(st)
+                Lux.testmode(st),
+                st_rng_sample,
+                model.sampling_timesteps |> pu,
+                model.sampling_alphas |> pu,
+                model.sampling_alphas_cumprod |> pu,
+                model.sampling_betas |> pu,
+                model.sampling_noise_masks |> pu,
+                model.sampling_step_masks |> pu,
+                model.sampling_num_steps
             )
         else
-            denoise_step
+            sample_loop
         end
 
     elseif model_type == :pang
         model = init_PangEBM(conf, x_shape; rng = rng)
         α_cd = parse(Float32, retrieve(conf, "PANG", "alpha_cd"))
+        lr_pang = parse(Float32, retrieve(conf, "PANG", "learning_rate"))
+        opt_pang = ManualAdam(lr_pang)
         model, train_step, opt_state, ps, st = prep_pang(
             model,
             x_sample,
-            optimizer.rule();
+            opt_pang;
             rng = rng,
             MLIR = MLIR,
             α_cd = α_cd
@@ -412,10 +424,10 @@ function init_trainer(
     )
 
     generate_batch_fns = Dict(
-        :vae => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :gan => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
+        :vae => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape),
+        :gan => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape),
+        :ddpm => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape),
+        :pang => (gen_compiled, ps, st, rng, x_shape) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape),
     )
 
     prepare_batch_fn = prepare_batch_fns[model_type]
@@ -504,8 +516,7 @@ function train!(t::Trainer)
             ps,
             st,
             t.rng,
-            t.x_shape,
-            t.batch_size
+            t.x_shape
         )
         return x_gen, st_new
     end

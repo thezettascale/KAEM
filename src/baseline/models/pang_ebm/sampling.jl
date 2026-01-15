@@ -42,6 +42,7 @@ function langevin_prior(model::PangEBM, ps, st, st_rng)
     z = st_rng.prior_init
     η = model.prior_sgld_step_size
     σ = model.noise_scale
+    σ_prior² = model.prior_sigma^2
     sqrt_2η = sqrt(2.0f0 * η)
 
     for step in 1:model.prior_sgld_steps
@@ -56,15 +57,20 @@ function langevin_prior(model::PangEBM, ps, st, st_rng)
             )
         )
 
+        # Gaussian prior gradient: ∇ log p_gaussian(z) = -z/σ_prior²
+        ∇z_prior = -z ./ σ_prior²
+
         ε = st_rng.prior_noise[:, :, step]
-        z = z .+ η .* ∇z .+ σ .* sqrt_2η .* ε
+        z = z .+ η .* (∇z .+ ∇z_prior) .+ σ .* sqrt_2η .* ε
     end
 
     return z
 end
 
 # ULA for posterior: sample z ~ p(z|x) ∝ p(x|z)p(z)
-function langevin_posterior(model::PangEBM, x, ps, st, st_rng; σ²::Float32 = 1.0f0)
+function langevin_posterior(model::PangEBM, x, ps, st, st_rng)
+    σ² = model.likelihood_variance
+    σ_prior² = model.prior_sigma^2
     z = st_rng.post_init
     η = model.post_sgld_step_size
     σ = model.noise_scale
@@ -84,8 +90,11 @@ function langevin_posterior(model::PangEBM, x, ps, st, st_rng; σ²::Float32 = 1
             )
         )
 
+        # Gaussian ref: ∇ log p_gaussian(z) = -z/σ_prior²
+        ∇z_prior = -z ./ σ_prior²
+
         ε = st_rng.post_noise[:, :, step]
-        z = z .+ η .* ∇z .+ σ .* sqrt_2η .* ε
+        z = z .+ η .* (∇z .+ ∇z_prior) .+ σ .* sqrt_2η .* ε
     end
 
     return z

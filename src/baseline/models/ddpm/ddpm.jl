@@ -2,7 +2,7 @@ module DDPMModel
 
 export DDPM, init_DDPM
 
-using Lux, ConfParser, Random
+using Lux, ConfParser, Random, LinearAlgebra
 
 using ..Utils
 
@@ -23,6 +23,14 @@ struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     sqrt_one_minus_alphas_cumprod_vec::AbstractVector{T}
     x_shape::Tuple{Vararg{Int}}
     batch_size::Int
+    sampling_stride::Int
+    sampling_num_steps::Int
+    sampling_timesteps::AbstractArray{T}
+    sampling_alphas::AbstractArray{T}
+    sampling_alphas_cumprod::AbstractArray{T}
+    sampling_betas::AbstractArray{T}
+    sampling_noise_masks::AbstractArray{T}
+    sampling_step_masks::AbstractArray{T}
 end
 
 function init_DDPM(
@@ -37,6 +45,7 @@ function init_DDPM(
     kernel_size = parse(Int, retrieve(conf, "DDPM", "kernel_size"))
     time_dim = parse(Int, retrieve(conf, "DDPM", "time_dim"))
     batch_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+    sampling_stride = parse(Int, retrieve(conf, "DDPM", "sampling_stride"))
 
     in_channels = last(x_shape)
 
@@ -57,6 +66,20 @@ function init_DDPM(
         num_timesteps
     )
 
+    # Strided denoising schedule
+    sampling_num_steps = cld(num_timesteps, sampling_stride)
+    timesteps_idx = [max(num_timesteps - (i - 1) * sampling_stride, 1) for i in 1:sampling_num_steps]
+
+    ndims_x = length(x_shape) + 1  # (H, W, C, batch)
+    broadcast_shape = (ones(Int, ndims_x)..., sampling_num_steps)
+
+    sampling_timesteps = repeat(Float32.(timesteps_idx)', batch_size, 1)
+    sampling_alphas = reshape(alphas[timesteps_idx], broadcast_shape...)
+    sampling_alphas_cumprod = reshape(alphas_cumprod[timesteps_idx], broadcast_shape...)
+    sampling_betas = reshape(betas[timesteps_idx], broadcast_shape...)
+    sampling_noise_masks = reshape(vcat(ones(Float32, sampling_num_steps - 1), 0.0f0), broadcast_shape...)
+    sampling_step_masks = Matrix{Float32}(I, sampling_num_steps, sampling_num_steps)
+
     unet = init_unet(in_channels, channels, kernel_size, time_dim)
 
     return DDPM{Float32}(
@@ -73,6 +96,14 @@ function init_DDPM(
         sqrt_one_minus_alphas_cumprod_vec,
         x_shape,
         batch_size,
+        sampling_stride,
+        sampling_num_steps,
+        sampling_timesteps,
+        sampling_alphas,
+        sampling_alphas_cumprod,
+        sampling_betas,
+        sampling_noise_masks,
+        sampling_step_masks,
     )
 end
 

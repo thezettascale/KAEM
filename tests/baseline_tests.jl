@@ -7,7 +7,7 @@ include("../src/baseline/training/trainer.jl")
 using .Baseline.VAEModel: VAE, init_VAE, sample
 using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM
-using .Baseline.DDPMSampling: q_sample, denoise_step, sample_loop_eager, seed_ddpm_step_rng
+using .Baseline.DDPMSampling: sample_loop, seed_ddpm_rng
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
 using .Baseline: Trainer
 using .Baseline.Utils: pu
@@ -130,7 +130,7 @@ function test_ddpm_q()
     sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape)
     sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape)
 
-    x_noisy = q_sample(x_0, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    x_noisy = sqrt_alpha .* x_0 .+ sqrt_one_minus_alpha .* noise
 
     @test size(x_noisy) == size(x_0)
     @test !any(isnan, x_noisy)
@@ -138,12 +138,12 @@ function test_ddpm_q()
     t_early = fill(1, batch_size)
     sqrt_alpha_early = reshape(model.sqrt_alphas_cumprod_vec[t_early], broadcast_shape)
     sqrt_one_minus_alpha_early = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_early], broadcast_shape)
-    x_noisy_early = q_sample(x_0, sqrt_alpha_early, sqrt_one_minus_alpha_early, noise)
+    x_noisy_early = sqrt_alpha_early .* x_0 .+ sqrt_one_minus_alpha_early .* noise
 
     t_late = fill(model.num_timesteps, batch_size)
     sqrt_alpha_late = reshape(model.sqrt_alphas_cumprod_vec[t_late], broadcast_shape)
     sqrt_one_minus_alpha_late = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_late], broadcast_shape)
-    x_noisy_late = q_sample(x_0, sqrt_alpha_late, sqrt_one_minus_alpha_late, noise)
+    x_noisy_late = sqrt_alpha_late .* x_0 .+ sqrt_one_minus_alpha_late .* noise
 
     signal_early = mean(abs.(x_noisy_early .- noise))
     signal_late = mean(abs.(x_noisy_late .- noise))
@@ -171,30 +171,6 @@ function test_training()
     return @test losses[end] < losses[1] * 2
 end
 
-function test_denoise_step()
-    x_shape = (32, 32, 3)
-    batch_size = 10
-
-    model = init_DDPM(conf, x_shape; rng = rng)
-    x = randn(rng, Float32, x_shape..., batch_size) |> pu
-    _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
-
-    st_rng = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
-
-    step_compiled = Reactant.@compile denoise_step(
-        model, st_rng.x, st_rng.t_float, st_rng.alpha,
-        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
-    )
-
-    x_prev, st_new = step_compiled(
-        model, st_rng.x, st_rng.t_float, st_rng.alpha,
-        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
-    )
-
-    @test size(Array(x_prev)) == (x_shape..., batch_size)
-    return @test !any(isnan, Array(x_prev))
-end
-
 function test_sample_loop()
     x_shape = (32, 32, 3)
     batch_size = 10
@@ -203,21 +179,34 @@ function test_sample_loop()
     x = randn(rng, Float32, x_shape..., batch_size) |> pu
     _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
 
-    st_rng = seed_ddpm_step_rng(model, x_shape, batch_size; rng = rng)
-    step_compiled = Reactant.@compile denoise_step(
-        model, st_rng.x, st_rng.t_float, st_rng.alpha,
-        st_rng.alpha_cumprod, st_rng.beta, st_rng.noise, ps, Lux.testmode(st)
+    st_rng = seed_ddpm_rng(model; rng = rng)
+    loop_compiled = Reactant.@compile sample_loop(
+        model.unet, ps, Lux.testmode(st), st_rng,
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
+        model.sampling_num_steps
     )
 
-    x_gen, st_final = sample_loop_eager(
-        model, step_compiled, ps, Lux.testmode(st),
-        x_shape, batch_size; rng = rng
+    st_rng_new = seed_ddpm_rng(model; rng = rng)
+    x_gen, st_final = loop_compiled(
+        model.unet, ps, Lux.testmode(st), st_rng_new,
+        model.sampling_timesteps |> pu,
+        model.sampling_alphas |> pu,
+        model.sampling_alphas_cumprod |> pu,
+        model.sampling_betas |> pu,
+        model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
+        model.sampling_num_steps
     )
 
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (x_shape..., batch_size)
     @test !any(isnan, x_gen_cpu)
-    @test all(x_gen_cpu .>= 0.0f0)  # Should be clamped
+    @test all(x_gen_cpu .>= 0.0f0)
     return @test all(x_gen_cpu .<= 1.0f0)
 end
 
@@ -225,7 +214,7 @@ function test_vae_gen()
     trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
@@ -239,7 +228,7 @@ function test_ddpm_gen()
     trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
@@ -253,7 +242,7 @@ function test_gan_gen()
     trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
-        trainer.rng, trainer.x_shape, trainer.batch_size
+        trainer.rng, trainer.x_shape
     )
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
@@ -285,8 +274,7 @@ end
 end
 
 @testset "Single-function Tests" begin
-    @testset "denoise compiled" begin
-        test_denoise_step()
+    @testset "sample_loop compiled" begin
         test_sample_loop()
     end
 

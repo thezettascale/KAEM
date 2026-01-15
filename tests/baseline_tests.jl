@@ -7,8 +7,9 @@ include("../src/baseline/training/trainer.jl")
 using .Baseline.VAEModel: VAE, init_VAE, sample
 using .Baseline.GANModel: GAN, init_GAN
 using .Baseline.DDPMModel: DDPM, init_DDPM
-using .Baseline.DDPMSampling: sample_loop, seed_ddpm_rng
+using .Baseline.DDPMSampling: sample_loop
 using .Baseline.TrainingSetup: prep_vae, prep_gan, prep_ddpm
+using .Baseline.BaselineRNG: seed_rng
 using .Baseline: Trainer
 using .Baseline.Utils: pu
 
@@ -32,8 +33,8 @@ function test_vae()
     _, train_step, opt_state, ps, st = prep_vae(model, x, optimizer.rule(); rng = rng)
 
     ps_before = Array(ps)
-    ε = randn(rng, Float32, model.latent_dim, batch_size) |> pu
-    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, ε)
+    st_rng = seed_rng(model; rng = rng)
+    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, st_rng)
 
     @test !isnan(Float32(loss))
     @test any(Array(ps_new) .!= ps_before)
@@ -67,9 +68,9 @@ function test_gan()
     )
 
     ps_before = Array(ps)
-    z = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+    st_rng = seed_rng(model; rng = rng)
     loss, ps_new, _, _, _ = train_step(
-        opt_state_gen, opt_state_disc, ps, st, x_real, z, 1
+        opt_state_gen, opt_state_disc, ps, st, x_real, st_rng, 1
     )
 
     ps_new_cpu = Array(ps_new)
@@ -103,13 +104,8 @@ function test_ddpm()
     _, train_step, opt_state, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
 
     ps_before = Array(ps)
-    t_idx = rand(rng, 1:model.num_timesteps, batch_size)
-    t = Float32.(t_idx) |> pu
-    broadcast_shape = (ones(Int, length(x_shape))..., batch_size)
-    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    noise = randn(rng, Float32, x_shape..., batch_size) |> pu
-    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    st_rng = seed_rng(model; rng = rng)
+    loss, ps_new, _, _ = train_step(opt_state, ps, st, x, st_rng)
 
     @test !isnan(Float32(loss))
     @test any(Array(ps_new) .!= ps_before)
@@ -161,8 +157,8 @@ function test_training()
 
     losses = Float32[]
     for i in 1:5
-        ε = randn(rng, Float32, model.latent_dim, batch_size) |> pu
-        loss, ps, opt_state, st = train_step(opt_state, ps, st, x, ε)
+        st_rng = seed_rng(model; rng = rng)
+        loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
         push!(losses, Float32(loss))
     end
 
@@ -179,7 +175,7 @@ function test_sample_loop()
     x = randn(rng, Float32, x_shape..., batch_size) |> pu
     _, _, _, ps, st = prep_ddpm(model, x, optimizer.rule(); rng = rng)
 
-    st_rng = seed_ddpm_rng(model; rng = rng)
+    st_rng = seed_rng(model; rng = rng, sampling = true)
     loop_compiled = Reactant.@compile sample_loop(
         model.unet, ps, Lux.testmode(st), st_rng,
         model.sampling_timesteps |> pu,
@@ -191,7 +187,7 @@ function test_sample_loop()
         model.sampling_num_steps
     )
 
-    st_rng_new = seed_ddpm_rng(model; rng = rng)
+    st_rng_new = seed_rng(model; rng = rng, sampling = true)
     x_gen, st_final = loop_compiled(
         model.unet, ps, Lux.testmode(st), st_rng_new,
         model.sampling_timesteps |> pu,

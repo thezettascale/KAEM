@@ -5,6 +5,8 @@ export VAETrainStep
 using Enzyme, Optimisers, Lux, Statistics
 using Flux: mse
 
+using ..Utils
+
 function elbo_loss(ps, x, ε, model, st, β)
     x_recon, μ, logvar, st_new = model(ps, st, x, ε)
     recon_loss = mse(x_recon, x)
@@ -20,7 +22,9 @@ struct VAETrainStep
     β
 end
 
-function (l::VAETrainStep)(opt_state, ps, st, x, ε)
+function (l::VAETrainStep)(opt_state, ps, st, x, st_rng)
+    ε = st_rng.ε
+
     dps = Enzyme.make_zero(ps)
 
     _, (loss, st_new) = Enzyme.autodiff(

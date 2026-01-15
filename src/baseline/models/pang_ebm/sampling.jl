@@ -1,31 +1,12 @@
 module PangEBMSampling
 
-export seed_pang_rng, langevin_prior, langevin_posterior, generate_pang
+export langevin_prior, langevin_posterior, generate_pang
 
-using Lux, Random, Enzyme
+using Lux, Enzyme
 using Reactant: @trace
 
 using ..Utils
 using ..PangEBMModel
-
-# Pre-generate all RNG
-function seed_pang_rng(
-        model::PangEBM{T};
-        rng::AbstractRNG = Random.MersenneTwister(1),
-        batch_size::Int = model.batch_size,
-    ) where {T <: Float32}
-
-    latent_dim = model.latent_dim
-    prior_steps = model.prior_sgld_steps
-    post_steps = model.post_sgld_steps
-
-    return (
-        prior_init = randn(rng, T, latent_dim, batch_size),
-        prior_noise = randn(rng, T, latent_dim, batch_size, prior_steps),
-        post_init = randn(rng, T, latent_dim, batch_size),
-        post_noise = randn(rng, T, latent_dim, batch_size, post_steps),
-    ) |> pu
-end
 
 function neg_energy_sum(z, energy_net, ps_ebm, st_ebm)
     E, _ = energy_net(z, ps_ebm, st_ebm)

@@ -41,32 +41,29 @@ include("../losses/vae_loss.jl")
 using .VAEModel
 using .VAELoss
 
+include("../rng.jl")
+using .BaselineRNG
+
 include("setup.jl")
 using .TrainingSetup
 
 function prepare_batch_vae(model, rng, x_shape, x, train_idx)
-    ε = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
-    return (x, ε)
+    st_rng = seed_rng(model; rng = rng)
+    return (x, st_rng)
 end
 
 function prepare_batch_gan(model, rng, x_shape, x, train_idx)
-    z = randn(rng, Float32, model.latent_dim, model.batch_size) |> pu
-    return (x, z, train_idx)
+    st_rng = seed_rng(model; rng = rng)
+    return (x, st_rng, train_idx)
 end
 
 function prepare_batch_ddpm(model, rng, x_shape, x, train_idx)
-    x_norm = x .* 2.0f0 .- 1.0f0 # IMPORTANT: [0,1] to [-1,1], so DDPM Gaussian works
-    t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
-    t_batch = Float32.(t_idx) |> pu
-    broadcast_shape = (ones(Int, length(x_shape))..., model.batch_size)
-    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    noise = randn(rng, Float32, x_shape..., model.batch_size) |> pu
-    return (x_norm, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise)
+    st_rng = seed_rng(model; rng = rng)
+    return (x, st_rng)
 end
 
 function prepare_batch_pang(model, rng, x_shape, x, train_idx)
-    st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
+    st_rng = seed_rng(model; rng = rng, batch_size = model.batch_size)
     return (x, st_rng)
 end
 
@@ -79,8 +76,8 @@ function call_train_step_vae(
         st,
         batch_args
     )
-    x, ε = batch_args
-    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, ε)
+    x, st_rng = batch_args
+    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
     return (loss, ps, opt_state, opt_state, opt_state, st)
 end
 
@@ -93,14 +90,14 @@ function call_train_step_gan(
         st,
         batch_args
     )
-    x, z, train_idx = batch_args
+    x, st_rng, train_idx = batch_args
     loss, ps, opt_state_gen, opt_state_disc, st = train_step(
         opt_state_gen,
         opt_state_disc,
         ps,
         st,
         x,
-        z,
+        st_rng,
         train_idx
     )
     return (
@@ -122,17 +119,8 @@ function call_train_step_ddpm(
         st,
         batch_args
     )
-    x, t_batch, sqrt_alpha, sqrt_one_minus_alpha, noise = batch_args
-    loss, ps, opt_state, st = train_step(
-        opt_state,
-        ps,
-        st,
-        x,
-        t_batch,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise
-    )
+    x, st_rng = batch_args
+    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
     return (
         loss,
         ps,
@@ -192,7 +180,7 @@ function generate_batch_ddpm(
         rng,
         x_shape
     )
-    st_rng = seed_ddpm_rng(model; rng = rng)
+    st_rng = seed_rng(model; rng = rng, sampling = true)
 
     x_gen, st_new = gen_compiled(
         model.unet,
@@ -219,7 +207,7 @@ function generate_batch_pang(
         rng,
         x_shape
     )
-    st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
+    st_rng = seed_rng(model; rng = rng, batch_size = model.batch_size)
     x_gen, st_new = gen_compiled(model, ps, Lux.testmode(st), st_rng)
     return x_gen, st_new
 end
@@ -364,7 +352,7 @@ function init_trainer(
             MLIR = MLIR
         )
 
-        st_rng_sample = seed_ddpm_rng(model; rng = rng)
+        st_rng_sample = seed_rng(model; rng = rng, sampling = true)
 
         println("  Compiling DDPM sample_loop ($(model.sampling_num_steps) steps)...")
         gen_compiled = if MLIR
@@ -400,7 +388,7 @@ function init_trainer(
             α_cd = α_cd
         )
 
-        st_rng_sample = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+        st_rng_sample = seed_rng(model; rng = rng, batch_size = batch_size)
         println("  Compiling Pang generate_pang...")
         gen_compiled = if MLIR
             Reactant.@compile generate_pang(
@@ -489,7 +477,6 @@ function train!(t::Trainer)
             now_time::Float64,
             epoch::Int,
             train_loss::Float32,
-            test_loss::Float32 = 0.0f0
         )
         loss_file = t.file_loc * "loss.csv"
         return open(loss_file, "a") do file
@@ -572,13 +559,13 @@ function train!(t::Trainer)
 
         train_loss /= num_batches
         now_time = time() - start_time
+        log_loss(now_time, epoch, train_loss)
 
         if t.gen_every > 0 && epoch % t.gen_every == 0
             test_loss = compute_test()
             println(
                 "Epoch: $epoch, Train Loss: $train_loss, Test Loss: $test_loss"
             )
-            log_loss(now_time, epoch, train_loss, test_loss)
             num_batches_gen = fld(t.num_generated_samples, 10) ÷ t.batch_size # Save 1/10 of the samples to conserve space
 
             if num_batches_gen > 0

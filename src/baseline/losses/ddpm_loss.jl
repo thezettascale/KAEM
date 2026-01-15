@@ -27,16 +27,13 @@ struct DDPMTrainStep
     model
 end
 
-function (l::DDPMTrainStep)(
-        opt_state,
-        ps,
-        st,
-        x_0,
-        t,
-        sqrt_alpha,
-        sqrt_one_minus_alpha,
-        noise,
-    )
+function (l::DDPMTrainStep)(opt_state, ps, st, x_0, st_rng)
+    x_norm = x_0 .* 2.0f0 .- 1.0f0
+    t = st_rng.t
+    sqrt_alpha = st_rng.sqrt_alpha
+    sqrt_one_minus_alpha = st_rng.sqrt_one_minus_alpha
+    noise = st_rng.noise
+
     dps = Enzyme.make_zero(ps)
 
     _, (loss, st_new) = Enzyme.autodiff(
@@ -44,7 +41,7 @@ function (l::DDPMTrainStep)(
         Const(noise_pred_loss),
         Active,
         Duplicated(ps, dps),
-        Const(x_0),
+        Const(x_norm),
         Const(t),
         Const(sqrt_alpha),
         Const(sqrt_one_minus_alpha),

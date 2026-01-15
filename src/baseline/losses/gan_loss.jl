@@ -5,6 +5,8 @@ export GANTrainStep
 using Enzyme, Optimisers, Lux, Statistics, Accessors, ComponentArrays
 using Flux: logitbinarycrossentropy
 
+using ..Utils
+
 function discriminator_loss(ps_disc, x_real, x_fake, disc, st_disc)
     logits_real, st_disc_new = disc(x_real, ps_disc, Lux.trainmode(st_disc))
     logits_fake, st_disc_new = disc(x_fake, ps_disc, st_disc_new)
@@ -26,9 +28,11 @@ struct GANTrainStep
     n_critic
 end
 
-function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, z, train_idx)
+function (l::GANTrainStep)(opt_state_gen, opt_state_disc, ps, st, x_real, st_rng, train_idx)
     gen = l.model.generator
     disc = l.model.discriminator
+    z = st_rng.z
+
     x_fake, st_gen = gen(z, ps.gen, Lux.trainmode(st.gen))
 
     # Discriminator update

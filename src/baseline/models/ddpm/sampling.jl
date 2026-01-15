@@ -1,8 +1,8 @@
 module DDPMSampling
 
-export sample_loop, seed_ddpm_rng
+export sample_loop
 
-using Lux, Random
+using Lux
 using Reactant: @trace
 
 using ..Utils
@@ -27,22 +27,6 @@ function denoise_step(
     sigma = sqrt.(beta)
     x_prev = mean .+ sigma .* noise .* noise_mask
     return x_prev, st_new
-end
-
-function seed_ddpm_rng(
-        model::DDPM{T};
-        rng::AbstractRNG = Random.MersenneTwister(1),
-    ) where {T <: Float32}
-    return (
-        x_init = randn(rng, T, model.x_shape..., model.batch_size),
-        step_noise = randn(
-            rng,
-            T,
-            model.x_shape...,
-            model.batch_size,
-            model.sampling_num_steps
-        ),
-    ) |> pu
 end
 
 function ddpm_step(

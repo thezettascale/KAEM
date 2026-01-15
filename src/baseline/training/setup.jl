@@ -17,7 +17,7 @@ using ..VAELoss: VAETrainStep
 using ..GANLoss: GANTrainStep
 using ..DDPMLoss: DDPMTrainStep
 using ..PangLoss: PangTrainStep
-using ..PangEBMSampling: seed_pang_rng
+using ..BaselineRNG: seed_rng
 
 function prep_vae(
         model::VAE{T},
@@ -33,13 +33,13 @@ function prep_vae(
     ps, st = ps |> ComponentArray |> Lux.f32 |> pu, st |> Lux.f32 |> pu
     opt_state = Optimisers.setup(optimizer, ps)
 
-    ε = randn(rng, T, model.latent_dim, model.batch_size) |> pu
+    st_rng = seed_rng(model; rng = rng)
 
     static_loss = VAETrainStep(model, β)
 
     println("  Compiling VAE train step...")
     compiled_step = if MLIR
-        Reactant.@compile static_loss(opt_state, ps, st, x, ε)
+        Reactant.@compile static_loss(opt_state, ps, st, x, st_rng)
     else
         static_loss
     end
@@ -65,14 +65,14 @@ function prep_gan(
     opt_state_gen = Optimisers.setup(optimizer_gen, ps.gen)
     opt_state_disc = Optimisers.setup(optimizer_disc, ps.disc)
 
-    z = randn(rng, T, model.latent_dim, model.batch_size) |> pu
+    st_rng = seed_rng(model; rng = rng)
 
     train_step = GANTrainStep(model, n_critic)
 
     println("  Compiling GAN train step...")
     compiled_step = if MLIR
         Reactant.@compile train_step(
-            opt_state_gen, opt_state_disc, ps, st, x, z, 1
+            opt_state_gen, opt_state_disc, ps, st, x, st_rng, 1
         )
     else
         train_step
@@ -95,19 +95,12 @@ function prep_ddpm(
     ps, st = ps |> ComponentArray |> Lux.f32 |> pu, st |> Lux.f32 |> pu
     opt_state = Optimisers.setup(optimizer, ps)
 
-    t_idx = rand(rng, 1:model.num_timesteps, model.batch_size)
-    t = Float32.(t_idx) |> pu
-    broadcast_shape = (ones(Int, length(model.x_shape))..., model.batch_size)
-    sqrt_alpha = reshape(model.sqrt_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    sqrt_one_minus_alpha = reshape(model.sqrt_one_minus_alphas_cumprod_vec[t_idx], broadcast_shape) |> pu
-    noise = randn(rng, T, model.x_shape..., model.batch_size) |> pu
+    st_rng = seed_rng(model; rng = rng)
     train_step = DDPMTrainStep(model)
 
     println("  Compiling DDPM train step...")
     compiled_step = if MLIR
-        Reactant.@compile train_step(
-            opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise
-        )
+        Reactant.@compile train_step(opt_state, ps, st, x, st_rng)
     else
         train_step
     end
@@ -130,7 +123,7 @@ function prep_pang(
     ps, st = ps |> ComponentArray |> Lux.f32 |> pu, st |> Lux.f32 |> pu
     opt_state = Optimisers.setup(optimizer, ps)
 
-    st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
+    st_rng = seed_rng(model; rng = rng, batch_size = model.batch_size)
     train_step = PangTrainStep(model, α_cd)
 
     println("  Compiling Pang train step...")

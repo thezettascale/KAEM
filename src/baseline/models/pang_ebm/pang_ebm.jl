@@ -24,6 +24,7 @@ struct PangEBM{T <: Float32} <: Lux.AbstractLuxLayer
     post_sgld_step_size::Float32
     noise_scale::Float32
     likelihood_variance::Float32
+    prior_sigma::Float32
 end
 
 function init_PangEBM(
@@ -45,6 +46,7 @@ function init_PangEBM(
     post_sgld_step_size = parse(Float32, retrieve(conf, "PANG", "post_sgld_step_size"))
     noise_scale = parse(Float32, retrieve(conf, "PANG", "noise_scale"))
     likelihood_variance = parse(Float32, retrieve(conf, "PANG", "likelihood_variance"))
+    prior_sigma = parse(Float32, retrieve(conf, "PANG", "prior_sigma"))
 
 
     generator = init_pang_generator(
@@ -64,6 +66,7 @@ function init_PangEBM(
         post_sgld_step_size,
         noise_scale,
         likelihood_variance,
+        prior_sigma,
     )
 end
 

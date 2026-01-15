@@ -64,7 +64,8 @@ function langevin_prior(model::PangEBM, ps, st, st_rng)
 end
 
 # ULA for posterior: sample z ~ p(z|x) ∝ p(x|z)p(z)
-function langevin_posterior(model::PangEBM, x, ps, st, st_rng; σ²::Float32 = 1.0f0)
+function langevin_posterior(model::PangEBM, x, ps, st, st_rng)
+    σ² = model.likelihood_variance
     z = st_rng.post_init
     η = model.post_sgld_step_size
     σ = model.noise_scale

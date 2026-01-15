@@ -23,6 +23,7 @@ struct PangEBM{T <: Float32} <: Lux.AbstractLuxLayer
     post_sgld_steps::Int
     post_sgld_step_size::Float32
     noise_scale::Float32
+    likelihood_variance::Float32
 end
 
 function init_PangEBM(
@@ -43,6 +44,8 @@ function init_PangEBM(
     post_sgld_steps = parse(Int, retrieve(conf, "PANG", "post_sgld_steps"))
     post_sgld_step_size = parse(Float32, retrieve(conf, "PANG", "post_sgld_step_size"))
     noise_scale = parse(Float32, retrieve(conf, "PANG", "noise_scale"))
+    likelihood_variance = parse(Float32, retrieve(conf, "PANG", "likelihood_variance"))
+
 
     generator = init_pang_generator(
         x_shape, latent_dim, gen_channels, gen_strides, gen_kernels, gen_paddings
@@ -60,6 +63,7 @@ function init_PangEBM(
         post_sgld_steps,
         post_sgld_step_size,
         noise_scale,
+        likelihood_variance,
     )
 end
 
@@ -77,7 +81,8 @@ function Lux.initialstates(rng::AbstractRNG, model::PangEBM)
     )
 end
 
-function log_likelihood(model::PangEBM, x, z, ps, st; σ²::Float32 = 1.0f0)
+function log_likelihood(model::PangEBM, x, z, ps, st)
+    σ² = model.likelihood_variance
     x_gen, st_gen = model.generator(z, ps.gen, st.gen)
     ll = -sum((x .- x_gen) .^ 2, dims = (1, 2, 3)) ./ (2.0f0 * σ²)
     return dropdims(ll; dims = (1, 2, 3)), st_gen

@@ -57,9 +57,10 @@ function ddpm_step(
         alphas_cumprod,
         betas,
         noise_masks,
-        num_steps,
+        step_masks,
     )
-    mask = ((1:num_steps) .== i) |> Lux.f32
+    mask = step_masks[:, i]
+    num_steps = size(step_masks, 1)
     t_mask = reshape(mask, 1, num_steps)
     t_float = dropdims(sum(timesteps .* t_mask; dims = 2); dims = 2)
 
@@ -96,6 +97,7 @@ function sample_loop(
         alphas_cumprod,
         betas,
         noise_masks,
+        step_masks,
         num_steps::Int,
     )
     x_init = st_rng.x_init
@@ -116,7 +118,7 @@ function sample_loop(
             alphas_cumprod,
             betas,
             noise_masks,
-            num_steps,
+            step_masks,
         )
         state = (i + 1, x_new, st_new)
     end

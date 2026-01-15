@@ -187,6 +187,7 @@ function test_sample_loop()
         model.sampling_alphas_cumprod |> pu,
         model.sampling_betas |> pu,
         model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
         model.sampling_num_steps
     )
 
@@ -198,6 +199,7 @@ function test_sample_loop()
         model.sampling_alphas_cumprod |> pu,
         model.sampling_betas |> pu,
         model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
         model.sampling_num_steps
     )
 

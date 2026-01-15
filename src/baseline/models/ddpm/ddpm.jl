@@ -2,7 +2,7 @@ module DDPMModel
 
 export DDPM, init_DDPM
 
-using Lux, ConfParser, Random
+using Lux, ConfParser, Random, LinearAlgebra
 
 using ..Utils
 
@@ -30,6 +30,7 @@ struct DDPM{T <: Float32} <: Lux.AbstractLuxLayer
     sampling_alphas_cumprod::AbstractArray{T}
     sampling_betas::AbstractArray{T}
     sampling_noise_masks::AbstractArray{T}
+    sampling_step_masks::AbstractArray{T}
 end
 
 function init_DDPM(
@@ -77,6 +78,7 @@ function init_DDPM(
     sampling_alphas_cumprod = reshape(alphas_cumprod[timesteps_idx], broadcast_shape...)
     sampling_betas = reshape(betas[timesteps_idx], broadcast_shape...)
     sampling_noise_masks = reshape(vcat(ones(Float32, sampling_num_steps - 1), 0.0f0), broadcast_shape...)
+    sampling_step_masks = Matrix{Float32}(I, sampling_num_steps, sampling_num_steps)
 
     unet = init_unet(in_channels, channels, kernel_size, time_dim)
 
@@ -101,6 +103,7 @@ function init_DDPM(
         sampling_alphas_cumprod,
         sampling_betas,
         sampling_noise_masks,
+        sampling_step_masks,
     )
 end
 

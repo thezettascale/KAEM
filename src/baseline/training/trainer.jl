@@ -206,6 +206,7 @@ function generate_batch_ddpm(
         model.sampling_alphas_cumprod |> pu,
         model.sampling_betas |> pu,
         model.sampling_noise_masks |> pu,
+        model.sampling_step_masks |> pu,
         model.sampling_num_steps
     )
     return x_gen, st_new
@@ -265,7 +266,6 @@ function init_trainer(
     checkpoint_every = -1
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
 
-    stride = 10
     dataset, x_shape, save_dataset = get_vision_dataset(
         dataset_name, N_train, N_test, num_generated_samples;
         img_resize = img_resize, cnn = true,
@@ -372,6 +372,7 @@ function init_trainer(
                 model.sampling_alphas_cumprod |> pu,
                 model.sampling_betas |> pu,
                 model.sampling_noise_masks |> pu,
+                model.sampling_step_masks |> pu,
                 model.sampling_num_steps
             )
         else
@@ -422,7 +423,7 @@ function init_trainer(
     generate_batch_fns = Dict(
         :vae => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_vae(model, gen_compiled, ps, st, rng, x_shape, batch_size),
         :gan => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_gan(model, gen_compiled, ps, st, rng, x_shape, batch_size),
-        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size; stride = stride),
+        :ddpm => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_ddpm(model, gen_compiled, ps, st, rng, x_shape, batch_size),
         :pang => (gen_compiled, ps, st, rng, x_shape, batch_size) -> generate_batch_pang(model, gen_compiled, ps, st, rng, x_shape, batch_size),
     )
 

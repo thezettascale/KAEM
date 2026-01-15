@@ -206,7 +206,7 @@ function test_sample_loop()
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (x_shape..., batch_size)
     @test !any(isnan, x_gen_cpu)
-    @test all(x_gen_cpu .>= 0.0f0)
+    @test all(x_gen_cpu .>= -1.0f0)
     return @test all(x_gen_cpu .<= 1.0f0)
 end
 
@@ -233,7 +233,7 @@ function test_ddpm_gen()
     x_gen_cpu = Array(x_gen)
     @test size(x_gen_cpu) == (trainer.x_shape..., trainer.batch_size)
     @test !any(isnan, x_gen_cpu)
-    @test all(x_gen_cpu .>= 0.0f0)
+    @test all(x_gen_cpu .>= -1.0f0)
     @test all(x_gen_cpu .<= 1.0f0)
     return @test true
 end

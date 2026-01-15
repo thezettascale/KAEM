@@ -37,11 +37,13 @@ function prep_vae(
 
     static_loss = VAETrainStep(model, β)
 
+    println("  Compiling VAE train step...")
     compiled_step = if MLIR
         Reactant.@compile static_loss(opt_state, ps, st, x, ε)
     else
         static_loss
     end
+    println("  VAE train step compiled.")
 
     return model, compiled_step, opt_state, ps, st
 end
@@ -67,6 +69,7 @@ function prep_gan(
 
     train_step = GANTrainStep(model, n_critic)
 
+    println("  Compiling GAN train step...")
     compiled_step = if MLIR
         Reactant.@compile train_step(
             opt_state_gen, opt_state_disc, ps, st, x, z, 1
@@ -74,6 +77,7 @@ function prep_gan(
     else
         train_step
     end
+    println("  GAN train step compiled.")
 
     return model, compiled_step, opt_state_gen, opt_state_disc, ps, st
 end
@@ -99,6 +103,7 @@ function prep_ddpm(
     noise = randn(rng, T, model.x_shape..., model.batch_size) |> pu
     train_step = DDPMTrainStep(model)
 
+    println("  Compiling DDPM train step...")
     compiled_step = if MLIR
         Reactant.@compile train_step(
             opt_state, ps, st, x, t, sqrt_alpha, sqrt_one_minus_alpha, noise
@@ -106,6 +111,7 @@ function prep_ddpm(
     else
         train_step
     end
+    println("  DDPM train step compiled.")
 
     return model, compiled_step, opt_state, ps, st
 end
@@ -127,11 +133,13 @@ function prep_pang(
     st_rng = seed_pang_rng(model; rng = rng, batch_size = model.batch_size)
     train_step = PangTrainStep(model, α_cd)
 
+    println("  Compiling Pang train step...")
     compiled_step = if MLIR
         Reactant.@compile train_step(opt_state, ps, st, x, st_rng)
     else
         train_step
     end
+    println("  Pang train step compiled.")
 
     return model, compiled_step, opt_state, ps, st
 end

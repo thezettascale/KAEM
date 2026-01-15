@@ -307,6 +307,7 @@ function init_trainer(
         )
 
         z_sample = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+        println("  Compiling VAE sampler...")
         gen_compiled = if MLIR
             Reactant.@compile sample(
                 model,
@@ -317,6 +318,7 @@ function init_trainer(
         else
             sample
         end
+        println("  VAE sampler compiled.")
 
     elseif model_type == :gan
         model = init_GAN(conf, x_shape; rng = rng)
@@ -338,6 +340,7 @@ function init_trainer(
         )
 
         z_sample = randn(rng, Float32, model.latent_dim, batch_size) |> pu
+        println("  Compiling GAN generator...")
         gen_compiled = if MLIR
             Reactant.@compile model.generator(
                 z_sample,
@@ -347,6 +350,7 @@ function init_trainer(
         else
             generate
         end
+        println("  GAN generator compiled.")
 
     elseif model_type == :ddpm
         model = init_DDPM(conf, x_shape; rng = rng)
@@ -362,6 +366,7 @@ function init_trainer(
 
         st_rng_sample = seed_ddpm_rng(model; rng = rng)
 
+        println("  Compiling DDPM sample_loop ($(model.sampling_num_steps) steps)...")
         gen_compiled = if MLIR
             Reactant.@compile sample_loop(
                 model.unet,
@@ -379,6 +384,7 @@ function init_trainer(
         else
             sample_loop
         end
+        println("  DDPM sample_loop compiled.")
 
     elseif model_type == :pang
         model = init_PangEBM(conf, x_shape; rng = rng)
@@ -395,6 +401,7 @@ function init_trainer(
         )
 
         st_rng_sample = seed_pang_rng(model; rng = rng, batch_size = batch_size)
+        println("  Compiling Pang generate_pang...")
         gen_compiled = if MLIR
             Reactant.@compile generate_pang(
                 model,
@@ -405,6 +412,7 @@ function init_trainer(
         else
             generate_pang
         end
+        println("  Pang generate_pang compiled.")
     else
         error("Unknown model type: $model_type. Use :vae, :gan, :ddpm, or :pang")
     end
@@ -535,7 +543,9 @@ function train!(t::Trainer)
     train_idx_start = 1
     x_sample = first(t.train_loader) |> pu
     x_gen_sample, st = generate_batch()
+    println("  Compiling test loss...")
     test_step_compiled = Reactant.@compile image_test_loss(x_sample, x_gen_sample)
+    println("  Ready to train.")
 
     function compute_test()
         test_loss = 0.0f0

@@ -274,7 +274,7 @@ function init_trainer(
     end
 
     open(file_loc * "loss.csv", "w") do file
-        write(file, "Time (s),Epoch,Train Loss,Test Loss\n")
+        write(file, "Time (s),Epoch,Train Loss\n")
     end
 
     x_sample = first(train_loader) |> pu
@@ -480,7 +480,7 @@ function train!(t::Trainer)
         )
         loss_file = t.file_loc * "loss.csv"
         return open(loss_file, "a") do file
-            write(file, "$now_time,$epoch,$train_loss,$test_loss\n")
+            write(file, "$now_time,$epoch,$train_loss\n")
         end
     end
 
@@ -588,7 +588,6 @@ function train!(t::Trainer)
             end
         else
             println("Epoch: $epoch, Train Loss: $train_loss")
-            log_loss(now_time, epoch, train_loss)
         end
 
         if t.checkpoint_every > 0 && epoch % t.checkpoint_every == 0

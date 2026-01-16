@@ -49,7 +49,7 @@ def save_images_to_directory(images, directory):
 def calculate_infinity_metrics(
     gen_file_path,
     real_file_path,
-    batch_sizes=[1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000],
+    batch_sizes=[2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000],
 ):
     real_images = load_images(real_file_path)
     gen_images = load_images(gen_file_path)

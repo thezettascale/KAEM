@@ -568,7 +568,7 @@ function train!(t::Trainer)
             println(
                 "Epoch: $epoch, Train Loss: $train_loss, Test Loss: $test_loss"
             )
-            num_batches_gen = fld(t.num_generated_samples, 10) ÷ t.batch_size # Save 1/10 of the samples to conserve space
+            num_batches_gen = 1 # Save only 1 batch for visualization during training
 
             if num_batches_gen > 0
                 first_batch, st = generate_batch()

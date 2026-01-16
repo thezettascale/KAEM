@@ -380,7 +380,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
         # Save images - collect batches first then concatenate once to avoid O(n²) allocations
         if (t.gen_every > 0) && (epoch % t.gen_every == 0) && epoch_done && !t.img_tuning
-            num_batches_to_save = fld(t.num_generated_samples, 10) ÷ t.model.batch_size # Save 1/10 of the samples to conserve space
+            num_batches_to_save = 1 # Save only 1 batch for visualization during training
             if num_batches_to_save > 0
                 concat_dim = length(t.model.lkhood.x_shape) + 1
                 t.st_rng = seed_rand(t.model; rng = t.rng)

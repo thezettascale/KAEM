@@ -11,15 +11,20 @@ function discriminator_loss(ps_disc, x_real, x_fake, disc, st_disc)
     logits_real, st_disc_new = disc(x_real, ps_disc, Lux.trainmode(st_disc))
     logits_fake, st_disc_new = disc(x_fake, ps_disc, st_disc_new)
 
-    loss_real = logitbinarycrossentropy(logits_real, one(eltype(logits_real)))
-    loss_fake = logitbinarycrossentropy(logits_fake, zero(eltype(logits_fake)))
+    real_labels = zero(logits_real) .+ 1
+    fake_labels = zero(logits_fake)
+
+    loss_real = logitbinarycrossentropy(logits_real, real_labels; agg = mean)
+    loss_fake = logitbinarycrossentropy(logits_fake, fake_labels; agg = mean)
     return (loss_real + loss_fake, st_disc_new)
 end
 
 function generator_loss(ps_gen, z, gen, disc, ps_disc, st_gen, st_disc)
     x_fake, st_gen_new = gen(z, ps_gen, Lux.trainmode(st_gen))
     logits_fake, _ = disc(x_fake, ps_disc, Lux.testmode(st_disc))
-    loss = logitbinarycrossentropy(logits_fake, one(eltype(logits_fake)))
+
+    real_labels = zero(logits_fake) .+ 1
+    loss = logitbinarycrossentropy(logits_fake, real_labels; agg = mean)
     return (loss, st_gen_new, x_fake)
 end
 

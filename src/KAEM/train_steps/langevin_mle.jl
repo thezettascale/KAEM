@@ -105,7 +105,7 @@ function (l::LangevinLoss)(
         st_rng,
     )
     z_posterior, st_new, noise, component_mask =
-        sample_langevin(ps, st_kan, Lux.trainmode(st_lux), l.model, x, st_rng)
+        sample_langevin(ps, st_kan, Lux.testmode(st_lux), l.model, x, st_rng)
     st_lux_ebm, st_lux_gen = st_new.ebm, st_new.gen
     z_prior, st_lux_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)

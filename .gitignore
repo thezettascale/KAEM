@@ -9,3 +9,4 @@ generated_images_epoch_*.h5
 condaenv*
 .CondaPkg/*
 logs/RealSamples/
+logs/Pretrained/**/*.h5

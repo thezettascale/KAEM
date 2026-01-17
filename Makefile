@@ -1,4 +1,4 @@
-.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results extract-symbolic format lint logs clear-logs julia-setup help baseline baseline-vae baseline-gan baseline-ddpm baseline-pang baseline-all
+.PHONY: install uninstall clean test bench train train-thermo train-vanilla train-variational tune sequential distributed batch plot plot-results extract-symbolic format lint logs clear-logs julia-setup help baseline baseline-vae baseline-gan baseline-ddpm baseline-pang baseline-all pretrained
 
 ENV_NAME = KAEM
 CONDA_BASE := $(shell conda info --base 2>/dev/null || echo "")
@@ -47,6 +47,7 @@ help:
 	@echo "  baseline-ddpm - Train DDPM baseline (use: make baseline-ddpm DATASET=CIFAR10)"
 	@echo "  baseline-pang - Train Pang EBM baseline (use: make baseline-pang DATASET=CIFAR10)"
 	@echo "  baseline-all  - Train all baselines on dataset (use: make baseline-all DATASET=CIFAR10)"
+	@echo "  pretrained    - Generate samples from pretrained DDPM (use: make pretrained DATASET=cifar10)"
 	@echo "  plot          - Run all plotting scripts"
 	@echo "  plot-results  - Run only results plotting scripts"
 	@echo "  extract-symbolic - Extract symbolic priors from trained models (use: make extract-symbolic CONFIG=jobs.txt)"
@@ -247,3 +248,11 @@ baseline-all:
 	@tmux send-keys -t kaem_baseline_all:baseline_all "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODEL=$$model DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; else conda activate $(ENV_NAME) && for model in vae gan ddpm pang; do echo \"Training $$model on $(DATASET)...\"; MODEL=$$model DATASET=$(DATASET) ./scripts/run_distributed.sh 2>&1 | tee -a logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; done; fi && tmux kill-session -t kaem_baseline_all" Enter
 	@echo "All baselines training session started in tmux. Attach with: tmux attach-session -t kaem_baseline_all"
 	@echo "Log file: logs/baseline_all_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log"
+
+pretrained:
+	@mkdir -p logs
+	@echo "Generating pretrained DDPM samples for $(DATASET)..."
+	@tmux kill-session -t kaem_pretrained 2>/dev/null || true
+	@tmux new-session -d -s kaem_pretrained -n pretrained
+	@tmux send-keys -t kaem_pretrained:pretrained "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && python notebooks/pretrained_samples.py --dataset $(DATASET) 2>&1 | tee logs/pretrained_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && python notebooks/pretrained_samples.py --dataset $(DATASET) 2>&1 | tee logs/pretrained_$(DATASET)_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_pretrained" Enter
+	@echo "Pretrained generation started in tmux. Attach with: tmux attach-session -t kaem_pretrained"

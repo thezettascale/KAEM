@@ -147,11 +147,19 @@ function init_trainer(
     gen_every = parse(Int, retrieve(conf, "TRAINING", "gen_every"))
 
     if !img_tuning
-        try
-            h5write(file_loc * "real_$(gen_type).h5", "samples", save_dataset)
-        catch
-            rm(file_loc * "real_$(gen_type).h5")
-            h5write(file_loc * "real_$(gen_type).h5", "samples", save_dataset)
+        real_samples_dir = "logs/RealSamples/$(dataset_name)/"
+        real_samples_path = real_samples_dir * "real_images.h5"
+        if !isfile(real_samples_path)
+            mkpath(real_samples_dir)
+            try
+                h5write(real_samples_path, "samples", save_dataset)
+                println("Saved real samples to $real_samples_path")
+            catch
+                rm(real_samples_path)
+                h5write(real_samples_path, "samples", save_dataset)
+            end
+        else
+            println("Real samples already exist at $real_samples_path")
         end
 
         open(file_loc * "loss.csv", "w") do file

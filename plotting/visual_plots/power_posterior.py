@@ -54,9 +54,7 @@ for ax, t, color in zip(axes, t_values, colors):
     ax.grid(True, alpha=0.3)
     ax.legend(loc="upper right", fontsize=14)
 
-axes[0].set_ylabel(
-    r"$p_{\bm{f}, \bm{\Phi}}(\bm{\bar{z}} \mid \bm{x},t)$", fontsize=16
-)
+axes[0].set_ylabel(r"$p_{\bm{f}, \bm{\Phi}}(\bm{\bar{z}} \mid \bm{x},t)$", fontsize=16)
 plt.ylim(0, 1)
 plt.subplots_adjust(hspace=0)
 plt.tight_layout()

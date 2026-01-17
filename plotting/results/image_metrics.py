@@ -143,74 +143,126 @@ def run_distributed(file_paths, num_workers=None):
             print("---")
 
 
+def get_real_samples_path(dataset: str) -> str:
+    return f"logs/RealSamples/{dataset}/real_images.h5"
+
+
+def discover_generated_samples(logs_dir: str = "logs") -> list[tuple[str, str]]:
+    file_paths = []
+    datasets = ["CIFAR10", "CELEBA", "SVHN"]
+
+    for dataset in datasets:
+        real_path = get_real_samples_path(dataset)
+        if not os.path.exists(real_path):
+            print(f"Warning: Real samples not found for {dataset} at {real_path}")
+            continue
+
+        # KAEM models - Vanilla
+        for train_type in ["ULA", "importance", "amortized"]:
+            for prior_type in ["mixture", "univariate"]:
+                gen_path = f"{logs_dir}/Vanilla/{dataset}/{train_type}/{prior_type}/generated_images.h5"
+                if os.path.exists(gen_path):
+                    file_paths.append((gen_path, real_path))
+
+        # KAEM models - Thermodynamic
+        for train_type in ["ULA", "importance", "amortized"]:
+            for prior_type in ["mixture", "univariate"]:
+                gen_path = f"{logs_dir}/Thermodynamic/{dataset}/{train_type}/{prior_type}/generated_images.h5"
+                if os.path.exists(gen_path):
+                    file_paths.append((gen_path, real_path))
+
+        # Baseline models
+        for model in ["VAE", "GAN", "DDPM", "PANG"]:
+            gen_path = f"{logs_dir}/Baseline/{dataset}/{model}/generated_images.h5"
+            if os.path.exists(gen_path):
+                file_paths.append((gen_path, real_path))
+
+        # Pretrained models
+        for model in ["DDPM"]:
+            gen_path = f"{logs_dir}/Pretrained/{dataset}/{model}/generated_images.h5"
+            if os.path.exists(gen_path):
+                file_paths.append((gen_path, real_path))
+
+    return file_paths
+
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Compute FID/KID metrics for generated samples"
+    )
+    parser.add_argument(
+        "--auto", action="store_true", help="Auto-discover all generated samples"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Filter by dataset (CIFAR10, CELEBA, SVHN)",
+    )
+    args = parser.parse_args()
+
+    if args.auto:
+        file_paths = discover_generated_samples()
+        if args.dataset:
+            file_paths = [(g, r) for g, r in file_paths if args.dataset.upper() in g]
+    else:
+        # Manual list for specific runs
+        file_paths = [
+            # KAEM - CIFAR10
+            (
+                "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CIFAR10"),
+            ),
+            (
+                "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CIFAR10"),
+            ),
+            # KAEM - CELEBA
+            (
+                "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CELEBA"),
+            ),
+            (
+                "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CELEBA"),
+            ),
+            # KAEM - SVHN
+            (
+                "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
+                get_real_samples_path("SVHN"),
+            ),
+            (
+                "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
+                get_real_samples_path("SVHN"),
+            ),
+            # Baselines - CIFAR10
+            (
+                "logs/Baseline/CIFAR10/VAE/generated_images.h5",
+                get_real_samples_path("CIFAR10"),
+            ),
+            (
+                "logs/Baseline/CIFAR10/GAN/generated_images.h5",
+                get_real_samples_path("CIFAR10"),
+            ),
+            # Pretrained - CIFAR10
+            (
+                "logs/Pretrained/CIFAR10/DDPM/generated_images.h5",
+                get_real_samples_path("CIFAR10"),
+            ),
+        ]
+
+    # Filter to only existing files
     file_paths = [
-        # KAEM - SVHN
-        (
-            "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
-            "logs/Vanilla/SVHN/ULA/mixture/real_images.h5",
-        ),
-        (
-            "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
-            "logs/Thermodynamic/SVHN/ULA/mixture/real_images.h5",
-        ),
-        # KAEM - CELEBA
-        (
-            "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
-            "logs/Vanilla/CELEBA/ULA/mixture/real_images.h5",
-        ),
-        (
-            "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
-            "logs/Thermodynamic/CELEBA/ULA/mixture/real_images.h5",
-        ),
-        # KAEM - CIFAR10
-        (
-            "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
-            "logs/Vanilla/CIFAR10/ULA/mixture/real_images.h5",
-        ),
-        (
-            "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
-            "logs/Thermodynamic/CIFAR10/ULA/mixture/real_images.h5",
-        ),
-        # # Baseline - CIFAR10
-        # (
-        #     "logs/Baseline/CIFAR10/VAE/generated_images.h5",
-        #     "logs/Baseline/CIFAR10/VAE/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/CIFAR10/GAN/generated_images.h5",
-        #     "logs/Baseline/CIFAR10/GAN/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/CIFAR10/DDPM/generated_images.h5",
-        #     "logs/Baseline/CIFAR10/DDPM/real_images.h5",
-        # ),
-        # # Baseline - CELEBA
-        # (
-        #     "logs/Baseline/CELEBA/VAE/generated_images.h5",
-        #     "logs/Baseline/CELEBA/VAE/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/CELEBA/GAN/generated_images.h5",
-        #     "logs/Baseline/CELEBA/GAN/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/CELEBA/DDPM/generated_images.h5",
-        #     "logs/Baseline/CELEBA/DDPM/real_images.h5",
-        # ),
-        # # Baseline - SVHN
-        # (
-        #     "logs/Baseline/SVHN/VAE/generated_images.h5",
-        #     "logs/Baseline/SVHN/VAE/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/SVHN/GAN/generated_images.h5",
-        #     "logs/Baseline/SVHN/GAN/real_images.h5",
-        # ),
-        # (
-        #     "logs/Baseline/SVHN/DDPM/generated_images.h5",
-        #     "logs/Baseline/SVHN/DDPM/real_images.h5",
-        # ),
+        (g, r) for g, r in file_paths if os.path.exists(g) and os.path.exists(r)
     ]
 
-    run_distributed(file_paths)
+    if not file_paths:
+        print("No generated samples found. Run training first or check paths.")
+    else:
+        print(f"Found {len(file_paths)} generated sample files to evaluate:")
+        for g, r in file_paths:
+            print(f"  {g}")
+        print()
+        run_distributed(file_paths)

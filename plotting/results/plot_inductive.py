@@ -89,50 +89,40 @@ def plot_prior_function_grid(dataset, prior, function, grid_size, cmap):
 def plot_real_images_reference(dataset, grid_size, cmap):
     """Generate a reference plot with real images for each dataset."""
 
-    # Try to find real images from any prior/function combination
-    for prior in PRIORS:
-        for function in FUNCTIONS:
-            real_path = (
-                f"logs/Vanilla/{dataset}/importance/{prior}_{function}/"
-                f"univariate/real_images.h5"
-            )
-            try:
-                with h5py.File(real_path, "r") as h5_file:
-                    real_images = h5_file["samples"][()]
+    real_path = f"logs/RealSamples/{dataset}/real_images.h5"
+    if not os.path.exists(real_path):
+        print(f"Real samples not found at {real_path}")
+        return
 
-                fig, axes = plt.subplots(grid_size, grid_size, figsize=(6, 6))
+    try:
+        with h5py.File(real_path, "r") as h5_file:
+            real_images = h5_file["samples"][()]
 
-                if grid_size == 1:
-                    axes = axes.reshape(1, 1)
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(6, 6))
 
-                for i in range(grid_size * grid_size):
-                    row, col = divmod(i, grid_size)
-                    ax = axes[row, col]
+        if grid_size == 1:
+            axes = axes.reshape(1, 1)
 
-                    img = np.transpose(real_images[i, :, :, :], (1, 2, 0))
-                    ax.imshow(img, cmap=cmap)
-                    ax.axis("off")
+        for i in range(grid_size * grid_size):
+            row, col = divmod(i, grid_size)
+            ax = axes[row, col]
 
-                fig.suptitle(
-                    f"{dataset} - Real Images (Reference)", fontsize=18, y=0.95
-                )
-                plt.subplots_adjust(wspace=0.1, hspace=0.1)
+            img = np.transpose(real_images[i, :, :, :], (1, 2, 0))
+            ax.imshow(img, cmap=cmap)
+            ax.axis("off")
 
-                filename = f"{dataset.lower()}_real_reference.png"
-                filepath = os.path.join(output_dir, filename)
-                plt.savefig(filepath, dpi=300, bbox_inches="tight")
-                plt.close()
+        fig.suptitle(f"{dataset} - Real Images (Reference)", fontsize=18, y=0.95)
+        plt.subplots_adjust(wspace=0.1, hspace=0.1)
 
-                print(f"Saved reference: {filename}")
-                return  # Exit after finding first valid real images
+        filename = f"{dataset.lower()}_real_reference.png"
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        plt.close()
 
-            except FileNotFoundError:
-                continue
-            except Exception as e:
-                print(f"Error processing real images for {dataset}: {e}")
-                continue
+        print(f"Saved reference: {filename}")
 
-    print(f"Warning: Could not find real images for {dataset}")
+    except Exception as e:
+        print(f"Error processing real images for {dataset}: {e}")
 
 
 def main():

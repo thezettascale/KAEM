@@ -139,9 +139,6 @@ function (sampler::ULA_sampler)(
     Returns:
         The posterior samples.
     """
-    st_kan = Lux.trainmode(st_kan)
-    st_lux = Lux.trainmode(st_lux)
-
     model = sampler.model
     η = sampler.η
     sqrt_2η = sampler.sqrt_2η

@@ -151,7 +151,7 @@ function (l::ThermoLoss)(
     z_posterior, Δt, st_lux, noise, tempered_noise, component_mask = sample_thermo(
         ps,
         st_kan,
-        Lux.testmode(st_lux),
+        st_lux,
         l.model,
         x,
         st_rng,

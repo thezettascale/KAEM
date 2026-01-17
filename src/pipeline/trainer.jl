@@ -214,19 +214,29 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
     (isnothing(trial) && t.img_tuning) && error("Must provide trial when tuning")
 
+    # Use trainmode if ULA
+    grid_st_mode = (
+        t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1 ?
+            Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
+    )
     grid_compiled = Reactant.@compile t.grid_updater(
         t.x,
         t.ps,
         t.st_kan,
-        Lux.testmode(t.st_lux),
+        grid_st_mode,
         train_idx,
         t.st_rng,
     )
 
+    # Use trainmode if ULA
+    gen_st_mode = (
+        t.model.prior.bool_config.ula ?
+            Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
+    )
     gen_compiled = Reactant.@compile t.model(
         t.ps,
         t.st_kan,
-        Lux.testmode(t.st_lux),
+        gen_st_mode,
         t.st_rng,
     )
 
@@ -235,7 +245,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         gen_compiled(
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            gen_st_mode,
             t.st_rng
         )
     )
@@ -261,7 +271,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 t.x,
                 t.ps,
                 t.st_kan,
-                Lux.testmode(t.st_lux),
+                grid_st_mode,
                 train_idx,
                 t.st_rng,
             )
@@ -320,7 +330,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 x_gen, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    gen_st_mode,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -353,7 +363,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 x_gen, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    gen_st_mode,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -397,7 +407,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 first_batch, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    gen_st_mode,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -413,7 +423,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                     batch, st_ebm, st_gen = gen_compiled(
                         t.ps,
                         t.st_kan,
-                        Lux.testmode(t.st_lux),
+                        gen_st_mode,
                         t.st_rng,
                     )
                     @reset t.st_lux.ebm = st_ebm
@@ -479,7 +489,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     first_batch, st_ebm, st_gen = gen_compiled(
         t.ps,
         t.st_kan,
-        Lux.testmode(t.st_lux),
+        gen_st_mode,
         t.st_rng,
     )
     first_batch = Array(first_batch)
@@ -492,7 +502,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         batch, st_ebm, st_gen = gen_compiled(
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            gen_st_mode,
             t.st_rng,
         )
         push!(batches_to_cat, Array(batch))
@@ -531,7 +541,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             x_gen, st_ebm, st_gen = gen_compiled(
                 t.ps,
                 t.st_kan,
-                Lux.testmode(t.st_lux),
+                gen_st_mode,
                 t.st_rng,
             )
             @reset t.st_lux.ebm = st_ebm

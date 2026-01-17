@@ -218,17 +218,22 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     grid_needs_trainmode = t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1
     gen_needs_trainmode = t.model.prior.bool_config.ula
 
-    println("Compiling grid_updater... (grid_needs_trainmode=$grid_needs_trainmode)")
-    grid_st = grid_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
-    grid_compiled = Reactant.@compile t.grid_updater(
-        t.x,
-        t.ps,
-        t.st_kan,
-        grid_st,
-        train_idx,
-        t.st_rng,
-    )
-    println("grid_updater compiled.")
+    grid_compiled = nothing
+    if t.grid_updater.update_prior_grid || t.grid_updater.update_llhood_grid
+        println("Compiling grid_updater... (grid_needs_trainmode=$grid_needs_trainmode)")
+        grid_st = grid_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
+        grid_compiled = Reactant.@compile t.grid_updater(
+            t.x,
+            t.ps,
+            t.st_kan,
+            grid_st,
+            train_idx,
+            t.st_rng,
+        )
+        println("grid_updater compiled.")
+    else
+        println("Grid updating disabled, skipping.")
+    end
 
     println("Compiling gen (model)... (gen_needs_trainmode=$gen_needs_trainmode)")
     gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)

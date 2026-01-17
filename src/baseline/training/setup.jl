@@ -38,14 +38,15 @@ function prep_vae(
     static_loss = VAETrainStep(model, β)
 
     println("  Compiling VAE train step...")
+    st_train = Lux.trainmode(st)
     compiled_step = if MLIR
-        Reactant.@compile static_loss(opt_state, ps, Lux.trainmode(st), x, st_rng)
+        Reactant.@compile static_loss(opt_state, ps, st_train, x, st_rng)
     else
         static_loss
     end
     println("  VAE train step compiled.")
 
-    return model, compiled_step, opt_state, ps, st
+    return model, compiled_step, opt_state, ps, st_train
 end
 
 function prep_gan(
@@ -70,16 +71,17 @@ function prep_gan(
     train_step = GANTrainStep(model, n_critic)
 
     println("  Compiling GAN train step...")
+    st_train = Lux.trainmode(st)
     compiled_step = if MLIR
         Reactant.@compile train_step(
-            opt_state_gen, opt_state_disc, ps, Lux.trainmode(st), x, st_rng, 1
+            opt_state_gen, opt_state_disc, ps, st_train, x, st_rng, 1
         )
     else
         train_step
     end
     println("  GAN train step compiled.")
 
-    return model, compiled_step, opt_state_gen, opt_state_disc, ps, st
+    return model, compiled_step, opt_state_gen, opt_state_disc, ps, st_train
 end
 
 function prep_ddpm(
@@ -99,8 +101,6 @@ function prep_ddpm(
     train_step = DDPMTrainStep(model)
 
     println("  Compiling DDPM train step...")
-    # Pass trainmode state to Reactant - it needs to compile with training mode
-    # so any normalization layers use training mode (which has gradient support)
     st_train = Lux.trainmode(st)
     compiled_step = if MLIR
         Reactant.@compile train_step(opt_state, ps, st_train, x, st_rng)
@@ -109,7 +109,7 @@ function prep_ddpm(
     end
     println("  DDPM train step compiled.")
 
-    return model, compiled_step, opt_state, ps, st
+    return model, compiled_step, opt_state, ps, st_train
 end
 
 function prep_pang(
@@ -130,14 +130,15 @@ function prep_pang(
     train_step = PangTrainStep(model, α_cd)
 
     println("  Compiling Pang train step...")
+    st_train = Lux.trainmode(st)
     compiled_step = if MLIR
-        Reactant.@compile train_step(opt_state, ps, Lux.trainmode(st), x, st_rng)
+        Reactant.@compile train_step(opt_state, ps, st_train, x, st_rng)
     else
         train_step
     end
     println("  Pang train step compiled.")
 
-    return model, compiled_step, opt_state, ps, st
+    return model, compiled_step, opt_state, ps, st_train
 end
 
 end

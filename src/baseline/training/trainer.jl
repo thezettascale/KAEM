@@ -77,7 +77,7 @@ function call_train_step_vae(
         batch_args
     )
     x, st_rng = batch_args
-    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
+    loss, ps, opt_state, st = train_step(opt_state, ps, Lux.trainmode(st), x, st_rng)
     return (loss, ps, opt_state, opt_state, opt_state, st)
 end
 
@@ -95,7 +95,7 @@ function call_train_step_gan(
         opt_state_gen,
         opt_state_disc,
         ps,
-        st,
+        Lux.trainmode(st),
         x,
         st_rng,
         train_idx
@@ -120,7 +120,7 @@ function call_train_step_ddpm(
         batch_args
     )
     x, st_rng = batch_args
-    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
+    loss, ps, opt_state, st = train_step(opt_state, ps, Lux.trainmode(st), x, st_rng)
     return (
         loss,
         ps,
@@ -141,7 +141,7 @@ function call_train_step_pang(
         batch_args
     )
     x, st_rng = batch_args
-    loss, ps, opt_state, st = train_step(opt_state, ps, st, x, st_rng)
+    loss, ps, opt_state, st = train_step(opt_state, ps, Lux.trainmode(st), x, st_rng)
     return (loss, ps, opt_state, opt_state, opt_state, st)
 end
 

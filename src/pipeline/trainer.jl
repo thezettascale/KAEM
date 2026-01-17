@@ -218,6 +218,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     grid_needs_trainmode = t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1
     gen_needs_trainmode = t.model.prior.bool_config.ula
 
+    println("Compiling grid_updater... (grid_needs_trainmode=$grid_needs_trainmode)")
     grid_st = grid_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     grid_compiled = Reactant.@compile t.grid_updater(
         t.x,
@@ -227,7 +228,9 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         train_idx,
         t.st_rng,
     )
+    println("grid_updater compiled.")
 
+    println("Compiling gen (model)... (gen_needs_trainmode=$gen_needs_trainmode)")
     gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     gen_compiled = Reactant.@compile t.model(
         t.ps,
@@ -235,8 +238,10 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         gen_st,
         t.st_rng,
     )
+    println("gen (model) compiled.")
 
     test_step = t.gen_type == "logits" ? logit_test_loss : image_test_loss
+    println("Running initial gen_compiled call...")
     gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     x_gen = first(
         gen_compiled(
@@ -246,8 +251,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             t.st_rng
         )
     )
+    println("Initial gen_compiled call done.")
 
+    println("Compiling test_step...")
     test_step = Reactant.@compile test_step(t.x, x_gen)
+    println("test_step compiled.")
 
     real_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
     if t.img_tuning

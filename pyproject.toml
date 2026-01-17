@@ -20,11 +20,9 @@ dependencies = [
     "scikit-learn",
     "pillow",
     "imageio",
-    "diffusers[flax]",
+    "diffusers",
     "accelerate",
     "tqdm",
-    "jax[cuda12]",
-    "flax",
 ]
 
 [project.optional-dependencies]

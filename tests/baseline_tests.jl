@@ -207,7 +207,7 @@ function test_sample_loop()
 end
 
 function test_vae_gen()
-    trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true)
+    trainer = Baseline.init_trainer(:vae, conf, "CIFAR10"; rng = rng, MLIR = true, create_logs = false)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
         trainer.rng, trainer.x_shape
@@ -221,7 +221,7 @@ function test_vae_gen()
 end
 
 function test_ddpm_gen()
-    trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true)
+    trainer = Baseline.init_trainer(:ddpm, conf, "CIFAR10"; rng = rng, MLIR = true, create_logs = false)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
         trainer.rng, trainer.x_shape
@@ -235,7 +235,7 @@ function test_ddpm_gen()
 end
 
 function test_gan_gen()
-    trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true)
+    trainer = Baseline.init_trainer(:gan, conf, "CIFAR10"; rng = rng, MLIR = true, create_logs = false)
     x_gen, _ = trainer.generate_batch_fn(
         trainer.gen_compiled, trainer.ps, trainer.st,
         trainer.rng, trainer.x_shape

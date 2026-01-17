@@ -243,6 +243,7 @@ function init_trainer(
         img_resize::Union{Nothing, Tuple{Int, Int}} = nothing,
         rng::AbstractRNG = Random.MersenneTwister(1),
         MLIR::Bool = true,
+        create_logs::Bool = true,
     )
     N_train = parse(Int, retrieve(conf, "TRAINING", "N_train"))
     N_test = parse(Int, retrieve(conf, "TRAINING", "N_test"))
@@ -264,25 +265,28 @@ function init_trainer(
     test_loader = Flux.DataLoader(test_data; batchsize = batch_size, shuffle = false)
 
     file_loc = "logs/Baseline/$(dataset_name)/$(uppercase(string(model_type)))/"
-    mkpath(file_loc)
 
-    real_samples_dir = "logs/RealSamples/$(dataset_name)/"
-    real_samples_path = real_samples_dir * "real_images.h5"
-    if !isfile(real_samples_path)
-        mkpath(real_samples_dir)
-        try
-            h5write(real_samples_path, "samples", save_dataset)
-            println("Saved real samples to $real_samples_path")
-        catch
-            rm(real_samples_path)
-            h5write(real_samples_path, "samples", save_dataset)
+    if create_logs
+        mkpath(file_loc)
+
+        real_samples_dir = "logs/RealSamples/$(dataset_name)/"
+        real_samples_path = real_samples_dir * "real_images.h5"
+        if !isfile(real_samples_path)
+            mkpath(real_samples_dir)
+            try
+                h5write(real_samples_path, "samples", save_dataset)
+                println("Saved real samples to $real_samples_path")
+            catch
+                rm(real_samples_path)
+                h5write(real_samples_path, "samples", save_dataset)
+            end
+        else
+            println("Real samples already exist at $real_samples_path")
         end
-    else
-        println("Real samples already exist at $real_samples_path")
-    end
 
-    open(file_loc * "loss.csv", "w") do file
-        write(file, "Time (s),Epoch,Train Loss\n")
+        open(file_loc * "loss.csv", "w") do file
+            write(file, "Time (s),Epoch,Train Loss\n")
+        end
     end
 
     x_sample = first(train_loader) |> pu

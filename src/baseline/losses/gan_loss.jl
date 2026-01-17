@@ -21,7 +21,7 @@ end
 
 function generator_loss(ps_gen, z, gen, disc, ps_disc, st_gen, st_disc)
     x_fake, st_gen_new = gen(z, ps_gen, Lux.trainmode(st_gen))
-    logits_fake, _ = disc(x_fake, ps_disc, Lux.testmode(st_disc))
+    logits_fake, _ = disc(x_fake, ps_disc, Lux.trainmode(st_disc))
 
     real_labels = zero(logits_fake) .+ 1
     loss = logitbinarycrossentropy(logits_fake, real_labels; agg = mean)

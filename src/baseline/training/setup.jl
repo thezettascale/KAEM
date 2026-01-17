@@ -39,7 +39,7 @@ function prep_vae(
 
     println("  Compiling VAE train step...")
     compiled_step = if MLIR
-        Reactant.@compile static_loss(opt_state, ps, st, x, st_rng)
+        Reactant.@compile static_loss(opt_state, ps, Lux.trainmode(st), x, st_rng)
     else
         static_loss
     end
@@ -72,7 +72,7 @@ function prep_gan(
     println("  Compiling GAN train step...")
     compiled_step = if MLIR
         Reactant.@compile train_step(
-            opt_state_gen, opt_state_disc, ps, st, x, st_rng, 1
+            opt_state_gen, opt_state_disc, ps, Lux.trainmode(st), x, st_rng, 1
         )
     else
         train_step
@@ -99,8 +99,11 @@ function prep_ddpm(
     train_step = DDPMTrainStep(model)
 
     println("  Compiling DDPM train step...")
+    # Pass trainmode state to Reactant - it needs to compile with training mode
+    # so any normalization layers use training mode (which has gradient support)
+    st_train = Lux.trainmode(st)
     compiled_step = if MLIR
-        Reactant.@compile train_step(opt_state, ps, st, x, st_rng)
+        Reactant.@compile train_step(opt_state, ps, st_train, x, st_rng)
     else
         train_step
     end
@@ -128,7 +131,7 @@ function prep_pang(
 
     println("  Compiling Pang train step...")
     compiled_step = if MLIR
-        Reactant.@compile train_step(opt_state, ps, st, x, st_rng)
+        Reactant.@compile train_step(opt_state, ps, Lux.trainmode(st), x, st_rng)
     else
         train_step
     end

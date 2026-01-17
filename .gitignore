@@ -1,10 +1,11 @@
 *.log
 *.out
 *.pyc
-# logs/** 
+# logs/**
 **/ckpt_*.jld2
 garbage/**
 generated_images_epoch_*.h5
 *.egg-info
 condaenv*
 .CondaPkg/*
+logs/RealSamples/

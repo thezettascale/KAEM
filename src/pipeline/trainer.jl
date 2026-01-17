@@ -214,38 +214,35 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
     (isnothing(trial) && t.img_tuning) && error("Must provide trial when tuning")
 
-    # Use trainmode if ULA
-    grid_st_mode = (
-        t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1 ?
-            Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
-    )
+    # Conditions for mode selection (trainmode needed for gradient computation)
+    grid_needs_trainmode = t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1
+    gen_needs_trainmode = t.model.prior.bool_config.ula
+
+    grid_st = grid_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     grid_compiled = Reactant.@compile t.grid_updater(
         t.x,
         t.ps,
         t.st_kan,
-        grid_st_mode,
+        grid_st,
         train_idx,
         t.st_rng,
     )
 
-    # Use trainmode if ULA
-    gen_st_mode = (
-        t.model.prior.bool_config.ula ?
-            Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
-    )
+    gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     gen_compiled = Reactant.@compile t.model(
         t.ps,
         t.st_kan,
-        gen_st_mode,
+        gen_st,
         t.st_rng,
     )
 
     test_step = t.gen_type == "logits" ? logit_test_loss : image_test_loss
+    gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     x_gen = first(
         gen_compiled(
             t.ps,
             t.st_kan,
-            gen_st_mode,
+            gen_st,
             t.st_rng
         )
     )
@@ -267,11 +264,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         if (
                 train_idx == 1 || (train_idx - t.last_grid_update >= t.grid_updater.update_frequency)
             ) && (t.grid_updater.update_llhood_grid || t.grid_updater.update_prior_grid)
+
+            grid_st = grid_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
             t.ps, t.st_kan, t.st_lux = grid_compiled(
                 t.x,
                 t.ps,
                 t.st_kan,
-                grid_st_mode,
+                grid_st,
                 train_idx,
                 t.st_rng,
             )
@@ -327,10 +326,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             test_loss = 0.0e0
             for x in t.model.test_loader
                 t.st_rng = seed_rand(t.model; rng = t.rng)
+                gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
                 x_gen, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    gen_st_mode,
+                    gen_st,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -360,10 +360,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             gen_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
             for x in t.model.test_loader
                 t.st_rng = seed_rand(t.model; rng = t.rng)
+                gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
                 x_gen, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    gen_st_mode,
+                    gen_st,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -404,10 +405,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 t.st_rng = seed_rand(t.model; rng = t.rng)
 
                 # Get first batch to determine type
+                gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
                 first_batch, st_ebm, st_gen = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    gen_st_mode,
+                    gen_st,
                     t.st_rng,
                 )
                 @reset t.st_lux.ebm = st_ebm
@@ -420,10 +422,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
                 for i in 2:num_batches_to_save
                     t.st_rng = seed_rand(t.model; rng = t.rng)
+                    gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
                     batch, st_ebm, st_gen = gen_compiled(
                         t.ps,
                         t.st_kan,
-                        gen_st_mode,
+                        gen_st,
                         t.st_rng,
                     )
                     @reset t.st_lux.ebm = st_ebm
@@ -486,10 +489,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     # Generate samples
     num_batches = t.num_generated_samples ÷ t.model.batch_size
     concat_dim = length(t.model.lkhood.x_shape) + 1
+    gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
     first_batch, st_ebm, st_gen = gen_compiled(
         t.ps,
         t.st_kan,
-        gen_st_mode,
+        gen_st,
         t.st_rng,
     )
     first_batch = Array(first_batch)
@@ -499,10 +503,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
     for i in 2:num_batches
         t.st_rng = seed_rand(t.model; rng = t.rng)
+        gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
         batch, st_ebm, st_gen = gen_compiled(
             t.ps,
             t.st_kan,
-            gen_st_mode,
+            gen_st,
             t.st_rng,
         )
         push!(batches_to_cat, Array(batch))
@@ -538,10 +543,11 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         gen_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
         for x in t.model.test_loader
             t.st_rng = seed_rand(t.model; rng = t.rng)
+            gen_st = gen_needs_trainmode ? Lux.trainmode(t.st_lux) : Lux.testmode(t.st_lux)
             x_gen, st_ebm, st_gen = gen_compiled(
                 t.ps,
                 t.st_kan,
-                gen_st_mode,
+                gen_st,
                 t.st_rng,
             )
             @reset t.st_lux.ebm = st_ebm

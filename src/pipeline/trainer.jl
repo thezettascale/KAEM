@@ -298,7 +298,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             t.opt_state,
             t.ps,
             t.st_kan,
-            Lux.trainmode(t.st_lux),
+            t.st_lux,
             t.x,
             train_idx,
             t.st_rng,

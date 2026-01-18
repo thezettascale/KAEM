@@ -59,13 +59,13 @@ function setup_training(
         )
         @reset model.log_prior = LogPriorULA(model.ε)
         @reset model.sample_prior =
-            (m, p, sk, sl, r) -> prior_sampler(p, sk, sl, x, r)
+            (m, p, sk, sl, r) -> prior_sampler(p, sk, Lux.trainmode(sl), x, r)
 
         println("Prior sampler: ULA")
     elseif model.prior.bool_config.mixture_model
         @reset model.sample_prior =
             (m, p, sk, sl, r) ->
-        sample_mixture(m.prior, p.ebm, sk.ebm, sl.ebm, sk.quad, r)
+        sample_mixture(m.prior, p.ebm, sk.ebm, Lux.testmode(sl.ebm), sk.quad, r)
 
         @reset model.log_prior =
             LogPriorMix(model.ε, !model.prior.bool_config.contrastive_div)
@@ -73,7 +73,7 @@ function setup_training(
     else
         @reset model.sample_prior =
             (m, p, sk, sl, r) ->
-        sample_univariate(m.prior, p.ebm, sk.ebm, sl.ebm, sk.quad, r)
+        sample_univariate(m.prior, p.ebm, sk.ebm, Lux.testmode(sl.ebm), sk.quad, r)
         @reset model.log_prior =
             LogPriorUnivariate(model.ε, !model.prior.bool_config.contrastive_div)
         println("Prior sampler: Univar ITS")
@@ -133,7 +133,7 @@ function setup_training(
                     opt_state,
                     ps,
                     st_kan,
-                    Lux.trainmode(st_lux),
+                    st_lux,
                     x,
                     1,
                     st_rng,
@@ -160,7 +160,7 @@ function setup_training(
                     opt_state,
                     ps,
                     st_kan,
-                    Lux.trainmode(st_lux),
+                    st_lux,
                     x,
                     1,
                     st_rng,
@@ -181,7 +181,7 @@ function setup_training(
                     opt_state,
                     ps,
                     st_kan,
-                    Lux.trainmode(st_lux),
+                    st_lux,
                     x,
                     1,
                     st_rng,
@@ -202,7 +202,7 @@ function setup_training(
                     opt_state,
                     ps,
                     st_kan,
-                    Lux.trainmode(st_lux),
+                    st_lux,
                     x,
                     1,
                     st_rng,

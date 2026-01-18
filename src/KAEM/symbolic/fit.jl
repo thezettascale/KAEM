@@ -82,7 +82,7 @@ function fit_affine(
         prob = OptimizationProblem(optf, params; lb = lb, ub = ub)
         sol = solve(prob, NLopt.LN_BOBYQA(); maxiters = max_iters)
 
-        if sol.objective < best_cost
+        if isnothing(best_u) || (!isnan(sol.objective) && sol.objective < best_cost)
             best_cost = sol.objective
             best_u = sol.minimizer
         end

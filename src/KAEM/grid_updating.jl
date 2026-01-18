@@ -162,6 +162,7 @@ function (gu::GridUpdater)(
                         ps.ebm.layernorm[symbol_map[i]],
                         st_lux.ebm[symbol_map[i]],
                     )
+                    @reset st_lux.ebm[symbol_map[i]] = st_ebm
                 end
 
                 new_grid, new_coef = update_fcn_grid(
@@ -245,6 +246,7 @@ function (gu::GridUpdater)(
                     ps.gen.layernorm[symbol_map[i]],
                     st_lux.gen[symbol_map[i]],
                 )
+                @reset st_lux.gen[symbol_map[i]] = st_gen
             end
 
             if !(

@@ -87,6 +87,11 @@ function setup_training(
 
     st_rng = seed_rand(model; rng = rng)
 
+    # Forward pass to init st_lux state before compilation
+    _, st_ebm, st_gen = Reactant.@jit model(ps, st_kan, Lux.trainmode(st_lux), st_rng)
+    @reset st_lux.ebm = st_ebm
+    @reset st_lux.gen = st_gen
+
     num_param_updates =
         parse(Int, retrieve(conf, "TRAINING", "N_epochs")) * length(model.train_loader)
 
@@ -210,7 +215,7 @@ function setup_training(
         println("Posterior sampler: MLE IS")
     end
 
-    return model, st_rng
+    return model, st_lux, st_rng
 end
 
 function prep_model(
@@ -224,15 +229,8 @@ function prep_model(
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
         ps |> ComponentArray |> Lux.f32 |> pu, st_kan |> Lux.f32 |> pu, st_lux |> Lux.f32 |> pu
-
-    # Forward pass to init st_lux state before compilation
-    st_rng = seed_rand(model; rng = rng)
-    _, st_ebm, st_gen = Reactant.@jit model(ps, st_kan, Lux.trainmode(st_lux), st_rng)
-    @reset st_lux.ebm = st_ebm
-    @reset st_lux.gen = st_gen
-
     opt_state = Optimisers.setup(optimizer.rule(), ps)
-    model, st_rng = setup_training(
+    model, st_lux, st_rng = setup_training(
         opt_state,
         ps,
         st_kan,

@@ -221,7 +221,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             t.x,
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            Lux.trainmode(t.st_lux),
             train_idx,
             t.st_rng,
         )
@@ -275,7 +275,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 t.x,
                 t.ps,
                 t.st_kan,
-                Lux.testmode(t.st_lux),
+                Lux.trainmode(t.st_lux),
                 train_idx,
                 t.st_rng,
             )

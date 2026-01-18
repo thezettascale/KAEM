@@ -192,8 +192,11 @@ extract-symbolic:
 	@mkdir -p logs figures/symbolic_priors
 	@echo "Extracting symbolic priors from trained models..."
 	@echo "Reading jobs from: $(CONFIG)"
-	@$(call conda_run,julia --project=. --threads=auto extract_symbolic_priors.jl $(CONFIG) 2>&1 | tee logs/extract_symbolic_$(shell date +%Y%m%d_%H%M%S).log)
-	@echo "Finished, figs in figures/symbolic_priors/"
+	@tmux kill-session -t kaem_extract 2>/dev/null || true
+	@tmux new-session -d -s kaem_extract -n extract
+	@tmux send-keys -t kaem_extract:extract "if [ -f '$(CONDA_ACTIVATE)' ]; then . '$(CONDA_ACTIVATE)' && conda activate $(ENV_NAME) && julia --project=. --threads=auto extract_symbolic_priors.jl $(CONFIG) 2>&1 | tee logs/extract_symbolic_$(shell date +%Y%m%d_%H%M%S).log; else conda activate $(ENV_NAME) && julia --project=. --threads=auto extract_symbolic_priors.jl $(CONFIG) 2>&1 | tee logs/extract_symbolic_$(shell date +%Y%m%d_%H%M%S).log; fi && tmux kill-session -t kaem_extract" Enter
+	@echo "Extract symbolic session started in tmux. Attach with: tmux attach-session -t kaem_extract"
+	@echo "Log file: logs/extract_symbolic_$(shell date +%Y%m%d_%H%M%S).log"
 
 julia-setup:
 	@echo "Installing Julia dependencies..."

@@ -56,7 +56,7 @@ function test_grid_update()
         x,
         ps,
         st_kan,
-        Lux.trainmode(st_lux),
+        Lux.testmode(st_lux),
         1,
         st_rng,
     )
@@ -68,7 +68,7 @@ function test_grid_update()
         x,
         ps,
         st_kan,
-        Lux.trainmode(st_lux),
+        Lux.testmode(st_lux),
         1,
         st_rng
     )

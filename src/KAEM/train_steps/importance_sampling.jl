@@ -159,11 +159,8 @@ function (l::ImportanceLoss)(
         st_rng,
     )
 
-    z_posterior, z_prior, st_lux_ebm, st_lux_gen, resampled_mask, noise, component_mask =
+    z_posterior, z_prior, st_ebm, st_gen, resampled_mask, noise, component_mask =
         sample_importance(ps, st_kan, st_lux, l.model, x, st_rng)
-
-    st_ebm = Lux.trainmode(st_lux_ebm)
-    st_gen = Lux.trainmode(st_lux_gen)
 
     dps = Enzyme.make_zero(ps)
     _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(

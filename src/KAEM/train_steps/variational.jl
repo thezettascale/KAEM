@@ -96,9 +96,9 @@ function (l::VariationalLoss)(
             nothing
     )
 
-    st_lux_enc = Lux.trainmode(st_lux.enc)
-    st_lux_ebm = Lux.trainmode(st_lux.ebm)
-    st_lux_gen = Lux.trainmode(st_lux.gen)
+    st_lux_enc = st_lux.enc
+    st_lux_ebm = st_lux.ebm
+    st_lux_gen = st_lux.gen
 
     dps = Enzyme.make_zero(ps)
     _, (loss, st_lux_ebm, st_lux_gen, st_lux_enc) = Enzyme.autodiff(

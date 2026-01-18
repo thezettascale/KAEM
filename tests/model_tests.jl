@@ -36,7 +36,7 @@ function test_ps_derivative()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)
@@ -81,7 +81,7 @@ function test_grid_update()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)
@@ -113,7 +113,7 @@ function test_mala_loss()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)
@@ -131,7 +131,7 @@ function test_cnn_loss()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)
@@ -149,7 +149,7 @@ function test_cnn_residual_loss()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)
@@ -167,7 +167,7 @@ function test_seq_loss()
 
     ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, Lux.trainmode(st_lux), x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_before .!= ps_after)

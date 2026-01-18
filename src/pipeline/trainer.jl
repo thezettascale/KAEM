@@ -214,6 +214,12 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
     (isnothing(trial) && t.img_tuning) && error("Must provide trial when tuning")
 
+    # Forward pass to init st_lux state before compilation
+    t.st_rng = seed_rand(t.model; rng = t.rng)
+    _, st_ebm, st_gen = Reactant.@jit t.model(t.ps, t.st_kan, Lux.trainmode(t.st_lux), t.st_rng)
+    @reset t.st_lux.ebm = st_ebm
+    @reset t.st_lux.gen = st_gen
+
     grid_compiled = nothing
     if t.grid_updater.update_prior_grid || t.grid_updater.update_llhood_grid
         println("Compiling grid_updater...")

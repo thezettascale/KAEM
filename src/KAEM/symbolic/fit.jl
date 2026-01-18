@@ -28,7 +28,6 @@ struct SymFitter
     lib
     num_points::Int
     max_iters::Int
-    num_restarts::Int
     lb::Float32
     ub::Float32
 end
@@ -43,13 +42,15 @@ function fit_affine(
         rng::AbstractRNG = Random.MersenneTwister(1),
         param_lower_bound::T = -10.0f0,
         param_upper_bound::T = 10.0f0,
-        max_iters::Int = 100,
-        num_restarts::Int = 5
+        max_iters::Int = 100
     )::Tuple{
         AbstractArray{T},
         AbstractArray{T},
         AbstractArray{T},
     } where {T <: Float32}
+    α_init = glorot_normal(rng, Float32, I * O)
+    β_init = glorot_normal(rng, Float32, I * O)
+    params = vcat(α_init, β_init)
 
     function R2_cost(u, p; final = false)
         α, β = reshape(u[1:(I * O)], I, O), reshape(u[(I * O + 1):end], I, O)
@@ -65,31 +66,16 @@ function fit_affine(
         return R2
     end
 
-    n_params = 2 * I * O
-    lb = fill(param_lower_bound, n_params)
-    ub = fill(param_upper_bound, n_params)
+    lb = fill(param_lower_bound, length(params))
+    ub = fill(param_upper_bound, length(params))
+
     optf = Optimization.OptimizationFunction(R2_cost)
+    prob = OptimizationProblem(optf, params; lb = lb, ub = ub)
+    sol = solve(prob, NLopt.LN_BOBYQA(); maxiters = max_iters)
+    u = sol.minimizer
 
-    best_cost = Inf32
-    best_u = nothing
-
-    for restart in 1:num_restarts
-        restart_rng = Random.MersenneTwister(Random.rand(rng, UInt))
-        α_init = glorot_normal(restart_rng, Float32, I * O)
-        β_init = glorot_normal(restart_rng, Float32, I * O)
-        params = vcat(α_init, β_init)
-
-        prob = OptimizationProblem(optf, params; lb = lb, ub = ub)
-        sol = solve(prob, NLopt.LN_BOBYQA(); maxiters = max_iters)
-
-        if isnothing(best_u) || (!isnan(sol.objective) && sol.objective < best_cost)
-            best_cost = sol.objective
-            best_u = sol.minimizer
-        end
-    end
-
-    α, β = reshape(best_u[1:(I * O)], I, O), reshape(best_u[(I * O + 1):end], I, O)
-    R2 = R2_cost(best_u, nothing; final = true)
+    α, β = reshape(u[1:(I * O)], I, O), reshape(u[(I * O + 1):end], I, O)
+    R2 = R2_cost(u, nothing; final = true)
     return dropdims(R2; dims = 3), α, β
 end
 
@@ -125,8 +111,7 @@ function fit_symbolic(
         rng::AbstractRNG = Random.MersenneTwister(1),
         param_lower_bound::T = -10.0f0,
         param_upper_bound::T = 10.0f0,
-        max_iters::Int = 100,
-        num_restarts::Int = 5
+        max_iters::Int = 100
     )::Tuple{
         AbstractArray{T},
         AbstractArray{T},
@@ -134,7 +119,7 @@ function fit_symbolic(
         AbstractArray{T},
         AbstractArray{T},
     } where {T <: Float32}
-    R2, α, β = fit_affine(x, y, func, I, O; rng = rng, max_iters = max_iters, num_restarts = num_restarts)
+    R2, α, β = fit_affine(x, y, func, I, O; rng = rng, max_iters = max_iters)
     z = func.(α .* x .+ β)
     z, y = PermutedDimsArray(z, (3, 1, 2)), PermutedDimsArray(y, (3, 1, 2))
     w, b = ols_wb(reshape(z, :, I * O), reshape(y, :, I * O))
@@ -148,14 +133,12 @@ function SymFitter(
     )
     num_points = parse(Int, retrieve(conf, "SYMBOLIC_REG", "num_points_fitting"))
     max_iters = parse(Int, retrieve(conf, "SYMBOLIC_REG", "max_iters"))
-    num_restarts = parse(Int, retrieve(conf, "SYMBOLIC_REG", "num_restarts"))
     lb = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "fit_lower_bound"))
     ub = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "fit_upper_bound"))
     return SymFitter(
         symbolic_lib,
         num_points,
         max_iters,
-        num_restarts,
         lb,
         ub
     )
@@ -206,8 +189,7 @@ function (sf::SymFitter)(
             rng = thread_rng,
             param_lower_bound = sf.lb,
             param_upper_bound = sf.ub,
-            max_iters = sf.max_iters,
-            num_restarts = sf.num_restarts
+            max_iters = sf.max_iters
         )
         R2_list[:, :, i] .= R2
         α_list[:, :, i] .= α

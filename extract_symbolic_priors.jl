@@ -13,14 +13,20 @@ using .KAEM_model
 include("src/pipeline/trainer.jl")
 using .trainer
 
-include("src/KAEM/symbolic/transfer.jl")
-using .Transfer
+include("src/KAEM/symbolic/func_lib.jl")
+using .SymbolicLibrary
+
+include("src/KAEM/symbolic/symbolic_func.jl")
+using .SymbolicFunctions
+
+include("src/KAEM/symbolic/fit.jl")
+using .FitSymbolic
 
 include("src/KAEM/symbolic/plot.jl")
 using .PlotKAN
 
-include("src/KAEM/symbolic/fit.jl")
-using .FitSymbolic
+include("src/KAEM/symbolic/transfer.jl")
+using .Transfer
 
 include("plotting/model_utils.jl")
 using .ModelUtils

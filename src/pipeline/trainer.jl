@@ -40,7 +40,7 @@ mutable struct KAEM_trainer{T <: Float32}
     schedule::Any
     dataset_name::AbstractString
     ps::ComponentArray{T}
-    st_kan::NamedTuple
+    st_kan::ComponentArray{T}
     st_lux::NamedTuple
     st_rng::NamedTuple
     N_epochs::Int

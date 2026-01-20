@@ -63,6 +63,8 @@ function test_grid_update()
 
     st_before = Array(st_kan)
     ps_before = Array(ps)
+    ebm_coef_before = Array(ps.ebm.fcn.a.coef)
+    ebm_grid_before = Array(st_kan.ebm.a.grid)
 
     ps, st_kan, st_lux = compiled_update(
         x,
@@ -75,6 +77,12 @@ function test_grid_update()
 
     grid = Array(st_kan)
     ps_mid = Array(ps)
+    ebm_coef_after = Array(ps.ebm.fcn.a.coef)
+    ebm_grid_after = Array(st_kan.ebm.a.grid)
+
+    @test !all(ebm_coef_before .== ebm_coef_after)
+    @test !all(ebm_grid_before .== ebm_grid_after)
+
     @test !all(iszero, grid - st_before)
     @test !any(isnan, grid)
     @test !all(iszero, ps_mid - ps_before)

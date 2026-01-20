@@ -134,8 +134,8 @@ function (gu::GridUpdater)(
             lo_bound = ifelse.(min_z .< 0, high, low)
             hi_bound = ifelse.(max_z .< 0, low, high)
 
-            st_kan[:ebm][:a][:min] .= lo_bound .* min_z
-            st_kan[:ebm][:a][:max] .= hi_bound .* max_z
+            st_kan.ebm.a.min .= lo_bound .* min_z
+            st_kan.ebm.a.max .= hi_bound .* max_z
         end
 
         if !gu.nogrid_prior
@@ -172,15 +172,15 @@ function (gu::GridUpdater)(
                     st_kan.ebm[symbol_map[i]],
                     z,
                 )
-                ps[:ebm][:fcn][symbol_map[i]][:coef] .= new_coef
-                st_kan[:ebm][symbol_map[i]][:grid] .= new_grid
+                getproperty(ps.ebm.fcn, symbol_map[i]).coef .= new_coef
+                getproperty(st_kan.ebm, symbol_map[i]).grid .= new_grid
 
                 if prior_copy.fcns_qp[i].spline_string == "RBF"
                     scale = (maximum(new_grid) - minimum(new_grid)) /
                         (size(new_grid, 2) - 1) |> Lux.f32
 
-                    new_scale = scale .+ zero(st_kan.ebm[symbol_map[i]].scale)
-                    st_kan[:ebm][symbol_map[i]][:scale] = new_scale
+                    new_scale = scale .+ zero(getproperty(st_kan.ebm, symbol_map[i]).scale)
+                    getproperty(st_kan.ebm, symbol_map[i]).scale .= new_scale
                 end
 
                 z = Lux.apply(
@@ -202,8 +202,8 @@ function (gu::GridUpdater)(
         st_kan.quad.init_nodes,
         st_kan.quad.init_weights
     )
-    st_kan[:quad][:nodes] .= new_nodes
-    st_kan[:quad][:weights] .= new_weights
+    st_kan.quad.nodes .= new_nodes
+    st_kan.quad.weights .= new_weights
 
     # Only update if KAN-type generator requires
     if gu.update_llhood_grid
@@ -266,15 +266,15 @@ function (gu::GridUpdater)(
                     st_kan.gen[symbol_map[i]],
                     z,
                 )
-                ps[:gen][:fcn][symbol_map[i]][:coef] .= new_coef
-                st_kan[:gen][symbol_map[i]][:grid] .= new_grid
+                getproperty(ps.gen.fcn, symbol_map[i]).coef .= new_coef
+                getproperty(st_kan.gen, symbol_map[i]).grid .= new_grid
 
                 if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
                     scale = (maximum(new_grid) - minimum(new_grid)) /
                         (size(new_grid, 2) - 1) |> Lux.f32
 
-                    new_scale = scale .+ zero(st_kan.gen[symbol_map[i]].scale)
-                    st_kan[:gen][symbol_map[i]][:scale] = new_scale
+                    new_scale = scale .+ zero(getproperty(st_kan.gen, symbol_map[i]).scale)
+                    getproperty(st_kan.gen, symbol_map[i]).scale .= new_scale
                 end
             end
 

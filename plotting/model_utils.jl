@@ -48,7 +48,7 @@ function load_saved_model(
     # Model structure
     t = init_trainer_fn(
         rng, conf, dataset;
-        file_loc = "tmp/",
+        file_loc = "garbage/",
         save_model = false
     )
     model = t.model

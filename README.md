@@ -215,7 +215,7 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 
 <table>
   <tr>
-    <td align="center"><img src="figures/test/test_symbolic_1_1.png" width="300"/><br/><b>Symbolic regression on untrained test prior.</b></td>
+    <td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
   </tr>
 </table>
 

@@ -33,7 +33,7 @@ using .ModelUtils
 
 const MODE_TRAIN_TYPE = Dict(
     "thermo" => ("Thermodynamic", "ULA"),
-    "vanilla" => ("Vanilla", "ULA"), # Change for importance
+    "vanilla" => ("Vanilla", "importance"), # Change for importance
     "variational" => ("Vanilla", "amortized"),
 )
 

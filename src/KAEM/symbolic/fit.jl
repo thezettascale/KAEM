@@ -177,7 +177,7 @@ function (sf::SymFitter)(
     w_list = zeros(Float32, I, O, num_funcs)
     b_list = zeros(Float32, I, O, num_funcs)
 
-    Threads.@threads for i in 1:num_funcs
+    for i in 1:num_funcs
         name, sym = lib_items[i]
         thread_rng = Random.MersenneTwister(i)
         R2, α, β, w, b = fit_symbolic(

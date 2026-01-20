@@ -1,4 +1,4 @@
-using JLD2, Lux, ConfParser, Random, ComponentArrays, Accessors
+using JLD2, Lux, ConfParser, Random, ComponentArrays, Accessors, FastGaussQuadrature
 using MLDataDevices: cpu_device
 
 ENV["DEVICE"] = "cpu"
@@ -210,6 +210,14 @@ function main(jobs_file::String = "jobs.txt")
 
         sym_fitter = SymFitter(conf)
 
+        st_quad = result.st_quad
+        try
+            nodes, weights = st_quad.init_nodes, st_quad.init_weights
+        catch e
+            init_nodes, init_weights = gausslegendre(result.prior.N_quad)
+            st_quad = (; st_quad..., init_nodes = Float32.(init_nodes'), init_weights = Float32.(init_weights'))
+        end
+
         symbolic_params = fit_symbolic_prior(
             result.prior,
             result.ps_ebm,
@@ -225,7 +233,7 @@ function main(jobs_file::String = "jobs.txt")
             result.ps_ebm,
             result.st_kan_ebm,
             result.st_lux_ebm,
-            result.st_quad,
+            st_quad,
             conf,
             dataset,
             mode,
@@ -237,7 +245,7 @@ function main(jobs_file::String = "jobs.txt")
             result.ps_ebm,
             result.st_kan_ebm,
             result.st_lux_ebm,
-            result.st_quad,
+            st_quad,
             dataset,
             mode,
             output_dir;

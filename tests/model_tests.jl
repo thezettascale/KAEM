@@ -81,7 +81,7 @@ function test_grid_update()
     @test !any(isnan, ps_mid)
 
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps_mid, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
 
     ps_after = Array(ps)
     @test any(ps_mid .!= ps_after)

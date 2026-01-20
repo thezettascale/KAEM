@@ -73,6 +73,8 @@ function (gu::GridUpdater)(
 
     model = gu.model
     z = nothing
+    ps_new = ps
+    st_kan_new = st_kan
     if gu.update_prior_grid
 
         if model.N_t > 1
@@ -134,8 +136,8 @@ function (gu::GridUpdater)(
             lo_bound = ifelse.(min_z .< 0, high, low)
             hi_bound = ifelse.(max_z .< 0, low, high)
 
-            @views st_kan.ebm[:a][:min] .= lo_bound .* min_z
-            @views st_kan.ebm[:a][:max] .= hi_bound .* max_z
+            st_kan_new.ebm[:a][:min] .= lo_bound .* min_z
+            st_kan_new.ebm[:a][:max] .= hi_bound .* max_z
         end
 
         if !gu.nogrid_prior
@@ -172,15 +174,15 @@ function (gu::GridUpdater)(
                     st_kan.ebm[symbol_map[i]],
                     z,
                 )
-                @views ps[:ebm][:fcn][symbol_map[i]][:coef] .= new_coef
-                @views st_kan.ebm[symbol_map[i]][:grid] .= new_grid
+                ps_new[:ebm][:fcn][symbol_map[i]][:coef] .= new_coef
+                st_kan_new.ebm[symbol_map[i]][:grid] .= new_grid
 
                 if prior_copy.fcns_qp[i].spline_string == "RBF"
                     scale = (maximum(new_grid) - minimum(new_grid)) /
                         (size(new_grid, 2) - 1) |> Lux.f32
 
                     new_scale = scale .+ zero(st_kan.ebm[symbol_map[i]].scale)
-                    @views st_kan.ebm[symbol_map[i]][:scale] = new_scale
+                    st_kan_new.ebm[symbol_map[i]][:scale] = new_scale
                 end
 
                 z = Lux.apply(
@@ -202,8 +204,8 @@ function (gu::GridUpdater)(
         st_kan.quad.init_nodes,
         st_kan.quad.init_weights
     )
-    @views st_kan.quad[:nodes] .= new_nodes
-    @views st_kan.quad[:weights] .= new_weights
+    st_kan_new.quad[:nodes] .= new_nodes
+    st_kan_new.quad[:weights] .= new_weights
 
     # Only update if KAN-type generator requires
     if gu.update_llhood_grid
@@ -266,15 +268,15 @@ function (gu::GridUpdater)(
                     st_kan.gen[symbol_map[i]],
                     z,
                 )
-                @views ps[:gen][:fcn][symbol_map[i]][:coef] .= new_coef
-                @views st_kan.gen[symbol_map[i]][:grid] .= new_grid
+                ps_new[:gen][:fcn][symbol_map[i]][:coef] .= new_coef
+                st_kan_new.gen[symbol_map[i]][:grid] .= new_grid
 
                 if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
                     scale = (maximum(new_grid) - minimum(new_grid)) /
                         (size(new_grid, 2) - 1) |> Lux.f32
 
                     new_scale = scale .+ zero(st_kan.gen[symbol_map[i]].scale)
-                    @views st_kan.gen[symbol_map[i]][:scale] = new_scale
+                    st_kan_new.gen[symbol_map[i]][:scale] = new_scale
                 end
             end
 
@@ -288,7 +290,7 @@ function (gu::GridUpdater)(
         end
     end
 
-    return ps, st_kan, st_lux
+    return ps_new, st_kan_new, st_lux
 end
 
 end

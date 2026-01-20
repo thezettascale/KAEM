@@ -61,7 +61,7 @@ function test_grid_update()
         st_rng,
     )
 
-    before = st_kan |> cpu_device() |> ComponentArray
+    st_before = Array(st_kan)
     ps_before = Array(ps)
 
     ps, st_kan, st_lux = compiled_update(
@@ -73,18 +73,18 @@ function test_grid_update()
         st_rng
     )
 
-    grid = st_kan |> cpu_device() |> ComponentArray
-    @test !all(iszero, grid - before)
+    grid = Array(st_kan)
+    ps_mid = Array(ps)
+    @test !all(iszero, grid - st_before)
     @test !any(isnan, grid)
-    @test !all(iszero, Array(ps) - ps_before)
-    @test !any(isnan, Array(ps))
+    @test !all(iszero, ps_mid - ps_before)
+    @test !any(isnan, ps_mid)
 
-    ps_before = Array(ps)
     loss, ps, _, st_ebm, st_gen =
-        model.train_step(opt_state, ps, st_kan, st_lux, x_test, 1, st_rng)
+        model.train_step(opt_state, ps_mid, st_kan, st_lux, x_test, 1, st_rng)
 
     ps_after = Array(ps)
-    @test any(ps_before .!= ps_after)
+    @test any(ps_mid .!= ps_after)
     return @test !any(isnan, ps_after)
 end
 

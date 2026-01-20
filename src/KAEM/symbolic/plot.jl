@@ -34,7 +34,15 @@ function plot_ebm!(
     )
     mkpath(file_loc)
 
-    z = first(get_gausslegendre(prior, st_kan))
+    z = first(
+        get_gausslegendre(
+            prior,
+            st_kan,
+            st_quad.init_nodes,
+            st_quad.init_weights
+        )
+    )
+
     π_0 = prior.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ)
 
     for i in 1:prior.depth

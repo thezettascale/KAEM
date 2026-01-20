@@ -8,6 +8,7 @@ using ..Utils
 using ..KAEM_model
 using ..KAEM_model.UnivariateFunctions
 using ..KAEM_model.EBM_Model
+using ..KAEM_model.Quadrature: get_gausslegendre
 
 include("kan/grid_updating.jl")
 using .GridUpdating
@@ -194,7 +195,12 @@ function (gu::GridUpdater)(
         end
     end
 
-    new_nodes, new_weights = get_gausslegendre(model.prior, st_kan.ebm)
+    new_nodes, new_weights = get_gausslegendre(
+        model.prior,
+        st_kan.ebm,
+        st_kan.quad.init_nodes,
+        st_kan.quad.init_weights
+    )
     @reset st_kan.quad.nodes = new_nodes
     @reset st_kan.quad.weights = new_weights
 

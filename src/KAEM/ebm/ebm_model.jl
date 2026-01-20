@@ -1,6 +1,6 @@
 module EBM_Model
 
-export EbmModel, init_EbmModel, get_gausslegendre
+export EbmModel, init_EbmModel
 
 using ConfParser,
     Random,
@@ -9,16 +9,13 @@ using ConfParser,
     Accessors,
     Statistics,
     LinearAlgebra,
-    ComponentArrays,
-    FastGaussQuadrature
+    ComponentArrays
 
 using ..Utils
 using ..UnivariateFunctions
 using ..SymbolicFunctions
 using ..RefPriors
-
-include("quadrature.jl")
-using .Quadrature
+using ..Quadrature: GaussLegendreQuadrature
 
 struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
@@ -43,8 +40,6 @@ struct EbmModel{T <: Float32} <: Lux.AbstractLuxLayer
     quad::AbstractQuadrature
     N_quad::Int
     λ::T
-    init_nodes
-    init_weights
 end
 
 function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
@@ -140,8 +135,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     train_props = parse(Bool, retrieve(conf, "MixtureModel", "train_proportions"))
 
     A = length(functions) > 0 ? typeof(functions[1].base_activation) : AbstractActivation
-
-    init_nodes, init_weights = gausslegendre(N_quad)
     no_grid = spline_function == "FFT" || spline_function == "Cheby"
 
     return EbmModel{Float32}(
@@ -165,8 +158,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         quad_fcn,
         N_quad,
         reg,
-        Float32.(init_nodes),
-        Float32.(init_weights)
     )
 end
 

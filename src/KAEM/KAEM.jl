@@ -2,7 +2,7 @@ module KAEM_model
 
 export KAEM, init_KAEM, generate_new
 
-using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics
+using ConfParser, Random, Lux, Accessors, ComponentArrays, Statistics, FastGaussQuadrature
 using Flux: DataLoader
 using MultivariateStats: PCA, transform, fit
 using MLDataDevices: cpu_device
@@ -20,6 +20,9 @@ using .InverseTransformSampling
 
 include("ebm/ref_priors.jl")
 using .RefPriors
+
+include("ebm/quadrature.jl")
+using .Quadrature
 
 include("ebm/ebm_model.jl")
 include("gen/gen_model.jl")
@@ -207,8 +210,24 @@ function Lux.initialstates(
 
     ebm_kan, ebm_lux = Lux.initialstates(rng, model.prior)
     gen_kan, gen_lux = Lux.initialstates(rng, model.lkhood)
-    n, w = get_gausslegendre(model.prior, ebm_kan)
-    st_quad = (nodes = n, weights = w)
+
+    init_nodes, init_weights = gausslegendre(model.prior.N_quad)
+    init_nodes = Float32.(init_nodes')
+    init_weights = Float32.(init_weights')
+
+    n, w = get_gausslegendre(
+        model.prior,
+        ebm_kan,
+        init_nodes,
+        init_weights
+    )
+
+    st_quad = (
+        nodes = n,
+        weights = w,
+        init_nodes = init_nodes,
+        init_weights = init_weights,
+    )
     enc_lux = Lux.initialstates(rng, model.encoder)
 
     return (

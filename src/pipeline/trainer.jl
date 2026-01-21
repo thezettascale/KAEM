@@ -211,17 +211,19 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     grid_updated = 0
     num_param_updates = num_batches * t.N_epochs
     loss_file = t.model.file_loc * "loss.csv"
+    no_testmode = t.model.prior.bool_config.ula || t.model.MALA || t.model.N_t > 1
 
     (isnothing(trial) && t.img_tuning) && error("Must provide trial when tuning")
 
     grid_compiled = nothing
+    st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
     if t.grid_updater.update_prior_grid || t.grid_updater.update_llhood_grid
         println("Compiling grid_updater...")
         grid_compiled = Reactant.@compile t.grid_updater(
             t.x,
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            st_lux,
             train_idx,
             t.st_rng,
         )
@@ -234,7 +236,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     gen_compiled = Reactant.@compile t.model(
         t.ps,
         t.st_kan,
-        Lux.testmode(t.st_lux),
+        st_lux,
         t.st_rng,
     )
     println("gen (model) compiled.")
@@ -245,7 +247,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         gen_compiled(
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            st_lux,
             t.st_rng
         )
     )
@@ -271,14 +273,16 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                 train_idx == 1 || (train_idx - t.last_grid_update >= t.grid_updater.update_frequency)
             ) && (t.grid_updater.update_llhood_grid || t.grid_updater.update_prior_grid)
 
-            t.ps, t.st_kan, t.st_lux = grid_compiled(
+            st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
+            t.ps, t.st_kan, st_lux = grid_compiled(
                 t.x,
                 t.ps,
                 t.st_kan,
-                Lux.testmode(t.st_lux),
+                st_lux,
                 train_idx,
                 t.st_rng,
             )
+            t.st_lux = Lux.trainmode(st_lux)
 
             grid_updated = 1
             t.last_grid_update = train_idx
@@ -329,12 +333,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         epoch_done = train_idx % num_batches == 0
         if !t.img_tuning && epoch_done || first_bool
             test_loss = 0.0e0
+            st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
             for x in t.model.test_loader
                 t.st_rng = seed_rand(t.model; rng = t.rng)
                 x_gen, _, _ = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    st_lux,
                     t.st_rng,
                 )
 
@@ -360,12 +365,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
 
         if (t.gen_every > 0) && (epoch % t.gen_every == 0) && epoch_done && t.img_tuning
             gen_ssim_x = zeros(Float32, t.model.lkhood.x_shape..., 0)
+            st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
             for x in t.model.test_loader
                 t.st_rng = seed_rand(t.model; rng = t.rng)
                 x_gen, _, _ = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    st_lux,
                     t.st_rng,
                 )
 
@@ -402,12 +408,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             if num_batches_to_save > 0
                 concat_dim = length(t.model.lkhood.x_shape) + 1
                 t.st_rng = seed_rand(t.model; rng = t.rng)
+                st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
 
                 # Get first batch to determine type
                 first_batch, _, _ = gen_compiled(
                     t.ps,
                     t.st_kan,
-                    Lux.testmode(t.st_lux),
+                    st_lux,
                     t.st_rng,
                 )
                 first_batch = Array(first_batch)
@@ -421,7 +428,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
                     batch, _, _ = gen_compiled(
                         t.ps,
                         t.st_kan,
-                        Lux.testmode(t.st_lux),
+                        st_lux,
                         t.st_rng,
                     )
                     push!(batches_to_cat, Array(batch))
@@ -480,12 +487,13 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
     end
 
     # Generate samples
+    st_lux = no_testmode ? t.st_lux : Lux.testmode(t.st_lux)
     num_batches = t.num_generated_samples ÷ t.model.batch_size
     concat_dim = length(t.model.lkhood.x_shape) + 1
     first_batch, _, _ = gen_compiled(
         t.ps,
         t.st_kan,
-        Lux.testmode(t.st_lux),
+        st_lux,
         t.st_rng,
     )
     first_batch = Array(first_batch)
@@ -498,7 +506,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
         batch, _, _ = gen_compiled(
             t.ps,
             t.st_kan,
-            Lux.testmode(t.st_lux),
+            st_lux,
             t.st_rng,
         )
         push!(batches_to_cat, Array(batch))
@@ -537,7 +545,7 @@ function train!(t::KAEM_trainer; train_idx::Int = 1, trial = nothing)
             x_gen, _, _ = gen_compiled(
                 t.ps,
                 t.st_kan,
-                Lux.testmode(t.st_lux),
+                st_lux,
                 t.st_rng,
             )
             gen_ssim_x = cat(

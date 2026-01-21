@@ -3,6 +3,7 @@ module LogPriorFCNs
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
 using NNlib: logsoftmax, softmax
+using LogExpFunctions: logsumexp
 using LinearAlgebra, Accessors, ComponentArrays, Lux
 
 using ..Utils
@@ -21,9 +22,9 @@ function log_mix_pdf(
         Z,
         ε,
     )
-    exp_f = exp.(f) .* π_0 .* α ./ Z
-    summed_p = sum(exp_f; dims = 2) .+ ε
-    prod_q = sum(log.(summed_p); dims = 1)
+    log_terms = f .+ log.(π_0 .* α .+ ε) .- log.(Z .+ ε)
+    summed_p = logsumexp(log_terms; dims = 2)
+    prod_q = sum(summed_p; dims = 1)
     return dropdims(prod_q; dims = (1, 2))
 end
 

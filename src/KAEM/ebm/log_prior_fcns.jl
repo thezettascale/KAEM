@@ -2,8 +2,7 @@ module LogPriorFCNs
 
 export LogPriorULA, LogPriorMix, LogPriorUnivariate
 
-using NNlib: logsoftmax, softmax
-using LogExpFunctions: logsumexp
+using NNlib: logsoftmax, softmax, logsumexp
 using LinearAlgebra, Accessors, ComponentArrays, Lux
 
 using ..Utils

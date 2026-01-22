@@ -26,7 +26,7 @@ using .HLOrng
 function setup_training(
         opt_state,
         ps::ComponentArray{T},
-        st_kan::ComponentArray{T},
+        st_kan::NamedTuple,
         st_lux::NamedTuple,
         model::KAEM{T},
         x::AbstractArray{T};
@@ -228,7 +228,7 @@ function prep_model(
     ps = Lux.initialparameters(rng, model)
     st_kan, st_lux = Lux.initialstates(rng, model)
     ps, st_kan, st_lux =
-        ps |> ComponentArray |> Lux.f32 |> pu, st_kan |> ComponentArray |> Lux.f32 |> pu, st_lux |> Lux.f32 |> pu
+        ps |> ComponentArray |> Lux.f32 |> pu, st_kan |> Lux.f32 |> pu, st_lux |> Lux.f32 |> pu
     opt_state = Optimisers.setup(optimizer.rule(), ps)
     model, st_lux, st_rng = setup_training(
         opt_state,

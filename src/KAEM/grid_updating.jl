@@ -3,7 +3,6 @@ module ModelGridUpdating
 export GridUpdater
 
 using Accessors, Lux, ComponentArrays, ConfParser
-using ComponentArrays: getdata, getaxes
 
 using ..Utils
 using ..KAEM_model
@@ -13,6 +12,30 @@ using ..KAEM_model.Quadrature: get_gausslegendre
 
 include("kan/grid_updating.jl")
 using .GridUpdating
+
+function replace_leaf(ps, old_leaf, new_leaf)
+    data = getdata(ps)
+    axes = getaxes(ps)
+
+    # old_leaf is a view into the flat data array
+    idx = parentindices(old_leaf)[1]
+    start_idx = first(idx)
+    end_idx = last(idx)
+    n = length(data)
+
+    # Build new data via concat
+    new_data = if start_idx == 1 && end_idx == n
+        vec(new_leaf)
+    elseif start_idx == 1
+        vcat(vec(new_leaf), data[(end_idx + 1):n])
+    elseif end_idx == n
+        vcat(data[1:(start_idx - 1)], vec(new_leaf))
+    else
+        vcat(data[1:(start_idx - 1)], vec(new_leaf), data[(end_idx + 1):n])
+    end
+
+    return ComponentArray(new_data, axes)
+end
 
 struct GridUpdater
     model
@@ -73,11 +96,6 @@ function (gu::GridUpdater)(
     """
 
     model = gu.model
-
-    # Create mutable copies
-    ps_data = copy(getdata(ps))
-    ps_axes = getaxes(ps)
-
     z = nothing
     if gu.update_prior_grid
 
@@ -178,7 +196,7 @@ function (gu::GridUpdater)(
                     st_kan.ebm[symbol_map[i]],
                     z,
                 )
-                ps_data[parentindices(getproperty(ps.ebm.fcn, symbol_map[i]).coef)[1]] = vec(new_coef)
+                ps = replace_leaf(ps, ps.ebm.fcn[symbol_map[i]].coef, vec(new_coef))
                 @reset st_kan.ebm[symbol_map[i]].grid = new_grid
 
                 if prior_copy.fcns_qp[i].spline_string == "RBF"
@@ -188,8 +206,6 @@ function (gu::GridUpdater)(
                     new_scale = scale .+ zero(st_kan.ebm[symbol_map[i]].scale)
                     @reset st_kan.ebm[symbol_map[i]].scale = new_scale
                 end
-
-                ps = ComponentArray(ps_data, ps_axes)
 
                 z = Lux.apply(
                     prior_copy.fcns_qp[i],
@@ -274,7 +290,7 @@ function (gu::GridUpdater)(
                     st_kan.gen[symbol_map[i]],
                     z,
                 )
-                ps_data[parentindices(getproperty(ps.gen.fcn, symbol_map[i]).coef)[1]] = vec(new_coef)
+                ps = replace_leaf(ps, ps.gen.fcn[symbol_map[i]].coef, vec(new_coef))
                 @reset st_kan.gen[symbol_map[i]].grid = new_grid
 
                 if model.lkhood.generator.Φ_fcns[i].spline_string == "RBF"
@@ -284,8 +300,6 @@ function (gu::GridUpdater)(
                     new_scale = scale .+ zero(st_kan.gen[symbol_map[i]].scale)
                     @reset st_kan.gen[symbol_map[i]].scale = new_scale
                 end
-
-                ps = ComponentArray(ps_data, ps_axes)
             end
 
             z = Lux.apply(

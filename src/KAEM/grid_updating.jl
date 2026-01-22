@@ -76,9 +76,7 @@ function (gu::GridUpdater)(
 
     # Create mutable copies
     ps_data = copy(getdata(ps))
-    st_kan_data = copy(getdata(st_kan))
     ps_axes = getaxes(ps)
-    st_kan_axes = getaxes(st_kan)
 
     z = nothing
     if gu.update_prior_grid

@@ -23,8 +23,11 @@ jobs:
           version: '1.11'
 
       - uses: julia-actions/cache@v2
+        with:
+          manifest: 'Manifest.toml'
 
-      - uses: julia-actions/julia-buildpkg@v1
+      - name: Install dependencies
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run tests in tests/
         run: |

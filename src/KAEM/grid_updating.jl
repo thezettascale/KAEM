@@ -282,7 +282,7 @@ function (gu::GridUpdater)(
                         (size(new_grid, 2) - 1) |> Lux.f32
 
                     new_scale = scale .+ zero(st_kan.gen[symbol_map[i]].scale)
-                    st_kan.gen[symbol_map[i]].scale = new_scale
+                    @reset st_kan.gen[symbol_map[i]].scale = new_scale
                 end
 
                 ps = ComponentArray(ps_data, ps_axes)

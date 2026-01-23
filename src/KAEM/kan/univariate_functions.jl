@@ -130,7 +130,12 @@ function Lux.initialparameters(
         scale = glorot_uniform(rng, Float32, l.in_dim, l.out_dim)
         translation = glorot_normal(rng, Float32, l.in_dim, l.out_dim)
         weights = glorot_normal(rng, Float32, l.in_dim, l.out_dim)
-        return (scale = scale, translation = translation, weights = weights)
+        return (
+            scale = scale,
+            translation = translation,
+            weights = weights,
+            basis_τ = l.init_τ,
+        )
     end
 
     w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base
@@ -216,7 +221,7 @@ function wavMUL(
     )
     x = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
     x = (x .- ps.translation) ./ ps.scale
-    wavelet = l.basis_function(x)
+    wavelet = l.basis_function(x, ps.basis_τ)
     return wavelet .* ps.weights
 end
 

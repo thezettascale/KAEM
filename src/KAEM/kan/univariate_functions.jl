@@ -218,10 +218,11 @@ function wavMUL(
         l,
         ps,
         x,
+        basis_τ
     )
     x = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
     x = (x .- ps.translation) ./ ps.scale
-    wavelet = l.basis_function(x, ps.basis_τ)
+    wavelet = l.basis_function(x, basis_τ)
     return wavelet .* ps.weights
 end
 
@@ -232,7 +233,7 @@ function (l::univariate_function)(
     )
     basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     scale = st.scale
-    l.spline_string == "Wavelet" && return wavMUL(l, ps, x)
+    l.spline_string == "Wavelet" && return wavMUL(l, ps, x, basis_τ)
 
     y =
         l.spline_string == "FFT" ?

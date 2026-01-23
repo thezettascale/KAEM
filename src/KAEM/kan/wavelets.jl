@@ -9,6 +9,9 @@ using ..Utils: AbstractBasis
 
 # Derivative of gaussian
 struct DoGWavelet <: AbstractBasis
+    I
+    O
+    S
 end
 
 function (w::DoGWavelet)(x, τ)
@@ -20,6 +23,9 @@ end
 
 # Mexican Hat
 struct MHWavelet <: AbstractBasis
+    I
+    O
+    S
 end
 
 function (w::MHWavelet)(x, τ)
@@ -32,6 +38,9 @@ end
 
 # Morlet
 struct MorletWavelet <: AbstractBasis
+    I
+    O
+    S
 end
 
 function (w::MorletWavelet)(x, τ)
@@ -43,6 +52,9 @@ end
 
 # ShannonWavelet
 struct ShannonWavelet
+    I
+    O
+    S
 end
 
 function (w::ShannonWavelet)(x, τ)

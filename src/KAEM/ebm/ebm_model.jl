@@ -68,6 +68,8 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     mixture_model = parse(Bool, retrieve(conf, "MixtureModel", "use_mixture_prior"))
     widths = mixture_model ? reverse(widths) : widths
 
+    wavelet = retrieve(conf, "EbmModel", "wavelet_type")
+
     prior_domain = Dict(
         "ebm" => grid_range,
         "learnable_gaussian" => grid_range,
@@ -112,6 +114,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             τ_trainable = τ_trainable,
             ε_ridge = eps,
             sample_size = s_size,
+            wavelet = wavelet
         )
 
         s_size = (i == 1 && !ula) ? outer_dim : s_size
@@ -135,7 +138,7 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
     train_props = parse(Bool, retrieve(conf, "MixtureModel", "train_proportions"))
 
     A = length(functions) > 0 ? typeof(functions[1].base_activation) : AbstractActivation
-    no_grid = spline_function == "FFT" || spline_function == "Cheby"
+    no_grid = spline_function == "FFT" || spline_function == "Cheby" || spline_function == "Wavelet"
 
     return EbmModel{Float32}(
         Tuple(functions),

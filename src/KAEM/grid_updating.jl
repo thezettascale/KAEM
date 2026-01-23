@@ -57,8 +57,8 @@ function GridUpdater(model, conf::ConfParse)
     prior_func = retrieve(conf, "EbmModel", "spline_function")
     gen_func = retrieve(conf, "GeneratorModel", "spline_function")
 
-    nogrid_prior = prior_func == "FFT" || prior_func == "Cheby"
-    nogrid_gen = gen_func == "FFT" || gen_func == "Cheby"
+    nogrid_prior = prior_func == "FFT" || prior_func == "Cheby" || prior_func == "Wavelet"
+    nogrid_gen = gen_func == "FFT" || gen_func == "Cheby" || prior_func == "Wavelet"
 
     return GridUpdater(
         model,

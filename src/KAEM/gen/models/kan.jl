@@ -55,6 +55,8 @@ function init_KAN_Generator(
 
     depth = length(widths) - 1
 
+    wavelet = retrieve(conf, "GeneratorModel", "wavelet_type")
+
     initialize_function =
         (in_dim, out_dim, base_scale) -> init_function(
         in_dim,
@@ -72,6 +74,7 @@ function init_KAN_Generator(
         τ_trainable = τ_trainable,
         ε_ridge = eps,
         sample_size = s_size,
+        wavelet = wavelet
     )
     # Let Julia infer the concrete activation type from the elements we push
     Φ_functions = []

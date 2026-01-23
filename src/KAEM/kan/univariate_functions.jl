@@ -10,12 +10,22 @@ using ..Utils
 include("spline_bases.jl")
 using .spline_functions
 
+include("wavelets.jl")
+using .Wavelets
+
 const SplineBasis_mapping = Dict(
     "B-spline" => (degree, in_dim, out_dim, grid_size, batch_size) -> B_spline_basis(degree, in_dim, out_dim, grid_size + 1, batch_size),
     "RBF" => (degree, in_dim, out_dim, grid_size, batch_size) -> RBF_basis(in_dim, out_dim, grid_size, batch_size),
     "RSWAF" => (degree, in_dim, out_dim, grid_size, batch_size) -> RSWAF_basis(in_dim, out_dim, grid_size, batch_size),
     "FFT" => (degree, in_dim, out_dim, grid_size, batch_size) -> FFT_basis(in_dim, out_dim, grid_size, batch_size),
     "Cheby" => (degree, in_dim, out_dim, grid_size, batch_size) -> Cheby_basis(degree, in_dim, out_dim, batch_size),
+)
+
+const Wavelet_mapping = Dict(
+    "DoG" => DoGWavelet,
+    "MH" => MHWavelet,
+    "Morlet" => MorletWavelet,
+    "Shannon" => ShannonWavelet
 )
 
 struct univariate_function{T <: Float32} <: Lux.AbstractLuxLayer
@@ -53,10 +63,11 @@ function init_function(
         τ_trainable::Bool = true,
         ε_ridge::T = 1.0f-6,
         sample_size::Int = 1,
+        wavelet::AbstractString = "Morlet"
     ) where {T <: Float32}
     spline_degree =
         (spline_function == "B-spline" || spline_function == "Cheby") ? spline_degree : 0
-    grid_size = spline_function == "Cheby" ? 1 : grid_size
+    grid_size = spline_function == "Cheby" || spline_function == "Wavelet" ? 1 : grid_size
     grid =
         spline_function == "FFT" ? collect(T, 0:grid_size) :
         range(grid_range[1], grid_range[2], length = grid_size + 1)
@@ -72,10 +83,23 @@ function init_function(
     # Extract concrete type for type parameter
     A = typeof(base_activation_obj)
 
-    initializer =
-        get(SplineBasis_mapping, spline_function, (degree, I, O, G, S) -> RBF_basis(I, O, G, S))
-
-    basis_function = initializer(spline_degree, in_dim, out_dim, size(grid, 2), sample_size)
+    basis_function = nothing
+    if spline_function == "Wavelet"
+        basis_function = get(Wavelet_mapping, wavelet, Morlet)()
+    else
+        initializer = get(
+            SplineBasis_mapping,
+            spline_function,
+            (degree, I, O, G, S) -> RBF_basis(I, O, G, S)
+        )
+        basis_function = initializer(
+            spline_degree,
+            in_dim,
+            out_dim,
+            size(grid, 2),
+            sample_size
+        )
+    end
 
     return univariate_function{T}(
         in_dim,
@@ -101,6 +125,13 @@ function Lux.initialparameters(
         rng::AbstractRNG,
         l::univariate_function{T},
     )::NamedTuple where {T <: Float32}
+
+    if l.spline_string == "Wavelet"
+        scale = glorot_uniform(rng, Float32, l.in_dim, l.out_dim)
+        translation = glorot_normal(rng, Float32, l.in_dim, l.out_dim)
+        weights = glorot_normal(rng, Float32, l.in_dim, l.out_dim)
+        return (scale = scale, translation = translation, weights = weights)
+    end
 
     w_base = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_base
     w_sp = glorot_normal(rng, Float32, l.in_dim, l.out_dim) .* l.σ_spline
@@ -178,6 +209,17 @@ function SplineMUL(
     return w_base .* PermutedDimsArray(view(x_act, :, :, :), (1, 3, 2)) .+ w_sp .* y
 end
 
+function wavMUL(
+        l,
+        ps,
+        x,
+    )
+    x = PermutedDimsArray(view(x, :, :, :), (1, 3, 2))
+    x = (x .- ps.translation) ./ ps.scale
+    wavelet = l.basis_function(x)
+    return wavelet .* ps.weights
+end
+
 function (l::univariate_function)(
         x,
         ps,
@@ -185,6 +227,8 @@ function (l::univariate_function)(
     )
     basis_τ = l.τ_trainable ? ps.basis_τ : st.basis_τ
     scale = st.scale
+    l.spline_string == "Wavelet" && return wavMUL(l, ps, x)
+
     y =
         l.spline_string == "FFT" ?
         coef2curve_FFT(l.basis_function, x, st.grid, ps.coef, basis_τ) :

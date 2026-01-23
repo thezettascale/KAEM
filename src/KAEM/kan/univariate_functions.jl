@@ -85,7 +85,7 @@ function init_function(
 
     basis_function = nothing
     if spline_function == "Wavelet"
-        basis_function = get(Wavelet_mapping, wavelet, MorletWavelet)(I, O, S)
+        basis_function = get(Wavelet_mapping, wavelet, MorletWavelet)(in_dim, out_dim, sample_size)
     else
         initializer = get(
             SplineBasis_mapping,

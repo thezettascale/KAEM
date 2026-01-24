@@ -10,3 +10,4 @@ condaenv*
 .CondaPkg/*
 logs/RealSamples/
 logs/Pretrained/**/*.h5
+**/*.h5

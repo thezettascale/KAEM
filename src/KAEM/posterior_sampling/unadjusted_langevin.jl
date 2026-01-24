@@ -78,6 +78,7 @@ function step(
         ll_noise,
         mask_swap_1,
         mask_swap_2,
+        component_mask
     )
     ξ = noise[:, :, :, i]
     ∇z =
@@ -89,6 +90,7 @@ function step(
         ps,
         st_kan,
         st_lux,
+        component_mask,
         sampler.log_dist,
     )
     new_z = z_i .+ η .* ∇z .+ sqrt_2η .* ξ
@@ -202,6 +204,14 @@ function (sampler::ULA_sampler)(
         end
     end
 
+    # Mask used for mixture sampling
+    component_mask = (
+        model.prior.bool_config.mixture_model && !model.prior.bool_config.contrastive_div ?
+            choose_component(ps.ebm.dist.α, S, Q, P, st_rng) :
+            nothing
+    )
+    component_mask = isnothing(component_mask) ? nothing : repeat(component_mask, 1, 1, num_temps)
+
     @reset model.prior.s_size = S * num_temps
     @reset model.lkhood.generator.s_size = S * num_temps
 
@@ -246,6 +256,7 @@ function (sampler::ULA_sampler)(
             ll_noise,
             mask_swap_1,
             mask_swap_2,
+            component_mask
         )
         state = (i + 1, z_new)
     end

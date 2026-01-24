@@ -126,8 +126,18 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
         end
     end
 
-    contrastive_div =
-        parse(Bool, retrieve(conf, "TRAINING", "contrastive_divergence_training")) && !ula
+    contrastive_div = (
+        parse(
+            Bool,
+            retrieve(
+                conf,
+                "TRAINING",
+                "contrastive_divergence_training"
+            )
+        )
+            && !ula
+            && !mixture_model
+    )
 
     quad_fcn = GaussLegendreQuadrature()
     N_quad = parse(Int, retrieve(conf, "EbmModel", "GaussQuad_nodes"))

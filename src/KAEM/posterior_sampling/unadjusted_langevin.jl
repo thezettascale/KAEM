@@ -16,6 +16,9 @@ using ..KAEM_model.InverseTransformSampling
 include("updates.jl")
 using .LangevinUpdates
 
+include("../ebm/mixture_selection.jl")
+using .MixtureChoice: choose_component
+
 struct ULA_sampler
     prior_sampling_bool
     N

@@ -210,46 +210,54 @@ if __name__ == "__main__":
     else:
         # Manual list for specific runs
         file_paths = [
-            # KAEM - CIFAR10
-            (
-                "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
-            ),
-            (
-                "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
-            ),
-            # KAEM - CELEBA
-            (
-                "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CELEBA"),
-            ),
-            (
-                "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CELEBA"),
-            ),
-            # KAEM - SVHN
-            (
-                "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
-                get_real_samples_path("SVHN"),
-            ),
-            (
-                "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
-                get_real_samples_path("SVHN"),
-            ),
-            # Baselines - CIFAR10
+            # # KAEM - CIFAR10
+            # (
+            #     "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
+            # (
+            #     "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
+            # # KAEM - CELEBA
+            # (
+            #     "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CELEBA"),
+            # ),
+            # (
+            #     "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CELEBA"),
+            # ),
+            # # KAEM - SVHN
+            # (
+            #     "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("SVHN"),
+            # ),
+            # (
+            #     "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("SVHN"),
+            # ),
+            # Baselines - VAE
             (
                 "logs/Baseline/CIFAR10/VAE/generated_images.h5",
                 get_real_samples_path("CIFAR10"),
             ),
             (
-                "logs/Baseline/CIFAR10/GAN/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
+                "logs/Baseline/CELEBA/VAE/generated_images.h5",
+                get_real_samples_path("CELEBA"),
             ),
-            # Pretrained - CIFAR10
             (
-                "logs/Pretrained/CIFAR10/DDPM/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
+                "logs/Baseline/SVHN/VAE/generated_images.h5",
+                get_real_samples_path("SVHN"),
+            ),
+            # (
+            #     "logs/Baseline/CIFAR10/GAN/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
+            # # Pretrained - CIFAR10
+            # (
+            #     "logs/Pretrained/CIFAR10/DDPM/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
             ),
         ]
 

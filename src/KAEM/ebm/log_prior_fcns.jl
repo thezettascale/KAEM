@@ -181,24 +181,21 @@ function (lp::LogPriorMix)(
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
-    Z =
-        lp.normalize && !ula ?
-        PermutedDimsArray(
-            sum(
-                first(
-                    ebm.quad(
-                        ebm,
-                        ps,
-                        st_kan,
-                        st_lyrnorm,
-                        st_quad;
-                        component_mask = component_mask,
-                        mix_bool = true
-                    )
-                ), dims = 3
-            ), (1, 3, 2)
-        ) :
-        zero(alpha) .+ 1.0f0
+    Z = PermutedDimsArray(
+        sum(
+            first(
+                ebm.quad(
+                    ebm,
+                    ps,
+                    st_kan,
+                    st_lyrnorm,
+                    st_quad;
+                    component_mask = component_mask,
+                    mix_bool = true
+                )
+            ), dims = 3
+        ), (1, 3, 2)
+    )
 
     reg = (
         ebm.λ > 0 ?

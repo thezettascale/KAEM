@@ -11,3 +11,4 @@ condaenv*
 logs/RealSamples/
 logs/Pretrained/**/*.h5
 **/*.h5
+**/*.jld2

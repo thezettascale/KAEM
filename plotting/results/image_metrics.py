@@ -10,6 +10,7 @@ import torch
 from PIL import Image
 from sklearn.linear_model import LinearRegression
 from torch_fidelity import calculate_metrics
+import argparse
 
 
 def get_num_gpus():
@@ -189,8 +190,6 @@ def discover_generated_samples(logs_dir: str = "logs") -> list[tuple[str, str]]:
 
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn')
-    import argparse
-
     parser = argparse.ArgumentParser(
         description="Compute FID/KID metrics for generated samples"
     )

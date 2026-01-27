@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import os
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -187,6 +188,7 @@ def discover_generated_samples(logs_dir: str = "logs") -> list[tuple[str, str]]:
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -258,7 +260,7 @@ if __name__ == "__main__":
             # (
             #     "logs/Pretrained/CIFAR10/DDPM/generated_images.h5",
             #     get_real_samples_path("CIFAR10"),
-            ),
+            # ),
         ]
 
     # Filter to only existing files

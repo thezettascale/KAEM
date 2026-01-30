@@ -17,7 +17,7 @@ using .ModelSetup
 include("../src/pipeline/optimizer.jl")
 using .optimization
 
-conf = ConfParse("config/nist_config.ini")
+conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
 optimizer = create_opt(conf)
 
@@ -25,15 +25,16 @@ rng = Random.MersenneTwister(1)
 
 commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
-commit!(conf, "CNN", "use_cnn_lkhood", "false")
+commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0")
 commit!(conf, "TRAINING", "verbose", "false")
 
 dataset, img_size = get_vision_dataset(
-    "MNIST",
+    "SVHN",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
-    parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"))
+    parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
+    cnn = true,
 )[1:2]
 
 function setup_model(n_z)

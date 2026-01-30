@@ -17,7 +17,7 @@ using .ModelSetup
 include("../src/pipeline/optimizer.jl")
 using .optimization
 
-conf = ConfParse("config/celeba_config.ini")
+conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
 optimizer = create_opt(conf)
 
@@ -29,16 +29,16 @@ commit!(conf, "TRAINING", "verbose", "false")
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 
 dataset, img_size = get_vision_dataset(
-    "CELEBA",
+    "SVHN",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
-    img_resize = (64, 64),
     cnn = true,
 )[1:2]
 
-function setup_model(N_t)
-    commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "$(N_t)")
+function setup_model(n_z)
+    commit!(conf, "EbmModel", "layer_widths", "$(n_z), $(2 * n_z + 1)")
+    commit!(conf, "GeneratorModel", "widths", "$(2 * n_z + 1), $(4 * n_z + 2)")
 
     model = init_KAEM(dataset, conf, img_size; rng = rng)
     x, loader_state = iterate(model.train_loader)
@@ -55,7 +55,7 @@ function benchmark_prior(model, params, st_kan, st_lux, st_rng)
 end
 
 results = DataFrame(
-    N_t = Int[],
+    n_z = Int[],
     time_mean = Float64[],
     time_std = Float64[],
     memory_estimate = Float64[],
@@ -63,10 +63,10 @@ results = DataFrame(
     gc_percent = Float64[],
 )
 
-for N_t in [1]
-    println("Benchmarking N_t = $N_t...")
+for n_z in [10, 20, 30, 40, 50]
+    println("Benchmarking n_z = $n_z...")
 
-    model, params, st_kan, st_lux, st_rng = setup_model(N_t)
+    model, params, st_kan, st_lux, st_rng = setup_model(n_z)
 
     b = @benchmark begin
         result = f(
@@ -90,7 +90,7 @@ for N_t in [1]
     push!(
         results,
         (
-            N_t,
+            n_z,
             b.times[end] / 1.0e9,  # Convert to seconds (median time)
             std(b.times) / 1.0e9,  # Standard deviation
             b.memory / (1024^3),  # Convert to GiB
@@ -100,6 +100,6 @@ for N_t in [1]
     )
 end
 
-CSV.write("benches/results/ITS_single.csv", results)
-println("Results saved to ITS_single.csv")
+CSV.write("benches/results/ITS_sampling.csv", results)
+println("Results saved to ITS_sampling.csv")
 println(results)

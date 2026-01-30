@@ -17,7 +17,7 @@ using .ModelSetup
 include("../src/pipeline/optimizer.jl")
 using .optimization
 
-conf = ConfParse("config/celeba_config.ini")
+conf = ConfParse("config/svhn_config.ini")
 parse_conf!(conf)
 optimizer = create_opt(conf)
 
@@ -29,12 +29,11 @@ commit!(conf, "TRAINING", "verbose", "false")
 commit!(conf, "POST_LANGEVIN", "use_langevin", "true")
 
 dataset, img_size = get_vision_dataset(
-    "CELEBA",
+    "SVHN",
     parse(Int, retrieve(conf, "TRAINING", "N_train")),
     parse(Int, retrieve(conf, "TRAINING", "N_test")),
     parse(Int, retrieve(conf, "TRAINING", "num_generated_samples"));
     cnn = true,
-    img_resize = (64, 64),
 )[1:2]
 
 function setup_model(N_t)

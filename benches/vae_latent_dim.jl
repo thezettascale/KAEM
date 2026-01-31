@@ -73,6 +73,7 @@ for latent_dim in [21, 41, 61, 81, 101]
 
     b = @benchmark begin
         result = f(
+            $train_step,
             $opt_state,
             $ps,
             $st,

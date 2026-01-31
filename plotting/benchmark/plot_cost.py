@@ -1,4 +1,6 @@
+from pathlib import Path
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -6,7 +8,7 @@ plt.rcParams.update(
     {
         "text.usetex": True,
         "font.family": "serif",
-        "font.serif": ["Compute Modern"],
+        "font.serif": ["Computer Modern"],
         "axes.unicode_minus": False,
         "text.latex.preamble": (
             r"\usepackage{amsmath} "
@@ -17,222 +19,255 @@ plt.rcParams.update(
     }
 )
 
-latent_dim_df = pd.read_csv("benches/results/latent_dim.csv")
-temperatures_df = pd.read_csv("benches/results/temperatures.csv")
-prior_steps_df = pd.read_csv("benches/results/prior_steps.csv")
-its_single_df = pd.read_csv("benches/results/ITS_single.csv")
+RESULTS_DIR = Path("benches/results")
+FIGURES_DIR = Path("figures/benchmark")
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-mala_steps_ref = {
-    "Time (s)": its_single_df.iloc[0]["time_mean"],
-    "Memory Estimate (GiB)": its_single_df.iloc[0]["memory_estimate"],
-    "Garbage Collection (%)": its_single_df.iloc[0]["gc_percent"],
-    "Allocations": its_single_df.iloc[0]["allocations"],
-}
-
-latent_dim = pd.DataFrame(
-    {
-        r"$n_z$": latent_dim_df["n_z"],
-        "Time (s)": latent_dim_df["time_mean"],
-        "Memory Estimate (GiB)": latent_dim_df["memory_estimate"],
-        "Garbage Collection (%)": latent_dim_df["gc_percent"],
-        "Allocations": latent_dim_df["allocations"],
-    }
-)
-
-mala_steps = pd.DataFrame(
-    {
-        r"$N_{t}$": temperatures_df["N_t"],
-        "Time (s)": temperatures_df["time_mean"],
-        "Memory Estimate (GiB)": temperatures_df["memory_estimate"],
-        "Garbage Collection (%)": temperatures_df["gc_percent"],
-        "Allocations": temperatures_df["allocations"],
-    }
-)
-
-prior_steps = pd.DataFrame(
-    {
-        r"$N_{prior}$": prior_steps_df["N_l"],
-        "Time (s)": prior_steps_df["time_mean"],
-        "Memory Estimate (GiB)": prior_steps_df["memory_estimate"],
-        "Garbage Collection (%)": prior_steps_df["gc_percent"],
-        "Allocations": prior_steps_df["allocations"],
-    }
-)
-
-prior_steps_ref = {
-    "Time (s)": its_single_df.iloc[0]["time_mean"],
-    "Memory Estimate (GiB)": its_single_df.iloc[0]["memory_estimate"],
-    "Garbage Collection (%)": its_single_df.iloc[0]["gc_percent"],
-    "Allocations": its_single_df.iloc[0]["allocations"],
-}
-
-keys = [r"$n_z$", r"$N_{t}$", r"$N_{prior}$"]
-colours = ["viridis", "cividis", "plasma"]
-elevations = [0.0, 0.0, 0.0, 0.0]
-datasets = [latent_dim, mala_steps, prior_steps]
-references = [None, mala_steps_ref, prior_steps_ref]
-titles = [r"Latent Dimension", r"Power Posteriors", "Prior ULA Steps"]
+METRICS = ["Time (s)", "Memory Estimate (GiB)", "Garbage Collection (%)", "Allocations"]
+METRIC_TITLES = ["Time", "Memory", "GC", "Allocations"]
 
 
-def add_text_annotations(ax, round=False, elevation=0.45):
-    for bar in ax.patches:
-        if round:
-            text = f"{int(bar.get_height())}"
+def load_csv_safe(path: Path) -> pd.DataFrame | None:
+    """Load CSV file if it exists, return None otherwise."""
+    if path.exists():
+        return pd.read_csv(path)
+    print(f"Warning: {path} not found, skipping.")
+    return None
+
+
+def plot_single_benchmark(
+    df: pd.DataFrame,
+    x_key: str,
+    title: str,
+    output_name: str,
+    reference: dict | None = None,
+    reference_label: str = "",
+    colour_palette: str = "viridis",
+    time_std_col: str | None = "Time Std (s)",
+):
+    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+    colors = sns.color_palette(colour_palette, n_colors=max(4, len(df)))
+
+    for idx, (metric, metric_title) in enumerate(zip(METRICS, METRIC_TITLES)):
+        ax = axs[idx]
+        color = colors[min(idx, len(colors) - 1)]
+
+        # Add error bars if std is available
+        if (
+            metric == "Time (s)"
+            and time_std_col is not None
+            and time_std_col in df.columns
+        ):
+            ax.bar(
+                range(len(df)),
+                df[metric],
+                yerr=df[time_std_col],
+                color=color,
+                capsize=5,
+                error_kw={"elinewidth": 2, "capthick": 2},
+            )
+            ax.set_xticks(range(len(df)))
+            ax.set_xticklabels(df[x_key], fontsize=14)
         else:
-            text = f"{bar.get_height():.2f}"
+            sns.barplot(x=x_key, y=metric, data=df, ax=ax, color=color)
 
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            elevation * ax.get_ylim()[1],
-            text,
-            ha="center",
-            va="bottom",
-            color="red",
-            rotation=45,
-            fontsize=14,
-        )
-
-
-for idx, (df, ref, title) in enumerate(zip(datasets, references, titles)):
-    fig, axs = plt.subplots(1, 4, figsize=(14, 4))
-
-    colors = sns.color_palette(colours[idx], n_colors=len(df))
-
-    sns.barplot(x=keys[idx], y="Time (s)", data=df, ax=axs[0], color=colors[0])
-    add_text_annotations(axs[0], round=False, elevation=elevations[idx])
-
-    if ref is not None:
-        if idx == 1:  # MALA steps plot
-            axs[0].axhline(
-                y=ref["Time (s)"],
+        if reference is not None and metric in reference:
+            ax.axhline(
+                y=reference[metric],
                 color="red",
                 linestyle="--",
-                label=(
-                    "Reference MLE criterion\n"
-                    + "with single posterior\n"
-                    + "ULA sampling"
-                ),
+                linewidth=2,
+                label=reference_label,
             )
-        else:
-            axs[0].axhline(
-                y=ref["Time (s)"],
-                color="red",
-                linestyle="--",
-                label=("Reference ITS\n" + "with Mixture Prior"),
-            )
-        axs[0].legend()
+            ax.legend(fontsize=12, loc="upper left")
 
-    axs[0].set_xlabel(keys[idx], fontsize=16)
-    axs[0].set_ylabel("Time (s)", fontsize=16)
-    axs[0].set_title(f"{title} - Time", fontsize=16)
+        ax.set_xlabel(x_key, fontsize=18)
+        ax.set_ylabel(metric, fontsize=18)
+        ax.set_title(f"{title} - {metric_title}", fontsize=18)
+        ax.tick_params(axis="both", labelsize=14)
 
-    sns.barplot(
-        x=keys[idx],
-        y="Memory Estimate (GiB)",
-        data=df,
-        ax=axs[1],
-        color=colors[1] if len(colors) > 1 else colors[0],
-    )
-    add_text_annotations(axs[1], round=False, elevation=elevations[idx])
-
-    if ref is not None:
-        if idx == 1:  # MALA steps plot
-            axs[1].axhline(
-                y=ref["Memory Estimate (GiB)"],
-                color="red",
-                linestyle="--",
-                label=(
-                    "Reference MLE criterion\n"
-                    + "with single posterior\n"
-                    + "ULA sampling"
-                ),
-            )
-        else:
-            axs[1].axhline(
-                y=ref["Memory Estimate (GiB)"],
-                color="red",
-                linestyle="--",
-                label=("Reference ITS\n" + "with Mixture Prior"),
-            )
-        axs[1].legend()
-
-    axs[1].set_xlabel(keys[idx], fontsize=16)
-    axs[1].set_ylabel("Memory Estimate (GiB)", fontsize=16)
-    axs[1].set_title(f"{title} - Memory", fontsize=16)
-
-    sns.barplot(
-        x=keys[idx],
-        y="Garbage Collection (%)",
-        data=df,
-        ax=axs[2],
-        color=colors[2] if len(colors) > 2 else colors[0],
-    )
-    add_text_annotations(axs[2], round=False, elevation=elevations[idx])
-
-    if ref is not None:
-        if idx == 1:  # MALA steps plot
-            axs[2].axhline(
-                y=ref["Garbage Collection (%)"],
-                color="red",
-                linestyle="--",
-                label=(
-                    "Reference MLE criterion\n"
-                    + "with single posterior\n"
-                    + "ULA sampling"
-                ),
-            )
-        else:
-            axs[2].axhline(
-                y=ref["Garbage Collection (%)"],
-                color="red",
-                linestyle="--",
-                label=("Reference ITS\n" + "with Mixture Prior"),
-            )
-        axs[2].legend()
-
-    axs[2].set_xlabel(keys[idx], fontsize=16)
-    axs[2].set_ylabel(r"Garbage Collection (\%)", fontsize=16)
-    axs[2].set_ylim(0, 1)
-    axs[2].set_title(f"{title} - GC", fontsize=16)
-
-    sns.barplot(
-        x=keys[idx],
-        y="Allocations",
-        data=df,
-        ax=axs[3],
-        color=colors[3] if len(colors) > 3 else colors[0],
-    )
-    add_text_annotations(axs[3], round=True, elevation=elevations[idx])
-
-    if ref is not None:
-        if idx == 1:  # MALA steps plot
-            axs[3].axhline(
-                y=ref["Allocations"],
-                color="red",
-                linestyle="--",
-                label=(
-                    "Reference MLE criterion\n"
-                    + "with single posterior\n"
-                    + "ULA sampling"
-                ),
-            )
-        else:
-            axs[3].axhline(
-                y=ref["Allocations"],
-                color="red",
-                linestyle="--",
-                label=("Reference ITS\n" + "with Mixture Prior"),
-            )
-        axs[3].legend()
-
-    axs[3].set_xlabel(keys[idx], fontsize=16)
-    axs[3].set_ylabel("Allocations", fontsize=16)
-    axs[3].set_title(f"{title} - Allocations", fontsize=16)
+        if metric == "Garbage Collection (%)":
+            ax.set_ylim(0, max(1, df[metric].max() * 1.1))
 
     plt.tight_layout()
-    plt.savefig(
-        f"figures/benchmark/plot_cost_{idx}.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
+    plt.savefig(FIGURES_DIR / output_name, dpi=300, bbox_inches="tight")
     plt.close()
+
+
+def plot_comparison(
+    kaem_df: pd.DataFrame,
+    vae_df: pd.DataFrame,
+    kaem_key: str,
+    vae_key: str,
+    title: str,
+    output_name: str,
+):
+    """Plot KAEM vs VAE comparison with grouped bars side by side."""
+    fig, axs = plt.subplots(1, 4, figsize=(22, 6))
+
+    col_rename = {
+        "time_mean": "Time (s)",
+        "time_std": "Time Std (s)",
+        "memory_estimate": "Memory Estimate (GiB)",
+        "gc_percent": "Garbage Collection (%)",
+        "allocations": "Allocations",
+    }
+
+    kaem_data = kaem_df.rename(columns=col_rename).copy()
+    kaem_data["Model"] = "KAEM"
+
+    # Convert n_z to Q = 2*n_z + 1 (the actual latent dimension)
+    kaem_data["Latent Dim"] = 2 * kaem_df[kaem_key] + 1
+
+    vae_data = vae_df.rename(columns=col_rename).copy()
+    vae_data["Model"] = "VAE"
+
+    # VAE already uses Q directly as latent_dim
+    vae_data["Latent Dim"] = vae_df[vae_key]
+
+    combined = pd.concat([kaem_data, vae_data], ignore_index=True)
+
+    palette = {"KAEM": "#2ecc71", "VAE": "#3498db"}
+    latent_dims = sorted(kaem_data["Latent Dim"].unique())
+
+    for idx, (metric, metric_title) in enumerate(zip(METRICS, METRIC_TITLES)):
+        ax = axs[idx]
+
+        if metric == "Time (s)" and "Time Std (s)" in kaem_data.columns:
+            x = np.arange(len(latent_dims))
+            width = 0.35
+
+            kaem_times = [
+                kaem_data[kaem_data["Latent Dim"] == ld]["Time (s)"].values[0]
+                for ld in latent_dims
+            ]
+            kaem_stds = [
+                kaem_data[kaem_data["Latent Dim"] == ld]["Time Std (s)"].values[0]
+                for ld in latent_dims
+            ]
+            vae_times = [
+                vae_data[vae_data["Latent Dim"] == ld]["Time (s)"].values[0]
+                for ld in latent_dims
+            ]
+            vae_stds = [
+                vae_data[vae_data["Latent Dim"] == ld]["Time Std (s)"].values[0]
+                for ld in latent_dims
+            ]
+
+            ax.bar(
+                x - width / 2,
+                kaem_times,
+                width,
+                yerr=kaem_stds,
+                label="KAEM",
+                color=palette["KAEM"],
+                capsize=4,
+                error_kw={"elinewidth": 2, "capthick": 2},
+            )
+            ax.bar(
+                x + width / 2,
+                vae_times,
+                width,
+                yerr=vae_stds,
+                label="VAE",
+                color=palette["VAE"],
+                capsize=4,
+                error_kw={"elinewidth": 2, "capthick": 2},
+            )
+
+            ax.set_xticks(x)
+            ax.set_xticklabels(latent_dims, fontsize=14)
+        else:
+            sns.barplot(
+                x="Latent Dim",
+                y=metric,
+                hue="Model",
+                data=combined,
+                ax=ax,
+                palette=palette,
+            )
+
+        ax.set_xlabel(r"Latent Dim, $Q$", fontsize=18)
+        ax.set_ylabel(metric, fontsize=18)
+        ax.set_title(f"{title} - {metric_title}", fontsize=18)
+        ax.legend(fontsize=14)
+        ax.tick_params(axis="both", labelsize=14)
+
+        if metric == "Garbage Collection (%)":
+            ax.set_ylim(0, max(1, combined[metric].max() * 1.1))
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / output_name, dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def main():
+    latent_dim_df = load_csv_safe(RESULTS_DIR / "latent_dim.csv")
+    temperatures_df = load_csv_safe(RESULTS_DIR / "temperatures.csv")
+    its_sampling_df = load_csv_safe(RESULTS_DIR / "ITS_sampling.csv")
+
+    vae_latent_dim_df = load_csv_safe(RESULTS_DIR / "vae_latent_dim.csv")
+    vae_sampling_df = load_csv_safe(RESULTS_DIR / "vae_sampling.csv")
+
+    ref_nz40 = None
+    if latent_dim_df is not None:
+        nz40_row = latent_dim_df[latent_dim_df["n_z"] == 40]
+        if not nz40_row.empty:
+            ref_nz40 = {
+                "Time (s)": nz40_row.iloc[0]["time_mean"],
+                "Memory Estimate (GiB)": nz40_row.iloc[0]["memory_estimate"],
+                "Garbage Collection (%)": nz40_row.iloc[0]["gc_percent"],
+                "Allocations": nz40_row.iloc[0]["allocations"],
+            }
+
+    # Plot 1: KAEM vs VAE Training Comparison (side by side)
+    if latent_dim_df is not None and vae_latent_dim_df is not None:
+        plot_comparison(
+            latent_dim_df,
+            vae_latent_dim_df,
+            "n_z",
+            "latent_dim",
+            "Training Cost: KAEM vs VAE",
+            "01_kaem_vs_vae_training_comparison.png",
+        )
+        print("Saved: 01_kaem_vs_vae_training_comparison.png")
+
+    # Plot 2: KAEM vs VAE Sampling Comparison (side by side)
+    if its_sampling_df is not None and vae_sampling_df is not None:
+        plot_comparison(
+            its_sampling_df,
+            vae_sampling_df,
+            "n_z",
+            "latent_dim",
+            "Sampling Cost: KAEM vs VAE",
+            "02_kaem_vs_vae_sampling_comparison.png",
+        )
+        print("Saved: 02_kaem_vs_vae_sampling_comparison.png")
+
+    # Plot 3: Thermodynamic Integration (Power Posteriors)
+    if temperatures_df is not None:
+        temps = pd.DataFrame(
+            {
+                r"$N_{t}$": temperatures_df["N_t"],
+                "Time (s)": temperatures_df["time_mean"],
+                "Time Std (s)": temperatures_df["time_std"],
+                "Memory Estimate (GiB)": temperatures_df["memory_estimate"],
+                "Garbage Collection (%)": temperatures_df["gc_percent"],
+                "Allocations": temperatures_df["allocations"],
+            }
+        )
+        ref_label = r"Reference KAEM ($Q=81$, $N_t=1$)"
+        plot_single_benchmark(
+            temps,
+            r"$N_{t}$",
+            "Power Posteriors",
+            "03_kaem_training_vs_num_temperatures.png",
+            reference=ref_nz40,
+            reference_label=ref_label,
+            colour_palette="viridis",
+        )
+        print("Saved: 03_kaem_training_vs_num_temperatures.png")
+
+
+if __name__ == "__main__":
+    main()

@@ -189,7 +189,7 @@ def discover_generated_samples(logs_dir: str = "logs") -> list[tuple[str, str]]:
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn')
+    multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(
         description="Compute FID/KID metrics for generated samples"
     )

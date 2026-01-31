@@ -2,6 +2,55 @@
 
 KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
 
+## Why use KAEM
+
+> Faster inference than VAEs and can be used to discover algebraic structure in the latent space:
+<table>
+  <tr>
+    <td align="center"><img src="figures/benchmark/02b_sampling_time_only.png" width="300"/><br/><b>Inference time comparison against VAEs</b></td>
+<td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
+
+  </tr>
+</table>
+
+> KAEM is a robust probabilistic model. It can even be trained cheaply with importance sampling.
+
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="300"/><br/><b>MNIST</b></td>
+    <td align="center"><img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="300"/><br/><b>Fashion-MNIST</b></td>
+  </tr>
+</table>
+
+> When importance sampling explodes with variance, unadjusted Langevin algorithm may be used, no encoder required.
+
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/svhn_real_reference.png" width="300"/><br/><b>SVHN (real)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="300"/><br/><b>SVHN (generated)</b></td>
+  </tr>
+</table>
+
+> Thermo training is presented as an embarrassingly parallel, interpretable, and structure-preserving alternative to diffusion EBMs for improved mixing in latent space.
+
+<table>
+  <tr>
+    <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="300"/><br/><b>CelebA (vanilla)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="300"/><br/><b>CelebA (thermo)</b></td>
+  </tr>
+</table>
+
+### WIP: Latent Discovery
+> KAEM can be used to discover latent priors and algebraic structure in the latent space.
+
+<table>
+  <tr>
+    <td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
+  </tr>
+</table>
+
+
+
 ## Setup:
 
 Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup). Choose your favourite installer and run: 
@@ -177,48 +226,6 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 @reset st.gen = st_gen
 ```
 ---
-
-## Samples
-
-### Importance Sampling
-> KAEM is a robust probabilistic model. It can even be trained cheaply with importance sampling.
-
-<table>
-  <tr>
-    <td align="center"><img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="300"/><br/><b>MNIST</b></td>
-    <td align="center"><img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="300"/><br/><b>Fashion-MNIST</b></td>
-  </tr>
-</table>
-
-### Langevin Dynamics
-> When importance sampling explodes with variance, unadjusted Langevin algorithm may be used.
-
-<table>
-  <tr>
-    <td align="center"><img src="figures/results/individual_plots/svhn_real_reference.png" width="300"/><br/><b>SVHN (real)</b></td>
-    <td align="center"><img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="300"/><br/><b>SVHN (generated)</b></td>
-  </tr>
-</table>
-
-### Thermodynamic Integration
-> Thermo training is presented as an embarrassingly parallel, interpretable, and structure-preserving alternative to diffusion EBMs for improved mixing in latent space.
-
-<table>
-  <tr>
-    <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="300"/><br/><b>CelebA (vanilla)</b></td>
-    <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="300"/><br/><b>CelebA (thermo)</b></td>
-  </tr>
-</table>
-
-### WIP: Latent Discovery
-> KAEM can be used to discover latent priors and algebraic structure in the latent space.
-
-<table>
-  <tr>
-    <td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
-  </tr>
-</table>
-
 
 ## Citation/license [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

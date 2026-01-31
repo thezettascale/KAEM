@@ -201,6 +201,84 @@ def plot_comparison(
     plt.close()
 
 
+def plot_sampling_time_only(
+    kaem_df: pd.DataFrame,
+    vae_df: pd.DataFrame,
+    kaem_key: str,
+    vae_key: str,
+    output_name: str,
+):
+    """Plot just the sampling time comparison."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    col_rename = {
+        "time_mean": "Time (s)",
+        "time_std": "Time Std (s)",
+    }
+
+    kaem_data = kaem_df.rename(columns=col_rename).copy()
+    kaem_data["Latent Dim"] = 2 * kaem_df[kaem_key] + 1
+
+    vae_data = vae_df.rename(columns=col_rename).copy()
+    vae_data["Latent Dim"] = vae_df[vae_key]
+
+    palette = {"KAEM": "#2ecc71", "VAE": "#3498db"}
+    latent_dims = sorted(kaem_data["Latent Dim"].unique())
+
+    x = np.arange(len(latent_dims))
+    width = 0.35
+
+    kaem_times = [
+        kaem_data[kaem_data["Latent Dim"] == ld]["Time (s)"].values[0]
+        for ld in latent_dims
+    ]
+    kaem_stds = [
+        kaem_data[kaem_data["Latent Dim"] == ld]["Time Std (s)"].values[0]
+        for ld in latent_dims
+    ]
+    vae_times = [
+        vae_data[vae_data["Latent Dim"] == ld]["Time (s)"].values[0]
+        for ld in latent_dims
+    ]
+    vae_stds = [
+        vae_data[vae_data["Latent Dim"] == ld]["Time Std (s)"].values[0]
+        for ld in latent_dims
+    ]
+
+    ax.bar(
+        x - width / 2,
+        kaem_times,
+        width,
+        yerr=kaem_stds,
+        label="KAEM",
+        color=palette["KAEM"],
+        capsize=5,
+        error_kw={"elinewidth": 2, "capthick": 2},
+    )
+    ax.bar(
+        x + width / 2,
+        vae_times,
+        width,
+        yerr=vae_stds,
+        label="VAE",
+        color=palette["VAE"],
+        capsize=5,
+        error_kw={"elinewidth": 2, "capthick": 2},
+    )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(latent_dims, fontsize=16)
+    ax.set_xlabel(r"Latent Dim, $Q$", fontsize=20)
+    ax.set_ylabel("Time (s)", fontsize=20)
+    ax.set_title("Sampling Time: KAEM vs VAE", fontsize=22)
+    ax.legend(fontsize=16)
+    ax.tick_params(axis="both", labelsize=16)
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / output_name, dpi=300, bbox_inches="tight")
+    plt.close()
+
+
 def main():
     latent_dim_df = load_csv_safe(RESULTS_DIR / "latent_dim.csv")
     temperatures_df = load_csv_safe(RESULTS_DIR / "temperatures.csv")
@@ -243,6 +321,16 @@ def main():
             "02_kaem_vs_vae_sampling_comparison.png",
         )
         print("Saved: 02_kaem_vs_vae_sampling_comparison.png")
+
+        # Plot 2b: Just the sampling time comparison
+        plot_sampling_time_only(
+            its_sampling_df,
+            vae_sampling_df,
+            "n_z",
+            "latent_dim",
+            "02b_sampling_time_only.png",
+        )
+        print("Saved: 02b_sampling_time_only.png")
 
     # Plot 3: Thermodynamic Integration (Power Posteriors)
     if temperatures_df is not None:

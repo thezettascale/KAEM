@@ -2,23 +2,14 @@ using BenchmarkTools, ConfParser, Lux, Random, ComponentArrays, CSV, DataFrames,
 
 ENV["GPU"] = true
 
-include("../src/utils.jl")
-using .Utils
-
-include("../src/pipeline/data_utils.jl")
+include("../src/baseline/training/trainer.jl")
+using .Baseline: Utils, VAEModel, VAELoss, BaselineRNG, optimization, DataUtils
+using .Utils: pu
+using .VAEModel: init_VAE
+using .VAELoss: VAETrainStep
+using .BaselineRNG: seed_rng
+using .optimization: ManualAdam
 using .DataUtils: get_vision_dataset
-
-include("../src/baseline/models/vae/vae.jl")
-using .VAEModel
-
-include("../src/baseline/losses/vae_loss.jl")
-using .VAELoss
-
-include("../src/baseline/rng.jl")
-using .BaselineRNG
-
-include("../src/pipeline/optimizer.jl")
-using .optimization
 
 conf = ConfParse("config/baseline_svhn_config.ini")
 parse_conf!(conf)

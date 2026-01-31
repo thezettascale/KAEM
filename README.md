@@ -7,8 +7,8 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 > Faster inference than VAEs and can be used to discover algebraic structure in the latent space:
 <table>
   <tr>
-    <td align="center"><img src="figures/benchmark/02b_sampling_time_only.png" width="200"/><br/><b>Inference time comparison against VAEs</b></td>
-<td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="200"/><br/><b>Symbolic regression on MNIST prior.</b></td>
+    <td align="center"><img src="figures/benchmark/02b_sampling_time_only.png" width="200"/><br/><b>Inference time against VAEs</b></td>
+<td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="200"/><br/><b>Symbolic regression on prior.</b></td>
 
   </tr>
 </table>

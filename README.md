@@ -7,8 +7,8 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 > Faster inference than VAEs and can be used to discover algebraic structure in the latent space:
 <table>
   <tr>
-    <td align="center"><img src="figures/benchmark/02b_sampling_time_only.png" width="300"/><br/><b>Inference time comparison against VAEs</b></td>
-<td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
+    <td align="center"><img src="figures/benchmark/02b_sampling_time_only.png" width="200"/><br/><b>Inference time comparison against VAEs</b></td>
+<td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="200"/><br/><b>Symbolic regression on MNIST prior.</b></td>
 
   </tr>
 </table>
@@ -17,8 +17,8 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 
 <table>
   <tr>
-    <td align="center"><img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="300"/><br/><b>MNIST</b></td>
-    <td align="center"><img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="300"/><br/><b>Fashion-MNIST</b></td>
+    <td align="center"><img src="figures/results/individual_plots/mnist_gaussian_rbf.png" width="200"/><br/><b>MNIST</b></td>
+    <td align="center"><img src="figures/results/individual_plots/fmnist_gaussian_rbf.png" width="200"/><br/><b>Fashion-MNIST</b></td>
   </tr>
 </table>
 
@@ -26,8 +26,8 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 
 <table>
   <tr>
-    <td align="center"><img src="figures/results/individual_plots/svhn_real_reference.png" width="300"/><br/><b>SVHN (real)</b></td>
-    <td align="center"><img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="300"/><br/><b>SVHN (generated)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/svhn_real_reference.png" width="200"/><br/><b>SVHN (real)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/svhn_vanilla_ula_mixture.png" width="200"/><br/><b>SVHN (generated)</b></td>
   </tr>
 </table>
 
@@ -35,21 +35,10 @@ KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167
 
 <table>
   <tr>
-    <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="300"/><br/><b>CelebA (vanilla)</b></td>
-    <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="300"/><br/><b>CelebA (thermo)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/celeba_vanilla_ula_mixture.png" width="200"/><br/><b>CelebA (vanilla)</b></td>
+    <td align="center"><img src="figures/results/individual_plots/celeba_thermodynamic_ula_mixture.png" width="200"/><br/><b>CelebA (thermo)</b></td>
   </tr>
 </table>
-
-### WIP: Latent Discovery
-> KAEM can be used to discover latent priors and algebraic structure in the latent space.
-
-<table>
-  <tr>
-    <td align="center"><img src="figures/symbolic_priors/plots/FMNIST_vanilla/FMNIST_vanilla_1_2.png" width="300"/><br/><b>Symbolic regression on MNIST prior.</b></td>
-  </tr>
-</table>
-
-
 
 ## Setup:
 

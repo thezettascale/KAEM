@@ -48,9 +48,9 @@ function setup_model(n_z)
     return model, params, st_kan, st_lux, st_rng
 end
 
-function benchmark_prior(model, params, st_kan, st_lux, st_rng)
+function benchmark_generate(model, params, st_kan, st_lux, st_rng)
     return first(
-        model.sample_prior(model, params, st_kan, st_lux, st_rng),
+        model(params, st_kan, Lux.testmode(st_lux), st_rng),
     )
 end
 
@@ -64,7 +64,7 @@ results = DataFrame(
 )
 
 for n_z in [10, 20, 30, 40, 50]
-    println("Benchmarking n_z = $n_z...")
+    println("Benchmarking ITS generation (prior + decoder) with n_z = $n_z...")
 
     model, params, st_kan, st_lux, st_rng = setup_model(n_z)
 
@@ -78,7 +78,7 @@ for n_z in [10, 20, 30, 40, 50]
         )
         Reactant.synchronize(result)
     end setup = (
-        f = Reactant.@compile sync = true benchmark_prior(
+        f = Reactant.@compile sync = true benchmark_generate(
             $model,
             $params,
             $st_kan,
@@ -100,6 +100,6 @@ for n_z in [10, 20, 30, 40, 50]
     )
 end
 
-CSV.write("benches/results/ITS_sampling.csv", results)
-println("Results saved to ITS_sampling.csv")
+CSV.write("benches/results/ITS_generation.csv", results)
+println("Results saved to ITS_generation.csv")
 println(results)

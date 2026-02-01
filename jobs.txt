@@ -17,20 +17,20 @@
 
 # SVHN
 # SVHN tune
-SVHN thermo
-SVHN vanilla
 # SVHN variational
 
 # CELEBA
-CELEBA thermo
+
 CELEBA vanilla
 # CELEBA tune
 # CELEBA variational
 
 # CIFAR
-CIFAR10 thermo
-CIFAR10 vanilla
-
+SVHN vanilla
+SVHN thermo
+# CELEBA thermo
+# CIFAR10 vanilla
+# CIFAR10 thermo
 # DARCY_FLOW vanilla
 
 # ==================== Baseline Jobs ====================

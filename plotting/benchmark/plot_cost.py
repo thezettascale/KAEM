@@ -282,7 +282,7 @@ def plot_sampling_time_only(
 def main():
     latent_dim_df = load_csv_safe(RESULTS_DIR / "latent_dim.csv")
     temperatures_df = load_csv_safe(RESULTS_DIR / "temperatures.csv")
-    its_sampling_df = load_csv_safe(RESULTS_DIR / "ITS_sampling.csv")
+    its_sampling_df = load_csv_safe(RESULTS_DIR / "ITS_generation.csv")
 
     vae_latent_dim_df = load_csv_safe(RESULTS_DIR / "vae_latent_dim.csv")
     vae_sampling_df = load_csv_safe(RESULTS_DIR / "vae_sampling.csv")

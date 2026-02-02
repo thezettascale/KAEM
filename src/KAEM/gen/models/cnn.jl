@@ -25,24 +25,15 @@ struct CNN_Generator <: Lux.AbstractLuxLayer
     init_channels::Int
 end
 
-function conv_transpose_input_size(
-        output_size::Int,
-        kernel::Int,
-        stride::Int,
-        padding::Int
+function compute_init_spatial(
+        target_size::Int,
+        k_sizes,
+        strides,
+        paddings
     )
-    return div(output_size - kernel + 2 * padding, stride) + 1
-end
-
-function compute_init_spatial(target_size::Int, k_sizes, strides, paddings)
     spatial = target_size
     for i in length(k_sizes):-1:1
-        spatial = conv_transpose_input_size(
-            spatial,
-            k_sizes[i],
-            strides[i],
-            paddings[i]
-        )
+        spatial = div(spatial - k_sizes[i] + 2 * paddings[i], strides[i]) + 1
     end
     return spatial
 end
@@ -165,21 +156,20 @@ function init_CNN_Generator(
     skip_bool = parse(Bool, retrieve(conf, "CNN", "latent_concat")) # Residual connection
     projection_bool = parse(Bool, retrieve(conf, "CNN", "projection"))
 
-    # Compute init_spatial by working backwards through conv transpose layers
-    # This correctly accounts for kernel sizes, strides, and paddings
+    # init_spatial: set to -1 to auto-compute from strides/kernels/paddings
+    init_spatial_cfg = parse(Int, retrieve(conf, "CNN", "init_spatial"))
     img_size = first(x_shape)
-    init_spatial = compute_init_spatial(img_size, k_size, strides, paddings)
+    init_spatial = init_spatial_cfg == -1 ?
+        compute_init_spatial(img_size, k_size, strides, paddings) :
+        init_spatial_cfg
     init_channels = first(channels)
 
     s_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
 
-    # Create projection layer if enabled
-    # Projects from q_size to init_channels * init_spatial^2, then reshape to spatial
     project = projection_bool ?
         Lux.Dense(q_size, init_channels * init_spatial * init_spatial, act) :
         nothing
 
-    # Channel configuration depends on whether projection is used
     # With projection: start from init_channels (same as first conv output)
     # Without projection: start from q_size (latent dim) at 1x1 spatial
     first_in_channels = projection_bool ? init_channels : q_size

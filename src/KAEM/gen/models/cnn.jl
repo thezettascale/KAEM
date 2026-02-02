@@ -25,6 +25,28 @@ struct CNN_Generator <: Lux.AbstractLuxLayer
     init_channels::Int
 end
 
+function conv_transpose_input_size(
+        output_size::Int,
+        kernel::Int,
+        stride::Int,
+        padding::Int
+    )
+    return div(output_size - kernel + 2 * padding, stride) + 1
+end
+
+function compute_init_spatial(target_size::Int, k_sizes, strides, paddings)
+    spatial = target_size
+    for i in length(k_sizes):-1:1
+        spatial = conv_transpose_input_size(
+            spatial,
+            k_sizes[i],
+            strides[i],
+            paddings[i]
+        )
+    end
+    return spatial
+end
+
 function upsample_to_match(
         input_tensor,
         target_tensor,
@@ -143,12 +165,10 @@ function init_CNN_Generator(
     skip_bool = parse(Bool, retrieve(conf, "CNN", "latent_concat")) # Residual connection
     projection_bool = parse(Bool, retrieve(conf, "CNN", "projection"))
 
-    # Compute init_spatial and init_channels like VAE/GAN decoders:
-    # init_spatial = img_size / (2^num_stride2_layers)
-    # init_channels = first(hidden_feature_dims)
+    # Compute init_spatial by working backwards through conv transpose layers
+    # This correctly accounts for kernel sizes, strides, and paddings
     img_size = first(x_shape)
-    num_upsample = count(s -> s == 2, strides)
-    init_spatial = img_size ÷ (2^num_upsample)
+    init_spatial = compute_init_spatial(img_size, k_size, strides, paddings)
     init_channels = first(channels)
 
     s_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))

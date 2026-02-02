@@ -108,11 +108,15 @@ function Lux.initialparameters(rng::AbstractRNG, lkhood::GenModel{T})::NamedTupl
             V = Lux.initialparameters(rng, lkhood.generator.attention[3]),
         ) : EMPTY_PARAMS
 
+    project_ps = (lkhood.CNN && lkhood.generator.bool_config.projection_bool) ?
+        Lux.initialparameters(rng, lkhood.generator.project) : EMPTY_PARAMS
+
     return (
         fcn = fcn_ps,
         layernorm = layernorm_ps,
         batchnorm = batchnorm_ps,
         attention = attention_ps,
+        project = project_ps,
     )
 end
 
@@ -131,6 +135,9 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T})::Tuple{NamedTu
             V = Lux.initialstates(rng, lkhood.generator.attention[3]) |> Lux.f32,
         ) : EMPTY_PARAMS
 
+    project_st = (lkhood.CNN && lkhood.generator.bool_config.projection_bool) ?
+        Lux.initialstates(rng, lkhood.generator.project) |> Lux.f32 : EMPTY_PARAMS
+
     if lkhood.CNN || lkhood.SEQ
         return (a = [1.0f0], b = [1.0f0]),
             (
@@ -138,6 +145,7 @@ function Lux.initialstates(rng::AbstractRNG, lkhood::GenModel{T})::Tuple{NamedTu
                 layernorm = st_lyrnorm,
                 batchnorm = batchnorm_st,
                 attention = attention_st,
+                project = project_st,
             )
     else
         return fcn_st, st_lyrnorm

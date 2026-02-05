@@ -17,7 +17,7 @@ end
 function (w::DoGWavelet)(x, τ)
     exp_term = exp.(- x ./ 2)
     y = x .* exp_term
-    y = y ./ sqrt(2π)
+    y = y ./ Float32(sqrt(2π))
     return y
 end
 
@@ -32,7 +32,7 @@ function (w::MHWavelet)(x, τ)
     term_1 = x .^ 2 .- 1
     term_2 = exp.(- x .^ 2 ./ 2)
     y = term_1 .* term_2
-    y = y .* 2 / sqrt(3 * sqrt(π))
+    y = y .* Float32(2 / sqrt(3 * sqrt(π)))
     return y
 end
 

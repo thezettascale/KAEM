@@ -10,15 +10,32 @@ struct BoolConfig <: AbstractBoolConfig
     layernorm::Bool
     batchnorm::Bool
     skip_bool::Bool
+    projection_bool::Bool
 end
 
 struct CNN_Generator <: Lux.AbstractLuxLayer
     depth::Int
     Φ_fcns::Tuple{Vararg{Lux.ConvTranspose}}
     batchnorms::Tuple{Vararg{Lux.BatchNorm}}
+    project::Union{Lux.Dense, Nothing}
     bool_config::BoolConfig
     in_channels::Int
     s_size::Int
+    init_spatial::Int
+    init_channels::Int
+end
+
+function compute_init_spatial(
+        target_size::Int,
+        k_sizes,
+        strides,
+        paddings
+    )
+    spatial = target_size
+    for i in length(k_sizes):-1:1
+        spatial = div(spatial - k_sizes[i] + 2 * paddings[i], strides[i]) + 1
+    end
+    return spatial
 end
 
 function upsample_to_match(
@@ -131,16 +148,33 @@ function init_CNN_Generator(
     validate_generator_widths(widths, q_size)
 
     channels = parse.(Int, retrieve(conf, "CNN", "hidden_feature_dims"))
-    hidden_c = (q_size, channels...)
-    depth = length(hidden_c) - 1
     strides = parse.(Int, retrieve(conf, "CNN", "strides"))
     k_size = parse.(Int, retrieve(conf, "CNN", "kernel_sizes"))
     paddings = parse.(Int, retrieve(conf, "CNN", "paddings"))
     act = lux_activation_mapping[retrieve(conf, "CNN", "activation")]
     batchnorm_bool = parse(Bool, retrieve(conf, "CNN", "batchnorm"))
     skip_bool = parse(Bool, retrieve(conf, "CNN", "latent_concat")) # Residual connection
+    projection_bool = parse(Bool, retrieve(conf, "CNN", "projection"))
+
+    # init_spatial: set to -1 to auto-compute from strides/kernels/paddings
+    init_spatial_cfg = parse(Int, retrieve(conf, "CNN", "init_spatial"))
+    img_size = first(x_shape)
+    init_spatial = init_spatial_cfg == -1 ?
+        compute_init_spatial(img_size, k_size, strides, paddings) :
+        init_spatial_cfg
+    init_channels = first(channels)
 
     s_size = parse(Int, retrieve(conf, "TRAINING", "batch_size"))
+
+    project = projection_bool ?
+        Lux.Dense(q_size, init_channels * init_spatial * init_spatial, act) :
+        nothing
+
+    # With projection: start from init_channels (same as first conv output)
+    # Without projection: start from q_size (latent dim) at 1x1 spatial
+    first_in_channels = projection_bool ? init_channels : q_size
+    hidden_c = (first_in_channels, channels...)
+    depth = length(hidden_c) - 1
 
     Φ_functions = Vector{Lux.ConvTranspose}(undef, 0)
     batchnorms = Vector{Lux.BatchNorm}(undef, 0)
@@ -188,9 +222,12 @@ function init_CNN_Generator(
         depth,
         Tuple(Φ_functions),
         Tuple(batchnorms),
-        BoolConfig(false, batchnorm_bool, skip_bool),
+        project,
+        BoolConfig(false, batchnorm_bool, skip_bool, projection_bool),
         first(widths),
         s_size,
+        init_spatial,
+        init_channels,  # Derived from first(channels) / hidden_feature_dims[1]
     )
 end
 
@@ -213,11 +250,22 @@ function (gen::CNN_Generator)(
     Returns:
         The generated data.
     """
-    z = reshape(sum(z, dims = 2), 1, 1, gen.in_channels, gen.s_size)
+    z_summed = sum(z, dims = 2)
+
+    # Projection matches baseline VAE decoder architecture
+    if gen.bool_config.projection_bool
+        z_flat = dropdims(z_summed, dims = 2)
+        z_proj, st_proj_new = Lux.apply(gen.project, z_flat, ps.project, st_lux.project)
+        @reset st_lux.project = st_proj_new
+        z_spatial = reshape(z_proj, gen.init_spatial, gen.init_spatial, gen.init_channels, gen.s_size)
+    else
+        z_spatial = reshape(z_summed, 1, 1, gen.in_channels, gen.s_size)
+    end
+
     out = (
         gen.bool_config.skip_bool ?
-            forward_with_latent_concat(gen, z, ps, st_lux) :
-            forward(gen, z, ps, st_lux)
+            forward_with_latent_concat(gen, z_spatial, ps, st_lux) :
+            forward(gen, z_spatial, ps, st_lux)
     )
     return out
 end

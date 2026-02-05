@@ -22,7 +22,7 @@ plt.rcParams.update(
 )
 
 DATASETS = {
-    # "SVHN": {"grid_size": 10, "cmap": None},
+    "SVHN": {"grid_size": 10, "cmap": None},
     "CELEBA": {"grid_size": 10, "cmap": None},
     # "CIFAR10": {"grid_size": 10, "cmap": None},
 }
@@ -34,17 +34,17 @@ METHOD_CONFIGS = {
     #     "model_type": "mixture",
     #     "is_baseline": False,
     # },
-    "thermo_ula_mixture": {
-        "method_type": "Thermodynamic",
-        "sampler": "ULA",
-        "model_type": "mixture",
-        "is_baseline": False,
-    },
-    # "baseline_vae": {
-    #     "method_type": "Baseline",
-    #     "model_type": "VAE",
-    #     "is_baseline": True,
+    # "thermo_ula_mixture": {
+    #     "method_type": "Thermodynamic",
+    #     "sampler": "ULA",
+    #     "model_type": "mixture",
+    #     "is_baseline": False,
     # },
+    "baseline_vae": {
+        "method_type": "Baseline",
+        "model_type": "VAE",
+        "is_baseline": True,
+    },
     # "baseline_gan": {
     #     "method_type": "Baseline",
     #     "model_type": "GAN",

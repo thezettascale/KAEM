@@ -27,6 +27,7 @@ commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 commit!(conf, "CNN", "use_cnn_lkhood", "true")
 commit!(conf, "SEQ", "sequence_length", "0")
 commit!(conf, "TRAINING", "verbose", "false")
+commit!(conf, "POST_LANGEVIN", "use_langevin", "false")
 
 dataset, img_size = get_vision_dataset(
     "SVHN",

@@ -25,10 +25,10 @@
 # CELEBA variational
 
 # CIFAR
-# SVHN vanilla
-# CELEBA vanilla
-# SVHN thermo
-# CELEBA thermo
+SVHN vanilla
+CELEBA vanilla
+SVHN thermo
+CELEBA thermo
 # CIFAR10 vanilla
 # CIFAR10 thermo
 # DARCY_FLOW vanilla
@@ -40,11 +40,11 @@
 # CIFAR10 baseline-ddpm
 
 # CelebA baselines
-CELEBA baseline-vae
+# CELEBA baseline-vae
 # CELEBA baseline-gan
 # CELEBA baseline-ddpm
 
 # SVHN baselines
-SVHN baseline-vae
+# SVHN baseline-vae
 # SVHN baseline-gan
 # SVHN baseline-ddpm

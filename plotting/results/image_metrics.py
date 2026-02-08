@@ -221,23 +221,23 @@ if __name__ == "__main__":
             #     get_real_samples_path("CIFAR10"),
             # ),
             # KAEM - CELEBA
-            # (
-            #     "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
-            #     get_real_samples_path("CELEBA"),
-            # ),
-            # (
-            #     "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
-            #     get_real_samples_path("CELEBA"),
-            # ),
-            # # KAEM - SVHN
-            # (
-            #     "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
-            #     get_real_samples_path("SVHN"),
-            # ),
-            # (
-            #     "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
-            #     get_real_samples_path("SVHN"),
-            # ),
+            (
+                "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CELEBA"),
+            ),
+            (
+                "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images.h5",
+                get_real_samples_path("CELEBA"),
+            ),
+            # KAEM - SVHN
+            (
+                "logs/Vanilla/SVHN/ULA/mixture/generated_images.h5",
+                get_real_samples_path("SVHN"),
+            ),
+            (
+                "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
+                get_real_samples_path("SVHN"),
+            ),
             # # Baselines - VAE
             # (
             #     "logs/Baseline/CIFAR10/VAE/generated_images.h5",

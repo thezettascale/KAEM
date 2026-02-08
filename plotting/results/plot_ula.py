@@ -28,18 +28,18 @@ DATASETS = {
 }
 
 METHOD_CONFIGS = {
-    # "vanilla_ula_mixture": {
-    #     "method_type": "Vanilla",
-    #     "sampler": "ULA",
-    #     "model_type": "mixture",
-    #     "is_baseline": False,
-    # },
-    # "thermo_ula_mixture": {
-    #     "method_type": "Thermodynamic",
-    #     "sampler": "ULA",
-    #     "model_type": "mixture",
-    #     "is_baseline": False,
-    # },
+    "vanilla_ula_mixture": {
+        "method_type": "Vanilla",
+        "sampler": "ULA",
+        "model_type": "mixture",
+        "is_baseline": False,
+    },
+    "thermo_ula_mixture": {
+        "method_type": "Thermodynamic",
+        "sampler": "ULA",
+        "model_type": "mixture",
+        "is_baseline": False,
+    },
     "baseline_vae": {
         "method_type": "Baseline",
         "model_type": "VAE",

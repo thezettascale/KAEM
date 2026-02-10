@@ -136,7 +136,6 @@ function init_EbmModel(conf::ConfParse; rng::AbstractRNG = Random.default_rng())
             )
         )
             && !ula
-            && !mixture_model
     )
 
     quad_fcn = GaussLegendreQuadrature()

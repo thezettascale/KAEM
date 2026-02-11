@@ -186,6 +186,8 @@ function init_CNN_Generator(
     length(paddings) != length(hidden_c) &&
         (error("Number of paddings must be equal to the number of hidden layers + 1."))
 
+    act_cnn = batchnorm_bool ? identity : act
+
     prev_c = 0
     for i in eachindex(hidden_c[1:(end - 1)])
         push!(
@@ -193,7 +195,7 @@ function init_CNN_Generator(
             Lux.ConvTranspose(
                 (k_size[i], k_size[i]),
                 hidden_c[i] + prev_c => hidden_c[i + 1],
-                identity;
+                act_cnn;
                 stride = strides[i],
                 pad = paddings[i],
             ),

@@ -207,6 +207,7 @@ def plot_sampling_time_only(
     kaem_key: str,
     vae_key: str,
     output_name: str,
+    title: str = "Sampling Time: KAEM vs VAE",
 ):
     """Plot just the sampling time comparison."""
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -270,7 +271,7 @@ def plot_sampling_time_only(
     ax.set_xticklabels(latent_dims, fontsize=16)
     ax.set_xlabel(r"Latent Dim, $Q$", fontsize=20)
     ax.set_ylabel("Time (s)", fontsize=20)
-    ax.set_title("Sampling Time: KAEM vs VAE", fontsize=22)
+    ax.set_title(title, fontsize=22)
     ax.legend(fontsize=16)
     ax.tick_params(axis="both", labelsize=16)
 
@@ -310,6 +311,17 @@ def main():
         )
         print("Saved: 01_kaem_vs_vae_training_comparison.png")
 
+        # Plot 1b: Just the training time comparison
+        plot_sampling_time_only(
+            latent_dim_df,
+            vae_latent_dim_df,
+            "n_z",
+            "latent_dim",
+            "01b_training_time_only.png",
+            title="Training Time: KAEM vs VAE",
+        )
+        print("Saved: 01b_training_time_only.png")
+
     # Plot 2: KAEM vs VAE Sampling Comparison (side by side)
     if its_sampling_df is not None and vae_sampling_df is not None:
         plot_comparison(
@@ -329,6 +341,7 @@ def main():
             "n_z",
             "latent_dim",
             "02b_sampling_time_only.png",
+            title="Sampling Time: KAEM vs VAE",
         )
         print("Saved: 02b_sampling_time_only.png")
 

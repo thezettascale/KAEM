@@ -16,7 +16,7 @@ plt.rcParams.update(
     }
 )
 
-num_param_updates = 16000
+num_param_updates = 40000
 num_cycles = 0
 initial_p = 2
 end_p = 0.5

@@ -210,15 +210,15 @@ if __name__ == "__main__":
             file_paths = [(g, r) for g, r in file_paths if args.dataset.upper() in g]
     else:
         file_paths = [
-            # KAEM - CIFAR10
-            (
-                "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
-            ),
-            (
-                "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
-            ),
+            # # KAEM - CIFAR10
+            # (
+            #     "logs/Vanilla/CIFAR10/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
+            # (
+            #     "logs/Thermodynamic/CIFAR10/ULA/mixture/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
             # KAEM - CELEBA
             (
                 "logs/Vanilla/CELEBA/ULA/mixture/generated_images.h5",
@@ -237,19 +237,19 @@ if __name__ == "__main__":
                 "logs/Thermodynamic/SVHN/ULA/mixture/generated_images.h5",
                 get_real_samples_path("SVHN"),
             ),
-            # Baselines - VAE
-            (
-                "logs/Baseline/CIFAR10/VAE/generated_images.h5",
-                get_real_samples_path("CIFAR10"),
-            ),
-            (
-                "logs/Baseline/CELEBA/VAE/generated_images.h5",
-                get_real_samples_path("CELEBA"),
-            ),
-            (
-                "logs/Baseline/SVHN/VAE/generated_images.h5",
-                get_real_samples_path("SVHN"),
-            ),
+            # # Baselines - VAE
+            # (
+            #     "logs/Baseline/CIFAR10/VAE/generated_images.h5",
+            #     get_real_samples_path("CIFAR10"),
+            # ),
+            # (
+            #     "logs/Baseline/CELEBA/VAE/generated_images.h5",
+            #     get_real_samples_path("CELEBA"),
+            # ),
+            # (
+            #     "logs/Baseline/SVHN/VAE/generated_images.h5",
+            #     get_real_samples_path("SVHN"),
+            # ),
             # (
             #     "logs/Baseline/CIFAR10/GAN/generated_images.h5",
             #     get_real_samples_path("CIFAR10"),

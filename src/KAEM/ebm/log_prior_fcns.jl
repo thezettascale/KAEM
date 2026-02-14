@@ -27,18 +27,6 @@ function log_mix_pdf(
     return dropdims(prod_q; dims = (1, 2))
 end
 
-function log_mix_pdf_unnorm(
-        f,
-        α,
-        π_0,
-        ε,
-    )
-    log_terms = f .+ log.(π_0 .* α .+ ε)
-    summed_p = logsumexp(log_terms; dims = 2)
-    prod_q = sum(summed_p; dims = 1)
-    return dropdims(prod_q; dims = (1, 2))
-end
-
 struct LogPriorULA{T <: Float32} <: AbstractLogPrior
     ε::T
 end
@@ -193,29 +181,20 @@ function (lp::LogPriorMix)(
 
     # Energy functions of each component, q -> p
     f, st_lyrnorm = ebm(ps, st_kan, st_lyrnorm, dropdims(z; dims = 2))
-
-    log_p = (
-        lp.normalize ?
-            log_mix_pdf(
-                f, alpha, π_0,
-                PermutedDimsArray(
-                    sum(
-                        first(
-                            ebm.quad(
-                                ebm,
-                                ps,
-                                st_kan,
-                                st_lyrnorm,
-                                st_quad;
-                                component_mask = component_mask,
-                                mix_bool = true
-                            )
-                        ), dims = 3
-                    ), (1, 3, 2)
-                ),
-                lp.ε
-            ) :
-            log_mix_pdf_unnorm(f, alpha, π_0, lp.ε)
+    Z = PermutedDimsArray(
+        sum(
+            first(
+                ebm.quad(
+                    ebm,
+                    ps,
+                    st_kan,
+                    st_lyrnorm,
+                    st_quad;
+                    component_mask = component_mask,
+                    mix_bool = true
+                )
+            ), dims = 3
+        ), (1, 3, 2)
     )
 
     reg = (
@@ -224,6 +203,7 @@ function (lp::LogPriorMix)(
             0.0f0
     )
 
+    log_p = log_mix_pdf(f, alpha, π_0, Z, lp.ε)
     return log_p .- reg, st_lyrnorm
 end
 

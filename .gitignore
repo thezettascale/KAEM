@@ -6,8 +6,8 @@
 garbage/**
 generated_images_epoch_*.h5
 *.egg-info
-condaenv*
 .CondaPkg/*
+.venv/
 logs/RealSamples/
 logs/Pretrained/**/*.h5
 **/*.h5

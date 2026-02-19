@@ -1,85 +1,35 @@
-# KAEM 
+# KAEM
 
 > 🚧 WORK IN PROGRESS 🚧
 
 KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
 
-## Setup:
+## Setup
 
-Need [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and [Julia](https://github.com/JuliaLang/juliaup). Choose your favourite installer and run: 
+Install [Julia](https://github.com/JuliaLang/juliaup) and [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-bash <conda-installer-name>-latest-Linux-x86_64.sh
 curl -fsSL https://install.julialang.org | sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Then install
+Install dependencies:
 
 ```bash
-make install
+julia --project=. -e "using Pkg; Pkg.instantiate()"
+uv venv && uv pip install -e ".[dev]"
 ```
 
-[Optional;] Test all Julia scripts:
-
-```bash
-make test
-```
-
-### Note for windows users:
+### Note for windows users
 
 This repo uses shell scripts solely for convenience, you can run everything without them too. If you want to use the shell scripts, [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) is recommended.
 
 ---
 
-## Quick start:
+## Quick start
 
-List commands:
-```
-make help
-```
+Configure jobs in `jobs.txt`:
 
-Edit the config files:
-
-```bash
-nvim config/nist_config.ini
-```
-
-### Training modes
-
-| Command | Description | Defaults |
-|---------|-------------|----------|
-| `make train DATASET=X MODE=Y` | Single KAEM job (tmux) | DATASET=MNIST, MODE=thermo |
-| `make sequential CONFIG=jobs.txt` | Jobs from file, one at a time | CONFIG=jobs.txt |
-| `make distributed DATASET=X MODE=Y DEVICE=N` | Single job on specific GPU | DEVICE=0 |
-| `make batch CONFIG=jobs.txt` | Jobs from file, parallel across GPUs | NUM_DEVICES=auto |
-
-Available KAEM modes: `vanilla`, `thermo`, `variational`
-
-Shorthand targets:
-```bash
-make train-vanilla DATASET=MNIST
-make train-thermo DATASET=SVHN
-make train-variational DATASET=CIFAR10
-```
-
-### Baseline models
-
-Train baseline generative models for comparison:
-
-| Command | Description |
-|---------|-------------|
-| `make baseline MODEL=X DATASET=Y` | Train single baseline (tmux) |
-| `make baseline-vae DATASET=CIFAR10` | Train VAE baseline |
-| `make baseline-gan DATASET=CIFAR10` | Train GAN baseline |
-| `make baseline-ddpm DATASET=CIFAR10` | Train DDPM baseline |
-| `make baseline-pang DATASET=CIFAR10` | Train Pang EBM baseline |
-| `make baseline-all DATASET=CIFAR10` | Train all baselines sequentially |
-
-Available baseline models: `vae`, `gan`, `ddpm`, `pang`
-
-### Job configuration
-
-Create a `jobs.txt` file with KAEM and baseline jobs:
 ```
 # KAEM jobs
 MNIST thermo
@@ -92,15 +42,20 @@ CIFAR10 baseline-gan
 CELEBA baseline-ddpm
 ```
 
-Run sequentially on single device:
+Run:
+
 ```bash
-make sequential CONFIG=jobs.txt
+./run.sh              # runs jobs.txt
+./run.sh other.txt    # runs a different config file
 ```
 
-Run in parallel across GPUs (one job per GPU):
-```bash
-make batch CONFIG=jobs.txt NUM_DEVICES=4
-```
+Logs are saved to `logs/`.
+
+KAEM modes: `vanilla`, `thermo`, `variational`, `tune`
+
+Baseline modes: `baseline-vae`, `baseline-gan`, `baseline-ddpm`, `baseline-pang`
+
+Datasets: `MNIST`, `FMNIST`, `CIFAR10`, `SVHN`, `CELEBA`, `PTB`, `SMS_SPAM`, `DARCY_FLOW`
 
 ### Device configuration
 
@@ -110,17 +65,17 @@ Set device in config files (`config/*.ini`):
 device = gpu   # Options: cpu, gpu, tpu
 ```
 
-Available datasets: `MNIST`, `FMNIST`, `CIFAR10`, `SVHN`, `CELEBA`, `PTB`, `SMS_SPAM`, `DARCY_FLOW`
-
-For benchmarking run:
+### Tests and benchmarks
 
 ```bash
-make bench
+./scripts/run_tests.sh
+./scripts/run_benchmarks.sh
+./scripts/run_plots.sh
 ```
 
 ---
 
-## Julia flow:
+## Julia flow
 
 With trainer (preferable):
 
@@ -131,9 +86,9 @@ include("src/pipeline/trainer.jl")
 using .trainer
 
 t = init_trainer(
-      rng, 
+      rng,
       conf, # See config directory for examples
-      dataset_name; 
+      dataset_name;
       img_resize = (16,16), # Resize for prototyping
       file_loc = loc
 )
@@ -153,17 +108,17 @@ using .ModelSetup
 using .Utils
 
 model = init_KAEM(
-      dataset, 
-      conf, 
-      x_shape; 
-      file_loc = file_loc, 
+      dataset,
+      conf,
+      x_shape;
+      file_loc = file_loc,
       rng = rng
 )
 
 # MLIR-compiled loss, (slow to compile, fast to run, see https://mlir.llvm.org/).
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
-model, ps, st_kan, st_lux, st_rng = prep_model(model, x, optimizer; rng = rng) 
+model, ps, st_kan, st_lux, st_rng = prep_model(model, x, optimizer; rng = rng)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
       ps,
       st_kan,
@@ -184,12 +139,12 @@ loss, grads, st_ebm, st_gen = model.loss_fcn(
 
 ```bibtex
 @misc{raj2025kolmogorovarnoldenergymodelsfast,
-      title={Kolmogorov-Arnold Energy Models: Fast and Interpretable Generative Modeling}, 
+      title={Kolmogorov-Arnold Energy Models: Fast and Interpretable Generative Modeling},
       author={Prithvi Raj},
       year={2025},
       eprint={2506.14167},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2506.14167}, 
+      url={https://arxiv.org/abs/2506.14167},
 }
 ```

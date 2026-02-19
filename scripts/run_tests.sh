@@ -18,7 +18,7 @@ FAILED_TESTS=()
 
 for test_file in $TEST_FILES; do
     echo "Running $test_file..."
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     
     if julia --project=. --threads=auto "$test_file"; then
         echo "✓ PASSED: $test_file"
@@ -28,13 +28,13 @@ for test_file in $TEST_FILES; do
         FAILED_TESTS+=("$test_file")
     fi
     
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     echo ""
 done
 
-echo "=========================================="
+printf '=%.0s' {1..40}; echo
 echo "SUMMARY"
-echo "=========================================="
+printf '=%.0s' {1..40}; echo
 echo "Passed: ${#PASSED_TESTS[@]}"
 echo "Failed: ${#FAILED_TESTS[@]}"
 echo ""

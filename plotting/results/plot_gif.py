@@ -192,9 +192,9 @@ def main():
     print(f"Output directory: {output_dir}")
 
     for config_name, config in GIF_CONFIGS.items():
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Plotting: {config_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         create_evolution_gif(config)
 

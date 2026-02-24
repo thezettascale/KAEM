@@ -122,28 +122,7 @@ function (sampler::ULA_sampler)(
         st_rng;
         temps = [1.0f0],
     )
-    """
-    Unadjusted Langevin Algorithm (ULA) sampler to generate posterior samples.
-
-    Args:
-        m: The model.
-        ps: The parameters of the model.
-        st: The states of the model.
-        x: The data.
-        t: The temperatures if using Thermodynamic Integration.
-        N: The number of iterations.
-        rng: The random number generator.
-
-        
-    Unused arguments:
-        N_unadjusted: The number of unadjusted iterations.
-        Δη: The step size increment.
-        η_min: The minimum step size.
-        η_max: The maximum step size.
-
-    Returns:
-        The posterior samples.
-    """
+    """ULA posterior sampler. Returns z ~ p(z|x)."""
     model = sampler.model
     η = sampler.η
     sqrt_2η = sampler.sqrt_2η

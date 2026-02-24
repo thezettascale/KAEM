@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kaem"
 version = "0.1.0"
-description = "KAEM: Thermodynamic Kernel Annealing Method"
+description = "KAEM: Kolmogorov-Arnold Energy Models"
 authors = [{name = "KAEM Team"}]
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,35 +29,16 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
-    "black",
-    "isort",
-    "flake8",
+    "ruff",
     "mypy",
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py311"
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["src"]
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -80,6 +61,3 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
-
-[tool.flake8]
-max-line-length = 88 

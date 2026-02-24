@@ -71,24 +71,7 @@ function (lp::LogPriorUnivariate)(
         ula = false,
         component_mask = nothing,
     )
-    """
-    The log-probability of the ebm-prior.
-
-    ∑_q [ ∑_p f_{q,p}(z_qp) ]
-
-    Args:
-        ebm: The ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-        ps: The parameters of the ebm-prior.
-        st: The states of the ebm-prior.
-        normalize: Whether to normalize the log-probability.
-        ε: The small value to avoid log(0).
-        agg: Whether to sum the log-probability over the samples.
-
-    Returns:
-        The unnormalized log-probability of the ebm-prior.
-        The updated states of the ebm-prior.
-    """
+    """Log-prior: ∑_q [ ∑_p f_{q,p}(z_qp) ]"""
     Q, P, S = ebm.q_size, ebm.p_size, ebm.s_size
     log_π0 = ebm.π_pdf(z, ps.dist.π_μ, ps.dist.π_σ; log_bool = true)
 
@@ -152,24 +135,7 @@ function (lp::LogPriorMix)(
         ula = false,
         component_mask = nothing,
     )
-    """
-    The log-probability of the mixture ebm-prior.
-
-    ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ]
-
-
-    Args:
-        mix: The mixture ebm-prior.
-        z: The component-wise latent samples to evaulate the measure on, (num_samples, q)
-        ps: The parameters of the mixture ebm-prior.
-        st: The states of the mixture ebm-prior.
-        normalize: Whether to normalize the log-probability.
-        ε: The small value to avoid log(0).
-
-    Returns:
-        The unnormalized log-probability of the mixture ebm-prior.
-        The updated states of the mixture ebm-prior.
-    """
+    """Log-prior (mixture): ∑_q [ log ( ∑_p α_p exp(f_{q,p}(z_q)) π_0(z_q) ) ]"""
     Q, P, S = ebm.q_size, ebm.p_size, ebm.s_size
     alpha =
         ebm.bool_config.use_attention_kernel ?

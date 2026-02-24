@@ -22,21 +22,7 @@ function log_likelihood_IS(
         noise;
         ε = eps(Float32),
     )
-    """
-    Conditional likelihood of the generator.
-
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-        x: The data.
-        z: The latent variable.
-        tempered: Whether to use tempered likelihood.
-        rng: The random number generator.
-
-    Returns:
-        The unnormalized log-likelihood.
-    """
+    """Importance-sampled conditional log-likelihood."""
     x̂, st_lux_new = lkhood.generator(ps, st_kan, st_lux, z)
     noise_scaled = lkhood.σ.noise .* noise
     x̂_noised = lkhood.output_activation(x̂ .+ noise_scaled)
@@ -66,20 +52,7 @@ function log_likelihood_MALA(
         noise;
         ε = eps(Float32),
     )
-    """
-    Conditional likelihood of the generator sampled by Langevin.
-
-    Args:
-        lkhood: The likelihood model.
-        ps: The parameters of the likelihood model.
-        st: The states of the likelihood model.
-        x: The data.
-        z: The latent variable.
-        rng: The random number generator.
-
-    Returns:
-        The unnormalized log-likelihood.
-    """
+    """MALA-sampled conditional log-likelihood."""
     x̂, st_lux_new = lkhood.generator(ps, st_kan, st_lux, z)
     noise_scaled = lkhood.σ.noise .* noise
     x̂_act = lkhood.output_activation(x̂ .+ noise_scaled)

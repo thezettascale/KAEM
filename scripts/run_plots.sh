@@ -22,9 +22,9 @@ mkdir -p figures/benchmark
 
 for plot_file in $PLOT_FILES; do
     echo "Running $plot_file..."
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     python "$plot_file"
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     echo ""
 done
 

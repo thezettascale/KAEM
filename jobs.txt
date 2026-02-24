@@ -1,13 +1,12 @@
-# Sequential Jobs Configuration File
-# Format: DATASET MODE
-# One job per line
+# Jobs Configuration
+# Format: DATASET MODE (one per line)
 #
-# Available datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
-#
+# Datasets: MNIST, FMNIST, CIFAR10, SVHN, CELEBA, PTB, SMS_SPAM, DARCY_PERM, DARCY_FLOW
 # KAEM modes: thermo, vanilla, variational, tune
 # Baseline modes: baseline-vae, baseline-gan, baseline-ddpm, baseline-pang
 #
-# Usage: make sequential CONFIG=jobs.txt
+# Usage: ./run.sh            (defaults to jobs.txt)
+#        ./run.sh other.txt  (custom config)
 
 # ==================== KAEM Jobs ====================
 # NIST

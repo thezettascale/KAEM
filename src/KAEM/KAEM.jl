@@ -183,7 +183,7 @@ function init_KAEM(
 end
 
 function init_from_file(file_loc::AbstractString, ckpt::Int)
-    """Load a model from a checkpoint file."""
+    """Load model from checkpoint."""
     saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
     model = saved_data["model"] |> deepcopy
     ps = convert(ComponentArray, saved_data["params"])
@@ -242,23 +242,7 @@ function (model::KAEM{T})(
         st_lux,
         st_rng,
     ) where {T <: Float32}
-    """
-    Inference pass to generate a batch of data from the model.
-    This is the same for both the standard and thermodynamic models.
-
-    Args:
-        model: The model.
-        ps: The parameters of the model.
-        st_kan: The states of the KAN model.
-        st_lux: The states of the Lux model.
-        num_samples: The number of samples to generate.
-        rng: The random number generator.
-
-    Returns:
-        The generated data.
-        Lux states of the prior.
-        Lux states of the likelihood.
-    """
+    """Generate a batch of samples: prior -> decoder -> output activation."""
     z, st_ebm = model.sample_prior(model, ps, st_kan, st_lux, st_rng)
     x̂, st_gen = model.lkhood.generator(ps.gen, st_kan.gen, st_lux.gen, z)
     return model.lkhood.output_activation(x̂), st_ebm, st_gen

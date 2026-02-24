@@ -37,22 +37,7 @@ function get_vision_dataset(
         cnn::Bool = false,
         batch_size::Int = 100,
     )
-    """
-    Load a vision dataset and resize it if necessary.
-
-    Args:
-        dataset_name: The name of the dataset.
-        N_train: The number of training samples.
-        N_test: The number of test samples.
-        num_generated_samples: The number of samples to generate.
-        img_resize: The size to resize the images to.
-        cnn: A boolean indicating if the dataset is for a CNN.
-
-    Returns:
-        The dataset.
-        The shape of the images.
-        The dataset to save.
-    """
+    """Load and optionally resize a vision dataset. Returns (data, img_shape, save_subset)."""
     dataset = begin
         if dataset_name == "DARCY_PERM" || dataset_name == "DARCY_FLOW"
             data = h5open("PDE_data/darcy_32/darcy_train_32.h5", "r") do file
@@ -129,21 +114,7 @@ function get_text_dataset(
         vocab_size::Int = 1000,
         batch_size::Int = 100,
     )
-    """
-    Load a text dataset.
-
-    Args:
-        dataset_name: The name of the dataset.
-        N_train: The number of training samples.
-        N_test: The number of test samples.
-        num_generated_samples: The number of samples to generate.
-
-    Returns:
-        The dataset.
-        The shape of the dataset.
-        The dataset to save.
-        The length of the vocabulary.
-    """
+    """Load a text dataset with GloVe embeddings. Returns (data, shape, save_subset, vocab_len)."""
     dataset = dataset_mapping[dataset_name][1:(N_train + N_test)].features # Already tokenized
     emb = load_embeddings(GloVe) # Pre-trained embeddings
 

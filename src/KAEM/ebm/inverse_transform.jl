@@ -95,19 +95,7 @@ function sample_mixture(
         st_rng;
         ula_init = false
     )
-    """
-    Component-wise inverse transform sampling for the ebm-prior.
-    p = components of model
-    q = number of models
-
-    Args:
-        prior: The ebm-prior.
-        ps: The parameters of the ebm-prior.
-        st: The states of the ebm-prior.
-
-    Returns:
-        z: The samples from the ebm-prior, (num_samples, q). 
-    """
+    """Component-wise inverse transform sampling. Returns z ~ prior, shape (num_samples, q)."""
     alpha = ps.dist.α .* 1.0f0
     if ebm.bool_config.use_attention_kernel
         scale = sqrt(Float32(ebm.s_size))

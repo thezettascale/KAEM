@@ -78,22 +78,7 @@ function (gu::GridUpdater)(
         train_idx,
         st_rng,
     )
-    """
-    Update the grid using samples from the prior.
-
-    Args:
-        x: Data samples.
-        ps: The parameters of the model.
-        st_kan: The states of the KAN model.
-        st_lux: The states of the Lux model.
-        temps: The temperatures for thermodynamic models.
-        rng: The random number generator.
-
-    Returns:
-        The updated params.
-        The updated KAN states.
-        The updated Lux states. 
-    """
+    """Update KAN grids using prior samples."""
 
     model = gu.model
     z = nothing

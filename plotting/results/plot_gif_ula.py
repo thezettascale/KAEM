@@ -279,8 +279,7 @@ def create_sample_subset_frame(
 def create_evolution_gif(config):
     if config.get("is_baseline", False):
         label = (
-            f"{config['dataset']} - "
-            f"{config['method_type']} - {config['model_type']}"
+            f"{config['dataset']} - {config['method_type']} - {config['model_type']}"
         )
     else:
         label = (
@@ -350,9 +349,9 @@ def main():
     print(f"Output directory: {output_dir}")
 
     for config_name, config in GIF_CONFIGS.items():
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Plotting: {config_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         create_evolution_gif(config)
 

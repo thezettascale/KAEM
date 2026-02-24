@@ -19,9 +19,9 @@ mkdir -p benches/results
 
 for bench_file in $BENCH_FILES; do
     echo "Running $bench_file..."
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     julia --project=. --threads=auto "$bench_file"
-    echo "=========================================="
+    printf '=%.0s' {1..40}; echo
     echo ""
 done
 

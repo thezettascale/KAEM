@@ -2,7 +2,7 @@
 
 > 🚧 WORK IN PROGRESS 🚧
 
-KAEM is a generative model presented [here](https://www.arxiv.org/abs/2506.14167).
+Paper: [arxiv.org/abs/2506.14167](https://www.arxiv.org/abs/2506.14167)
 
 ## Setup
 
@@ -17,7 +17,7 @@ Install dependencies:
 
 ```bash
 julia --project=. -e "using Pkg; Pkg.instantiate()"
-uv venv && uv pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 ### Note for windows users

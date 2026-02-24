@@ -1,3 +1,4 @@
+import argparse
 import json
 import multiprocessing
 import os
@@ -10,7 +11,6 @@ import torch
 from PIL import Image
 from sklearn.linear_model import LinearRegression
 from torch_fidelity import calculate_metrics
-import argparse
 
 
 def get_num_gpus():
@@ -162,14 +162,20 @@ def discover_generated_samples(logs_dir: str = "logs") -> list[tuple[str, str]]:
         # KAEM models - Vanilla
         for train_type in ["ULA", "importance", "amortized"]:
             for prior_type in ["mixture", "univariate"]:
-                gen_path = f"{logs_dir}/Vanilla/{dataset}/{train_type}/{prior_type}/generated_images.h5"
+                gen_path = (
+                    f"{logs_dir}/Vanilla/{dataset}"
+                    f"/{train_type}/{prior_type}/generated_images.h5"
+                )
                 if os.path.exists(gen_path):
                     file_paths.append((gen_path, real_path))
 
         # KAEM models - Thermodynamic
         for train_type in ["ULA", "importance", "amortized"]:
             for prior_type in ["mixture", "univariate"]:
-                gen_path = f"{logs_dir}/Thermodynamic/{dataset}/{train_type}/{prior_type}/generated_images.h5"
+                gen_path = (
+                    f"{logs_dir}/Thermodynamic/{dataset}"
+                    f"/{train_type}/{prior_type}/generated_images.h5"
+                )
                 if os.path.exists(gen_path):
                     file_paths.append((gen_path, real_path))
 

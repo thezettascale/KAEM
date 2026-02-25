@@ -70,13 +70,6 @@ function seed_rand(
             [0.0f0]
     )
 
-    # Replica exchange
-    swap_replica_idxs = (
-        num_temps > 1 ?
-            rand(rng, 1:(model.N_t - 1), 1, model.posterior_sampler.N) :
-            [0]
-    )
-
     # Resampler uniform noise
     systematic_bool = model.lkhood.resampler_type == "systematic"
     resample_rv = (
@@ -92,7 +85,39 @@ function seed_rand(
     Q, N, S = model.posterior_sampler.Q, model.posterior_sampler.N, model.batch_size
     ula_noise = randn(rng, T, Q, P, S * num_temps, N)
     log_swap = log.(rand(rng, T, num_temps, N))
-    xchange_ll_noise = randn(rng, T, model.lkhood.x_shape..., S, 2, num_temps, N)
+    xchange_ll_noise = randn(rng, T, model.lkhood.x_shape..., S, num_temps, N)
+
+    # DEO masks and shift matrices (deterministic)
+    if num_temps > 1
+        even_1 = zeros(T, num_temps)
+        even_2 = zeros(T, num_temps)
+        for t in 1:2:(num_temps - 1)
+            even_1[t] = 1.0f0
+            even_2[t + 1] = 1.0f0
+        end
+
+        odd_1 = zeros(T, num_temps)
+        odd_2 = zeros(T, num_temps)
+        for t in 2:2:(num_temps - 1)
+            odd_1[t] = 1.0f0
+            odd_2[t + 1] = 1.0f0
+        end
+
+        deo_mask_1 = hcat([isodd(i) ? even_1 : odd_1 for i in 1:N]...)
+        deo_mask_2 = hcat([isodd(i) ? even_2 : odd_2 for i in 1:N]...)
+
+        shift_down = zeros(T, num_temps, num_temps)
+        shift_up = zeros(T, num_temps, num_temps)
+        for t in 1:(num_temps - 1)
+            shift_down[t, t + 1] = 1.0f0
+            shift_up[t + 1, t] = 1.0f0
+        end
+    else
+        deo_mask_1 = [0.0f0]
+        deo_mask_2 = [0.0f0]
+        shift_down = [0.0f0]
+        shift_up = [0.0f0]
+    end
 
     latent_dim = model.prior.q_size * model.prior.p_size
     encoder_noise = (
@@ -109,11 +134,14 @@ function seed_rand(
         attn_rand = attn_rand,
         train_noise = train_noise,
         tempered_noise = tempered_noise,
-        swap_replica_idxs = swap_replica_idxs,
         resample_rv = resample_rv,
         ula_noise = ula_noise,
         log_swap = log_swap,
         xchange_ll_noise = xchange_ll_noise,
+        deo_mask_1 = deo_mask_1,
+        deo_mask_2 = deo_mask_2,
+        shift_down = shift_down,
+        shift_up = shift_up,
         encoder_noise = encoder_noise,
     ) |> pu
 end

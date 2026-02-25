@@ -19,8 +19,7 @@ function sample_thermo(
         model,
         x,
         st_rng,
-        p_value;
-        swap_replica_idxs = nothing,
+        p_value,
     )
     temps = collect(Float32, [(k / model.N_t)^p_value for k in 0:model.N_t])
     z, st_lux = model.posterior_sampler(

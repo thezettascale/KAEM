@@ -81,7 +81,9 @@ function step(
         ll_noise,
         mask_swap_1,
         mask_swap_2,
-        component_mask
+        component_mask,
+        shift_down,
+        shift_up,
     )
     ξ = noise[:, :, :, i]
     ∇z =
@@ -100,7 +102,7 @@ function step(
     return model.xchange_func(
         i,
         new_z,
-        x,
+        x_t,
         temps,
         model,
         lkhood_copy,
@@ -111,6 +113,8 @@ function step(
         ll_noise,
         mask_swap_1,
         mask_swap_2,
+        shift_down,
+        shift_up,
     )
 end
 
@@ -209,11 +213,12 @@ function (sampler::ULA_sampler)(
     noise = st_rng.ula_noise
     log_u_swap = st_rng.log_swap
     ll_noise = st_rng.xchange_ll_noise
-    swap_replica_idxs = st_rng.swap_replica_idxs
 
-    # Traced HLO does not support int arrays, so handle mask outside
-    mask_swap_1 = num_temps > 1 ? Lux.f32(1:num_temps .== swap_replica_idxs) .* 1.0f0 : nothing
-    mask_swap_2 = num_temps > 1 ? Lux.f32(1:num_temps .== (swap_replica_idxs .+ 1)) .* 1.0f0 : nothing
+    # DEO masks + shift matrices (pre-computed in rng.jl, already on device)
+    mask_swap_1 = num_temps > 1 ? st_rng.deo_mask_1 : nothing
+    mask_swap_2 = num_temps > 1 ? st_rng.deo_mask_2 : nothing
+    shift_down = num_temps > 1 ? st_rng.shift_down : nothing
+    shift_up = num_temps > 1 ? st_rng.shift_up : nothing
 
     state = (1, z_flat)
     @trace while first(state) <= N_steps
@@ -238,7 +243,9 @@ function (sampler::ULA_sampler)(
             ll_noise,
             mask_swap_1,
             mask_swap_2,
-            component_mask
+            component_mask,
+            shift_down,
+            shift_up,
         )
         state = (i + 1, z_new)
     end

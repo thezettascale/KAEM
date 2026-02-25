@@ -33,6 +33,8 @@ function Regularizer(conf::ConfParse, CNN_bool::Bool, SEQ_bool::Bool)
     λ_coefdiff = parse(Float32, retrieve(conf, "SYMBOLIC_REG", "λ_coefdiff"))
     reg_ebm = parse(Bool, retrieve(conf, "SYMBOLIC_REG", "regularize_prior"))
     reg_gen = parse(Bool, retrieve(conf, "SYMBOLIC_REG", "regularize_gen"))
+    no_coef_ebm = retrieve(conf, "EbmModel", "spline_function") == "Wavelet"
+    no_coef_gen = retrieve(conf, "GeneratorModel", "spline_function") == "Wavelet"
     return Regularizer(
         ε,
         th,
@@ -42,8 +44,8 @@ function Regularizer(conf::ConfParse, CNN_bool::Bool, SEQ_bool::Bool)
         λ_entropy,
         λ_coef,
         λ_coefdiff,
-        reg_ebm,
-        reg_gen && !CNN_bool && !SEQ_bool,
+        reg_ebm && !no_coef_ebm,
+        reg_gen && !CNN_bool && !SEQ_bool && !no_coef_gen,
     )
 end
 

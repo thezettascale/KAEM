@@ -94,7 +94,7 @@ function seed_rand(
             "deo"
     )
 
-    if num_temps > 1
+    if num_temps > 1 && exchange_type != "none"
         if exchange_type == "deo"
             even_1 = zeros(T, num_temps)
             even_2 = zeros(T, num_temps)

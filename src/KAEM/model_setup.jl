@@ -149,7 +149,13 @@ function setup_training(
 
         Q, S = model.prior.q_size, model.batch_size
         P = model.prior.bool_config.mixture_model ? 1 : model.prior.p_size
-        @reset model.xchange_func = ReplicaXchange(Q, P, S, model.N_t)
+        exchange_type = (
+            haskey(conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") ?
+                retrieve(conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") :
+                "deo"
+        )
+        @reset model.xchange_func =
+            exchange_type == "none" ? NoExchange() : ReplicaXchange(Q, P, S, model.N_t)
 
         @reset model.train_step = begin
 

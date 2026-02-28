@@ -1,6 +1,6 @@
 module PopulationXchange
 
-export DEOReplicaXchange, NoExchange
+export ReplicaXchange, NoExchange
 
 using ..Utils
 using ..KAEM_model
@@ -8,14 +8,14 @@ using ..KAEM_model
 include("../gen/loglikelihoods.jl")
 using .LogLikelihoods: log_likelihood_MALA
 
-struct DEOReplicaXchange
+struct ReplicaXchange
     Q::Int
     P::Int
     S::Int
     num_temps::Int
 end
 
-function (r::DEOReplicaXchange)(
+function (r::ReplicaXchange)(
         i,
         z_i,
         x_t,

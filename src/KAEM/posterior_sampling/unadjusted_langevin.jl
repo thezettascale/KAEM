@@ -215,8 +215,8 @@ function (sampler::ULA_sampler)(
     ll_noise = st_rng.xchange_ll_noise
 
     # DEO masks + shift matrices (pre-computed in rng.jl, already on device)
-    mask_swap_1 = num_temps > 1 ? st_rng.deo_mask_1 : nothing
-    mask_swap_2 = num_temps > 1 ? st_rng.deo_mask_2 : nothing
+    mask_swap_1 = num_temps > 1 ? st_rng.swap_mask_1 : nothing
+    mask_swap_2 = num_temps > 1 ? st_rng.swap_mask_2 : nothing
     shift_down = num_temps > 1 ? st_rng.shift_down : nothing
     shift_up = num_temps > 1 ? st_rng.shift_up : nothing
 

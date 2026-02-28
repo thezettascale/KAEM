@@ -1,6 +1,6 @@
 module HLOrng
 
-using Random
+using Random, ConfParser
 
 export seed_rand
 
@@ -87,24 +87,40 @@ function seed_rand(
     log_swap = log.(rand(rng, T, num_temps, N))
     xchange_ll_noise = randn(rng, T, model.lkhood.x_shape..., S, num_temps, N)
 
-    # DEO masks and shift matrices (deterministic)
+    # Replica exchange masks and shift matrices
+    exchange_type = (
+        haskey(model.conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") ?
+            retrieve(model.conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") :
+            "deo"
+    )
+
     if num_temps > 1
-        even_1 = zeros(T, num_temps)
-        even_2 = zeros(T, num_temps)
-        for t in 1:2:(num_temps - 1)
-            even_1[t] = 1.0f0
-            even_2[t + 1] = 1.0f0
-        end
+        if exchange_type == "deo"
+            even_1 = zeros(T, num_temps)
+            even_2 = zeros(T, num_temps)
+            for t in 1:2:(num_temps - 1)
+                even_1[t] = 1.0f0
+                even_2[t + 1] = 1.0f0
+            end
 
-        odd_1 = zeros(T, num_temps)
-        odd_2 = zeros(T, num_temps)
-        for t in 2:2:(num_temps - 1)
-            odd_1[t] = 1.0f0
-            odd_2[t + 1] = 1.0f0
-        end
+            odd_1 = zeros(T, num_temps)
+            odd_2 = zeros(T, num_temps)
+            for t in 2:2:(num_temps - 1)
+                odd_1[t] = 1.0f0
+                odd_2[t + 1] = 1.0f0
+            end
 
-        deo_mask_1 = hcat([isodd(i) ? even_1 : odd_1 for i in 1:N]...)
-        deo_mask_2 = hcat([isodd(i) ? even_2 : odd_2 for i in 1:N]...)
+            swap_mask_1 = hcat([isodd(i) ? even_1 : odd_1 for i in 1:N]...)
+            swap_mask_2 = hcat([isodd(i) ? even_2 : odd_2 for i in 1:N]...)
+        else # random
+            swap_mask_1 = zeros(T, num_temps, N)
+            swap_mask_2 = zeros(T, num_temps, N)
+            for i in 1:N
+                t = rand(rng, 1:(num_temps - 1))
+                swap_mask_1[t, i] = 1.0f0
+                swap_mask_2[t + 1, i] = 1.0f0
+            end
+        end
 
         shift_down = zeros(T, num_temps, num_temps)
         shift_up = zeros(T, num_temps, num_temps)
@@ -113,8 +129,8 @@ function seed_rand(
             shift_up[t + 1, t] = 1.0f0
         end
     else
-        deo_mask_1 = [0.0f0]
-        deo_mask_2 = [0.0f0]
+        swap_mask_1 = [0.0f0]
+        swap_mask_2 = [0.0f0]
         shift_down = [0.0f0]
         shift_up = [0.0f0]
     end
@@ -138,8 +154,8 @@ function seed_rand(
         ula_noise = ula_noise,
         log_swap = log_swap,
         xchange_ll_noise = xchange_ll_noise,
-        deo_mask_1 = deo_mask_1,
-        deo_mask_2 = deo_mask_2,
+        swap_mask_1 = swap_mask_1,
+        swap_mask_2 = swap_mask_2,
         shift_down = shift_down,
         shift_up = shift_up,
         encoder_noise = encoder_noise,

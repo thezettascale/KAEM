@@ -3,6 +3,7 @@ module ThermodynamicIntegration
 export ThermoLoss
 
 using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
+using NNlib: logsumexp
 
 using ..Utils
 using ..KAEM_model
@@ -61,33 +62,46 @@ function marginal_llhood(
         component_mask,
     )
 
-    # Steppingstone estimator
+    # SS estimator = sum_{k=1}^{N_t} [ logsumexp(Δt_k * ll(z_{t_{k-1}})) - log(N) ]
     num_temps = model.N_t > 1 ? model.N_t : 1
 
-    log_ss = 0.0f0
-    for t in 1:num_temps
+    # k=1: samples from t_0 = 0 (prior)
+    ll, st_gen = log_likelihood_MALA(
+        z_prior,
+        x,
+        model.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux_gen,
+        noise;
+        ε = model.ε,
+    )
+    log_ss = logsumexp(Δt[1] .* ll) - log(model.batch_size)
+
+    # k=2,...,N_t: samples from t_{k-1} (previous power posterior)
+    for k in 2:num_temps
 
         noise_t = (
-            model.lkhood.SEQ ? tempered_noise[:, :, :, t] : (
-                    model.use_pca ? tempered_noise[:, :, t] :
-                    tempered_noise[:, :, :, :, t]
+            model.lkhood.SEQ ? tempered_noise[:, :, :, k - 1] : (
+                    model.use_pca ? tempered_noise[:, :, k - 1] :
+                    tempered_noise[:, :, :, :, k - 1]
                 )
         )
 
         ll, st_gen = log_likelihood_MALA(
-            z_posterior[:, :, :, t],
+            z_posterior[:, :, :, k - 1],
             x,
             model.lkhood,
             ps.gen,
             st_kan.gen,
-            st_lux_gen,
+            st_gen,
             noise_t;
             ε = model.ε,
         )
-        log_ss += Δt[t] * mean(ll)
+        log_ss += logsumexp(Δt[k] .* ll) - log(model.batch_size)
     end
 
-    # MLE estimator
+    # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)
     logprior_pos, st_ebm = model.log_prior(
         z_posterior[:, :, :, num_temps],
         model.prior,
@@ -109,18 +123,6 @@ function marginal_llhood(
     )
     ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : 0.0f0
 
-    logllhood, st_gen = log_likelihood_MALA(
-        z_prior,
-        x,
-        model.lkhood,
-        ps.gen,
-        st_kan.gen,
-        st_gen,
-        noise;
-        ε = model.ε,
-    )
-    steppingstone_loss = Δt[1] * mean(logllhood) + log_ss
-
     reg, st_ebm, st_gen = model.kan_regularizer(
         z_posterior[:, :, :, num_temps],
         model,
@@ -130,7 +132,7 @@ function marginal_llhood(
         st_gen
     )
 
-    loss = reg - (steppingstone_loss + mean(logprior_pos) - ex_prior)
+    loss = reg - (log_ss + mean(logprior_pos) - ex_prior)
     return (loss, st_ebm, st_gen)
 end
 

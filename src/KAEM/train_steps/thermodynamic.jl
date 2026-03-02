@@ -3,7 +3,6 @@ module ThermodynamicIntegration
 export ThermoLoss
 
 using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
-using NNlib: logsumexp
 
 using ..Utils
 using ..KAEM_model
@@ -76,7 +75,7 @@ function marginal_llhood(
         noise;
         ε = model.ε,
     )
-    log_ss = logsumexp(Δt[1] .* ll) - log(model.batch_size)
+    log_ss = Δt[1] .* mean(ll)
 
     # k=2,...,N_t: samples from t_{k-1} (previous power posterior)
     for k in 2:num_temps
@@ -98,7 +97,7 @@ function marginal_llhood(
             noise_t;
             ε = model.ε,
         )
-        log_ss += logsumexp(Δt[k] .* ll) - log(model.batch_size)
+        log_ss += Δt[k] .* mean(ll)
     end
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)

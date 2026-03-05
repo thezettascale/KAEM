@@ -3,7 +3,6 @@ module ThermodynamicIntegration
 export ThermoLoss
 
 using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
-using NNlib: logsumexp
 
 using ..Utils
 using ..KAEM_model
@@ -62,10 +61,10 @@ function marginal_llhood(
         component_mask,
     )
 
-    # SS estimator = sum_{k=1}^{N_t} [ logsumexp(Δt_k * ll(z_{t_{k-1}})) - log(N) ]
+    # Trapezoid rule: sum_{k=1}^{N_t} Δt_k * 0.5 * (E_{k-1} + E_k)
     num_temps = model.N_t > 1 ? model.N_t : 1
 
-    # k=1: samples from t_0 = 0 (prior)
+    # E_0: evaluate ll at z_prior (t_0 = 0)
     ll, st_gen = log_likelihood_MALA(
         z_prior,
         x,
@@ -76,20 +75,21 @@ function marginal_llhood(
         noise;
         ε = model.ε,
     )
-    log_ss = logsumexp(Δt[1] .* ll) - log(model.batch_size)
+    prev_E = mean(ll)
+    log_ss = 0.0f0
 
-    # k=2,...,N_t: samples from t_{k-1} (previous power posterior)
-    for k in 2:num_temps
+    # E_1,...,E_{N_t}: evaluate ll at z_posterior[:,:,:,k]
+    for k in 1:num_temps
 
         noise_t = (
-            model.lkhood.SEQ ? tempered_noise[:, :, :, k - 1] : (
-                    model.use_pca ? tempered_noise[:, :, k - 1] :
-                    tempered_noise[:, :, :, :, k - 1]
+            model.lkhood.SEQ ? tempered_noise[:, :, :, k] : (
+                    model.use_pca ? tempered_noise[:, :, k] :
+                    tempered_noise[:, :, :, :, k]
                 )
         )
 
         ll, st_gen = log_likelihood_MALA(
-            z_posterior[:, :, :, k - 1],
+            z_posterior[:, :, :, k],
             x,
             model.lkhood,
             ps.gen,
@@ -98,7 +98,9 @@ function marginal_llhood(
             noise_t;
             ε = model.ε,
         )
-        log_ss += logsumexp(Δt[k] .* ll) - log(model.batch_size)
+        curr_E = mean(ll)
+        log_ss += Δt[k] .* 0.5f0 .* (prev_E .+ curr_E)
+        prev_E = curr_E
     end
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)

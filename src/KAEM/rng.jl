@@ -85,7 +85,6 @@ function seed_rand(
     Q, N, S = model.posterior_sampler.Q, model.posterior_sampler.N, model.batch_size
     ula_noise = randn(rng, T, Q, P, S * num_temps, N)
     log_swap = log.(rand(rng, T, num_temps, N))
-    xchange_ll_noise = randn(rng, T, model.lkhood.x_shape..., S, num_temps, N)
 
     # Replica exchange masks and shift matrices
     exchange_type = (
@@ -153,7 +152,6 @@ function seed_rand(
         resample_rv = resample_rv,
         ula_noise = ula_noise,
         log_swap = log_swap,
-        xchange_ll_noise = xchange_ll_noise,
         swap_mask_1 = swap_mask_1,
         swap_mask_2 = swap_mask_2,
         shift_down = shift_down,

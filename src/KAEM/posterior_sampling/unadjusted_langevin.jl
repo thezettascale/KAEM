@@ -78,7 +78,6 @@ function step(
         st_lux,
         noise,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         component_mask,
@@ -110,7 +109,6 @@ function step(
         st_kan,
         st_lux,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         shift_down,
@@ -212,7 +210,6 @@ function (sampler::ULA_sampler)(
     # Pre-allocate noise
     noise = st_rng.ula_noise
     log_u_swap = st_rng.log_swap
-    ll_noise = st_rng.xchange_ll_noise
 
     # DEO masks + shift matrices (pre-computed in rng.jl, already on device)
     mask_swap_1 = num_temps > 1 ? st_rng.swap_mask_1 : nothing
@@ -240,7 +237,6 @@ function (sampler::ULA_sampler)(
             st_lux,
             noise,
             log_u_swap,
-            ll_noise,
             mask_swap_1,
             mask_swap_2,
             component_mask,

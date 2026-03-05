@@ -26,22 +26,12 @@ function (r::ReplicaXchange)(
         st_kan,
         st_lux,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         shift_down,
         shift_up,
     )
     Q, P, S, num_temps = r.Q, r.P, r.S, r.num_temps
-    noise_flat = (
-        model.lkhood.SEQ ?
-            reshape(ll_noise[:, :, :, :, i], size(ll_noise, 1), size(ll_noise, 2), S * num_temps) :
-            (
-                model.use_pca ?
-                reshape(ll_noise[:, :, :, i], size(ll_noise, 1), S * num_temps) :
-                reshape(ll_noise[:, :, :, :, :, i], size(ll_noise, 1), size(ll_noise, 2), size(ll_noise, 3), S * num_temps)
-            )
-    )
 
     # Batched likelihood for all temps
     ll_all, _ = log_likelihood_MALA(
@@ -51,7 +41,7 @@ function (r::ReplicaXchange)(
         ps.gen,
         st_kan.gen,
         st_lux.gen,
-        noise_flat;
+        zero(x_t);
         ε = model.ε,
     )
 
@@ -108,7 +98,6 @@ function (r::NoExchange)(
         st_kan,
         st_lux,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         shift_down,

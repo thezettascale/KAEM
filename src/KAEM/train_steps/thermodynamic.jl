@@ -140,7 +140,7 @@ function (l::ThermoLoss)(
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
     Q, P, S = l.model.posterior_sampler.Q, l.model.posterior_sampler.P, l.model.batch_size
-    z = cat(z_prior[:, :, :, :], z; dims = 4)
+    z = cat(z_prior, z; dims = 4)
 
     x = l.model.lkhood.SEQ ? repeat(x, 1, 1, l.model.N_t + 1) :
         (l.model.use_pca ? repeat(x, 1, l.model.N_t + 1) : repeat(x, 1, 1, 1, l.model.N_t + 1))

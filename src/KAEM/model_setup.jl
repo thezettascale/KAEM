@@ -162,11 +162,11 @@ function setup_training(
             thermo_model = model
             if !model.lkhood.SEQ && !model.lkhood.CNN
                 for i in 1:model.lkhood.generator.depth
-                    @reset thermo_model.lkhood.generator.Φ_fcns[i].basis_function.S = S * model.N_t
+                    @reset thermo_model.lkhood.generator.Φ_fcns[i].basis_function.S = S * (model.N_t + 1)
                 end
             end
 
-            @reset thermo_model.lkhood.generator.s_size = S * model.N_t
+            @reset thermo_model.lkhood.generator.s_size = S * (model.N_t + 1)
             static_loss = ThermoLoss(thermo_model)
 
             if MLIR

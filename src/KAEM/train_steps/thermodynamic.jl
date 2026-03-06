@@ -3,7 +3,6 @@ module ThermodynamicIntegration
 export ThermoLoss
 
 using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
-using NNlib: logsumexp
 
 using ..Utils
 using ..KAEM_model
@@ -62,17 +61,12 @@ function marginal_llhood(
         component_mask,
     )
 
-    # SS estimator = sum_{k=1}^{N_t} [ logsumexp(Δt_k * ll(z_{t_{k-1}})) - log(N) ]
     num_temps = model.N_t > 1 ? model.N_t : 1
-    log_ss = 0.0f0
+    Q, P, S = model.posterior_sampler.Q, model.posterior_sampler.P, model.batch_size
 
+    z_all = cat(reshape(z_prior, Q, P, S, 1), z_posterior; dims = 4)
     ll, st_gen = log_likelihood_MALA(
-        reshape(
-            z_posterior,
-            model.posterior_sampler.Q,
-            model.posterior_sampler.P,
-            model.batch_size * num_temps
-        ),
+        reshape(z_all, Q, P, S * (num_temps + 1)),
         x,
         model.lkhood,
         ps.gen,
@@ -81,12 +75,14 @@ function marginal_llhood(
         tempered_noise;
         ε = model.ε,
     )
-    ll = reshape(ll, model.batch_size, num_temps)
-    log_ss = sum(logsumexp(Δt .* ll; dims = 1) .- log(model.batch_size))
+
+    # Trapezoidal: ½ Σ_k Δt_k (E_{k-1} + E_k)
+    E = mean(reshape(ll, S, num_temps + 1); dims = 1)
+    log_ss = 0.5f0 * sum(Δt .* (E[:, 1:(end - 1)] .+ E[:, 2:end]))
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)
     logprior_pos, st_ebm = model.log_prior(
-        z_posterior[:, :, :, num_temps],
+        z_posterior[:, :, :, end],
         model.prior,
         ps.ebm,
         st_kan.ebm,
@@ -107,7 +103,7 @@ function marginal_llhood(
     ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : 0.0f0
 
     reg, st_ebm, st_gen = model.kan_regularizer(
-        z_posterior[:, :, :, num_temps],
+        z_posterior[:, :, :, end],
         model,
         ps,
         st_kan,
@@ -145,8 +141,8 @@ function (l::ThermoLoss)(
     z_prior, st_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
-    x = l.model.lkhood.SEQ ? repeat(x, 1, 1, l.model.N_t) :
-        (l.model.use_pca ? repeat(x, 1, l.model.N_t) : repeat(x, 1, 1, 1, l.model.N_t))
+    x = l.model.lkhood.SEQ ? repeat(x, 1, 1, l.model.N_t + 1) :
+        (l.model.use_pca ? repeat(x, 1, l.model.N_t + 1) : repeat(x, 1, 1, 1, l.model.N_t + 1))
 
     dps = Enzyme.make_zero(ps)
     _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(

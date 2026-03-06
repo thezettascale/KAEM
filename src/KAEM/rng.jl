@@ -66,7 +66,7 @@ function seed_rand(
 
     tempered_noise = (
         num_temps > 1 ?
-            randn(rng, T, model.lkhood.x_shape..., model.batch_size * model.N_t) :
+            randn(rng, T, model.lkhood.x_shape..., model.batch_size * (model.N_t + 1)) :
             [0.0f0]
     )
 

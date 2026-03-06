@@ -64,7 +64,7 @@ function marginal_llhood(
     num_temps = model.N_t > 1 ? model.N_t : 1
     Q, P, S = model.posterior_sampler.Q, model.posterior_sampler.P, model.batch_size
 
-    z_all = cat(reshape(z_prior, Q, P, S, 1), z_posterior; dims = 4)
+    z_all = cat(z_prior[:, :, :, :], z_posterior; dims = 4)
     ll, st_gen = log_likelihood_MALA(
         reshape(z_all, Q, P, S * (num_temps + 1)),
         x,
@@ -77,8 +77,8 @@ function marginal_llhood(
     )
 
     # Trapezoidal: ½ Σ_k Δt_k (E_{k-1} + E_k)
-    E = mean(reshape(ll, S, num_temps + 1); dims = 1)
-    log_ss = 0.5f0 * sum(Δt .* (E[:, 1:(end - 1)] .+ E[:, 2:end]))
+    E = dropdims(mean(reshape(ll, S, num_temps + 1); dims = 1); dims = 1)
+    log_ss = 0.5f0 * sum(Δt .* (E[1:(end - 1)] .+ E[2:end]))
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)
     logprior_pos, st_ebm = model.log_prior(

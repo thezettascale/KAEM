@@ -44,7 +44,7 @@ function sample_thermo(
             nothing
     )
 
-    return z, Δt, st_lux, noise, tempered_noise, component_mask
+    return z, Δt', st_lux, noise, tempered_noise, component_mask
 end
 
 function marginal_llhood(
@@ -66,27 +66,23 @@ function marginal_llhood(
     num_temps = model.N_t > 1 ? model.N_t : 1
     log_ss = 0.0f0
 
-    for k in 1:num_temps
-
-        noise_t = (
-            model.lkhood.SEQ ? tempered_noise[:, :, :, k] : (
-                    model.use_pca ? tempered_noise[:, :, k] :
-                    tempered_noise[:, :, :, :, k]
-                )
-        )
-
-        ll, st_gen = log_likelihood_MALA(
-            z_posterior[:, :, :, k],
-            x,
-            model.lkhood,
-            ps.gen,
-            st_kan.gen,
-            st_gen,
-            noise_t;
-            ε = model.ε,
-        )
-        log_ss += logsumexp(Δt[k] .* ll) - log(model.batch_size)
-    end
+    ll, st_gen = log_likelihood_MALA(
+        reshape(
+            z_posterior,
+            model.posterior_sampler.Q,
+            model.posterior_sampler.P,
+            model.batch_size * num_temps
+        ),
+        x,
+        model.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux_gen,
+        tempered_noise;
+        ε = model.ε,
+    )
+    ll = reshape(ll, model.batch_size, num_temps)
+    log_ss = sum(logsumexp(Δt .* ll; dims = 1) .- log(model.batch_size))
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)
     logprior_pos, st_ebm = model.log_prior(
@@ -148,6 +144,9 @@ function (l::ThermoLoss)(
     st_lux_ebm, st_lux_gen = st_lux.ebm, st_lux.gen
     z_prior, st_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
+
+    x = l.model.lkhood.SEQ ? repeat(x, 1, 1, l.model.N_t) :
+        (l.model.use_pca ? repeat(x, 1, l.model.N_t) : repeat(x, 1, 1, 1, l.model.N_t))
 
     dps = Enzyme.make_zero(ps)
     _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(

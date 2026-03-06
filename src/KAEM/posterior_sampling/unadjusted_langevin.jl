@@ -198,7 +198,6 @@ function (sampler::ULA_sampler)(
 
     @reset model.prior.s_size = S * num_temps
     @reset model.lkhood.generator.s_size = S * num_temps
-
     temps_gpu = repeat(temps, S)
 
     N_steps = sampler.N

@@ -74,7 +74,6 @@ function marginal_llhood(
         ε = model.ε,
     )
 
-    # z[:,:,:,1] = prior, z[:,:,:,2:num_temps+1] = t_1,...,t_{N_t}
     # Trapezoidal: ½ Σ_k Δt_k (E_{k-1} + E_k)
     E = dropdims(mean(reshape(ll, S, num_temps + 1); dims = 1); dims = 1)
     log_ss = 0.5f0 * sum(Δt .* (E[1:num_temps] .+ E[2:(num_temps + 1)]))

@@ -3,6 +3,7 @@ module ThermodynamicIntegration
 export ThermoLoss
 
 using ComponentArrays, Enzyme, Statistics, Lux, Optimisers
+using NNlib: logsumexp
 
 using ..Utils
 using ..KAEM_model
@@ -61,24 +62,10 @@ function marginal_llhood(
         component_mask,
     )
 
-    # Trapezoid rule: sum_{k=1}^{N_t} Δt_k * 0.5 * (E_{k-1} + E_k)
+    # SS estimator = sum_{k=1}^{N_t} [ logsumexp(Δt_k * ll(z_{t_{k-1}})) - log(N) ]
     num_temps = model.N_t > 1 ? model.N_t : 1
-
-    # E_0: evaluate ll at z_prior (t_0 = 0)
-    ll, st_gen = log_likelihood_MALA(
-        z_prior,
-        x,
-        model.lkhood,
-        ps.gen,
-        st_kan.gen,
-        st_lux_gen,
-        noise;
-        ε = model.ε,
-    )
-    prev_E = mean(ll)
     log_ss = 0.0f0
 
-    # E_1,...,E_{N_t}: evaluate ll at z_posterior[:,:,:,k]
     for k in 1:num_temps
 
         noise_t = (
@@ -98,9 +85,7 @@ function marginal_llhood(
             noise_t;
             ε = model.ε,
         )
-        curr_E = mean(ll)
-        log_ss += Δt[k] .* 0.5f0 .* (prev_E .+ curr_E)
-        prev_E = curr_E
+        log_ss += logsumexp(Δt[k] .* ll) - log(model.batch_size)
     end
 
     # MLE estimator (prior learned from full posterior samples at t_{N_t}=1)

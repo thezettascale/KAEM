@@ -43,7 +43,7 @@ function sample_thermo(
             nothing
     )
 
-    return z, Δt', st_lux, noise, tempered_noise, component_mask
+    return z, Δt, st_lux, noise, tempered_noise, component_mask
 end
 
 function marginal_llhood(

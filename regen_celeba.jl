@@ -12,6 +12,9 @@ commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 ENV["DEVICE"] = retrieve(conf, "TRAINING", "device")
 ENV["PERCEPTUAL"] = retrieve(conf, "TRAINING", "use_perceptual_loss")
 
+include("src/utils.jl")
+using .Utils
+
 include("src/pipeline/trainer.jl")
 using .trainer
 using .trainer: seed_rand

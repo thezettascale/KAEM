@@ -24,8 +24,8 @@
 # CELEBA variational
 
 # CIFAR
-SVHN thermo
-CELEBA thermo
+# SVHN thermo
+# CELEBA thermo
 # SVHN vanilla
 # CELEBA vanilla
 # CIFAR10 vanilla

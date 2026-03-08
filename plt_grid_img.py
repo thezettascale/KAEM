@@ -2,9 +2,9 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
-file_path_real = "logs/Baseline/CELEBA/VAE/generated_images_epoch_90.h5"
+file_path_real = "logs/Baseline/CELEBA/VAE/generated_images_epoch_60.h5"
 file_path_generated = (
-    "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images_epoch_90.h5"
+    "logs/Thermodynamic/CELEBA/ULA/mixture/generated_images_epoch_60.h5"
 )
 
 with h5py.File(file_path_real, "r") as h5_file:
@@ -14,7 +14,7 @@ with h5py.File(file_path_generated, "r") as h5_file:
     generated_data = h5_file["samples"][()]
 
 grid_size = (7, 7)
-fig = plt.figure(figsize=(20, 20))
+fig = plt.figure(figsize=(9, 7))
 gs = fig.add_gridspec(grid_size[0], grid_size[1] * 2 + 1, wspace=0, hspace=0)
 
 for i in range(grid_size[0] * grid_size[1]):
@@ -31,5 +31,5 @@ for i in range(grid_size[0] * grid_size[1]):
     ax.imshow(img)
     ax.axis("off")
 
-plt.savefig("garbage/grid.png", bbox_inches="tight", pad_inches=0.2, dpi=150)
+plt.savefig("garbage/grid.png", bbox_inches="tight", pad_inches=0.2, dpi=700)
 plt.show()

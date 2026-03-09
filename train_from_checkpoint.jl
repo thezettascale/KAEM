@@ -32,12 +32,14 @@ include("src/pipeline/trainer.jl")
 using .Utils: pu
 using .trainer
 
-saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
-ps = convert(ComponentArray, saved_data["params"]) |> pu
-st = convert(NamedTuple, saved_data["state"]) |> pu
-
 rng = Random.MersenneTwister(1)
 t = init_trainer(rng, conf, dataset)
-t.ps, t.st = ps, st
+
+saved_data = load(file_loc * "ckpt_epoch_$ckpt.jld2")
+ps_flat = saved_data["params"] .|> Float32
+ps_template = Lux.initialparameters(rng, t.model)
+t.ps = ComponentArray(ps_flat, getaxes(ps_template)) |> pu
+t.st_kan = saved_data["kan_state"] |> pu
+t.st_lux = saved_data["lux_state"] |> pu
 
 train!(t)

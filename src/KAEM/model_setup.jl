@@ -149,11 +149,25 @@ function setup_training(
 
         Q, S = model.prior.q_size, model.batch_size
         P = model.prior.bool_config.mixture_model ? 1 : model.prior.p_size
-        @reset model.xchange_func = DEOReplicaXchange(Q, P, S, model.N_t)
+        exchange_type = (
+            haskey(conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") ?
+                retrieve(conf, "THERMODYNAMIC_INTEGRATION", "exchange_type") :
+                "deo"
+        )
+        @reset model.xchange_func =
+            exchange_type == "none" ? NoExchange() : ReplicaXchange(Q, P, S, model.N_t)
 
         @reset model.train_step = begin
 
-            static_loss = ThermoLoss(model)
+            thermo_model = model
+            if !model.lkhood.SEQ && !model.lkhood.CNN
+                for i in 1:model.lkhood.generator.depth
+                    @reset thermo_model.lkhood.generator.Φ_fcns[i].basis_function.S = S * (model.N_t + 1)
+                end
+            end
+
+            @reset thermo_model.lkhood.generator.s_size = S * (model.N_t + 1)
+            static_loss = ThermoLoss(thermo_model)
 
             if MLIR
                 Reactant.@compile static_loss(

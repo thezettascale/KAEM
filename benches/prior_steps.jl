@@ -1,6 +1,6 @@
 # using BenchmarkTools, ConfParser, Lux, Random, ComponentArrays, CSV, DataFrames, Reactant
 #
-# ENV["GPU"] = true
+# ENV["DEVICE"] = "gpu"
 #
 # include("../src/pipeline/data_utils.jl")
 # using .DataUtils: get_vision_dataset

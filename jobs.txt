@@ -24,10 +24,10 @@
 # CELEBA variational
 
 # CIFAR
-SVHN vanilla
+# SVHN thermo
+# CELEBA thermo
+# SVHN vanilla
 CELEBA vanilla
-SVHN thermo
-CELEBA thermo
 # CIFAR10 vanilla
 # CIFAR10 thermo
 # DARCY_FLOW vanilla

@@ -78,7 +78,6 @@ function step(
         st_lux,
         noise,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         component_mask,
@@ -110,7 +109,6 @@ function step(
         st_kan,
         st_lux,
         log_u_swap,
-        ll_noise,
         mask_swap_1,
         mask_swap_2,
         shift_down,
@@ -200,7 +198,6 @@ function (sampler::ULA_sampler)(
 
     @reset model.prior.s_size = S * num_temps
     @reset model.lkhood.generator.s_size = S * num_temps
-
     temps_gpu = repeat(temps, S)
 
     N_steps = sampler.N
@@ -212,11 +209,10 @@ function (sampler::ULA_sampler)(
     # Pre-allocate noise
     noise = st_rng.ula_noise
     log_u_swap = st_rng.log_swap
-    ll_noise = st_rng.xchange_ll_noise
 
     # DEO masks + shift matrices (pre-computed in rng.jl, already on device)
-    mask_swap_1 = num_temps > 1 ? st_rng.deo_mask_1 : nothing
-    mask_swap_2 = num_temps > 1 ? st_rng.deo_mask_2 : nothing
+    mask_swap_1 = num_temps > 1 ? st_rng.swap_mask_1 : nothing
+    mask_swap_2 = num_temps > 1 ? st_rng.swap_mask_2 : nothing
     shift_down = num_temps > 1 ? st_rng.shift_down : nothing
     shift_up = num_temps > 1 ? st_rng.shift_up : nothing
 
@@ -240,7 +236,6 @@ function (sampler::ULA_sampler)(
             st_lux,
             noise,
             log_u_swap,
-            ll_noise,
             mask_swap_1,
             mask_swap_2,
             component_mask,

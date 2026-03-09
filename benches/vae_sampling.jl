@@ -1,6 +1,6 @@
 using BenchmarkTools, ConfParser, Lux, Random, ComponentArrays, CSV, DataFrames, Reactant
 
-ENV["GPU"] = true
+ENV["DEVICE"] = "gpu"
 
 include("../src/baseline/training/trainer.jl")
 using .Baseline: Utils, VAEModel, DataUtils

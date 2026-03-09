@@ -48,8 +48,7 @@ end
 
 function marginal_llhood(
         ps,
-        z_posterior,
-        z_prior,
+        z,
         x,
         Δt,
         model,
@@ -61,35 +60,26 @@ function marginal_llhood(
         component_mask,
     )
 
-    # Steppingstone estimator
     num_temps = model.N_t > 1 ? model.N_t : 1
+    Q, P, S = model.posterior_sampler.Q, model.posterior_sampler.P, model.batch_size
 
-    log_ss = 0.0f0
-    for t in 1:num_temps
+    ll, st_gen = log_likelihood_MALA(
+        reshape(z, Q, P, S * (num_temps + 1)),
+        x,
+        model.lkhood,
+        ps.gen,
+        st_kan.gen,
+        st_lux_gen,
+        tempered_noise;
+        ε = model.ε,
+    )
 
-        noise_t = (
-            model.lkhood.SEQ ? tempered_noise[:, :, :, t] : (
-                    model.use_pca ? tempered_noise[:, :, t] :
-                    tempered_noise[:, :, :, :, t]
-                )
-        )
+    # Trapezoidal: ½ Σ_k Δt_k (E_{k-1} + E_k)
+    E = dropdims(mean(reshape(ll, S, num_temps + 1); dims = 1); dims = 1)
+    log_ss = 0.5f0 * sum(Δt .* (E[1:num_temps] .+ E[2:(num_temps + 1)]))
 
-        ll, st_gen = log_likelihood_MALA(
-            z_posterior[:, :, :, t],
-            x,
-            model.lkhood,
-            ps.gen,
-            st_kan.gen,
-            st_lux_gen,
-            noise_t;
-            ε = model.ε,
-        )
-        log_ss += Δt[t] * mean(ll)
-    end
-
-    # MLE estimator
     logprior_pos, st_ebm = model.log_prior(
-        z_posterior[:, :, :, num_temps],
+        z[:, :, :, num_temps + 1],
         model.prior,
         ps.ebm,
         st_kan.ebm,
@@ -99,7 +89,7 @@ function marginal_llhood(
     )
 
     logprior, st_ebm = model.log_prior(
-        z_prior,
+        z[:, :, :, 1],
         model.prior,
         ps.ebm,
         st_kan.ebm,
@@ -109,20 +99,8 @@ function marginal_llhood(
     )
     ex_prior = model.prior.bool_config.contrastive_div ? mean(logprior) : 0.0f0
 
-    logllhood, st_gen = log_likelihood_MALA(
-        z_prior,
-        x,
-        model.lkhood,
-        ps.gen,
-        st_kan.gen,
-        st_gen,
-        noise;
-        ε = model.ε,
-    )
-    steppingstone_loss = Δt[1] * mean(logllhood) + log_ss
-
     reg, st_ebm, st_gen = model.kan_regularizer(
-        z_posterior[:, :, :, num_temps],
+        z[:, :, :, num_temps + 1],
         model,
         ps,
         st_kan,
@@ -130,7 +108,7 @@ function marginal_llhood(
         st_gen
     )
 
-    loss = reg - (steppingstone_loss + mean(logprior_pos) - ex_prior)
+    loss = reg - (log_ss + mean(logprior_pos) - ex_prior)
     return (loss, st_ebm, st_gen)
 end
 
@@ -147,7 +125,7 @@ function (l::ThermoLoss)(
         train_idx,
         st_rng,
     )
-    z_posterior, Δt, st_lux, noise, tempered_noise, component_mask = sample_thermo(
+    z, Δt, st_lux, noise, tempered_noise, component_mask = sample_thermo(
         ps,
         st_kan,
         st_lux,
@@ -160,14 +138,19 @@ function (l::ThermoLoss)(
     z_prior, st_ebm =
         l.model.sample_prior(l.model, ps, st_kan, st_lux, st_rng)
 
+    Q, P, S = l.model.posterior_sampler.Q, l.model.posterior_sampler.P, l.model.batch_size
+    z = cat(z_prior, z; dims = 4)
+
+    x = l.model.lkhood.SEQ ? repeat(x, 1, 1, l.model.N_t + 1) :
+        (l.model.use_pca ? repeat(x, 1, l.model.N_t + 1) : repeat(x, 1, 1, 1, l.model.N_t + 1))
+
     dps = Enzyme.make_zero(ps)
     _, (loss, st_lux_ebm, st_lux_gen) = Enzyme.autodiff(
         Enzyme.ReverseWithPrimal,
         Const(marginal_llhood),
         Active,
         Duplicated(ps, dps),
-        Const(z_posterior),
-        Const(z_prior),
+        Const(z),
         Const(x),
         Const(Δt),
         Const(l.model),

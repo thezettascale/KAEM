@@ -76,12 +76,13 @@ function (t::SymbolicTransfer)(
                 rng = rng
             )
 
+            grid_layer = layer.grid_trainable ? ps_layer.grid : st_kan_layer.grid
             sym_func = init_symbolic_function(
                 layer.basis_function,
                 I,
                 O,
-                st_kan_layer.grid[:, 1],
-                st_kan_layer.grid[:, end],
+                grid_layer[:, 1],
+                grid_layer[:, end],
                 fit_dict,
                 α,
                 β,
@@ -111,12 +112,13 @@ function (t::SymbolicTransfer)(
                 rng = rng
             )
 
+            grid_layer = layer.grid_trainable ? ps_layer.grid : st_kan_layer.grid
             sym_func = init_symbolic_function(
                 layer.basis_function,
                 I,
                 O,
-                st_kan_layer.grid[:, 1],
-                st_kan_layer.grid[:, end],
+                grid_layer[:, 1],
+                grid_layer[:, end],
                 fit_dict,
                 α,
                 β,

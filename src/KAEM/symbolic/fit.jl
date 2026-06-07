@@ -151,13 +151,14 @@ function (sf::SymFitter)(
         rng = Random.MersenneTwister(1),
     )
     """Finds best symbolic functions for each input and output dim"""
-    in_min, in_max = st_kan.grid[:, 1], st_kan.grid[:, end]
+    grid = kan_func.grid_trainable ? ps.grid : st_kan.grid
+    in_min, in_max = grid[:, 1], grid[:, end]
     I = length(in_min)
     O = ndims(ps.coef) > 3 ? size(ps.coef, 3) : size(ps.coef, 2)
 
     z = zeros(Float32, I, 1, sf.num_points)
     for i in 1:I
-        in_min, in_max = Float32(st_kan.grid[i, 1]), Float32(st_kan.grid[i, end])
+        in_min, in_max = Float32(grid[i, 1]), Float32(grid[i, end])
         z[i, 1, :] = range(in_min, in_max, length = sf.num_points) |> collect
     end
 

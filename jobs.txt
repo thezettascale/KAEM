@@ -25,10 +25,10 @@
 # CELEBA tune
 # CELEBA variational
 
-# SVHN vanilla
-# SVHN thermo
-# CELEBA vanilla
-# CELEBA thermo
+SVHN vanilla
+SVHN thermo
+CELEBA vanilla
+CELEBA thermo
 CIFAR10 vanilla
 CIFAR10 thermo
 

@@ -50,11 +50,11 @@ METHOD_CONFIGS = {
     #     "model_type": "GAN",
     #     "is_baseline": True,
     # },
-    # "baseline_pang": {
-    #     "method_type": "Baseline",
-    #     "model_type": "PANG",
-    #     "is_baseline": True,
-    # },
+    "baseline_pang": {
+        "method_type": "Baseline",
+        "model_type": "PANG",
+        "is_baseline": True,
+    },
     # "baseline_ddpm": {
     #     "method_type": "Baseline",
     #     "model_type": "DDPM",

@@ -212,18 +212,18 @@ if __name__ == "__main__":
                 #     "logs/Baseline/SVHN/VAE/generated_images.h5",
                 #     get_real_samples_path("SVHN"),
                 # ),
-                # (
-                #     "logs/Baseline/CIFAR10/PANG/generated_images.h5",
-                #     get_real_samples_path("CIFAR10"),
-                # ),
-                # (
-                #     "logs/Baseline/CELEBA/PANG/generated_images.h5",
-                #     get_real_samples_path("CELEBA"),
-                # ),
-                # (
-                #     "logs/Baseline/SVHN/PANG/generated_images.h5",
-                #     get_real_samples_path("SVHN"),
-                # ),
+                (
+                    "logs/Baseline/CIFAR10/PANG/generated_images.h5",
+                    get_real_samples_path("CIFAR10"),
+                ),
+                (
+                    "logs/Baseline/CELEBA/PANG/generated_images.h5",
+                    get_real_samples_path("CELEBA"),
+                ),
+                (
+                    "logs/Baseline/SVHN/PANG/generated_images.h5",
+                    get_real_samples_path("SVHN"),
+                ),
                 # (
                 #     "logs/Baseline/CIFAR10/DDPM/generated_images.h5",
                 #     get_real_samples_path("CIFAR10"),

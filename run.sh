@@ -26,7 +26,7 @@ fi
 echo "running $total job(s) from $CONFIG"
 echo "log: $LOGFILE"
 
-# Datasets supported by latent_traversal.jl / latent_interpolation.jl
+# Datasets supported by / latent_interpolation.jl
 LATENT_DATASETS=("CELEBA" "SVHN" "CIFAR10")
 
 is_latent_supported() {
@@ -52,10 +52,7 @@ for i in "${!jobs[@]}"; do
         DATASET="$dataset" MODE="$mode" \
             julia --project=. --threads=auto main.jl 2>&1 | tee -a "$LOGFILE"
 
-        # Also run latent traversal/interpolation.
         if [[ "$mode" == "vanilla" || "$mode" == "thermo" ]] && is_latent_supported "$dataset"; then
-            echo "[$n/$total] latent_traversal.jl $dataset $mode"
-            julia --project=. --threads=auto latent_traversal.jl "$dataset" "$mode" 2>&1 | tee -a "$LOGFILE"
             echo "[$n/$total] latent_interpolation.jl $dataset $mode"
             julia --project=. --threads=auto latent_interpolation.jl "$dataset" "$mode" 2>&1 | tee -a "$LOGFILE"
         fi

@@ -26,6 +26,7 @@ plt.rcParams.update(
 
 
 def _kaem_config(dataset, method_type):
+    name = f"{dataset.lower()}_{method_type.lower()}_ULA_mixture_evolution.gif"
     return {
         "dataset": dataset,
         "method_type": method_type,
@@ -35,7 +36,7 @@ def _kaem_config(dataset, method_type):
         "cmap": None,
         "epochs": list(range(10, 100, 10)),
         "samples_per_frame": 1,
-        "filename": f"{dataset.lower()}_{method_type.lower()}_ULA_mixture_evolution.gif",
+        "filename": name,
         "is_baseline": False,
     }
 

@@ -16,24 +16,23 @@ dataset_configs = Dict(
 haskey(dataset_configs, dataset) || error("Unknown dataset: $dataset. Use one of: $(keys(dataset_configs))")
 ds = dataset_configs[dataset]
 
+file_loc = (
+    mode == "thermo" ? "logs/Thermodynamic/$(dataset)/ULA/mixture/" :
+        "logs/Vanilla/$(dataset)/ULA/mixture/"
+)
+save_dir = "figures/interpolations/$(dataset)/$(mode)/"
+mkpath(save_dir)
+
+num_interp_steps = 8
+num_pairs = 6
+num_prior_samples = 500
+num_density_dims = 3
+
 conf = ConfParse(ds.config)
 parse_conf!(conf)
 commit!(conf, "THERMODYNAMIC_INTEGRATION", "num_temps", "-1")
 ENV["DEVICE"] = retrieve(conf, "TRAINING", "device")
 ENV["PERCEPTUAL"] = retrieve(conf, "TRAINING", "use_perceptual_loss")
-
-prior_type = parse(Bool, retrieve(conf, "MixtureModel", "use_mixture_prior")) ? "mixture" : "univariate"
-file_loc = (
-    mode == "thermo" ? "logs/Thermodynamic/$(dataset)/ULA/$(prior_type)/" :
-        "logs/Vanilla/$(dataset)/ULA/$(prior_type)/"
-)
-save_dir = "figures/interpolations/$(dataset)/$(mode)/$(prior_type)/"
-mkpath(save_dir)
-
-num_interp_steps = 8
-num_pairs = 6
-num_prior_samples = 5000
-num_density_dims = 3
 
 include("src/utils.jl")
 using .Utils
@@ -57,7 +56,7 @@ st_lux = Lux.testmode(t.st_lux)
 q_size = model.prior.q_size
 batch_size = model.batch_size
 
-# Prior samples
+# Sample from prior
 num_batches = num_prior_samples ÷ batch_size
 z_all = zeros(Float32, q_size, 1, num_batches * batch_size)
 for i in 1:num_batches
@@ -78,175 +77,50 @@ z_dummy = pu(zeros(Float32, q_size, 1, batch_size))
 decode_compiled = Reactant.@compile decode(ps.gen, st_kan.gen, st_lux.gen, z_dummy)
 println("Decoder compiled.")
 
-# Gaussian KDE per dim
-function silverman_bandwidth(samples::AbstractVector)
-    n = length(samples)
-    σ = std(samples)
-    iqr = quantile(samples, 0.75f0) - quantile(samples, 0.25f0)
-    a = min(σ, iqr / 1.34f0)
-    a = a > 0 ? a : (σ > 0 ? σ : 1.0f0)
-    return Float32(0.9 * a * n^(-0.2))
-end
-
-function kde_on_grid(samples::AbstractVector{Float32}, grid::AbstractVector{Float32})
-    h = silverman_bandwidth(samples)
-    invh = 1.0f0 / h
-    norm = invh / (sqrt(2.0f0 * π) * length(samples))
-    density = similar(grid)
-    @inbounds for i in eachindex(grid)
-        z = grid[i]
-        acc = 0.0f0
-        for s in samples
-            d = (z - s) * invh
-            acc += exp(-0.5f0 * d * d)
-        end
-        density[i] = acc * norm
+# SLERP
+function slerp(z1, z2, t)
+    z1_flat = vec(z1)
+    z2_flat = vec(z2)
+    n1 = z1_flat / max(norm(z1_flat), eps(Float32))
+    n2 = z2_flat / max(norm(z2_flat), eps(Float32))
+    omega = acos(clamp(dot(n1, n2), -1.0f0, 1.0f0))
+    if omega < 1.0f-6
+        return (1.0f0 - t) .* z1 .+ t .* z2
     end
-    return density
+    s = sin(omega)
+    return (sin((1.0f0 - t) * omega) / s) .* z1 .+ (sin(t * omega) / s) .* z2
 end
 
-# Local maxima above prominence floor
-function kde_peaks(
-        grid::AbstractVector{Float32}, density::AbstractVector{Float32};
-        rel_prominence::Float32 = 0.08f0
-    )
-    n = length(grid)
-    dmax = maximum(density)
-    peaks = Float32[]
-    for i in 2:(n - 1)
-        if density[i] > density[i - 1] && density[i] > density[i + 1] &&
-                density[i] > rel_prominence * dmax
-            push!(peaks, grid[i])
-        end
-    end
-    isempty(peaks) && push!(peaks, grid[argmax(density)])
-    return peaks
+# Pairs far apart
+N = size(z_all, 3)
+pair_dists = Dict{Tuple{Int, Int}, Float32}()
+for i in 1:N, j in (i + 1):N
+    pair_dists[(i, j)] = sum((z_all[:, :, i] .- z_all[:, :, j]) .^ 2)
 end
+sorted_pairs = sort(collect(pair_dists); by = last, rev = true)
 
-struct DimDistribution
-    sorted::Vector{Float32}
-    grid::Vector{Float32}
-    density::Vector{Float32}
-    modes::Vector{Float32}
+pairs = Tuple{Int, Int}[]
+used = Set{Int}()
+for (p, _) in sorted_pairs
+    (p[1] in used || p[2] in used) && continue
+    push!(pairs, p)
+    push!(used, p[1], p[2])
+    length(pairs) >= num_pairs && break
 end
+println("Selected pairs: $pairs")
 
-function ecdf_value(d::DimDistribution, z::Float32)
-    n = length(d.sorted)
-    z <= d.sorted[1] && return 0.0f0
-    z >= d.sorted[end] && return 1.0f0
-    idx = searchsortedlast(d.sorted, z)
-    z_lo = d.sorted[idx]
-    z_hi = d.sorted[idx + 1]
-    span = max(z_hi - z_lo, eps(Float32))
-    return Float32(idx - 1 + (z - z_lo) / span) / Float32(n - 1)
-end
-
-function ecdf_inverse(d::DimDistribution, u::Float32)
-    n = length(d.sorted)
-    u <= 0.0f0 && return d.sorted[1]
-    u >= 1.0f0 && return d.sorted[end]
-    pos = u * Float32(n - 1) + 1.0f0
-    lo = clamp(floor(Int, pos), 1, n - 1)
-    frac = pos - Float32(lo)
-    return (1.0f0 - frac) * d.sorted[lo] + frac * d.sorted[lo + 1]
-end
-
-println("Building per-dimension empirical CDFs and locating prior modes...")
-dim_dists = Vector{DimDistribution}(undef, q_size)
-for q in 1:q_size
-    samples = vec(z_all[q, 1, :])
-    sorted = sort(samples)
-    pad = 0.05f0 * (sorted[end] - sorted[1] + eps(Float32))
-    grid = collect(range(sorted[1] - pad, sorted[end] + pad; length = 256))
-    density = kde_on_grid(samples, grid)
-    modes = kde_peaks(grid, density)
-    dim_dists[q] = DimDistribution(sorted, grid, density, modes)
-end
-mode_counts = [length(d.modes) for d in dim_dists]
-multimodal_dims = findall(>(1), mode_counts)
-println("Identified $(length(multimodal_dims)) multimodal dimensions out of $q_size.")
-
-num_flip_dims = 5
-
-function decode_many(zs::AbstractMatrix{Float32})
-    n = size(zs, 2)
-    out = nothing
-    for start in 1:batch_size:n
-        stop = min(start + batch_size - 1, n)
-        z_pad = zeros(Float32, q_size, 1, batch_size)
-        z_pad[:, 1, 1:(stop - start + 1)] .= zs[:, start:stop]
-        x = Array(decode_compiled(ps.gen, st_kan.gen, st_lux.gen, pu(z_pad)))
-        chunk = x[:, :, :, 1:(stop - start + 1)]
-        out = out === nothing ? chunk : cat(out, chunk; dims = 4)
-    end
-    return out
-end
-
-# Rank multimodal dims by L2 change in decoded image
-function decoder_sensitivities(anchor, dim_dists, mode_counts, q_size)
-    multimodal = findall(>=(2), mode_counts)
-    n = length(multimodal)
-    n == 0 && return Int[], Float32[]
-
-    z_test = zeros(Float32, q_size, n + 1)
-    z_test[:, 1] .= anchor
-    for (i, q) in enumerate(multimodal)
-        modes_q = dim_dists[q].modes
-        cur = argmin(abs.(anchor[q] .- modes_q))
-        nxt = cur == 1 ? 2 : 1
-        z_test[:, i + 1] .= anchor
-        z_test[q, i + 1] = modes_q[nxt]
-    end
-
-    imgs = decode_many(z_test)
-    base = imgs[:, :, :, 1]
-    sens = Float32[
-        sqrt(sum((imgs[:, :, :, i + 1] .- base) .^ 2)) for i in 1:n
-    ]
-    return multimodal, sens
-end
-
-function sample_mode_pair(rng_pair, dim_dists, mode_counts, q_size, z_all, n_flip)
-    n_samples = size(z_all, 3)
-    anchor = vec(z_all[:, 1, rand(rng_pair, 1:n_samples)])
-    z_a = copy(anchor)
-    z_b = copy(anchor)
-
-    multimodal, sens = decoder_sensitivities(anchor, dim_dists, mode_counts, q_size)
-    isempty(multimodal) && return z_a, z_b
-
-    k = min(n_flip, length(multimodal))
-    flip_dims = multimodal[sortperm(sens; rev = true)[1:k]]
-
-    for q in flip_dims
-        modes_q = dim_dists[q].modes
-        cur = argmin(abs.(anchor[q] .- modes_q))
-        others = [i for i in 1:length(modes_q) if i != cur]
-        nxt = others[rand(rng_pair, 1:length(others))]
-        z_a[q] = modes_q[cur]
-        z_b[q] = modes_q[nxt]
-    end
-    return z_a, z_b
-end
-
+# Interpolate and plot each pair
 num_cols = num_interp_steps + 2
-ts = collect(range(0.0f0, 1.0f0; length = num_cols))
+ts = range(0.0f0, 1.0f0; length = num_cols)
 
-for pair_idx in 1:num_pairs
-    rng_pair = Random.MersenneTwister(pair_idx * 31 + 7)
-    z_a, z_b = sample_mode_pair(rng_pair, dim_dists, mode_counts, q_size, z_all, num_flip_dims)
+for (pair_idx, (i, j)) in enumerate(pairs)
+    z_a = z_all[:, :, i:i]
+    z_b = z_all[:, :, j:j]
 
-    u_a = Float32[ecdf_value(dim_dists[q], z_a[q]) for q in 1:q_size]
-    u_b = Float32[ecdf_value(dim_dists[q], z_b[q]) for q in 1:q_size]
-
-    z_a_col = reshape(z_a, q_size, 1)
-    z_batch = repeat(z_a_col, 1, 1, batch_size)
+    z_batch = repeat(z_a, 1, 1, batch_size)
     for (ci, t_val) in enumerate(ts)
-        u_t = (1.0f0 - t_val) .* u_a .+ t_val .* u_b
-        z_t = Float32[ecdf_inverse(dim_dists[q], u_t[q]) for q in 1:q_size]
-        z_batch[:, :, ci] .= reshape(z_t, q_size, 1)
+        z_batch[:, :, ci] .= slerp(z_a, z_b, t_val)
     end
-
     x_decoded = Array(decode_compiled(ps.gen, st_kan.gen, st_lux.gen, pu(z_batch)))
 
     all_rgb = Matrix{RGB{Float32}}[]
@@ -256,13 +130,39 @@ for pair_idx in 1:num_pairs
         push!(all_rgb, rot180(rgb))
     end
 
-    # Dims the path actually traverses
-    delta_u = abs.(u_a .- u_b)
-    scores = delta_u .* Float32.(mode_counts)
+    # Dims that are multimodal and have good z_A/z_B separation
+    function count_modes(samples, nbins = 30)
+        lo, hi = extrema(samples)
+        edges = range(lo - 0.01f0, hi + 0.01f0; length = nbins + 1)
+        counts = zeros(Int, nbins)
+        for s in samples
+            bin = clamp(searchsortedlast(edges, s), 1, nbins)
+            counts[bin] += 1
+        end
+
+        # Smooth with a 3-wide moving average to suppress noise
+        smoothed = [mean(counts[max(1, i - 1):min(nbins, i + 1)]) for i in 1:nbins]
+
+        # Count local maxima
+        n_modes = 0
+        for i in 2:(nbins - 1)
+            if smoothed[i] > smoothed[i - 1] && smoothed[i] > smoothed[i + 1]
+                n_modes += 1
+            end
+        end
+        return max(n_modes, 1)
+    end
+
+    zdiff = abs.(vec(z_a[:, 1, 1]) .- vec(z_b[:, 1, 1]))
+    mode_counts = [count_modes(vec(z_all[d, 1, :])) for d in 1:q_size]
+
+    # Score: prefer multimodal dims, break ties by z_A/z_B separation
+    scores = mode_counts .* zdiff
     top_dims = sortperm(scores; rev = true)[1:num_density_dims]
 
     fig = Figure(size = (700, 550), backgroundcolor = :white)
 
+    # Image row
     for col in 1:num_cols
         ax = CairoMakie.Axis(fig[2, col], aspect = DataAspect())
         hidedecorations!(ax)
@@ -270,10 +170,13 @@ for pair_idx in 1:num_pairs
         image!(ax, all_rgb[col])
     end
 
+    # Header
     Label(fig[1, 1], L"z_A", fontsize = 18, halign = :center, valign = :bottom)
     Label(fig[1, div(num_cols, 2):(div(num_cols, 2) + 1)], L"\longrightarrow", fontsize = 18, halign = :center, valign = :bottom)
     Label(fig[1, num_cols], L"z_B", fontsize = 18, halign = :center, valign = :bottom)
 
+    # Prior density plots (empirical KDE from prior samples)
+    # Dimensions selected by largest |z_A - z_B| difference
     dim_colors = [:royalblue, :firebrick, :forestgreen]
     for (di, dim) in enumerate(top_dims)
         is_last = di == num_density_dims
@@ -287,17 +190,10 @@ for pair_idx in 1:num_pairs
         !is_last && hidexdecorations!(ax; ticks = false)
         hidespines!(ax, :t, :r)
 
-        d = dim_dists[dim]
-        lines!(
-            ax, d.grid, d.density;
-            color = dim_colors[di], linewidth = 1.5
-        )
-        band!(
-            ax, d.grid, zeros(Float32, length(d.grid)), d.density;
-            color = (dim_colors[di], 0.15)
-        )
-        vlines!(ax, [z_a[dim]]; color = :black, linewidth = 1.5, linestyle = :solid)
-        vlines!(ax, [z_b[dim]]; color = :black, linewidth = 1.5, linestyle = :dash)
+        samples_dim = vec(z_all[dim, 1, :])
+        density!(ax, samples_dim; color = (dim_colors[di], 0.15), strokecolor = (dim_colors[di], 0.8), strokewidth = 1.5)
+        vlines!(ax, [z_a[dim, 1, 1]]; color = :black, linewidth = 1.5, linestyle = :solid)
+        vlines!(ax, [z_b[dim, 1, 1]]; color = :black, linewidth = 1.5, linestyle = :dash)
     end
 
     Legend(
@@ -318,8 +214,8 @@ for pair_idx in 1:num_pairs
     rowgap!(fig.layout, 4)
     rowgap!(fig.layout, 2, 12)
 
-    save(save_dir * "mode_cdf_$(pair_idx).png", fig, px_per_unit = 5)
-    println("Saved mode_cdf_$(pair_idx).png")
+    save(save_dir * "slerp_$(pair_idx).png", fig, px_per_unit = 5)
+    println("Saved slerp_$(pair_idx).png")
 end
 
 println("Results in $save_dir")

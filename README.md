@@ -1,9 +1,8 @@
 # KAEM
 
-> 🚧 WORK IN PROGRESS 🚧
-
 - Paper: [arxiv.org/abs/2506.14167](https://www.arxiv.org/abs/2506.14167)
 - Summary: [pritraj1.github.io/kaem.html](https://pritraj1.github.io/kaem.html)
+- PyPI JAX package: [https://github.com/PritRaj1/thermo-ebms](https://github.com/PritRaj1/thermo-ebms)
 
 ## Setup
 
@@ -21,10 +20,6 @@ julia --project=. -e "using Pkg; Pkg.instantiate()"
 uv sync --extra dev
 mkdir -p PDE_data && curl -L -o PDE_data/darcy_flow.h5 https://darus.uni-stuttgart.de/api/access/datafile/133219
 ```
-
-### Note for windows users
-
-This repo uses shell scripts solely for convenience, you can run everything without them too. If you want to use the shell scripts, [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) is recommended.
 
 ---
 
@@ -79,7 +74,7 @@ device = gpu   # Options: cpu, gpu, tpu
 
 ## Julia flow
 
-With trainer (preferable):
+With trainer:
 
 ```julia
 using ConfParser, Random
@@ -117,9 +112,10 @@ model = init_KAEM(
       rng = rng
 )
 
-# MLIR-compiled loss, (slow to compile, fast to run, see https://mlir.llvm.org/).
+# XLA/MLIR-compiled loss
 x, loader_state = iterate(model.train_loader)
 x = pu(x)
+
 model, ps, st_kan, st_lux, st_rng = prep_model(model, x, optimizer; rng = rng)
 loss, grads, st_ebm, st_gen = model.loss_fcn(
       ps,

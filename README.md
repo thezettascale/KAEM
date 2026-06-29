@@ -1,9 +1,13 @@
 # KAEM
 
+Julia Reactant/Enzyme implementation of [Kolmgorov-Arnold Energy Models](https://pritraj1.github.io/kaem.html).
+
+A more polished JAX package can be found [here](https://github.com/PritRaj1/thermo-ebms).
+
 > 🚧 WORK IN PROGRESS 🚧
 
 - Paper: [arxiv.org/abs/2506.14167](https://www.arxiv.org/abs/2506.14167)
-- Summary: [pritraj1.github.io/kaem.html](https://pritraj1.github.io/kaem.html)
+- Summary: [pritraj1.github.io/portfolio/kaem.html](https://pritraj1.github.io/kaem.html)
 
 ## Setup
 
